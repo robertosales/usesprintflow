@@ -47,6 +47,26 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
+        kanban: {
+          aguardando: "hsl(var(--kanban-aguardando))",
+          desenvolvimento: "hsl(var(--kanban-desenvolvimento))",
+          review: "hsl(var(--kanban-review))",
+          teste: "hsl(var(--kanban-teste))",
+          bug: "hsl(var(--kanban-bug))",
+          pronto: "hsl(var(--kanban-pronto))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
