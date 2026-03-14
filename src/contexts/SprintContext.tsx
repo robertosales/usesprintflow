@@ -11,7 +11,7 @@ interface SprintContextType {
   removeDeveloper: (id: string) => void;
   addUserStory: (hu: Omit<UserStory, "id" | "code" | "createdAt">) => void;
   removeUserStory: (id: string) => void;
-  addActivity: (act: Omit<Activity, "id" | "endDate" | "createdAt" | "status">) => void;
+  addActivity: (act: Omit<Activity, "id" | "endDate" | "createdAt" | "status" | "impediments">) => void;
   removeActivity: (id: string) => void;
   updateActivityStatus: (id: string, status: KanbanStatus) => void;
   addImpediment: (activityId: string, reason: string) => void;
