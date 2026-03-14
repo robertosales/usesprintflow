@@ -65,11 +65,11 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     setActivities((prev) => prev.filter((a) => a.huId !== id));
   };
 
-  const addActivity = (act: Omit<Activity, "id" | "endDate" | "createdAt" | "status">) => {
+  const addActivity = (act: Omit<Activity, "id" | "endDate" | "createdAt" | "status" | "impediments">) => {
     const endDate = calculateEndDate(act.startDate, act.hours);
     setActivities((prev) => [
       ...prev,
-      { ...act, id: crypto.randomUUID(), endDate, status: "aguardando_desenvolvimento", createdAt: new Date().toISOString() },
+      { ...act, id: crypto.randomUUID(), endDate, status: "aguardando_desenvolvimento", impediments: [], createdAt: new Date().toISOString() },
     ]);
   };
 
