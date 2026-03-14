@@ -6,10 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ListTodo, Plus, Trash2, AlertCircle } from "lucide-react";
+import { ListTodo, Plus, Trash2, AlertCircle, AlertTriangle, ShieldAlert } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getTotalHoursForHU } from "@/types/sprint";
+import { getTotalHoursForHU, isOverdue, hasActiveImpediment } from "@/types/sprint";
 import { toast } from "sonner";
 
 export function ActivityManager() {
@@ -47,6 +47,9 @@ export function ActivityManager() {
     ? activities.filter((a) => sprintStories.some((hu) => hu.id === a.huId))
     : [];
 
+  const overdueCount = sprintActivities.filter(isOverdue).length;
+  const blockedCount = sprintActivities.filter(hasActiveImpediment).length;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -54,6 +57,16 @@ export function ActivityManager() {
           <ListTodo className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-semibold">Atividades</h2>
           <Badge variant="secondary">{sprintActivities.length}</Badge>
+          {overdueCount > 0 && (
+            <Badge variant="destructive" className="gap-0.5">
+              <AlertTriangle className="h-3 w-3" /> {overdueCount} atrasada{overdueCount > 1 ? "s" : ""}
+            </Badge>
+          )}
+          {blockedCount > 0 && (
+            <Badge className="gap-0.5 bg-warning text-warning-foreground">
+              <ShieldAlert className="h-3 w-3" /> {blockedCount} impedimento{blockedCount > 1 ? "s" : ""}
+            </Badge>
+          )}
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -135,19 +148,31 @@ export function ActivityManager() {
         {sprintActivities.map((act) => {
           const hu = userStories.find((h) => h.id === act.huId);
           const dev = developers.find((d) => d.id === act.assigneeId);
+          const overdue = isOverdue(act);
+          const blocked = hasActiveImpediment(act);
           return (
-            <Card key={act.id} className="group">
+            <Card key={act.id} className={`group ${overdue ? "border-destructive border-2" : ""} ${blocked ? "ring-2 ring-warning" : ""}`}>
               <CardContent className="p-3">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-0.5">
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <Badge variant="outline" className="font-mono text-xs">{hu?.code}</Badge>
                       <span className="text-sm font-medium">{act.title}</span>
+                      {overdue && (
+                        <Badge variant="destructive" className="text-[10px] gap-0.5">
+                          <AlertTriangle className="h-2.5 w-2.5" /> Atrasado
+                        </Badge>
+                      )}
+                      {blocked && (
+                        <Badge className="text-[10px] gap-0.5 bg-warning text-warning-foreground">
+                          <ShieldAlert className="h-2.5 w-2.5" /> Impedimento
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span>{dev?.name || "N/A"}</span>
                       <span>{act.hours}h</span>
-                      <span>{act.startDate} → {act.endDate}</span>
+                      <span className={overdue ? "text-destructive font-medium" : ""}>{act.startDate} → {act.endDate}</span>
                     </div>
                   </div>
                   <Button

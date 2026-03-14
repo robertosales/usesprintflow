@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Developer, UserStory, Activity, Sprint, KanbanStatus, calculateEndDate } from "@/types/sprint";
+import { Developer, UserStory, Activity, Sprint, KanbanStatus, calculateEndDate, Impediment } from "@/types/sprint";
 
 interface SprintContextType {
   developers: Developer[];
@@ -11,9 +11,11 @@ interface SprintContextType {
   removeDeveloper: (id: string) => void;
   addUserStory: (hu: Omit<UserStory, "id" | "code" | "createdAt">) => void;
   removeUserStory: (id: string) => void;
-  addActivity: (act: Omit<Activity, "id" | "endDate" | "createdAt" | "status">) => void;
+  addActivity: (act: Omit<Activity, "id" | "endDate" | "createdAt" | "status" | "impediments">) => void;
   removeActivity: (id: string) => void;
   updateActivityStatus: (id: string, status: KanbanStatus) => void;
+  addImpediment: (activityId: string, reason: string) => void;
+  resolveImpediment: (activityId: string, impedimentId: string) => void;
   addSprint: (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => void;
   setActiveSprint: (id: string) => void;
 }
@@ -63,11 +65,11 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     setActivities((prev) => prev.filter((a) => a.huId !== id));
   };
 
-  const addActivity = (act: Omit<Activity, "id" | "endDate" | "createdAt" | "status">) => {
+  const addActivity = (act: Omit<Activity, "id" | "endDate" | "createdAt" | "status" | "impediments">) => {
     const endDate = calculateEndDate(act.startDate, act.hours);
     setActivities((prev) => [
       ...prev,
-      { ...act, id: crypto.randomUUID(), endDate, status: "aguardando_desenvolvimento", createdAt: new Date().toISOString() },
+      { ...act, id: crypto.randomUUID(), endDate, status: "aguardando_desenvolvimento", impediments: [], createdAt: new Date().toISOString() },
     ]);
   };
 
@@ -77,6 +79,26 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
   const updateActivityStatus = (id: string, status: KanbanStatus) => {
     setActivities((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
+  };
+
+  const addImpediment = (activityId: string, reason: string) => {
+    setActivities((prev) =>
+      prev.map((a) =>
+        a.id === activityId
+          ? { ...a, impediments: [...(a.impediments || []), { id: crypto.randomUUID(), reason, reportedAt: new Date().toISOString() }] }
+          : a
+      )
+    );
+  };
+
+  const resolveImpediment = (activityId: string, impedimentId: string) => {
+    setActivities((prev) =>
+      prev.map((a) =>
+        a.id === activityId
+          ? { ...a, impediments: (a.impediments || []).map((imp) => imp.id === impedimentId ? { ...imp, resolvedAt: new Date().toISOString() } : imp) }
+          : a
+      )
+    );
   };
 
   const addSprint = (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => {
@@ -96,6 +118,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         developers, userStories, activities, sprints, activeSprint,
         addDeveloper, removeDeveloper, addUserStory, removeUserStory,
         addActivity, removeActivity, updateActivityStatus,
+        addImpediment, resolveImpediment,
         addSprint, setActiveSprint: setActiveSprintFn,
       }}
     >
