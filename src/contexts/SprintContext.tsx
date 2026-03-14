@@ -81,6 +81,26 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     setActivities((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
   };
 
+  const addImpediment = (activityId: string, reason: string) => {
+    setActivities((prev) =>
+      prev.map((a) =>
+        a.id === activityId
+          ? { ...a, impediments: [...(a.impediments || []), { id: crypto.randomUUID(), reason, reportedAt: new Date().toISOString() }] }
+          : a
+      )
+    );
+  };
+
+  const resolveImpediment = (activityId: string, impedimentId: string) => {
+    setActivities((prev) =>
+      prev.map((a) =>
+        a.id === activityId
+          ? { ...a, impediments: (a.impediments || []).map((imp) => imp.id === impedimentId ? { ...imp, resolvedAt: new Date().toISOString() } : imp) }
+          : a
+      )
+    );
+  };
+
   const addSprint = (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => {
     setSprints((prev) => [
       ...prev.map((s) => ({ ...s, isActive: false })),
