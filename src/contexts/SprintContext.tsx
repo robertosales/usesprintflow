@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Developer, UserStory, Activity, Sprint, KanbanStatus } from "@/types/sprint";
+import { Developer, UserStory, Activity, Sprint, KanbanStatus, calculateEndDate } from "@/types/sprint";
 
 interface SprintContextType {
   developers: Developer[];
