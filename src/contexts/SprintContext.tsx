@@ -118,6 +118,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         developers, userStories, activities, sprints, activeSprint,
         addDeveloper, removeDeveloper, addUserStory, removeUserStory,
         addActivity, removeActivity, updateActivityStatus,
+        addImpediment, resolveImpediment,
         addSprint, setActiveSprint: setActiveSprintFn,
       }}
     >

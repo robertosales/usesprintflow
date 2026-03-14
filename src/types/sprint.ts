@@ -23,6 +23,13 @@ export interface Developer {
   avatar?: string;
 }
 
+export interface Impediment {
+  id: string;
+  reason: string;
+  reportedAt: string;
+  resolvedAt?: string;
+}
+
 export interface Activity {
   id: string;
   huId: string;
@@ -33,7 +40,18 @@ export interface Activity {
   startDate: string; // ISO date
   endDate: string; // calculated: startDate + hours
   status: KanbanStatus;
+  impediments: Impediment[];
   createdAt: string;
+}
+
+export function isOverdue(activity: Activity): boolean {
+  if (activity.status === "pronto_para_publicacao") return false;
+  const today = new Date().toISOString().split("T")[0];
+  return activity.endDate < today;
+}
+
+export function hasActiveImpediment(activity: Activity): boolean {
+  return activity.impediments.some((imp) => !imp.resolvedAt);
 }
 
 export interface UserStory {
