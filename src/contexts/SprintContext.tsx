@@ -14,6 +14,8 @@ interface SprintContextType {
   addActivity: (act: Omit<Activity, "id" | "endDate" | "createdAt" | "status">) => void;
   removeActivity: (id: string) => void;
   updateActivityStatus: (id: string, status: KanbanStatus) => void;
+  addImpediment: (activityId: string, reason: string) => void;
+  resolveImpediment: (activityId: string, impedimentId: string) => void;
   addSprint: (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => void;
   setActiveSprint: (id: string) => void;
 }
