@@ -64,7 +64,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   };
 
   const addActivity = (act: Omit<Activity, "id" | "endDate" | "createdAt" | "status">) => {
-    const { calculateEndDate } = require("@/types/sprint");
     const endDate = calculateEndDate(act.startDate, act.hours);
     setActivities((prev) => [
       ...prev,
