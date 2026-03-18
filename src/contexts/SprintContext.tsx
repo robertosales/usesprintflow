@@ -1,5 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Developer, UserStory, Activity, Sprint, KanbanStatus, calculateEndDate, Impediment } from "@/types/sprint";
+import { Developer, UserStory, Activity, Sprint, KanbanStatus, calculateEndDate, Impediment, ImpedimentType, ImpedimentCriticality, ActivityType } from "@/types/sprint";
+
+interface AddImpedimentData {
+  reason: string;
+  type: ImpedimentType;
+  criticality: ImpedimentCriticality;
+  hasTicket: boolean;
+  ticketUrl?: string;
+  ticketId?: string;
+}
 
 interface SprintContextType {
   developers: Developer[];
@@ -8,15 +17,20 @@ interface SprintContextType {
   sprints: Sprint[];
   activeSprint: Sprint | null;
   addDeveloper: (dev: Omit<Developer, "id">) => void;
+  updateDeveloper: (id: string, dev: Partial<Omit<Developer, "id">>) => void;
   removeDeveloper: (id: string) => void;
   addUserStory: (hu: Omit<UserStory, "id" | "code" | "createdAt">) => void;
+  updateUserStory: (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => void;
   removeUserStory: (id: string) => void;
   addActivity: (act: Omit<Activity, "id" | "endDate" | "createdAt" | "status" | "impediments">) => void;
+  updateActivity: (id: string, act: Partial<Omit<Activity, "id" | "createdAt" | "impediments">>) => void;
   removeActivity: (id: string) => void;
   updateActivityStatus: (id: string, status: KanbanStatus) => void;
-  addImpediment: (activityId: string, reason: string) => void;
-  resolveImpediment: (activityId: string, impedimentId: string) => void;
+  addImpediment: (activityId: string, data: AddImpedimentData) => void;
+  resolveImpediment: (activityId: string, impedimentId: string, resolution?: string) => void;
   addSprint: (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => void;
+  updateSprint: (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => void;
+  removeSprint: (id: string) => void;
   setActiveSprint: (id: string) => void;
 }
 
@@ -48,6 +62,10 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     setDevelopers((prev) => [...prev, { ...dev, id: crypto.randomUUID() }]);
   };
 
+  const updateDeveloper = (id: string, dev: Partial<Omit<Developer, "id">>) => {
+    setDevelopers((prev) => prev.map((d) => (d.id === id ? { ...d, ...dev } : d)));
+  };
+
   const removeDeveloper = (id: string) => {
     setDevelopers((prev) => prev.filter((d) => d.id !== id));
   };
@@ -58,6 +76,10 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       ...prev,
       { ...hu, id: crypto.randomUUID(), code: `HU-${String(count).padStart(3, "0")}`, createdAt: new Date().toISOString() },
     ]);
+  };
+
+  const updateUserStory = (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => {
+    setUserStories((prev) => prev.map((h) => (h.id === id ? { ...h, ...hu } : h)));
   };
 
   const removeUserStory = (id: string) => {
@@ -73,6 +95,17 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     ]);
   };
 
+  const updateActivity = (id: string, act: Partial<Omit<Activity, "id" | "createdAt" | "impediments">>) => {
+    setActivities((prev) => prev.map((a) => {
+      if (a.id !== id) return a;
+      const updated = { ...a, ...act };
+      if (act.startDate || act.hours) {
+        updated.endDate = calculateEndDate(updated.startDate, updated.hours);
+      }
+      return updated;
+    }));
+  };
+
   const removeActivity = (id: string) => {
     setActivities((prev) => prev.filter((a) => a.id !== id));
   };
@@ -81,21 +114,38 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     setActivities((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
   };
 
-  const addImpediment = (activityId: string, reason: string) => {
+  const addImpediment = (activityId: string, data: AddImpedimentData) => {
+    const impediment: Impediment = {
+      id: crypto.randomUUID(),
+      reason: data.reason,
+      type: data.type,
+      criticality: data.criticality,
+      hasTicket: data.hasTicket,
+      ticketUrl: data.ticketUrl,
+      ticketId: data.ticketId,
+      reportedAt: new Date().toISOString(),
+    };
     setActivities((prev) =>
       prev.map((a) =>
         a.id === activityId
-          ? { ...a, impediments: [...(a.impediments || []), { id: crypto.randomUUID(), reason, reportedAt: new Date().toISOString() }] }
+          ? { ...a, impediments: [...(a.impediments || []), impediment] }
           : a
       )
     );
   };
 
-  const resolveImpediment = (activityId: string, impedimentId: string) => {
+  const resolveImpediment = (activityId: string, impedimentId: string, resolution?: string) => {
     setActivities((prev) =>
       prev.map((a) =>
         a.id === activityId
-          ? { ...a, impediments: (a.impediments || []).map((imp) => imp.id === impedimentId ? { ...imp, resolvedAt: new Date().toISOString() } : imp) }
+          ? {
+              ...a,
+              impediments: (a.impediments || []).map((imp) =>
+                imp.id === impedimentId
+                  ? { ...imp, resolvedAt: new Date().toISOString(), resolution }
+                  : imp
+              ),
+            }
           : a
       )
     );
@@ -108,6 +158,17 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     ]);
   };
 
+  const updateSprint = (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => {
+    setSprints((prev) => prev.map((s) => (s.id === id ? { ...s, ...sprint } : s)));
+  };
+
+  const removeSprint = (id: string) => {
+    setSprints((prev) => prev.filter((s) => s.id !== id));
+    const storyIds = userStories.filter((hu) => hu.sprintId === id).map((hu) => hu.id);
+    setUserStories((prev) => prev.filter((hu) => hu.sprintId !== id));
+    setActivities((prev) => prev.filter((a) => !storyIds.includes(a.huId)));
+  };
+
   const setActiveSprintFn = (id: string) => {
     setSprints((prev) => prev.map((s) => ({ ...s, isActive: s.id === id })));
   };
@@ -116,10 +177,11 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     <SprintContext.Provider
       value={{
         developers, userStories, activities, sprints, activeSprint,
-        addDeveloper, removeDeveloper, addUserStory, removeUserStory,
-        addActivity, removeActivity, updateActivityStatus,
+        addDeveloper, updateDeveloper, removeDeveloper,
+        addUserStory, updateUserStory, removeUserStory,
+        addActivity, updateActivity, removeActivity, updateActivityStatus,
         addImpediment, resolveImpediment,
-        addSprint, setActiveSprint: setActiveSprintFn,
+        addSprint, updateSprint, removeSprint, setActiveSprint: setActiveSprintFn,
       }}
     >
       {children}

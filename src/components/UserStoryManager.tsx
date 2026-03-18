@@ -6,16 +6,17 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { BookOpen, Plus, Trash2, Clock } from "lucide-react";
+import { BookOpen, Plus, Trash2, Clock, AlertCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getTotalHoursForHU } from "@/types/sprint";
+import { toast } from "sonner";
 
-const PRIORITY_COLORS: Record<string, string> = {
-  baixa: "bg-muted text-muted-foreground",
-  media: "bg-info/10 text-info",
-  alta: "bg-warning/10 text-warning",
-  critica: "bg-destructive/10 text-destructive",
+const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
+  baixa: { label: "Baixa", color: "bg-muted text-muted-foreground" },
+  media: { label: "Média", color: "bg-info/15 text-info border border-info/30" },
+  alta: { label: "Alta", color: "bg-warning/15 text-warning border border-warning/30" },
+  critica: { label: "Crítica", color: "bg-destructive/15 text-destructive border border-destructive/30" },
 };
 
 export function UserStoryManager() {
@@ -25,17 +26,27 @@ export function UserStoryManager() {
   const [description, setDescription] = useState("");
   const [storyPoints, setStoryPoints] = useState("3");
   const [priority, setPriority] = useState<"baixa" | "media" | "alta" | "critica">("media");
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const sprintStories = activeSprint
     ? userStories.filter((hu) => hu.sprintId === activeSprint.id)
     : userStories;
 
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!title.trim()) e.title = "Título é obrigatório";
+    if (!activeSprint) e.sprint = "Selecione uma sprint ativa";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !activeSprint) return;
-    addUserStory({ title, description, storyPoints: Number(storyPoints), priority, sprintId: activeSprint.id });
-    setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media");
+    if (!validate() || !activeSprint) return;
+    addUserStory({ title: title.trim(), description: description.trim(), storyPoints: Number(storyPoints), priority, sprintId: activeSprint.id });
+    setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setErrors({});
     setOpen(false);
+    toast.success("User Story criada!");
   };
 
   return (
@@ -43,33 +54,37 @@ export function UserStoryManager() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold">User Stories (HUs)</h2>
+          <h2 className="text-lg font-bold tracking-tight">User Stories (Backlog)</h2>
           <Badge variant="secondary">{sprintStories.length}</Badge>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="gap-1" disabled={!activeSprint}>
+            <Button size="sm" className="gap-1.5" disabled={!activeSprint}>
               <Plus className="h-4 w-4" /> Nova HU
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Nova User Story</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-primary" />
+                Nova User Story
+              </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label>Título</Label>
-                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Como usuário, eu quero..." />
+                <Label>Título <span className="text-destructive">*</span></Label>
+                <Input value={title} onChange={(e) => { setTitle(e.target.value); setErrors((p) => ({ ...p, title: "" })); }} placeholder="Como usuário, eu quero..." className="mt-1" />
+                {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
               </div>
               <div>
-                <Label>Descrição</Label>
-                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Detalhes da história" />
+                <Label>Descrição / Critérios de Aceite</Label>
+                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Critérios de aceite, regras de negócio..." className="mt-1" rows={3} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Story Points</Label>
+                  <Label>Story Points <span className="text-destructive">*</span></Label>
                   <Select value={storyPoints} onValueChange={setStoryPoints}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {[1, 2, 3, 5, 8, 13, 21].map((p) => (
                         <SelectItem key={p} value={String(p)}>{p} pts</SelectItem>
@@ -78,19 +93,20 @@ export function UserStoryManager() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Prioridade</Label>
+                  <Label>Prioridade <span className="text-destructive">*</span></Label>
                   <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="baixa">Baixa</SelectItem>
-                      <SelectItem value="media">Média</SelectItem>
-                      <SelectItem value="alta">Alta</SelectItem>
-                      <SelectItem value="critica">Crítica</SelectItem>
+                      {Object.entries(PRIORITY_MAP).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-              <Button type="submit" className="w-full">Criar HU</Button>
+              <Button type="submit" className="w-full gap-2">
+                <Plus className="h-4 w-4" /> Criar User Story
+              </Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -98,17 +114,20 @@ export function UserStoryManager() {
 
       {!activeSprint && (
         <Card className="border-dashed">
-          <CardContent className="py-6 text-center text-muted-foreground">
-            Crie uma Sprint primeiro para adicionar User Stories
+          <CardContent className="py-8 text-center text-muted-foreground">
+            <AlertCircle className="h-10 w-10 mx-auto mb-2 opacity-30" />
+            <p className="font-medium">Crie uma Sprint primeiro</p>
+            <p className="text-sm mt-1">As User Stories são vinculadas a uma Sprint ativa</p>
           </CardContent>
         </Card>
       )}
 
       {activeSprint && sprintStories.length === 0 && (
         <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-            <BookOpen className="h-10 w-10 mb-2 opacity-50" />
-            <p>Nenhuma User Story cadastrada</p>
+          <CardContent className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+            <BookOpen className="h-12 w-12 mb-3 opacity-30" />
+            <p className="font-medium">Backlog vazio</p>
+            <p className="text-sm mt-1">Adicione as User Stories desta Sprint</p>
           </CardContent>
         </Card>
       )}
@@ -117,24 +136,30 @@ export function UserStoryManager() {
         {sprintStories.map((hu) => {
           const totalHours = getTotalHoursForHU(activities, hu.id);
           const huActivities = activities.filter((a) => a.huId === hu.id);
+          const completedActs = huActivities.filter((a) => a.status === "pronto_para_publicacao");
+          const pInfo = PRIORITY_MAP[hu.priority];
           return (
-            <Card key={hu.id} className="group">
+            <Card key={hu.id} className="group hover:shadow-md transition-shadow">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className="font-mono text-xs">{hu.code}</Badge>
-                      <Badge className={PRIORITY_COLORS[hu.priority]}>{hu.priority}</Badge>
-                      <Badge variant="secondary">{hu.storyPoints} pts</Badge>
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <Badge variant="outline" className="font-mono text-xs font-bold">{hu.code}</Badge>
+                      <Badge className={`${pInfo.color} text-xs`}>{pInfo.label}</Badge>
+                      <Badge variant="secondary" className="text-xs">{hu.storyPoints} pts</Badge>
+                      {huActivities.length > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          {completedActs.length}/{huActivities.length} atividades
+                        </Badge>
+                      )}
                     </div>
-                    <h3 className="font-medium">{hu.title}</h3>
-                    {hu.description && <p className="text-sm text-muted-foreground mt-1">{hu.description}</p>}
+                    <h3 className="font-semibold text-sm">{hu.title}</h3>
+                    {hu.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{hu.description}</p>}
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        {totalHours}/24h utilizadas
+                        {totalHours}/24h
                       </span>
-                      <span>{huActivities.length} atividade(s)</span>
                     </div>
                     {totalHours > 0 && (
                       <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
@@ -149,7 +174,7 @@ export function UserStoryManager() {
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
-                    onClick={() => removeUserStory(hu.id)}
+                    onClick={() => { removeUserStory(hu.id); toast.info("User Story removida"); }}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>

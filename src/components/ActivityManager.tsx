@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ListTodo, Plus, Trash2, AlertCircle, AlertTriangle, ShieldAlert } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getTotalHoursForHU, isOverdue, hasActiveImpediment } from "@/types/sprint";
+import { getTotalHoursForHU, isOverdue, hasActiveImpediment, ActivityType, ACTIVITY_TYPE_LABELS, KANBAN_COLUMNS } from "@/types/sprint";
 import { toast } from "sonner";
 
 export function ActivityManager() {
@@ -17,30 +17,44 @@ export function ActivityManager() {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [activityType, setActivityType] = useState<ActivityType>("task");
   const [huId, setHuId] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [hours, setHours] = useState("4");
   const [startDate, setStartDate] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const sprintStories = activeSprint
     ? userStories.filter((hu) => hu.sprintId === activeSprint.id)
     : [];
 
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!title.trim()) e.title = "Título é obrigatório";
+    if (!huId) e.huId = "Selecione uma User Story";
+    if (!assigneeId) e.assigneeId = "Selecione um responsável";
+    if (!startDate) e.startDate = "Data de início é obrigatória";
+    if (!hours || Number(hours) < 1) e.hours = "Horas deve ser no mínimo 1";
+    if (Number(hours) > 24) e.hours = "Máximo de 24 horas por atividade";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !huId || !assigneeId || !startDate) return;
+    if (!validate()) return;
 
     const numHours = Number(hours);
     const currentHours = getTotalHoursForHU(activities, huId);
     if (currentHours + numHours > 24) {
-      toast.error(`Esta HU já possui ${currentHours}h. Máximo é 24h. Disponível: ${24 - currentHours}h`);
+      toast.error(`HU já possui ${currentHours}h alocadas. Disponível: ${24 - currentHours}h`);
       return;
     }
 
-    addActivity({ title, description, huId, assigneeId, hours: numHours, startDate });
-    setTitle(""); setDescription(""); setHuId(""); setAssigneeId(""); setHours("4"); setStartDate("");
+    addActivity({ title: title.trim(), description: description.trim(), activityType, huId, assigneeId, hours: numHours, startDate });
+    setTitle(""); setDescription(""); setActivityType("task"); setHuId(""); setAssigneeId(""); setHours("4"); setStartDate(""); setErrors({});
     setOpen(false);
-    toast.success("Atividade criada com sucesso!");
+    toast.success("Atividade criada!");
   };
 
   const sprintActivities = activeSprint
@@ -53,9 +67,9 @@ export function ActivityManager() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <ListTodo className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold">Atividades</h2>
+          <h2 className="text-lg font-bold tracking-tight">Atividades</h2>
           <Badge variant="secondary">{sprintActivities.length}</Badge>
           {overdueCount > 0 && (
             <Badge variant="destructive" className="gap-0.5">
@@ -64,72 +78,95 @@ export function ActivityManager() {
           )}
           {blockedCount > 0 && (
             <Badge className="gap-0.5 bg-warning text-warning-foreground">
-              <ShieldAlert className="h-3 w-3" /> {blockedCount} impedimento{blockedCount > 1 ? "s" : ""}
+              <ShieldAlert className="h-3 w-3" /> {blockedCount} bloqueada{blockedCount > 1 ? "s" : ""}
             </Badge>
           )}
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="gap-1" disabled={sprintStories.length === 0 || developers.length === 0}>
+            <Button size="sm" className="gap-1.5" disabled={sprintStories.length === 0 || developers.length === 0}>
               <Plus className="h-4 w-4" /> Nova Atividade
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Nova Atividade</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <ListTodo className="h-5 w-5 text-primary" />
+                Nova Atividade
+              </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label>Título</Label>
-                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Descrição da atividade" />
+                <Label>Título <span className="text-destructive">*</span></Label>
+                <Input value={title} onChange={(e) => { setTitle(e.target.value); setErrors((p) => ({ ...p, title: "" })); }} placeholder="Descrição da atividade" className="mt-1" />
+                {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
               </div>
               <div>
                 <Label>Descrição</Label>
-                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Detalhes" />
+                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Detalhes técnicos, observações..." className="mt-1" />
               </div>
               <div>
-                <Label>User Story</Label>
-                <Select value={huId} onValueChange={setHuId}>
-                  <SelectTrigger><SelectValue placeholder="Selecione a HU" /></SelectTrigger>
+                <Label>Tipo <span className="text-destructive">*</span></Label>
+                <Select value={activityType} onValueChange={(v) => setActivityType(v as ActivityType)}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(ACTIVITY_TYPE_LABELS).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>User Story <span className="text-destructive">*</span></Label>
+                <Select value={huId} onValueChange={(v) => { setHuId(v); setErrors((p) => ({ ...p, huId: "" })); }}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a HU" /></SelectTrigger>
                   <SelectContent>
                     {sprintStories.map((hu) => {
                       const used = getTotalHoursForHU(activities, hu.id);
                       return (
                         <SelectItem key={hu.id} value={hu.id}>
-                          {hu.code} - {hu.title} ({used}/24h)
+                          {hu.code} — {hu.title} ({used}/24h)
                         </SelectItem>
                       );
                     })}
                   </SelectContent>
                 </Select>
+                {errors.huId && <p className="text-xs text-destructive mt-1">{errors.huId}</p>}
                 {huId && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Horas disponíveis: {24 - getTotalHoursForHU(activities, huId)}h
+                    Horas disponíveis: <span className="font-semibold">{24 - getTotalHoursForHU(activities, huId)}h</span>
                   </p>
                 )}
               </div>
               <div>
-                <Label>Responsável</Label>
-                <Select value={assigneeId} onValueChange={setAssigneeId}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o dev" /></SelectTrigger>
+                <Label>Responsável <span className="text-destructive">*</span></Label>
+                <Select value={assigneeId} onValueChange={(v) => { setAssigneeId(v); setErrors((p) => ({ ...p, assigneeId: "" })); }}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
                   <SelectContent>
                     {developers.map((dev) => (
-                      <SelectItem key={dev.id} value={dev.id}>{dev.name}</SelectItem>
+                      <SelectItem key={dev.id} value={dev.id}>
+                        {dev.name} — {dev.role}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.assigneeId && <p className="text-xs text-destructive mt-1">{errors.assigneeId}</p>}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Horas estimadas</Label>
-                  <Input type="number" min="1" max="24" value={hours} onChange={(e) => setHours(e.target.value)} />
+                  <Label>Horas estimadas <span className="text-destructive">*</span></Label>
+                  <Input type="number" min="1" max="24" value={hours} onChange={(e) => { setHours(e.target.value); setErrors((p) => ({ ...p, hours: "" })); }} className="mt-1" />
+                  {errors.hours && <p className="text-xs text-destructive mt-1">{errors.hours}</p>}
                 </div>
                 <div>
-                  <Label>Data início</Label>
-                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                  <Label>Data início <span className="text-destructive">*</span></Label>
+                  <Input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setErrors((p) => ({ ...p, startDate: "" })); }} className="mt-1" />
+                  {errors.startDate && <p className="text-xs text-destructive mt-1">{errors.startDate}</p>}
                 </div>
               </div>
-              <Button type="submit" className="w-full">Criar Atividade</Button>
+              <Button type="submit" className="w-full gap-2">
+                <Plus className="h-4 w-4" /> Criar Atividade
+              </Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -137,9 +174,11 @@ export function ActivityManager() {
 
       {(sprintStories.length === 0 || developers.length === 0) && (
         <Card className="border-dashed">
-          <CardContent className="py-6 text-center text-muted-foreground flex items-center justify-center gap-2">
-            <AlertCircle className="h-4 w-4" />
-            {developers.length === 0 ? "Cadastre desenvolvedores primeiro" : "Crie User Stories primeiro"}
+          <CardContent className="py-8 text-center text-muted-foreground">
+            <AlertCircle className="h-10 w-10 mx-auto mb-2 opacity-30" />
+            <p className="font-medium">
+              {developers.length === 0 ? "Cadastre membros do time primeiro" : "Crie User Stories primeiro"}
+            </p>
           </CardContent>
         </Card>
       )}
@@ -150,14 +189,22 @@ export function ActivityManager() {
           const dev = developers.find((d) => d.id === act.assigneeId);
           const overdue = isOverdue(act);
           const blocked = hasActiveImpediment(act);
+          const typeInfo = ACTIVITY_TYPE_LABELS[act.activityType || "task"];
+          const statusCol = KANBAN_COLUMNS.find((c) => c.key === act.status);
           return (
-            <Card key={act.id} className={`group ${overdue ? "border-destructive border-2" : ""} ${blocked ? "ring-2 ring-warning" : ""}`}>
+            <Card key={act.id} className={`group hover:shadow-md transition-shadow ${overdue ? "border-destructive border-2" : ""} ${blocked ? "ring-2 ring-warning" : ""}`}>
               <CardContent className="p-3">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                      <Badge variant="outline" className="font-mono text-xs">{hu?.code}</Badge>
-                      <span className="text-sm font-medium">{act.title}</span>
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <Badge variant="outline" className="font-mono text-xs font-bold">{hu?.code}</Badge>
+                      <Badge className={`text-[10px] border ${typeInfo.color}`}>{typeInfo.label}</Badge>
+                      {statusCol && (
+                        <Badge variant="secondary" className="text-[10px] gap-1">
+                          <div className={`h-1.5 w-1.5 rounded-full ${statusCol.dotColor}`} />
+                          {statusCol.label}
+                        </Badge>
+                      )}
                       {overdue && (
                         <Badge variant="destructive" className="text-[10px] gap-0.5">
                           <AlertTriangle className="h-2.5 w-2.5" /> Atrasado
@@ -165,21 +212,24 @@ export function ActivityManager() {
                       )}
                       {blocked && (
                         <Badge className="text-[10px] gap-0.5 bg-warning text-warning-foreground">
-                          <ShieldAlert className="h-2.5 w-2.5" /> Impedimento
+                          <ShieldAlert className="h-2.5 w-2.5" /> Bloqueado
                         </Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="text-sm font-semibold">{act.title}</span>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                       <span>{dev?.name || "N/A"}</span>
                       <span>{act.hours}h</span>
-                      <span className={overdue ? "text-destructive font-medium" : ""}>{act.startDate} → {act.endDate}</span>
+                      <span className={overdue ? "text-destructive font-medium" : ""}>
+                        {new Date(act.startDate).toLocaleDateString("pt-BR")} → {new Date(act.endDate).toLocaleDateString("pt-BR")}
+                      </span>
                     </div>
                   </div>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
-                    onClick={() => removeActivity(act.id)}
+                    onClick={() => { removeActivity(act.id); toast.info("Atividade removida"); }}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
