@@ -6,14 +6,41 @@ export type KanbanStatus =
   | "bug"
   | "pronto_para_publicacao";
 
-export const KANBAN_COLUMNS: { key: KanbanStatus; label: string; colorClass: string }[] = [
-  { key: "aguardando_desenvolvimento", label: "Aguardando Desenvolvimento", colorClass: "bg-kanban-aguardando" },
-  { key: "em_desenvolvimento", label: "Em Desenvolvimento", colorClass: "bg-kanban-desenvolvimento" },
-  { key: "em_code_review", label: "Em Code Review", colorClass: "bg-kanban-review" },
-  { key: "em_teste", label: "Em Teste", colorClass: "bg-kanban-teste" },
-  { key: "bug", label: "Bug", colorClass: "bg-kanban-bug" },
-  { key: "pronto_para_publicacao", label: "Pronto para Publicação", colorClass: "bg-kanban-pronto" },
+export const KANBAN_COLUMNS: { key: KanbanStatus; label: string; colorClass: string; dotColor: string }[] = [
+  { key: "aguardando_desenvolvimento", label: "Aguardando Desenvolvimento", colorClass: "bg-kanban-aguardando", dotColor: "bg-muted-foreground" },
+  { key: "em_desenvolvimento", label: "Em Desenvolvimento", colorClass: "bg-kanban-desenvolvimento", dotColor: "bg-info" },
+  { key: "em_code_review", label: "Em Code Review", colorClass: "bg-kanban-review", dotColor: "bg-accent" },
+  { key: "em_teste", label: "Em Teste", colorClass: "bg-kanban-teste", dotColor: "bg-warning" },
+  { key: "bug", label: "Bug", colorClass: "bg-kanban-bug", dotColor: "bg-destructive" },
+  { key: "pronto_para_publicacao", label: "Pronto para Publicação", colorClass: "bg-kanban-pronto", dotColor: "bg-success" },
 ];
+
+export type ActivityType = "task" | "bug" | "architecture";
+
+export const ACTIVITY_TYPE_LABELS: Record<ActivityType, { label: string; color: string }> = {
+  task: { label: "Tarefa", color: "bg-info/15 text-info border-info/30" },
+  bug: { label: "Bug", color: "bg-destructive/15 text-destructive border-destructive/30" },
+  architecture: { label: "Arquitetura", color: "bg-accent/15 text-accent border-accent/30" },
+};
+
+export type ImpedimentType = "tecnico" | "dependencia" | "ambiente" | "requisito" | "infra" | "outro";
+export type ImpedimentCriticality = "baixa" | "media" | "alta" | "critica";
+
+export const IMPEDIMENT_TYPE_LABELS: Record<ImpedimentType, string> = {
+  tecnico: "Técnico",
+  dependencia: "Dependência Externa",
+  ambiente: "Ambiente",
+  requisito: "Requisito Indefinido",
+  infra: "Infraestrutura",
+  outro: "Outro",
+};
+
+export const IMPEDIMENT_CRITICALITY_LABELS: Record<ImpedimentCriticality, { label: string; color: string }> = {
+  baixa: { label: "Baixa", color: "bg-muted text-muted-foreground" },
+  media: { label: "Média", color: "bg-info/15 text-info" },
+  alta: { label: "Alta", color: "bg-warning/15 text-warning" },
+  critica: { label: "Crítica", color: "bg-destructive/15 text-destructive" },
+};
 
 export interface Developer {
   id: string;
@@ -26,8 +53,14 @@ export interface Developer {
 export interface Impediment {
   id: string;
   reason: string;
+  type: ImpedimentType;
+  criticality: ImpedimentCriticality;
+  hasTicket: boolean;
+  ticketUrl?: string;
+  ticketId?: string;
   reportedAt: string;
   resolvedAt?: string;
+  resolution?: string;
 }
 
 export interface Activity {
@@ -35,10 +68,11 @@ export interface Activity {
   huId: string;
   title: string;
   description: string;
+  activityType: ActivityType;
   assigneeId: string;
   hours: number;
-  startDate: string; // ISO date
-  endDate: string; // calculated: startDate + hours
+  startDate: string;
+  endDate: string;
   status: KanbanStatus;
   impediments: Impediment[];
   createdAt: string;
@@ -56,7 +90,7 @@ export function hasActiveImpediment(activity: Activity): boolean {
 
 export interface UserStory {
   id: string;
-  code: string; // e.g. HU-001
+  code: string;
   title: string;
   description: string;
   storyPoints: number;
@@ -77,7 +111,6 @@ export interface Sprint {
 
 export function calculateEndDate(startDate: string, hours: number): string {
   const start = new Date(startDate);
-  // 8h work day
   const workDays = Math.ceil(hours / 8);
   const end = new Date(start);
   let daysAdded = 0;
