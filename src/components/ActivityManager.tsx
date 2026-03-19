@@ -6,15 +6,16 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ListTodo, Plus, Trash2, AlertCircle, AlertTriangle, ShieldAlert } from "lucide-react";
+import { ListTodo, Plus, Trash2, AlertCircle, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getTotalHoursForHU, isOverdue, hasActiveImpediment, ActivityType, ACTIVITY_TYPE_LABELS, KANBAN_COLUMNS } from "@/types/sprint";
+import { getTotalHoursForHU, ActivityType, ACTIVITY_TYPE_LABELS } from "@/types/sprint";
 import { toast } from "sonner";
 
 export function ActivityManager() {
-  const { activities, addActivity, removeActivity, userStories, developers, activeSprint } = useSprint();
+  const { activities, addActivity, removeActivity, updateActivity, userStories, developers, activeSprint } = useSprint();
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [activityType, setActivityType] = useState<ActivityType>("task");
@@ -40,29 +41,49 @@ export function ActivityManager() {
     return Object.keys(e).length === 0;
   };
 
+  const resetForm = () => {
+    setTitle(""); setDescription(""); setActivityType("task"); setHuId(""); setAssigneeId(""); setHours("4"); setStartDate(""); setErrors({}); setEditId(null);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-
     const numHours = Number(hours);
-    const currentHours = getTotalHoursForHU(activities, huId);
-    if (currentHours + numHours > 24) {
-      toast.error(`HU já possui ${currentHours}h alocadas. Disponível: ${24 - currentHours}h`);
-      return;
-    }
 
-    addActivity({ title: title.trim(), description: description.trim(), activityType, huId, assigneeId, hours: numHours, startDate });
-    setTitle(""); setDescription(""); setActivityType("task"); setHuId(""); setAssigneeId(""); setHours("4"); setStartDate(""); setErrors({});
+    if (editId) {
+      updateActivity(editId, { title: title.trim(), description: description.trim(), activityType, huId, assigneeId, hours: numHours, startDate });
+      toast.success("Atividade atualizada!");
+    } else {
+      const currentHours = getTotalHoursForHU(activities, huId);
+      if (currentHours + numHours > 24) {
+        toast.error(`HU já possui ${currentHours}h alocadas. Disponível: ${24 - currentHours}h`);
+        return;
+      }
+      addActivity({ title: title.trim(), description: description.trim(), activityType, huId, assigneeId, hours: numHours, startDate });
+      toast.success("Atividade criada!");
+    }
+    resetForm();
     setOpen(false);
-    toast.success("Atividade criada!");
+  };
+
+  const openEdit = (actId: string) => {
+    const act = activities.find((a) => a.id === actId);
+    if (!act) return;
+    setEditId(act.id);
+    setTitle(act.title);
+    setDescription(act.description);
+    setActivityType(act.activityType);
+    setHuId(act.huId);
+    setAssigneeId(act.assigneeId);
+    setHours(String(act.hours));
+    setStartDate(act.startDate);
+    setErrors({});
+    setOpen(true);
   };
 
   const sprintActivities = activeSprint
     ? activities.filter((a) => sprintStories.some((hu) => hu.id === a.huId))
     : [];
-
-  const overdueCount = sprintActivities.filter(isOverdue).length;
-  const blockedCount = sprintActivities.filter(hasActiveImpediment).length;
 
   return (
     <div className="space-y-4">
@@ -71,18 +92,8 @@ export function ActivityManager() {
           <ListTodo className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-bold tracking-tight">Atividades</h2>
           <Badge variant="secondary">{sprintActivities.length}</Badge>
-          {overdueCount > 0 && (
-            <Badge variant="destructive" className="gap-0.5">
-              <AlertTriangle className="h-3 w-3" /> {overdueCount} atrasada{overdueCount > 1 ? "s" : ""}
-            </Badge>
-          )}
-          {blockedCount > 0 && (
-            <Badge className="gap-0.5 bg-warning text-warning-foreground">
-              <ShieldAlert className="h-3 w-3" /> {blockedCount} bloqueada{blockedCount > 1 ? "s" : ""}
-            </Badge>
-          )}
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5" disabled={sprintStories.length === 0 || developers.length === 0}>
               <Plus className="h-4 w-4" /> Nova Atividade
@@ -92,7 +103,7 @@ export function ActivityManager() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <ListTodo className="h-5 w-5 text-primary" />
-                Nova Atividade
+                {editId ? "Editar Atividade" : "Nova Atividade"}
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -132,11 +143,6 @@ export function ActivityManager() {
                   </SelectContent>
                 </Select>
                 {errors.huId && <p className="text-xs text-destructive mt-1">{errors.huId}</p>}
-                {huId && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Horas disponíveis: <span className="font-semibold">{24 - getTotalHoursForHU(activities, huId)}h</span>
-                  </p>
-                )}
               </div>
               <div>
                 <Label>Responsável <span className="text-destructive">*</span></Label>
@@ -165,7 +171,7 @@ export function ActivityManager() {
                 </div>
               </div>
               <Button type="submit" className="w-full gap-2">
-                <Plus className="h-4 w-4" /> Criar Atividade
+                <Plus className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Criar Atividade"}
               </Button>
             </form>
           </DialogContent>
@@ -187,52 +193,38 @@ export function ActivityManager() {
         {sprintActivities.map((act) => {
           const hu = userStories.find((h) => h.id === act.huId);
           const dev = developers.find((d) => d.id === act.assigneeId);
-          const overdue = isOverdue(act);
-          const blocked = hasActiveImpediment(act);
           const typeInfo = ACTIVITY_TYPE_LABELS[act.activityType || "task"];
-          const statusCol = KANBAN_COLUMNS.find((c) => c.key === act.status);
           return (
-            <Card key={act.id} className={`group hover:shadow-md transition-shadow ${overdue ? "border-destructive border-2" : ""} ${blocked ? "ring-2 ring-warning" : ""}`}>
+            <Card key={act.id} className="group hover:shadow-md transition-shadow">
               <CardContent className="p-3">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <Badge variant="outline" className="font-mono text-xs font-bold">{hu?.code}</Badge>
                       <Badge className={`text-[10px] border ${typeInfo.color}`}>{typeInfo.label}</Badge>
-                      {statusCol && (
-                        <Badge variant="secondary" className="text-[10px] gap-1">
-                          <div className={`h-1.5 w-1.5 rounded-full ${statusCol.dotColor}`} />
-                          {statusCol.label}
-                        </Badge>
-                      )}
-                      {overdue && (
-                        <Badge variant="destructive" className="text-[10px] gap-0.5">
-                          <AlertTriangle className="h-2.5 w-2.5" /> Atrasado
-                        </Badge>
-                      )}
-                      {blocked && (
-                        <Badge className="text-[10px] gap-0.5 bg-warning text-warning-foreground">
-                          <ShieldAlert className="h-2.5 w-2.5" /> Bloqueado
-                        </Badge>
-                      )}
                     </div>
                     <span className="text-sm font-semibold">{act.title}</span>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                       <span>{dev?.name || "N/A"}</span>
                       <span>{act.hours}h</span>
-                      <span className={overdue ? "text-destructive font-medium" : ""}>
+                      <span>
                         {new Date(act.startDate).toLocaleDateString("pt-BR")} → {new Date(act.endDate).toLocaleDateString("pt-BR")}
                       </span>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
-                    onClick={() => { removeActivity(act.id); toast.info("Atividade removida"); }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(act.id)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive"
+                      onClick={() => { removeActivity(act.id); toast.info("Atividade removida"); }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

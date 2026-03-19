@@ -1,10 +1,10 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
-import { KANBAN_COLUMNS, KanbanStatus, isOverdue, hasActiveImpediment, ACTIVITY_TYPE_LABELS, IMPEDIMENT_CRITICALITY_LABELS, IMPEDIMENT_TYPE_LABELS } from "@/types/sprint";
+import { KANBAN_COLUMNS, KanbanStatus, isHUOverdue, hasActiveImpediment, IMPEDIMENT_CRITICALITY_LABELS, UserStory } from "@/types/sprint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { User, Clock, AlertTriangle, ShieldAlert, CheckCircle2, ExternalLink, Link2, GripVertical } from "lucide-react";
+import { AlertTriangle, ShieldAlert, CheckCircle2, Clock, Target, Link2, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { ImpedimentDialog } from "@/components/ImpedimentManager";
 import {
@@ -16,7 +16,6 @@ import {
   useSensors,
   DragStartEvent,
   DragEndEvent,
-  DragOverEvent,
   useDroppable,
 } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
@@ -36,16 +35,13 @@ function DroppableColumn({ id, children }: { id: string; children: React.ReactNo
   );
 }
 
-function DraggableCard({ activity, children }: { activity: { id: string }; children: React.ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: activity.id,
-  });
+function DraggableCard({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
   };
-
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       {children}
@@ -54,9 +50,10 @@ function DraggableCard({ activity, children }: { activity: { id: string }; child
 }
 
 export function KanbanBoard() {
-  const { activities, userStories, developers, updateActivityStatus, resolveImpediment, activeSprint } = useSprint();
+  const { activities, userStories, developers, updateUserStoryStatus, resolveImpediment, activeSprint } = useSprint();
   const [impedimentDialog, setImpedimentDialog] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [expandedHU, setExpandedHU] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -65,9 +62,6 @@ export function KanbanBoard() {
   const sprintStories = activeSprint
     ? userStories.filter((hu) => hu.sprintId === activeSprint.id)
     : [];
-  const sprintActivities = activities.filter((a) =>
-    sprintStories.some((hu) => hu.id === a.huId)
-  );
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -78,41 +72,39 @@ export function KanbanBoard() {
     setActiveId(null);
     if (!over) return;
 
-    const activityId = active.id as string;
+    const huId = active.id as string;
     const overId = over.id as string;
 
-    // Check if dropped on a column
     const targetColumn = KANBAN_COLUMNS.find((c) => c.key === overId);
     if (targetColumn) {
-      const act = activities.find((a) => a.id === activityId);
-      if (act && act.status !== targetColumn.key) {
-        updateActivityStatus(activityId, targetColumn.key);
-        toast.success(`Movido para ${targetColumn.label}`);
+      const hu = sprintStories.find((h) => h.id === huId);
+      if (hu && hu.status !== targetColumn.key) {
+        updateUserStoryStatus(huId, targetColumn.key);
+        toast.success(`HU movida para ${targetColumn.label}`);
       }
       return;
     }
 
-    // Dropped on another card - find which column that card is in
-    const targetActivity = activities.find((a) => a.id === overId);
-    if (targetActivity) {
-      const act = activities.find((a) => a.id === activityId);
-      if (act && act.status !== targetActivity.status) {
-        updateActivityStatus(activityId, targetActivity.status);
-        const col = KANBAN_COLUMNS.find((c) => c.key === targetActivity.status);
-        toast.success(`Movido para ${col?.label}`);
+    const targetHU = sprintStories.find((h) => h.id === overId);
+    if (targetHU) {
+      const hu = sprintStories.find((h) => h.id === huId);
+      if (hu && hu.status !== targetHU.status) {
+        updateUserStoryStatus(huId, targetHU.status);
+        const col = KANBAN_COLUMNS.find((c) => c.key === targetHU.status);
+        toast.success(`HU movida para ${col?.label}`);
       }
     }
   };
 
-  const activeActivity = activeId ? sprintActivities.find((a) => a.id === activeId) : null;
+  const activeHU = activeId ? sprintStories.find((h) => h.id === activeId) : null;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold tracking-tight">Board</h2>
+        <h2 className="text-lg font-bold tracking-tight">Board — User Stories</h2>
         {activeSprint && (
           <Badge variant="outline" className="text-xs font-mono">
-            {activeSprint.name} • {sprintActivities.length} itens
+            {activeSprint.name} • {sprintStories.length} HUs
           </Badge>
         )}
       </div>
@@ -133,9 +125,9 @@ export function KanbanBoard() {
         >
           <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin">
             {KANBAN_COLUMNS.map((col) => {
-              const colActivities = sprintActivities.filter((a) => a.status === col.key);
+              const colHUs = sprintStories.filter((hu) => (hu.status || "aguardando_desenvolvimento") === col.key);
               return (
-                <div key={col.key} className="min-w-[280px] w-[280px] flex-shrink-0">
+                <div key={col.key} className="min-w-[300px] w-[300px] flex-shrink-0">
                   <div className={`rounded-t-lg px-3 py-2.5 ${col.colorClass} border border-b-0`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -143,18 +135,20 @@ export function KanbanBoard() {
                         <span className="text-xs font-semibold uppercase tracking-wider">{col.label}</span>
                       </div>
                       <span className="text-xs font-bold bg-background/80 rounded-full h-5 min-w-5 flex items-center justify-center px-1.5">
-                        {colActivities.length}
+                        {colHUs.length}
                       </span>
                     </div>
                   </div>
                   <DroppableColumn id={col.key}>
-                    {colActivities.map((act) => (
-                      <DraggableCard key={act.id} activity={act}>
-                        <ActivityCard
-                          act={act}
-                          onImpediment={() => setImpedimentDialog(act.id)}
+                    {colHUs.map((hu) => (
+                      <DraggableCard key={hu.id} id={hu.id}>
+                        <HUCard
+                          hu={hu}
+                          expanded={expandedHU === hu.id}
+                          onToggleExpand={() => setExpandedHU(expandedHU === hu.id ? null : hu.id)}
+                          onImpediment={() => setImpedimentDialog(hu.id)}
                           onResolveImpediment={(impId) => {
-                            resolveImpediment(act.id, impId);
+                            resolveImpediment(hu.id, impId);
                             toast.success("Impedimento resolvido!");
                           }}
                         />
@@ -167,10 +161,12 @@ export function KanbanBoard() {
           </div>
 
           <DragOverlay>
-            {activeActivity && (
+            {activeHU && (
               <div className="opacity-90 rotate-2 scale-105">
-                <ActivityCard
-                  act={activeActivity}
+                <HUCard
+                  hu={activeHU}
+                  expanded={false}
+                  onToggleExpand={() => {}}
                   onImpediment={() => {}}
                   onResolveImpediment={() => {}}
                 />
@@ -181,7 +177,7 @@ export function KanbanBoard() {
       )}
 
       <ImpedimentDialog
-        activityId={impedimentDialog}
+        huId={impedimentDialog}
         open={!!impedimentDialog}
         onClose={() => setImpedimentDialog(null)}
       />
@@ -189,22 +185,35 @@ export function KanbanBoard() {
   );
 }
 
-function ActivityCard({
-  act,
+const PRIORITY_COLORS: Record<string, string> = {
+  baixa: "bg-muted text-muted-foreground",
+  media: "bg-info/15 text-info",
+  alta: "bg-warning/15 text-warning",
+  critica: "bg-destructive/15 text-destructive",
+};
+const PRIORITY_LABELS: Record<string, string> = {
+  baixa: "Baixa", media: "Média", alta: "Alta", critica: "Crítica",
+};
+
+function HUCard({
+  hu,
+  expanded,
+  onToggleExpand,
   onImpediment,
   onResolveImpediment,
 }: {
-  act: ReturnType<typeof useSprint>["activities"][0];
+  hu: UserStory;
+  expanded: boolean;
+  onToggleExpand: () => void;
   onImpediment: () => void;
   onResolveImpediment: (impId: string) => void;
 }) {
-  const { userStories, developers } = useSprint();
-  const hu = userStories.find((h) => h.id === act.huId);
-  const dev = developers.find((d) => d.id === act.assigneeId);
-  const overdue = isOverdue(act);
-  const blocked = hasActiveImpediment(act);
-  const activeImpediments = (act.impediments || []).filter((i) => !i.resolvedAt);
-  const typeInfo = ACTIVITY_TYPE_LABELS[act.activityType || "task"];
+  const { activities, developers } = useSprint();
+  const huActivities = activities.filter((a) => a.huId === hu.id);
+  const overdue = isHUOverdue(hu, activities);
+  const blocked = hasActiveImpediment(hu);
+  const activeImpediments = (hu.impediments || []).filter((i) => !i.resolvedAt);
+  const totalHours = huActivities.reduce((s, a) => s + a.hours, 0);
 
   return (
     <Card
@@ -214,35 +223,30 @@ function ActivityCard({
     >
       <CardContent className="p-3 space-y-2">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <Badge variant="outline" className="font-mono text-[10px] px-1.5">{hu?.code}</Badge>
-          <Badge className={`text-[10px] px-1.5 border ${typeInfo.color}`}>{typeInfo.label}</Badge>
+          <Badge variant="outline" className="font-mono text-[10px] px-1.5 font-bold">{hu.code}</Badge>
+          <Badge className={`text-[10px] px-1.5 ${PRIORITY_COLORS[hu.priority]}`}>{PRIORITY_LABELS[hu.priority]}</Badge>
+          <Badge variant="secondary" className="text-[10px] px-1.5">{hu.storyPoints} pts</Badge>
           {overdue && (
             <Badge variant="destructive" className="text-[10px] px-1.5 gap-0.5">
-              <AlertTriangle className="h-2.5 w-2.5" /> Atrasado
+              <AlertTriangle className="h-2.5 w-2.5" /> Atrasada
             </Badge>
           )}
           {blocked && (
             <Badge className="text-[10px] px-1.5 gap-0.5 bg-warning text-warning-foreground">
-              <ShieldAlert className="h-2.5 w-2.5" /> Bloqueado
+              <ShieldAlert className="h-2.5 w-2.5" /> Impedida
             </Badge>
           )}
         </div>
 
-        <p className="text-sm font-medium leading-tight">{act.title}</p>
-
-        {overdue && (
-          <p className="text-[10px] text-destructive font-medium">
-            Prazo: {new Date(act.endDate).toLocaleDateString("pt-BR")}
-          </p>
-        )}
+        <p className="text-sm font-medium leading-tight">{hu.title}</p>
 
         {activeImpediments.length > 0 && (
           <div className="space-y-1">
-            {activeImpediments.map((imp) => (
+            {activeImpediments.slice(0, 2).map((imp) => (
               <div key={imp.id} className="flex items-start gap-1 text-[10px] bg-warning/10 rounded p-1.5 border border-warning/20">
                 <ShieldAlert className="h-3 w-3 text-warning shrink-0 mt-0.5" />
                 <div className="flex-1 space-y-0.5">
-                  <span className="block">{imp.reason}</span>
+                  <span className="block line-clamp-1">{imp.reason}</span>
                   <div className="flex items-center gap-1 flex-wrap">
                     <Badge className={`text-[8px] px-1 ${IMPEDIMENT_CRITICALITY_LABELS[imp.criticality].color}`}>
                       {IMPEDIMENT_CRITICALITY_LABELS[imp.criticality].label}
@@ -267,28 +271,51 @@ function ActivityCard({
           </div>
         )}
 
+        {/* Tasks summary */}
         <div className="flex items-center justify-between pt-1 border-t border-border/50">
-          <div className="flex items-center gap-1.5">
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-[8px] font-bold">
-              {dev?.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() || "?"}
-            </div>
-            <span className="text-[11px] text-muted-foreground">{dev?.name?.split(" ")[0] || "N/A"}</span>
-          </div>
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
-              <Clock className="h-3 w-3" />{act.hours}h
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-5 w-5 text-warning hover:bg-warning/10"
-              title="Reportar Impedimento"
-              onClick={(e) => { e.stopPropagation(); onImpediment(); }}
+            <button
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
             >
-              <ShieldAlert className="h-3 w-3" />
-            </Button>
+              {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              {huActivities.length} tarefa{huActivities.length !== 1 ? "s" : ""}
+            </button>
+            <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
+              <Clock className="h-3 w-3" />{totalHours}h
+            </span>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 text-warning hover:bg-warning/10"
+            title="Reportar Impedimento"
+            onClick={(e) => { e.stopPropagation(); onImpediment(); }}
+          >
+            <ShieldAlert className="h-3 w-3" />
+          </Button>
         </div>
+
+        {/* Expanded tasks list */}
+        {expanded && huActivities.length > 0 && (
+          <div className="space-y-1 pt-1">
+            {huActivities.map((act) => {
+              const dev = developers.find((d) => d.id === act.assigneeId);
+              return (
+                <div key={act.id} className="flex items-center gap-2 text-[11px] bg-muted/50 rounded px-2 py-1.5">
+                  <Badge variant="outline" className="text-[8px] px-1">
+                    {act.activityType === "bug" ? "🐛" : act.activityType === "architecture" ? "🏗️" : "📋"}
+                  </Badge>
+                  <span className="flex-1 truncate">{act.title}</span>
+                  <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary text-[7px] font-bold shrink-0">
+                    {dev?.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() || "?"}
+                  </div>
+                  <span className="text-muted-foreground shrink-0">{act.hours}h</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

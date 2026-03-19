@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
-import { Activity, Impediment, IMPEDIMENT_TYPE_LABELS, IMPEDIMENT_CRITICALITY_LABELS, ImpedimentType, ImpedimentCriticality, hasActiveImpediment } from "@/types/sprint";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Impediment, IMPEDIMENT_TYPE_LABELS, IMPEDIMENT_CRITICALITY_LABELS, ImpedimentType, ImpedimentCriticality, hasActiveImpediment } from "@/types/sprint";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,12 +14,12 @@ import { ShieldAlert, ExternalLink, CheckCircle2, AlertTriangle, Clock, Link2 } 
 import { toast } from "sonner";
 
 interface ImpedimentDialogProps {
-  activityId: string | null;
+  huId: string | null;
   open: boolean;
   onClose: () => void;
 }
 
-export function ImpedimentDialog({ activityId, open, onClose }: ImpedimentDialogProps) {
+export function ImpedimentDialog({ huId, open, onClose }: ImpedimentDialogProps) {
   const { addImpediment } = useSprint();
   const [reason, setReason] = useState("");
   const [type, setType] = useState<ImpedimentType>("tecnico");
@@ -27,7 +27,6 @@ export function ImpedimentDialog({ activityId, open, onClose }: ImpedimentDialog
   const [hasTicket, setHasTicket] = useState(false);
   const [ticketUrl, setTicketUrl] = useState("");
   const [ticketId, setTicketId] = useState("");
-
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validate = () => {
@@ -39,8 +38,8 @@ export function ImpedimentDialog({ activityId, open, onClose }: ImpedimentDialog
   };
 
   const handleSubmit = () => {
-    if (!activityId || !validate()) return;
-    addImpediment(activityId, {
+    if (!huId || !validate()) return;
+    addImpediment(huId, {
       reason: reason.trim(),
       type,
       criticality,
@@ -65,14 +64,12 @@ export function ImpedimentDialog({ activityId, open, onClose }: ImpedimentDialog
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldAlert className="h-5 w-5 text-warning" />
-            Registrar Impedimento
+            Registrar Impedimento na HU
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label className="text-sm font-medium">
-              Descrição <span className="text-destructive">*</span>
-            </Label>
+            <Label className="text-sm font-medium">Descrição <span className="text-destructive">*</span></Label>
             <Textarea
               value={reason}
               onChange={(e) => { setReason(e.target.value); setErrors((p) => ({ ...p, reason: "" })); }}
@@ -82,12 +79,9 @@ export function ImpedimentDialog({ activityId, open, onClose }: ImpedimentDialog
             />
             {errors.reason && <p className="text-xs text-destructive mt-1">{errors.reason}</p>}
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-sm font-medium">
-                Tipo <span className="text-destructive">*</span>
-              </Label>
+              <Label className="text-sm font-medium">Tipo <span className="text-destructive">*</span></Label>
               <Select value={type} onValueChange={(v) => setType(v as ImpedimentType)}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -98,9 +92,7 @@ export function ImpedimentDialog({ activityId, open, onClose }: ImpedimentDialog
               </Select>
             </div>
             <div>
-              <Label className="text-sm font-medium">
-                Criticidade <span className="text-destructive">*</span>
-              </Label>
+              <Label className="text-sm font-medium">Criticidade <span className="text-destructive">*</span></Label>
               <Select value={criticality} onValueChange={(v) => setCriticality(v as ImpedimentCriticality)}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -111,7 +103,6 @@ export function ImpedimentDialog({ activityId, open, onClose }: ImpedimentDialog
               </Select>
             </div>
           </div>
-
           <div className="space-y-3 rounded-lg border p-3">
             <div className="flex items-center justify-between">
               <Label className="text-sm font-medium flex items-center gap-2">
@@ -123,9 +114,7 @@ export function ImpedimentDialog({ activityId, open, onClose }: ImpedimentDialog
             {hasTicket && (
               <div className="space-y-3 pt-1">
                 <div>
-                  <Label className="text-sm">
-                    Número do chamado <span className="text-destructive">*</span>
-                  </Label>
+                  <Label className="text-sm">Número do chamado <span className="text-destructive">*</span></Label>
                   <Input
                     value={ticketId}
                     onChange={(e) => { setTicketId(e.target.value); setErrors((p) => ({ ...p, ticketId: "" })); }}
@@ -146,7 +135,6 @@ export function ImpedimentDialog({ activityId, open, onClose }: ImpedimentDialog
               </div>
             )}
           </div>
-
           <Button onClick={handleSubmit} className="w-full gap-2">
             <ShieldAlert className="h-4 w-4" />
             Registrar Impedimento
@@ -158,17 +146,16 @@ export function ImpedimentDialog({ activityId, open, onClose }: ImpedimentDialog
 }
 
 export function ImpedimentList() {
-  const { activities, userStories, developers, resolveImpediment, activeSprint } = useSprint();
-  const [resolutionDialog, setResolutionDialog] = useState<{ actId: string; impId: string } | null>(null);
+  const { userStories, developers, activities, resolveImpediment, activeSprint } = useSprint();
+  const [resolutionDialog, setResolutionDialog] = useState<{ huId: string; impId: string } | null>(null);
   const [resolution, setResolution] = useState("");
 
   const sprintStories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : [];
-  const sprintActivities = activities.filter((a) => sprintStories.some((hu) => hu.id === a.huId));
 
-  const allImpediments: { activity: Activity; impediment: Impediment }[] = [];
-  sprintActivities.forEach((act) => {
-    (act.impediments || []).forEach((imp) => {
-      allImpediments.push({ activity: act, impediment: imp });
+  const allImpediments: { hu: typeof sprintStories[0]; impediment: Impediment }[] = [];
+  sprintStories.forEach((hu) => {
+    (hu.impediments || []).forEach((imp) => {
+      allImpediments.push({ hu, impediment: imp });
     });
   });
 
@@ -177,7 +164,7 @@ export function ImpedimentList() {
 
   const handleResolve = () => {
     if (!resolutionDialog) return;
-    resolveImpediment(resolutionDialog.actId, resolutionDialog.impId, resolution.trim() || undefined);
+    resolveImpediment(resolutionDialog.huId, resolutionDialog.impId, resolution.trim() || undefined);
     toast.success("Impedimento resolvido!");
     setResolutionDialog(null);
     setResolution("");
@@ -195,7 +182,6 @@ export function ImpedimentList() {
 
   return (
     <div className="space-y-6">
-      {/* Active */}
       <div>
         <div className="flex items-center gap-2 mb-3">
           <AlertTriangle className="h-5 w-5 text-warning" />
@@ -210,68 +196,57 @@ export function ImpedimentList() {
           </Card>
         ) : (
           <div className="space-y-2">
-            {active.map(({ activity, impediment }) => {
-              const hu = userStories.find((h) => h.id === activity.huId);
-              const dev = developers.find((d) => d.id === activity.assigneeId);
-              return (
-                <Card key={impediment.id} className="border-l-4 border-l-warning">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge variant="outline" className="font-mono text-xs">{hu?.code}</Badge>
-                          <Badge className={IMPEDIMENT_CRITICALITY_LABELS[impediment.criticality].color + " text-xs"}>
-                            {IMPEDIMENT_CRITICALITY_LABELS[impediment.criticality].label}
-                          </Badge>
-                          <Badge variant="secondary" className="text-xs">{IMPEDIMENT_TYPE_LABELS[impediment.type]}</Badge>
-                        </div>
-                        <p className="text-sm font-medium">{impediment.reason}</p>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          <span>Atividade: {activity.title}</span>
-                          <span>Dev: {dev?.name || "N/A"}</span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {new Date(impediment.reportedAt).toLocaleDateString("pt-BR")}
-                          </span>
-                        </div>
-                        {impediment.hasTicket && impediment.ticketId && (
-                          <div className="flex items-center gap-2 text-xs">
-                            <Badge variant="outline" className="gap-1">
-                              <Link2 className="h-3 w-3" />
-                              {impediment.ticketId}
-                            </Badge>
-                            {impediment.ticketUrl && (
-                              <a
-                                href={impediment.ticketUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary hover:underline flex items-center gap-1"
-                              >
-                                Abrir chamado <ExternalLink className="h-3 w-3" />
-                              </a>
-                            )}
-                          </div>
-                        )}
+            {active.map(({ hu, impediment }) => (
+              <Card key={impediment.id} className="border-l-4 border-l-warning">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className="font-mono text-xs">{hu.code}</Badge>
+                        <Badge className={IMPEDIMENT_CRITICALITY_LABELS[impediment.criticality].color + " text-xs"}>
+                          {IMPEDIMENT_CRITICALITY_LABELS[impediment.criticality].label}
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs">{IMPEDIMENT_TYPE_LABELS[impediment.type]}</Badge>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1 shrink-0 text-success border-success/30 hover:bg-success/10"
-                        onClick={() => setResolutionDialog({ actId: activity.id, impId: impediment.id })}
-                      >
-                        <CheckCircle2 className="h-4 w-4" />
-                        Resolver
-                      </Button>
+                      <p className="text-sm font-medium">{impediment.reason}</p>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span>HU: {hu.title}</span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {new Date(impediment.reportedAt).toLocaleDateString("pt-BR")}
+                        </span>
+                      </div>
+                      {impediment.hasTicket && impediment.ticketId && (
+                        <div className="flex items-center gap-2 text-xs">
+                          <Badge variant="outline" className="gap-1">
+                            <Link2 className="h-3 w-3" />
+                            {impediment.ticketId}
+                          </Badge>
+                          {impediment.ticketUrl && (
+                            <a href={impediment.ticketUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1">
+                              Abrir chamado <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1 shrink-0 text-success border-success/30 hover:bg-success/10"
+                      onClick={() => setResolutionDialog({ huId: hu.id, impId: impediment.id })}
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      Resolver
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
       </div>
 
-      {/* Resolved */}
       {resolved.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
@@ -280,28 +255,24 @@ export function ImpedimentList() {
             <Badge variant="secondary">{resolved.length}</Badge>
           </div>
           <div className="space-y-2">
-            {resolved.map(({ activity, impediment }) => {
-              const hu = userStories.find((h) => h.id === activity.huId);
-              return (
-                <Card key={impediment.id} className="border-l-4 border-l-success opacity-70">
-                  <CardContent className="p-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className="font-mono text-xs">{hu?.code}</Badge>
-                      <span className="text-sm">{impediment.reason}</span>
-                      <Badge variant="secondary" className="text-xs">{IMPEDIMENT_TYPE_LABELS[impediment.type]}</Badge>
-                      {impediment.resolution && (
-                        <span className="text-xs text-muted-foreground">— {impediment.resolution}</span>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+            {resolved.map(({ hu, impediment }) => (
+              <Card key={impediment.id} className="border-l-4 border-l-success opacity-70">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="outline" className="font-mono text-xs">{hu.code}</Badge>
+                    <span className="text-sm">{impediment.reason}</span>
+                    <Badge variant="secondary" className="text-xs">{IMPEDIMENT_TYPE_LABELS[impediment.type]}</Badge>
+                    {impediment.resolution && (
+                      <span className="text-xs text-muted-foreground">— {impediment.resolution}</span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Resolution Dialog */}
       <Dialog open={!!resolutionDialog} onOpenChange={(v) => !v && setResolutionDialog(null)}>
         <DialogContent>
           <DialogHeader>
@@ -313,12 +284,7 @@ export function ImpedimentList() {
           <div className="space-y-4">
             <div>
               <Label>Como foi resolvido? (opcional)</Label>
-              <Textarea
-                value={resolution}
-                onChange={(e) => setResolution(e.target.value)}
-                placeholder="Descreva a resolução..."
-                className="mt-1"
-              />
+              <Textarea value={resolution} onChange={(e) => setResolution(e.target.value)} placeholder="Descreva a resolução..." className="mt-1" />
             </div>
             <Button onClick={handleResolve} className="w-full gap-2">
               <CheckCircle2 className="h-4 w-4" />

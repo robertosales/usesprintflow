@@ -1,9 +1,9 @@
 import { useSprint } from "@/contexts/SprintContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, AreaChart, Area } from "recharts";
-import { TrendingUp, Users, Activity, Target, Gauge, CheckCircle, AlertTriangle, ShieldAlert, Clock } from "lucide-react";
-import { KANBAN_COLUMNS, isOverdue, hasActiveImpediment, ACTIVITY_TYPE_LABELS } from "@/types/sprint";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area } from "recharts";
+import { TrendingUp, Users, Target, Gauge, CheckCircle, AlertTriangle, ShieldAlert, Clock } from "lucide-react";
+import { KANBAN_COLUMNS, isHUOverdue, hasActiveImpediment } from "@/types/sprint";
 
 const STATUS_COLORS: Record<string, string> = {
   aguardando_desenvolvimento: "hsl(220, 14%, 55%)",
@@ -25,16 +25,11 @@ export function MetricsDashboard() {
   );
 
   const totalPoints = sprintStories.reduce((s, hu) => s + hu.storyPoints, 0);
-  const completedActivities = sprintActivities.filter((a) => a.status === "pronto_para_publicacao");
-  const completedHUs = sprintStories.filter((hu) => {
-    const huActs = sprintActivities.filter((a) => a.huId === hu.id);
-    return huActs.length > 0 && huActs.every((a) => a.status === "pronto_para_publicacao");
-  });
+  const completedHUs = sprintStories.filter((hu) => (hu.status || "aguardando_desenvolvimento") === "pronto_para_publicacao");
   const completedPoints = completedHUs.reduce((s, hu) => s + hu.storyPoints, 0);
   const totalHours = sprintActivities.reduce((s, a) => s + a.hours, 0);
-  const completedHours = completedActivities.reduce((s, a) => s + a.hours, 0);
-  const overdueCount = sprintActivities.filter(isOverdue).length;
-  const blockedCount = sprintActivities.filter(hasActiveImpediment).length;
+  const overdueCount = sprintStories.filter((hu) => isHUOverdue(hu, activities)).length;
+  const blockedCount = sprintStories.filter(hasActiveImpediment).length;
 
   let sprintDays = 10;
   if (activeSprint) {
@@ -44,34 +39,32 @@ export function MetricsDashboard() {
   }
   const totalCapacity = developers.length * 8 * sprintDays;
   const capacityPercent = totalCapacity > 0 ? Math.round((totalHours / totalCapacity) * 100) : 0;
-  const completionRate = sprintActivities.length > 0
-    ? Math.round((completedActivities.length / sprintActivities.length) * 100)
+  const completionRate = sprintStories.length > 0
+    ? Math.round((completedHUs.length / sprintStories.length) * 100)
     : 0;
 
-  // Status distribution
+  // HU status distribution
   const statusData = KANBAN_COLUMNS.map((col) => ({
     name: col.label,
-    value: sprintActivities.filter((a) => a.status === col.key).length,
+    value: sprintStories.filter((hu) => (hu.status || "aguardando_desenvolvimento") === col.key).length,
     color: STATUS_COLORS[col.key],
   })).filter((d) => d.value > 0);
 
   // Dev workload
   const devWorkload = developers.map((dev) => {
     const devActs = sprintActivities.filter((a) => a.assigneeId === dev.id);
-    const done = devActs.filter((a) => a.status === "pronto_para_publicacao").reduce((s, a) => s + a.hours, 0);
     const total = devActs.reduce((s, a) => s + a.hours, 0);
-    const bugs = devActs.filter((a) => a.activityType === "bug" || a.status === "bug").length;
-    return { name: dev.name.split(" ")[0], total, done, pending: total - done, bugs, tasks: devActs.length };
+    // Check which HUs this dev's activities belong to that are completed
+    const devHUIds = [...new Set(devActs.map((a) => a.huId))];
+    const doneHours = devActs.filter((a) => {
+      const hu = sprintStories.find((h) => h.id === a.huId);
+      return hu && hu.status === "pronto_para_publicacao";
+    }).reduce((s, a) => s + a.hours, 0);
+    const bugs = devActs.filter((a) => a.activityType === "bug").length;
+    return { name: dev.name.split(" ")[0], total, done: doneHours, pending: total - doneHours, bugs, tasks: devActs.length };
   });
 
-  // Activity type breakdown
-  const typeBreakdown = Object.entries(ACTIVITY_TYPE_LABELS).map(([key, info]) => ({
-    name: info.label,
-    value: sprintActivities.filter((a) => (a.activityType || "task") === key).length,
-    color: key === "task" ? "hsl(210, 92%, 55%)" : key === "bug" ? "hsl(0, 72%, 51%)" : "hsl(262, 52%, 55%)",
-  })).filter((d) => d.value > 0);
-
-  // Burndown-like data (simplified)
+  // Burndown (HU-based story points)
   const burndownData = (() => {
     if (!activeSprint) return [];
     const start = new Date(activeSprint.startDate);
@@ -83,13 +76,12 @@ export function MetricsDashboard() {
     const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
 
     while (current <= end) {
-      const dateStr = current.toISOString().split("T")[0];
       const ideal = Math.max(0, totalPts - (totalPts / totalDays) * dayIdx);
       const remaining = totalPts - completedPoints;
       days.push({
         day: current.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
         ideal: Math.round(ideal * 10) / 10,
-        real: dayIdx === totalDays ? remaining : dayIdx < totalDays ? Math.round((totalPts - (completedPoints * dayIdx / totalDays)) * 10) / 10 : remaining,
+        real: dayIdx === totalDays ? remaining : Math.round((totalPts - (completedPoints * dayIdx / totalDays)) * 10) / 10,
       });
       current.setDate(current.getDate() + 1);
       dayIdx++;
@@ -121,26 +113,26 @@ export function MetricsDashboard() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         <KPICard icon={TrendingUp} label="Velocity" value={`${completedPoints}`} sub={`/${totalPoints} pts`} />
-        <KPICard icon={Target} label="Conclusão" value={`${completionRate}%`} sub={`${completedActivities.length}/${sprintActivities.length}`} />
+        <KPICard icon={Target} label="HUs Concluídas" value={`${completedHUs.length}`} sub={`/${sprintStories.length}`} />
+        <KPICard icon={CheckCircle} label="Conclusão" value={`${completionRate}%`} sub="das HUs" />
         <KPICard icon={Gauge} label="Capacidade" value={`${capacityPercent}%`} sub={`${totalHours}/${totalCapacity}h`} />
-        <KPICard icon={Clock} label="Horas Entregues" value={`${completedHours}h`} sub={`de ${totalHours}h`} />
-        <KPICard icon={CheckCircle} label="HUs Completas" value={`${completedHUs.length}`} sub={`/${sprintStories.length}`} />
+        <KPICard icon={Clock} label="Horas Alocadas" value={`${totalHours}h`} sub={`${sprintActivities.length} tarefas`} />
         <KPICard icon={Users} label="Time" value={`${developers.length}`} sub="membros" />
-        <KPICard icon={AlertTriangle} label="Atrasadas" value={`${overdueCount}`} sub="atividades" accent={overdueCount > 0 ? "destructive" : undefined} />
-        <KPICard icon={ShieldAlert} label="Bloqueadas" value={`${blockedCount}`} sub="impedimentos" accent={blockedCount > 0 ? "warning" : undefined} />
+        <KPICard icon={AlertTriangle} label="Atrasadas" value={`${overdueCount}`} sub="HUs" accent={overdueCount > 0 ? "destructive" : undefined} />
+        <KPICard icon={ShieldAlert} label="Impedidas" value={`${blockedCount}`} sub="HUs" accent={blockedCount > 0 ? "warning" : undefined} />
       </div>
 
       {/* Charts Row 1 */}
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Distribuição por Status</CardTitle>
+            <CardTitle className="text-sm font-semibold">HUs por Status</CardTitle>
           </CardHeader>
           <CardContent>
             {statusData.length > 0 ? (
               <ResponsiveContainer width="100%" height={260}>
                 <PieChart>
-                  <Pie data={statusData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} dataKey="value" label={({ name, value }) => `${value}`} paddingAngle={2}>
+                  <Pie data={statusData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} dataKey="value" label={({ value }) => `${value}`} paddingAngle={2}>
                     {statusData.map((entry, i) => (
                       <Cell key={i} fill={entry.color} />
                     ))}
@@ -178,53 +170,28 @@ export function MetricsDashboard() {
         </Card>
       </div>
 
-      {/* Charts Row 2 */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Burndown Chart (Story Points)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {burndownData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <AreaChart data={burndownData}>
-                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                  <XAxis dataKey="day" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Area type="monotone" dataKey="ideal" stroke="hsl(220, 14%, 70%)" fill="hsl(220, 14%, 95%)" strokeDasharray="5 5" name="Ideal" />
-                  <Area type="monotone" dataKey="real" stroke="hsl(173, 58%, 39%)" fill="hsl(173, 58%, 39%)" fillOpacity={0.15} name="Real" />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyChart />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Tipo de Atividade</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {typeBreakdown.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie data={typeBreakdown} cx="50%" cy="50%" innerRadius={55} outerRadius={85} dataKey="value" label={({ name, value }) => `${name}: ${value}`} paddingAngle={2}>
-                    {typeBreakdown.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyChart />
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {/* Burndown */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold">Burndown Chart (Story Points por HU)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {burndownData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={burndownData}>
+                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                <XAxis dataKey="day" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Area type="monotone" dataKey="ideal" stroke="hsl(220, 14%, 70%)" fill="hsl(220, 14%, 95%)" strokeDasharray="5 5" name="Ideal" />
+                <Area type="monotone" dataKey="real" stroke="hsl(173, 58%, 39%)" fill="hsl(173, 58%, 39%)" fillOpacity={0.15} name="Real" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyChart />
+          )}
+        </CardContent>
+      </Card>
 
       {/* Dev Performance Table */}
       {devWorkload.length > 0 && (
@@ -238,7 +205,7 @@ export function MetricsDashboard() {
                 <thead>
                   <tr className="border-b text-muted-foreground">
                     <th className="text-left py-2 font-medium">Membro</th>
-                    <th className="text-center py-2 font-medium">Atividades</th>
+                    <th className="text-center py-2 font-medium">Tarefas</th>
                     <th className="text-center py-2 font-medium">Horas Total</th>
                     <th className="text-center py-2 font-medium">Concluído</th>
                     <th className="text-center py-2 font-medium">Pendente</th>
