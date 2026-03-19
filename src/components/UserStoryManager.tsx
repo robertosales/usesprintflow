@@ -6,10 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { BookOpen, Plus, Trash2, Clock, AlertCircle } from "lucide-react";
+import { BookOpen, Plus, Trash2, Clock, AlertCircle, Pencil, ShieldAlert } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getTotalHoursForHU } from "@/types/sprint";
+import { getTotalHoursForHU, KANBAN_COLUMNS, hasActiveImpediment } from "@/types/sprint";
 import { toast } from "sonner";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
@@ -20,8 +20,9 @@ const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
 };
 
 export function UserStoryManager() {
-  const { userStories, addUserStory, removeUserStory, activities, activeSprint } = useSprint();
+  const { userStories, addUserStory, removeUserStory, updateUserStory, activities, activeSprint } = useSprint();
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [storyPoints, setStoryPoints] = useState("3");
@@ -31,6 +32,10 @@ export function UserStoryManager() {
   const sprintStories = activeSprint
     ? userStories.filter((hu) => hu.sprintId === activeSprint.id)
     : userStories;
+
+  const resetForm = () => {
+    setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setErrors({}); setEditId(null);
+  };
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -43,10 +48,27 @@ export function UserStoryManager() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate() || !activeSprint) return;
-    addUserStory({ title: title.trim(), description: description.trim(), storyPoints: Number(storyPoints), priority, sprintId: activeSprint.id });
-    setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setErrors({});
+    if (editId) {
+      updateUserStory(editId, { title: title.trim(), description: description.trim(), storyPoints: Number(storyPoints), priority });
+      toast.success("User Story atualizada!");
+    } else {
+      addUserStory({ title: title.trim(), description: description.trim(), storyPoints: Number(storyPoints), priority, sprintId: activeSprint.id });
+      toast.success("User Story criada!");
+    }
+    resetForm();
     setOpen(false);
-    toast.success("User Story criada!");
+  };
+
+  const openEdit = (huId: string) => {
+    const hu = userStories.find((h) => h.id === huId);
+    if (!hu) return;
+    setEditId(hu.id);
+    setTitle(hu.title);
+    setDescription(hu.description);
+    setStoryPoints(String(hu.storyPoints));
+    setPriority(hu.priority);
+    setErrors({});
+    setOpen(true);
   };
 
   return (
@@ -57,7 +79,7 @@ export function UserStoryManager() {
           <h2 className="text-lg font-bold tracking-tight">User Stories (Backlog)</h2>
           <Badge variant="secondary">{sprintStories.length}</Badge>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5" disabled={!activeSprint}>
               <Plus className="h-4 w-4" /> Nova HU
@@ -67,7 +89,7 @@ export function UserStoryManager() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <BookOpen className="h-5 w-5 text-primary" />
-                Nova User Story
+                {editId ? "Editar User Story" : "Nova User Story"}
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -105,7 +127,7 @@ export function UserStoryManager() {
                 </div>
               </div>
               <Button type="submit" className="w-full gap-2">
-                <Plus className="h-4 w-4" /> Criar User Story
+                <Plus className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Criar User Story"}
               </Button>
             </form>
           </DialogContent>
@@ -136,10 +158,12 @@ export function UserStoryManager() {
         {sprintStories.map((hu) => {
           const totalHours = getTotalHoursForHU(activities, hu.id);
           const huActivities = activities.filter((a) => a.huId === hu.id);
-          const completedActs = huActivities.filter((a) => a.status === "pronto_para_publicacao");
           const pInfo = PRIORITY_MAP[hu.priority];
+          const statusCol = KANBAN_COLUMNS.find((c) => c.key === (hu.status || "aguardando_desenvolvimento"));
+          const blocked = hasActiveImpediment(hu);
+          const activeImps = (hu.impediments || []).filter((i) => !i.resolvedAt).length;
           return (
-            <Card key={hu.id} className="group hover:shadow-md transition-shadow">
+            <Card key={hu.id} className={`group hover:shadow-md transition-shadow ${blocked ? "ring-2 ring-warning" : ""}`}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -147,9 +171,20 @@ export function UserStoryManager() {
                       <Badge variant="outline" className="font-mono text-xs font-bold">{hu.code}</Badge>
                       <Badge className={`${pInfo.color} text-xs`}>{pInfo.label}</Badge>
                       <Badge variant="secondary" className="text-xs">{hu.storyPoints} pts</Badge>
+                      {statusCol && (
+                        <Badge variant="secondary" className="text-[10px] gap-1">
+                          <div className={`h-1.5 w-1.5 rounded-full ${statusCol.dotColor}`} />
+                          {statusCol.label}
+                        </Badge>
+                      )}
+                      {blocked && (
+                        <Badge className="text-[10px] gap-0.5 bg-warning text-warning-foreground">
+                          <ShieldAlert className="h-2.5 w-2.5" /> {activeImps} impedimento{activeImps > 1 ? "s" : ""}
+                        </Badge>
+                      )}
                       {huActivities.length > 0 && (
                         <Badge variant="outline" className="text-xs">
-                          {completedActs.length}/{huActivities.length} atividades
+                          {huActivities.length} tarefa{huActivities.length !== 1 ? "s" : ""}
                         </Badge>
                       )}
                     </div>
@@ -158,26 +193,23 @@ export function UserStoryManager() {
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        {totalHours}/24h
+                        {totalHours}h total
                       </span>
                     </div>
-                    {totalHours > 0 && (
-                      <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${totalHours > 24 ? "bg-destructive" : "bg-primary"}`}
-                          style={{ width: `${Math.min((totalHours / 24) * 100, 100)}%` }}
-                        />
-                      </div>
-                    )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
-                    onClick={() => { removeUserStory(hu.id); toast.info("User Story removida"); }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(hu.id)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive"
+                      onClick={() => { removeUserStory(hu.id); toast.info("User Story removida"); }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

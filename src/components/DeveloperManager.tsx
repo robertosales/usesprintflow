@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Plus, Trash2, Mail, Briefcase } from "lucide-react";
+import { Users, Plus, Trash2, Mail, Briefcase, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -23,12 +23,17 @@ const ROLES = [
 ];
 
 export function DeveloperManager() {
-  const { developers, addDeveloper, removeDeveloper } = useSprint();
+  const { developers, addDeveloper, removeDeveloper, updateDeveloper } = useSprint();
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const resetForm = () => {
+    setName(""); setEmail(""); setRole(""); setErrors({}); setEditId(null);
+  };
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -43,10 +48,26 @@ export function DeveloperManager() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    addDeveloper({ name: name.trim(), email: email.trim(), role });
-    setName(""); setEmail(""); setRole(""); setErrors({});
+    if (editId) {
+      updateDeveloper(editId, { name: name.trim(), email: email.trim(), role });
+      toast.success("Membro atualizado!");
+    } else {
+      addDeveloper({ name: name.trim(), email: email.trim(), role });
+      toast.success("Membro adicionado ao time!");
+    }
+    resetForm();
     setOpen(false);
-    toast.success("Membro adicionado ao time!");
+  };
+
+  const openEdit = (devId: string) => {
+    const dev = developers.find((d) => d.id === devId);
+    if (!dev) return;
+    setEditId(dev.id);
+    setName(dev.name);
+    setEmail(dev.email);
+    setRole(dev.role);
+    setErrors({});
+    setOpen(true);
   };
 
   return (
@@ -57,7 +78,7 @@ export function DeveloperManager() {
           <h2 className="text-lg font-bold tracking-tight">Time</h2>
           <Badge variant="secondary">{developers.length}</Badge>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> Adicionar Membro</Button>
           </DialogTrigger>
@@ -65,7 +86,7 @@ export function DeveloperManager() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-primary" />
-                Novo Membro do Time
+                {editId ? "Editar Membro" : "Novo Membro do Time"}
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -92,7 +113,7 @@ export function DeveloperManager() {
                 {errors.role && <p className="text-xs text-destructive mt-1">{errors.role}</p>}
               </div>
               <Button type="submit" className="w-full gap-2">
-                <Plus className="h-4 w-4" /> Cadastrar
+                <Plus className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Cadastrar"}
               </Button>
             </form>
           </DialogContent>
@@ -127,14 +148,19 @@ export function DeveloperManager() {
                       </Badge>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
-                    onClick={() => { removeDeveloper(dev.id); toast.info("Membro removido"); }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(dev.id)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive"
+                      onClick={() => { removeDeveloper(dev.id); toast.info("Membro removido"); }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

@@ -5,19 +5,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Zap, Plus, Calendar, Target, Trash2 } from "lucide-react";
+import { Zap, Plus, Calendar, Target, Trash2, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
 export function SprintManager() {
-  const { sprints, addSprint, setActiveSprint, removeSprint, activeSprint } = useSprint();
+  const { sprints, addSprint, updateSprint, setActiveSprint, removeSprint, activeSprint } = useSprint();
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [goal, setGoal] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const resetForm = () => {
+    setName(""); setStartDate(""); setEndDate(""); setGoal(""); setErrors({}); setEditId(null);
+  };
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -32,10 +37,27 @@ export function SprintManager() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    addSprint({ name: name.trim(), startDate, endDate, goal: goal.trim() });
-    setName(""); setStartDate(""); setEndDate(""); setGoal(""); setErrors({});
+    if (editId) {
+      updateSprint(editId, { name: name.trim(), startDate, endDate, goal: goal.trim() });
+      toast.success("Sprint atualizada!");
+    } else {
+      addSprint({ name: name.trim(), startDate, endDate, goal: goal.trim() });
+      toast.success("Sprint criada e ativada!");
+    }
+    resetForm();
     setOpen(false);
-    toast.success("Sprint criada e ativada!");
+  };
+
+  const openEdit = (sprintId: string) => {
+    const s = sprints.find((sp) => sp.id === sprintId);
+    if (!s) return;
+    setEditId(s.id);
+    setName(s.name);
+    setStartDate(s.startDate);
+    setEndDate(s.endDate);
+    setGoal(s.goal);
+    setErrors({});
+    setOpen(true);
   };
 
   return (
@@ -46,7 +68,7 @@ export function SprintManager() {
           <h2 className="text-lg font-bold tracking-tight">Sprints</h2>
           <Badge variant="secondary">{sprints.length}</Badge>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> Nova Sprint</Button>
           </DialogTrigger>
@@ -54,7 +76,7 @@ export function SprintManager() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Zap className="h-5 w-5 text-primary" />
-                Criar Sprint
+                {editId ? "Editar Sprint" : "Criar Sprint"}
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -80,7 +102,7 @@ export function SprintManager() {
                 <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="O que esperamos entregar nessa sprint?" className="mt-1" />
               </div>
               <Button type="submit" className="w-full gap-2">
-                <Zap className="h-4 w-4" /> Iniciar Sprint
+                <Zap className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Iniciar Sprint"}
               </Button>
             </form>
           </DialogContent>
@@ -91,7 +113,7 @@ export function SprintManager() {
         {sprints.map((sprint) => (
           <Card
             key={sprint.id}
-            className={`cursor-pointer transition-all hover:shadow-md min-w-[240px] ${
+            className={`cursor-pointer transition-all hover:shadow-md min-w-[240px] group ${
               sprint.isActive ? "ring-2 ring-primary shadow-md" : "opacity-70 hover:opacity-100"
             }`}
             onClick={() => setActiveSprint(sprint.id)}
@@ -104,7 +126,15 @@ export function SprintManager() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100 hover:opacity-100"
+                    className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                    onClick={(e) => { e.stopPropagation(); openEdit(sprint.id); }}
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100"
                     onClick={(e) => { e.stopPropagation(); removeSprint(sprint.id); toast.info("Sprint removida"); }}
                   >
                     <Trash2 className="h-3 w-3" />

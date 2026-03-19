@@ -13,7 +13,7 @@ import {
   ChevronLeft, ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { isOverdue, hasActiveImpediment } from "@/types/sprint";
+import { hasActiveImpediment } from "@/types/sprint";
 
 const NAV_ITEMS = [
   { key: "backlog", label: "Backlog", icon: LayoutDashboard },
@@ -29,17 +29,15 @@ type NavKey = typeof NAV_ITEMS[number]["key"];
 const Index = () => {
   const [active, setActive] = useState<NavKey>("backlog");
   const [collapsed, setCollapsed] = useState(false);
-  const { activeSprint, activities, userStories } = useSprint();
+  const { activeSprint, userStories } = useSprint();
 
   const sprintStories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : [];
-  const sprintActivities = activities.filter((a) => sprintStories.some((hu) => hu.id === a.huId));
-  const blockedCount = sprintActivities.filter(hasActiveImpediment).length;
+  const blockedCount = sprintStories.filter(hasActiveImpediment).length;
 
   return (
     <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
       <aside className={`bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border transition-all duration-200 ${collapsed ? "w-16" : "w-60"} shrink-0`}>
-        {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 py-4 border-b border-sidebar-border">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary shrink-0">
             <Zap className="h-4 w-4 text-sidebar-primary-foreground" />
@@ -52,7 +50,6 @@ const Index = () => {
           )}
         </div>
 
-        {/* Active Sprint */}
         {!collapsed && activeSprint && (
           <div className="px-3 py-3 border-b border-sidebar-border">
             <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/50 font-semibold mb-1">Sprint Ativa</p>
@@ -63,7 +60,6 @@ const Index = () => {
           </div>
         )}
 
-        {/* Navigation */}
         <nav className="flex-1 py-2 px-2 space-y-0.5">
           {!collapsed && (
             <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 font-semibold px-2 pt-2 pb-1">Planejamento</p>
@@ -95,7 +91,6 @@ const Index = () => {
           })}
         </nav>
 
-        {/* Collapse button */}
         <div className="px-2 py-2 border-t border-sidebar-border">
           <Button
             variant="ghost"
@@ -108,7 +103,6 @@ const Index = () => {
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 overflow-auto">
         <div className="max-w-7xl mx-auto p-6">
           {active === "backlog" && (

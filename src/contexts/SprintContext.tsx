@@ -19,15 +19,15 @@ interface SprintContextType {
   addDeveloper: (dev: Omit<Developer, "id">) => void;
   updateDeveloper: (id: string, dev: Partial<Omit<Developer, "id">>) => void;
   removeDeveloper: (id: string) => void;
-  addUserStory: (hu: Omit<UserStory, "id" | "code" | "createdAt">) => void;
+  addUserStory: (hu: Omit<UserStory, "id" | "code" | "createdAt" | "status" | "impediments">) => void;
   updateUserStory: (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => void;
   removeUserStory: (id: string) => void;
-  addActivity: (act: Omit<Activity, "id" | "endDate" | "createdAt" | "status" | "impediments">) => void;
-  updateActivity: (id: string, act: Partial<Omit<Activity, "id" | "createdAt" | "impediments">>) => void;
+  updateUserStoryStatus: (id: string, status: KanbanStatus) => void;
+  addActivity: (act: Omit<Activity, "id" | "endDate" | "createdAt">) => void;
+  updateActivity: (id: string, act: Partial<Omit<Activity, "id" | "createdAt">>) => void;
   removeActivity: (id: string) => void;
-  updateActivityStatus: (id: string, status: KanbanStatus) => void;
-  addImpediment: (activityId: string, data: AddImpedimentData) => void;
-  resolveImpediment: (activityId: string, impedimentId: string, resolution?: string) => void;
+  addImpediment: (huId: string, data: AddImpedimentData) => void;
+  resolveImpediment: (huId: string, impedimentId: string, resolution?: string) => void;
   addSprint: (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => void;
   updateSprint: (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => void;
   removeSprint: (id: string) => void;
@@ -61,41 +61,39 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const addDeveloper = (dev: Omit<Developer, "id">) => {
     setDevelopers((prev) => [...prev, { ...dev, id: crypto.randomUUID() }]);
   };
-
   const updateDeveloper = (id: string, dev: Partial<Omit<Developer, "id">>) => {
     setDevelopers((prev) => prev.map((d) => (d.id === id ? { ...d, ...dev } : d)));
   };
-
   const removeDeveloper = (id: string) => {
     setDevelopers((prev) => prev.filter((d) => d.id !== id));
   };
 
-  const addUserStory = (hu: Omit<UserStory, "id" | "code" | "createdAt">) => {
+  const addUserStory = (hu: Omit<UserStory, "id" | "code" | "createdAt" | "status" | "impediments">) => {
     const count = userStories.length + 1;
     setUserStories((prev) => [
       ...prev,
-      { ...hu, id: crypto.randomUUID(), code: `HU-${String(count).padStart(3, "0")}`, createdAt: new Date().toISOString() },
+      { ...hu, id: crypto.randomUUID(), code: `HU-${String(count).padStart(3, "0")}`, status: "aguardando_desenvolvimento", impediments: [], createdAt: new Date().toISOString() },
     ]);
   };
-
   const updateUserStory = (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => {
     setUserStories((prev) => prev.map((h) => (h.id === id ? { ...h, ...hu } : h)));
   };
-
   const removeUserStory = (id: string) => {
     setUserStories((prev) => prev.filter((h) => h.id !== id));
     setActivities((prev) => prev.filter((a) => a.huId !== id));
   };
+  const updateUserStoryStatus = (id: string, status: KanbanStatus) => {
+    setUserStories((prev) => prev.map((h) => (h.id === id ? { ...h, status } : h)));
+  };
 
-  const addActivity = (act: Omit<Activity, "id" | "endDate" | "createdAt" | "status" | "impediments">) => {
+  const addActivity = (act: Omit<Activity, "id" | "endDate" | "createdAt">) => {
     const endDate = calculateEndDate(act.startDate, act.hours);
     setActivities((prev) => [
       ...prev,
-      { ...act, id: crypto.randomUUID(), endDate, status: "aguardando_desenvolvimento", impediments: [], createdAt: new Date().toISOString() },
+      { ...act, id: crypto.randomUUID(), endDate, createdAt: new Date().toISOString() },
     ]);
   };
-
-  const updateActivity = (id: string, act: Partial<Omit<Activity, "id" | "createdAt" | "impediments">>) => {
+  const updateActivity = (id: string, act: Partial<Omit<Activity, "id" | "createdAt">>) => {
     setActivities((prev) => prev.map((a) => {
       if (a.id !== id) return a;
       const updated = { ...a, ...act };
@@ -105,16 +103,11 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       return updated;
     }));
   };
-
   const removeActivity = (id: string) => {
     setActivities((prev) => prev.filter((a) => a.id !== id));
   };
 
-  const updateActivityStatus = (id: string, status: KanbanStatus) => {
-    setActivities((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
-  };
-
-  const addImpediment = (activityId: string, data: AddImpedimentData) => {
+  const addImpediment = (huId: string, data: AddImpedimentData) => {
     const impediment: Impediment = {
       id: crypto.randomUUID(),
       reason: data.reason,
@@ -125,28 +118,28 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       ticketId: data.ticketId,
       reportedAt: new Date().toISOString(),
     };
-    setActivities((prev) =>
-      prev.map((a) =>
-        a.id === activityId
-          ? { ...a, impediments: [...(a.impediments || []), impediment] }
-          : a
+    setUserStories((prev) =>
+      prev.map((h) =>
+        h.id === huId
+          ? { ...h, impediments: [...(h.impediments || []), impediment] }
+          : h
       )
     );
   };
 
-  const resolveImpediment = (activityId: string, impedimentId: string, resolution?: string) => {
-    setActivities((prev) =>
-      prev.map((a) =>
-        a.id === activityId
+  const resolveImpediment = (huId: string, impedimentId: string, resolution?: string) => {
+    setUserStories((prev) =>
+      prev.map((h) =>
+        h.id === huId
           ? {
-              ...a,
-              impediments: (a.impediments || []).map((imp) =>
+              ...h,
+              impediments: (h.impediments || []).map((imp) =>
                 imp.id === impedimentId
                   ? { ...imp, resolvedAt: new Date().toISOString(), resolution }
                   : imp
               ),
             }
-          : a
+          : h
       )
     );
   };
@@ -157,18 +150,15 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       { ...sprint, id: crypto.randomUUID(), createdAt: new Date().toISOString(), isActive: true },
     ]);
   };
-
   const updateSprint = (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => {
     setSprints((prev) => prev.map((s) => (s.id === id ? { ...s, ...sprint } : s)));
   };
-
   const removeSprint = (id: string) => {
     setSprints((prev) => prev.filter((s) => s.id !== id));
     const storyIds = userStories.filter((hu) => hu.sprintId === id).map((hu) => hu.id);
     setUserStories((prev) => prev.filter((hu) => hu.sprintId !== id));
     setActivities((prev) => prev.filter((a) => !storyIds.includes(a.huId)));
   };
-
   const setActiveSprintFn = (id: string) => {
     setSprints((prev) => prev.map((s) => ({ ...s, isActive: s.id === id })));
   };
@@ -178,8 +168,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       value={{
         developers, userStories, activities, sprints, activeSprint,
         addDeveloper, updateDeveloper, removeDeveloper,
-        addUserStory, updateUserStory, removeUserStory,
-        addActivity, updateActivity, removeActivity, updateActivityStatus,
+        addUserStory, updateUserStory, removeUserStory, updateUserStoryStatus,
+        addActivity, updateActivity, removeActivity,
         addImpediment, resolveImpediment,
         addSprint, updateSprint, removeSprint, setActiveSprint: setActiveSprintFn,
       }}

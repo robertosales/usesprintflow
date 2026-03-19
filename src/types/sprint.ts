@@ -73,19 +73,7 @@ export interface Activity {
   hours: number;
   startDate: string;
   endDate: string;
-  status: KanbanStatus;
-  impediments: Impediment[];
   createdAt: string;
-}
-
-export function isOverdue(activity: Activity): boolean {
-  if (activity.status === "pronto_para_publicacao") return false;
-  const today = new Date().toISOString().split("T")[0];
-  return activity.endDate < today;
-}
-
-export function hasActiveImpediment(activity: Activity): boolean {
-  return activity.impediments.some((imp) => !imp.resolvedAt);
 }
 
 export interface UserStory {
@@ -95,8 +83,23 @@ export interface UserStory {
   description: string;
   storyPoints: number;
   priority: "baixa" | "media" | "alta" | "critica";
+  status: KanbanStatus;
   sprintId: string;
+  impediments: Impediment[];
   createdAt: string;
+}
+
+export function isHUOverdue(hu: UserStory, activities: Activity[]): boolean {
+  if (hu.status === "pronto_para_publicacao") return false;
+  const huActs = activities.filter((a) => a.huId === hu.id);
+  if (huActs.length === 0) return false;
+  const today = new Date().toISOString().split("T")[0];
+  const maxEnd = huActs.reduce((max, a) => (a.endDate > max ? a.endDate : max), "");
+  return maxEnd < today;
+}
+
+export function hasActiveImpediment(hu: UserStory): boolean {
+  return (hu.impediments || []).some((imp) => !imp.resolvedAt);
 }
 
 export interface Sprint {
