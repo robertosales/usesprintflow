@@ -90,7 +90,7 @@ export function KanbanBoard() {
       const hu = sprintStories.find((h) => h.id === huId);
       if (hu && hu.status !== targetHU.status) {
         updateUserStoryStatus(huId, targetHU.status);
-        const col = KANBAN_COLUMNS.find((c) => c.key === targetHU.status);
+        const col = workflowColumns.find((c) => c.key === targetHU.status);
         toast.success(`HU movida para ${col?.label}`);
       }
     }
