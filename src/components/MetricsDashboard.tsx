@@ -45,10 +45,10 @@ export function MetricsDashboard() {
     : 0;
 
   // HU status distribution
-  const statusData = KANBAN_COLUMNS.map((col) => ({
+  const statusData = workflowColumns.map((col) => ({
     name: col.label,
-    value: sprintStories.filter((hu) => (hu.status || "aguardando_desenvolvimento") === col.key).length,
-    color: STATUS_COLORS[col.key],
+    value: sprintStories.filter((hu) => hu.status === col.key).length,
+    color: STATUS_COLORS[col.key] || "hsl(220, 14%, 55%)",
   })).filter((d) => d.value > 0);
 
   // Dev workload
