@@ -75,7 +75,7 @@ export function KanbanBoard() {
     const huId = active.id as string;
     const overId = over.id as string;
 
-    const targetColumn = KANBAN_COLUMNS.find((c) => c.key === overId);
+    const targetColumn = workflowColumns.find((c) => c.key === overId);
     if (targetColumn) {
       const hu = sprintStories.find((h) => h.id === huId);
       if (hu && hu.status !== targetColumn.key) {
