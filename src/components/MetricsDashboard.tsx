@@ -15,7 +15,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function MetricsDashboard() {
-  const { activities, userStories, developers, activeSprint } = useSprint();
+  const { activities, userStories, developers, activeSprint, workflowColumns } = useSprint();
 
   const sprintStories = activeSprint
     ? userStories.filter((hu) => hu.sprintId === activeSprint.id)
