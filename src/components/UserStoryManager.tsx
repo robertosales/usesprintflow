@@ -50,10 +50,10 @@ export function UserStoryManager() {
     e.preventDefault();
     if (!validate() || !activeSprint) return;
     if (editId) {
-      updateUserStory(editId, { title: title.trim(), description: description.trim(), storyPoints: Number(storyPoints), priority });
+      updateUserStory(editId, { title: title.trim(), description: description.trim(), storyPoints: Number(storyPoints), priority, epicId: epicId || undefined });
       toast.success("User Story atualizada!");
     } else {
-      addUserStory({ title: title.trim(), description: description.trim(), storyPoints: Number(storyPoints), priority, sprintId: activeSprint.id });
+      addUserStory({ title: title.trim(), description: description.trim(), storyPoints: Number(storyPoints), priority, sprintId: activeSprint.id, epicId: epicId || undefined });
       toast.success("User Story criada!");
     }
     resetForm();
