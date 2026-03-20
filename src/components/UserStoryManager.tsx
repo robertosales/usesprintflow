@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { BookOpen, Plus, Trash2, Clock, AlertCircle, Pencil, ShieldAlert } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getTotalHoursForHU, KANBAN_COLUMNS, hasActiveImpediment } from "@/types/sprint";
+import { getTotalHoursForHU, hasActiveImpediment } from "@/types/sprint";
 import { toast } from "sonner";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
