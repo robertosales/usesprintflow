@@ -191,6 +191,12 @@ export function UserStoryManager() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                       <Badge variant="outline" className="font-mono text-xs font-bold">{hu.code}</Badge>
+                      {epic && (
+                        <Badge className="text-[10px] gap-1 px-1.5" style={{ backgroundColor: epic.color + "22", color: epic.color, borderColor: epic.color + "44" }}>
+                          <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: epic.color }} />
+                          {epic.name}
+                        </Badge>
+                      )}
                       <Badge className={`${pInfo.color} text-xs`}>{pInfo.label}</Badge>
                       <Badge variant="secondary" className="text-xs">{hu.storyPoints} pts</Badge>
                       {statusCol && (
