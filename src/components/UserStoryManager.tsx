@@ -159,7 +159,7 @@ export function UserStoryManager() {
           const totalHours = getTotalHoursForHU(activities, hu.id);
           const huActivities = activities.filter((a) => a.huId === hu.id);
           const pInfo = PRIORITY_MAP[hu.priority];
-          const statusCol = KANBAN_COLUMNS.find((c) => c.key === (hu.status || "aguardando_desenvolvimento"));
+          const statusCol = workflowColumns.find((c) => c.key === hu.status);
           const blocked = hasActiveImpediment(hu);
           const activeImps = (hu.impediments || []).filter((i) => !i.resolvedAt).length;
           return (

@@ -124,8 +124,8 @@ export function KanbanBoard() {
           onDragEnd={handleDragEnd}
         >
           <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin">
-            {KANBAN_COLUMNS.map((col) => {
-              const colHUs = sprintStories.filter((hu) => (hu.status || "aguardando_desenvolvimento") === col.key);
+            {workflowColumns.map((col) => {
+              const colHUs = sprintStories.filter((hu) => (hu.status || workflowColumns[0]?.key) === col.key);
               return (
                 <div key={col.key} className="min-w-[300px] w-[300px] flex-shrink-0">
                   <div className={`rounded-t-lg px-3 py-2.5 ${col.colorClass} border border-b-0`}>

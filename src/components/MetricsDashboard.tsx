@@ -59,7 +59,7 @@ export function MetricsDashboard() {
     const devHUIds = [...new Set(devActs.map((a) => a.huId))];
     const doneHours = devActs.filter((a) => {
       const hu = sprintStories.find((h) => h.id === a.huId);
-      return hu && hu.status === "pronto_para_publicacao";
+      return hu && hu.status === lastCol;
     }).reduce((s, a) => s + a.hours, 0);
     const bugs = devActs.filter((a) => a.activityType === "bug").length;
     return { name: dev.name.split(" ")[0], total, done: doneHours, pending: total - doneHours, bugs, tasks: devActs.length };
