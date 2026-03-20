@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area } from "recharts";
 import { TrendingUp, Users, Target, Gauge, CheckCircle, AlertTriangle, ShieldAlert, Clock } from "lucide-react";
-import { KANBAN_COLUMNS, isHUOverdue, hasActiveImpediment } from "@/types/sprint";
+import { isHUOverdue, hasActiveImpediment } from "@/types/sprint";
 
 const STATUS_COLORS: Record<string, string> = {
   aguardando_desenvolvimento: "hsl(220, 14%, 55%)",
