@@ -183,6 +183,7 @@ export function UserStoryManager() {
           const statusCol = workflowColumns.find((c) => c.key === hu.status);
           const blocked = hasActiveImpediment(hu);
           const activeImps = (hu.impediments || []).filter((i) => !i.resolvedAt).length;
+          const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
           return (
             <Card key={hu.id} className={`group hover:shadow-md transition-shadow ${blocked ? "ring-2 ring-warning" : ""}`}>
               <CardContent className="p-4">
