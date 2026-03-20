@@ -68,6 +68,7 @@ export function UserStoryManager() {
     setDescription(hu.description);
     setStoryPoints(String(hu.storyPoints));
     setPriority(hu.priority);
+    setEpicId(hu.epicId || "");
     setErrors({});
     setOpen(true);
   };
