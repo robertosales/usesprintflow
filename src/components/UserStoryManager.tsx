@@ -20,7 +20,7 @@ const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
 };
 
 export function UserStoryManager() {
-  const { userStories, addUserStory, removeUserStory, updateUserStory, activities, activeSprint } = useSprint();
+  const { userStories, addUserStory, removeUserStory, updateUserStory, activities, activeSprint, epics, workflowColumns } = useSprint();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
