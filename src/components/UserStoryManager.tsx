@@ -128,6 +128,25 @@ export function UserStoryManager() {
                   </Select>
                 </div>
               </div>
+              {epics.length > 0 && (
+                <div>
+                  <Label>Épico</Label>
+                  <Select value={epicId} onValueChange={setEpicId}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Sem épico" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem épico</SelectItem>
+                      {epics.map((ep) => (
+                        <SelectItem key={ep.id} value={ep.id}>
+                          <div className="flex items-center gap-2">
+                            <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: ep.color }} />
+                            {ep.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <Button type="submit" className="w-full gap-2">
                 <Plus className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Criar User Story"}
               </Button>
