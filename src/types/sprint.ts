@@ -1,18 +1,28 @@
-export type KanbanStatus =
-  | "aguardando_desenvolvimento"
-  | "em_desenvolvimento"
-  | "em_code_review"
-  | "em_teste"
-  | "bug"
-  | "pronto_para_publicacao";
+export type KanbanStatus = string;
 
-export const KANBAN_COLUMNS: { key: KanbanStatus; label: string; colorClass: string; dotColor: string }[] = [
+export interface WorkflowColumn {
+  key: string;
+  label: string;
+  colorClass: string;
+  dotColor: string;
+}
+
+export const DEFAULT_KANBAN_COLUMNS: WorkflowColumn[] = [
   { key: "aguardando_desenvolvimento", label: "Aguardando Desenvolvimento", colorClass: "bg-kanban-aguardando", dotColor: "bg-muted-foreground" },
   { key: "em_desenvolvimento", label: "Em Desenvolvimento", colorClass: "bg-kanban-desenvolvimento", dotColor: "bg-info" },
   { key: "em_code_review", label: "Em Code Review", colorClass: "bg-kanban-review", dotColor: "bg-accent" },
   { key: "em_teste", label: "Em Teste", colorClass: "bg-kanban-teste", dotColor: "bg-warning" },
   { key: "bug", label: "Bug", colorClass: "bg-kanban-bug", dotColor: "bg-destructive" },
   { key: "pronto_para_publicacao", label: "Pronto para Publicação", colorClass: "bg-kanban-pronto", dotColor: "bg-success" },
+];
+
+export const COLUMN_COLOR_OPTIONS = [
+  { colorClass: "bg-kanban-aguardando", dotColor: "bg-muted-foreground", label: "Cinza" },
+  { colorClass: "bg-kanban-desenvolvimento", dotColor: "bg-info", label: "Azul" },
+  { colorClass: "bg-kanban-review", dotColor: "bg-accent", label: "Roxo" },
+  { colorClass: "bg-kanban-teste", dotColor: "bg-warning", label: "Amarelo" },
+  { colorClass: "bg-kanban-bug", dotColor: "bg-destructive", label: "Vermelho" },
+  { colorClass: "bg-kanban-pronto", dotColor: "bg-success", label: "Verde" },
 ];
 
 export type ActivityType = "task" | "bug" | "architecture";
@@ -41,6 +51,41 @@ export const IMPEDIMENT_CRITICALITY_LABELS: Record<ImpedimentCriticality, { labe
   alta: { label: "Alta", color: "bg-warning/15 text-warning" },
   critica: { label: "Crítica", color: "bg-destructive/15 text-destructive" },
 };
+
+export type CustomFieldType = "text" | "number" | "select";
+
+export interface CustomFieldDefinition {
+  id: string;
+  name: string;
+  type: CustomFieldType;
+  options?: string[]; // for select type
+  required: boolean;
+}
+
+export interface AutomationRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  trigger: {
+    type: "status_change";
+    fromStatus?: string;
+    toStatus: string;
+  };
+  action: {
+    type: "change_status" | "add_impediment" | "notify";
+    targetStatus?: string;
+    message?: string;
+  };
+  createdAt: string;
+}
+
+export interface Epic {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  createdAt: string;
+}
 
 export interface Developer {
   id: string;
@@ -85,7 +130,9 @@ export interface UserStory {
   priority: "baixa" | "media" | "alta" | "critica";
   status: KanbanStatus;
   sprintId: string;
+  epicId?: string;
   impediments: Impediment[];
+  customFields?: Record<string, string | number>;
   createdAt: string;
 }
 

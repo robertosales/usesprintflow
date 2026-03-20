@@ -1,5 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Developer, UserStory, Activity, Sprint, KanbanStatus, calculateEndDate, Impediment, ImpedimentType, ImpedimentCriticality, ActivityType } from "@/types/sprint";
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import {
+  Developer, UserStory, Activity, Sprint, KanbanStatus, calculateEndDate,
+  Impediment, ImpedimentType, ImpedimentCriticality, ActivityType,
+  Epic, CustomFieldDefinition, AutomationRule, WorkflowColumn, DEFAULT_KANBAN_COLUMNS,
+} from "@/types/sprint";
+import { toast } from "sonner";
 
 interface AddImpedimentData {
   reason: string;
@@ -15,6 +20,10 @@ interface SprintContextType {
   userStories: UserStory[];
   activities: Activity[];
   sprints: Sprint[];
+  epics: Epic[];
+  customFields: CustomFieldDefinition[];
+  automationRules: AutomationRule[];
+  workflowColumns: WorkflowColumn[];
   activeSprint: Sprint | null;
   addDeveloper: (dev: Omit<Developer, "id">) => void;
   updateDeveloper: (id: string, dev: Partial<Omit<Developer, "id">>) => void;
@@ -32,6 +41,20 @@ interface SprintContextType {
   updateSprint: (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => void;
   removeSprint: (id: string) => void;
   setActiveSprint: (id: string) => void;
+  addEpic: (epic: Omit<Epic, "id" | "createdAt">) => void;
+  updateEpic: (id: string, epic: Partial<Omit<Epic, "id" | "createdAt">>) => void;
+  removeEpic: (id: string) => void;
+  addCustomField: (field: Omit<CustomFieldDefinition, "id">) => void;
+  updateCustomField: (id: string, field: Partial<Omit<CustomFieldDefinition, "id">>) => void;
+  removeCustomField: (id: string) => void;
+  addAutomationRule: (rule: Omit<AutomationRule, "id" | "createdAt">) => void;
+  updateAutomationRule: (id: string, rule: Partial<Omit<AutomationRule, "id" | "createdAt">>) => void;
+  removeAutomationRule: (id: string) => void;
+  setWorkflowColumns: (columns: WorkflowColumn[]) => void;
+  addWorkflowColumn: (col: WorkflowColumn) => void;
+  removeWorkflowColumn: (key: string) => void;
+  updateWorkflowColumn: (key: string, col: Partial<WorkflowColumn>) => void;
+  reorderWorkflowColumns: (columns: WorkflowColumn[]) => void;
 }
 
 const SprintContext = createContext<SprintContextType | undefined>(undefined);
@@ -50,14 +73,43 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const [userStories, setUserStories] = useState<UserStory[]>(() => loadFromStorage("sprint_hus", []));
   const [activities, setActivities] = useState<Activity[]>(() => loadFromStorage("sprint_activities", []));
   const [sprints, setSprints] = useState<Sprint[]>(() => loadFromStorage("sprint_sprints", []));
+  const [epics, setEpics] = useState<Epic[]>(() => loadFromStorage("sprint_epics", []));
+  const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>(() => loadFromStorage("sprint_custom_fields", []));
+  const [automationRules, setAutomationRules] = useState<AutomationRule[]>(() => loadFromStorage("sprint_automation_rules", []));
+  const [workflowColumns, setWorkflowColumnsState] = useState<WorkflowColumn[]>(() => loadFromStorage("sprint_workflow_columns", DEFAULT_KANBAN_COLUMNS));
 
   useEffect(() => localStorage.setItem("sprint_devs", JSON.stringify(developers)), [developers]);
   useEffect(() => localStorage.setItem("sprint_hus", JSON.stringify(userStories)), [userStories]);
   useEffect(() => localStorage.setItem("sprint_activities", JSON.stringify(activities)), [activities]);
   useEffect(() => localStorage.setItem("sprint_sprints", JSON.stringify(sprints)), [sprints]);
+  useEffect(() => localStorage.setItem("sprint_epics", JSON.stringify(epics)), [epics]);
+  useEffect(() => localStorage.setItem("sprint_custom_fields", JSON.stringify(customFields)), [customFields]);
+  useEffect(() => localStorage.setItem("sprint_automation_rules", JSON.stringify(automationRules)), [automationRules]);
+  useEffect(() => localStorage.setItem("sprint_workflow_columns", JSON.stringify(workflowColumns)), [workflowColumns]);
 
   const activeSprint = sprints.find((s) => s.isActive) || null;
 
+  // --- Automation engine ---
+  const runAutomations = useCallback((huId: string, fromStatus: string, toStatus: string) => {
+    const rules = automationRules.filter((r) => r.enabled && r.trigger.type === "status_change");
+    rules.forEach((rule) => {
+      const matchFrom = !rule.trigger.fromStatus || rule.trigger.fromStatus === fromStatus;
+      const matchTo = rule.trigger.toStatus === toStatus;
+      if (matchFrom && matchTo) {
+        if (rule.action.type === "notify" && rule.action.message) {
+          toast.info(`🤖 Automação "${rule.name}": ${rule.action.message}`);
+        }
+        if (rule.action.type === "change_status" && rule.action.targetStatus) {
+          setUserStories((prev) =>
+            prev.map((h) => (h.id === huId ? { ...h, status: rule.action.targetStatus! } : h))
+          );
+          toast.info(`🤖 Automação "${rule.name}": Status alterado automaticamente`);
+        }
+      }
+    });
+  }, [automationRules]);
+
+  // Developers
   const addDeveloper = (dev: Omit<Developer, "id">) => {
     setDevelopers((prev) => [...prev, { ...dev, id: crypto.randomUUID() }]);
   };
@@ -68,11 +120,13 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     setDevelopers((prev) => prev.filter((d) => d.id !== id));
   };
 
+  // User Stories
   const addUserStory = (hu: Omit<UserStory, "id" | "code" | "createdAt" | "status" | "impediments">) => {
     const count = userStories.length + 1;
+    const firstCol = workflowColumns[0]?.key || "aguardando_desenvolvimento";
     setUserStories((prev) => [
       ...prev,
-      { ...hu, id: crypto.randomUUID(), code: `HU-${String(count).padStart(3, "0")}`, status: "aguardando_desenvolvimento", impediments: [], createdAt: new Date().toISOString() },
+      { ...hu, id: crypto.randomUUID(), code: `HU-${String(count).padStart(3, "0")}`, status: firstCol, impediments: [], createdAt: new Date().toISOString() },
     ]);
   };
   const updateUserStory = (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => {
@@ -83,9 +137,17 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     setActivities((prev) => prev.filter((a) => a.huId !== id));
   };
   const updateUserStoryStatus = (id: string, status: KanbanStatus) => {
-    setUserStories((prev) => prev.map((h) => (h.id === id ? { ...h, status } : h)));
+    const hu = userStories.find((h) => h.id === id);
+    if (hu) {
+      const oldStatus = hu.status;
+      setUserStories((prev) => prev.map((h) => (h.id === id ? { ...h, status } : h)));
+      if (oldStatus !== status) {
+        runAutomations(id, oldStatus, status);
+      }
+    }
   };
 
+  // Activities
   const addActivity = (act: Omit<Activity, "id" | "endDate" | "createdAt">) => {
     const endDate = calculateEndDate(act.startDate, act.hours);
     setActivities((prev) => [
@@ -107,6 +169,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     setActivities((prev) => prev.filter((a) => a.id !== id));
   };
 
+  // Impediments
   const addImpediment = (huId: string, data: AddImpedimentData) => {
     const impediment: Impediment = {
       id: crypto.randomUUID(),
@@ -120,30 +183,21 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     };
     setUserStories((prev) =>
       prev.map((h) =>
-        h.id === huId
-          ? { ...h, impediments: [...(h.impediments || []), impediment] }
-          : h
+        h.id === huId ? { ...h, impediments: [...(h.impediments || []), impediment] } : h
       )
     );
   };
-
   const resolveImpediment = (huId: string, impedimentId: string, resolution?: string) => {
     setUserStories((prev) =>
       prev.map((h) =>
         h.id === huId
-          ? {
-              ...h,
-              impediments: (h.impediments || []).map((imp) =>
-                imp.id === impedimentId
-                  ? { ...imp, resolvedAt: new Date().toISOString(), resolution }
-                  : imp
-              ),
-            }
+          ? { ...h, impediments: (h.impediments || []).map((imp) => imp.id === impedimentId ? { ...imp, resolvedAt: new Date().toISOString(), resolution } : imp) }
           : h
       )
     );
   };
 
+  // Sprints
   const addSprint = (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => {
     setSprints((prev) => [
       ...prev.map((s) => ({ ...s, isActive: false })),
@@ -163,15 +217,66 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     setSprints((prev) => prev.map((s) => ({ ...s, isActive: s.id === id })));
   };
 
+  // Epics
+  const addEpic = (epic: Omit<Epic, "id" | "createdAt">) => {
+    setEpics((prev) => [...prev, { ...epic, id: crypto.randomUUID(), createdAt: new Date().toISOString() }]);
+  };
+  const updateEpic = (id: string, epic: Partial<Omit<Epic, "id" | "createdAt">>) => {
+    setEpics((prev) => prev.map((e) => (e.id === id ? { ...e, ...epic } : e)));
+  };
+  const removeEpic = (id: string) => {
+    setEpics((prev) => prev.filter((e) => e.id !== id));
+    setUserStories((prev) => prev.map((hu) => (hu.epicId === id ? { ...hu, epicId: undefined } : hu)));
+  };
+
+  // Custom Fields
+  const addCustomField = (field: Omit<CustomFieldDefinition, "id">) => {
+    setCustomFields((prev) => [...prev, { ...field, id: crypto.randomUUID() }]);
+  };
+  const updateCustomField = (id: string, field: Partial<Omit<CustomFieldDefinition, "id">>) => {
+    setCustomFields((prev) => prev.map((f) => (f.id === id ? { ...f, ...field } : f)));
+  };
+  const removeCustomField = (id: string) => {
+    setCustomFields((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  // Automation Rules
+  const addAutomationRule = (rule: Omit<AutomationRule, "id" | "createdAt">) => {
+    setAutomationRules((prev) => [...prev, { ...rule, id: crypto.randomUUID(), createdAt: new Date().toISOString() }]);
+  };
+  const updateAutomationRule = (id: string, rule: Partial<Omit<AutomationRule, "id" | "createdAt">>) => {
+    setAutomationRules((prev) => prev.map((r) => (r.id === id ? { ...r, ...rule } : r)));
+  };
+  const removeAutomationRule = (id: string) => {
+    setAutomationRules((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  // Workflow Columns
+  const setWorkflowColumns = (columns: WorkflowColumn[]) => setWorkflowColumnsState(columns);
+  const addWorkflowColumn = (col: WorkflowColumn) => {
+    setWorkflowColumnsState((prev) => [...prev, col]);
+  };
+  const removeWorkflowColumn = (key: string) => {
+    setWorkflowColumnsState((prev) => prev.filter((c) => c.key !== key));
+  };
+  const updateWorkflowColumn = (key: string, col: Partial<WorkflowColumn>) => {
+    setWorkflowColumnsState((prev) => prev.map((c) => (c.key === key ? { ...c, ...col } : c)));
+  };
+  const reorderWorkflowColumns = (columns: WorkflowColumn[]) => setWorkflowColumnsState(columns);
+
   return (
     <SprintContext.Provider
       value={{
-        developers, userStories, activities, sprints, activeSprint,
+        developers, userStories, activities, sprints, epics, customFields, automationRules, workflowColumns, activeSprint,
         addDeveloper, updateDeveloper, removeDeveloper,
         addUserStory, updateUserStory, removeUserStory, updateUserStoryStatus,
         addActivity, updateActivity, removeActivity,
         addImpediment, resolveImpediment,
         addSprint, updateSprint, removeSprint, setActiveSprint: setActiveSprintFn,
+        addEpic, updateEpic, removeEpic,
+        addCustomField, updateCustomField, removeCustomField,
+        addAutomationRule, updateAutomationRule, removeAutomationRule,
+        setWorkflowColumns, addWorkflowColumn, removeWorkflowColumn, updateWorkflowColumn, reorderWorkflowColumns,
       }}
     >
       {children}
