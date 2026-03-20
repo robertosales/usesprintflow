@@ -225,6 +225,12 @@ function HUCard({
       <CardContent className="p-3 space-y-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           <Badge variant="outline" className="font-mono text-[10px] px-1.5 font-bold">{hu.code}</Badge>
+          {epic && (
+            <Badge className="text-[8px] px-1 gap-0.5" style={{ backgroundColor: epic.color + "22", color: epic.color }}>
+              <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: epic.color }} />
+              {epic.name}
+            </Badge>
+          )}
           <Badge className={`text-[10px] px-1.5 ${PRIORITY_COLORS[hu.priority]}`}>{PRIORITY_LABELS[hu.priority]}</Badge>
           <Badge variant="secondary" className="text-[10px] px-1.5">{hu.storyPoints} pts</Badge>
           {overdue && (
