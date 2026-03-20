@@ -35,7 +35,7 @@ export function UserStoryManager() {
     : userStories;
 
   const resetForm = () => {
-    setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setErrors({}); setEditId(null);
+    setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setEpicId(""); setErrors({}); setEditId(null);
   };
 
   const validate = () => {
