@@ -25,7 +25,8 @@ export function MetricsDashboard() {
   );
 
   const totalPoints = sprintStories.reduce((s, hu) => s + hu.storyPoints, 0);
-  const completedHUs = sprintStories.filter((hu) => (hu.status || "aguardando_desenvolvimento") === "pronto_para_publicacao");
+  const lastCol = workflowColumns[workflowColumns.length - 1]?.key;
+  const completedHUs = sprintStories.filter((hu) => hu.status === lastCol);
   const completedPoints = completedHUs.reduce((s, hu) => s + hu.storyPoints, 0);
   const totalHours = sprintActivities.reduce((s, a) => s + a.hours, 0);
   const overdueCount = sprintStories.filter((hu) => isHUOverdue(hu, activities)).length;
