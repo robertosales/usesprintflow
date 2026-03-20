@@ -6,25 +6,49 @@ import { ActivityManager } from "@/components/ActivityManager";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { MetricsDashboard } from "@/components/MetricsDashboard";
 import { ImpedimentList } from "@/components/ImpedimentManager";
+import { EpicManager } from "@/components/EpicManager";
+import { WorkflowManager } from "@/components/WorkflowManager";
+import { CustomFieldManager } from "@/components/CustomFieldManager";
+import { AutomationManager } from "@/components/AutomationManager";
 import { useSprint } from "@/contexts/SprintContext";
 import { Badge } from "@/components/ui/badge";
 import {
-  LayoutDashboard, Users, BookOpen, ListTodo, Columns3, BarChart3, Zap, ShieldAlert,
-  ChevronLeft, ChevronRight
+  LayoutDashboard, Users, ListTodo, Columns3, BarChart3, Zap, ShieldAlert,
+  ChevronLeft, ChevronRight, Layers, GitBranch, SlidersHorizontal, Wand2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasActiveImpediment } from "@/types/sprint";
+import { Separator } from "@/components/ui/separator";
 
-const NAV_ITEMS = [
-  { key: "backlog", label: "Backlog", icon: LayoutDashboard },
-  { key: "team", label: "Time", icon: Users },
-  { key: "activities", label: "Atividades", icon: ListTodo },
-  { key: "kanban", label: "Board", icon: Columns3 },
-  { key: "impediments", label: "Impedimentos", icon: ShieldAlert },
-  { key: "metrics", label: "Métricas", icon: BarChart3 },
+const NAV_SECTIONS = [
+  {
+    title: "Planejamento",
+    items: [
+      { key: "backlog", label: "Backlog", icon: LayoutDashboard },
+      { key: "epics", label: "Épicos", icon: Layers },
+      { key: "team", label: "Time", icon: Users },
+      { key: "activities", label: "Atividades", icon: ListTodo },
+    ],
+  },
+  {
+    title: "Execução",
+    items: [
+      { key: "kanban", label: "Board", icon: Columns3 },
+      { key: "impediments", label: "Impedimentos", icon: ShieldAlert },
+      { key: "metrics", label: "Métricas", icon: BarChart3 },
+    ],
+  },
+  {
+    title: "Configurações",
+    items: [
+      { key: "workflow", label: "Fluxo de Trabalho", icon: GitBranch },
+      { key: "custom-fields", label: "Campos Custom", icon: SlidersHorizontal },
+      { key: "automations", label: "Automações", icon: Wand2 },
+    ],
+  },
 ] as const;
 
-type NavKey = typeof NAV_ITEMS[number]["key"];
+type NavKey = typeof NAV_SECTIONS[number]["items"][number]["key"];
 
 const Index = () => {
   const [active, setActive] = useState<NavKey>("backlog");
@@ -36,7 +60,6 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Sidebar */}
       <aside className={`bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border transition-all duration-200 ${collapsed ? "w-16" : "w-60"} shrink-0`}>
         <div className="flex items-center gap-2.5 px-4 py-4 border-b border-sidebar-border">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary shrink-0">
@@ -60,35 +83,40 @@ const Index = () => {
           </div>
         )}
 
-        <nav className="flex-1 py-2 px-2 space-y-0.5">
-          {!collapsed && (
-            <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 font-semibold px-2 pt-2 pb-1">Planejamento</p>
-          )}
-          {NAV_ITEMS.map((item) => {
-            const isActive = active === item.key;
-            return (
-              <button
-                key={item.key}
-                onClick={() => setActive(item.key)}
-                className={`w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors ${
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-                } ${collapsed ? "justify-center" : ""}`}
-                title={collapsed ? item.label : undefined}
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                {!collapsed && (
-                  <span className="truncate flex-1 text-left">{item.label}</span>
-                )}
-                {!collapsed && item.key === "impediments" && blockedCount > 0 && (
-                  <Badge className="bg-warning text-warning-foreground text-[10px] h-4 min-w-4 flex items-center justify-center px-1">
-                    {blockedCount}
-                  </Badge>
-                )}
-              </button>
-            );
-          })}
+        <nav className="flex-1 py-2 px-2 space-y-1 overflow-y-auto scrollbar-thin">
+          {NAV_SECTIONS.map((section, sIdx) => (
+            <div key={section.title}>
+              {!collapsed && (
+                <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 font-semibold px-2 pt-3 pb-1">{section.title}</p>
+              )}
+              {collapsed && sIdx > 0 && <Separator className="my-1 bg-sidebar-border" />}
+              {section.items.map((item) => {
+                const isActive = active === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => setActive(item.key as NavKey)}
+                    className={`w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors ${
+                      isActive
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                    } ${collapsed ? "justify-center" : ""}`}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    {!collapsed && (
+                      <span className="truncate flex-1 text-left">{item.label}</span>
+                    )}
+                    {!collapsed && item.key === "impediments" && blockedCount > 0 && (
+                      <Badge className="bg-warning text-warning-foreground text-[10px] h-4 min-w-4 flex items-center justify-center px-1">
+                        {blockedCount}
+                      </Badge>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="px-2 py-2 border-t border-sidebar-border">
@@ -111,11 +139,15 @@ const Index = () => {
               <UserStoryManager />
             </div>
           )}
+          {active === "epics" && <EpicManager />}
           {active === "team" && <DeveloperManager />}
           {active === "activities" && <ActivityManager />}
           {active === "kanban" && <KanbanBoard />}
           {active === "impediments" && <ImpedimentList />}
           {active === "metrics" && <MetricsDashboard />}
+          {active === "workflow" && <WorkflowManager />}
+          {active === "custom-fields" && <CustomFieldManager />}
+          {active === "automations" && <AutomationManager />}
         </div>
       </main>
     </div>

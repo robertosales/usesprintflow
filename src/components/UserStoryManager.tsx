@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { BookOpen, Plus, Trash2, Clock, AlertCircle, Pencil, ShieldAlert } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getTotalHoursForHU, KANBAN_COLUMNS, hasActiveImpediment } from "@/types/sprint";
+import { getTotalHoursForHU, hasActiveImpediment } from "@/types/sprint";
 import { toast } from "sonner";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
@@ -20,13 +20,14 @@ const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
 };
 
 export function UserStoryManager() {
-  const { userStories, addUserStory, removeUserStory, updateUserStory, activities, activeSprint } = useSprint();
+  const { userStories, addUserStory, removeUserStory, updateUserStory, activities, activeSprint, epics, workflowColumns } = useSprint();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [storyPoints, setStoryPoints] = useState("3");
   const [priority, setPriority] = useState<"baixa" | "media" | "alta" | "critica">("media");
+  const [epicId, setEpicId] = useState<string>("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const sprintStories = activeSprint
@@ -34,7 +35,7 @@ export function UserStoryManager() {
     : userStories;
 
   const resetForm = () => {
-    setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setErrors({}); setEditId(null);
+    setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setEpicId(""); setErrors({}); setEditId(null);
   };
 
   const validate = () => {
@@ -49,10 +50,10 @@ export function UserStoryManager() {
     e.preventDefault();
     if (!validate() || !activeSprint) return;
     if (editId) {
-      updateUserStory(editId, { title: title.trim(), description: description.trim(), storyPoints: Number(storyPoints), priority });
+      updateUserStory(editId, { title: title.trim(), description: description.trim(), storyPoints: Number(storyPoints), priority, epicId: epicId || undefined });
       toast.success("User Story atualizada!");
     } else {
-      addUserStory({ title: title.trim(), description: description.trim(), storyPoints: Number(storyPoints), priority, sprintId: activeSprint.id });
+      addUserStory({ title: title.trim(), description: description.trim(), storyPoints: Number(storyPoints), priority, sprintId: activeSprint.id, epicId: epicId || undefined });
       toast.success("User Story criada!");
     }
     resetForm();
@@ -67,6 +68,7 @@ export function UserStoryManager() {
     setDescription(hu.description);
     setStoryPoints(String(hu.storyPoints));
     setPriority(hu.priority);
+    setEpicId(hu.epicId || "");
     setErrors({});
     setOpen(true);
   };
@@ -126,6 +128,25 @@ export function UserStoryManager() {
                   </Select>
                 </div>
               </div>
+              {epics.length > 0 && (
+                <div>
+                  <Label>Épico</Label>
+                  <Select value={epicId} onValueChange={setEpicId}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Sem épico" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem épico</SelectItem>
+                      {epics.map((ep) => (
+                        <SelectItem key={ep.id} value={ep.id}>
+                          <div className="flex items-center gap-2">
+                            <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: ep.color }} />
+                            {ep.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <Button type="submit" className="w-full gap-2">
                 <Plus className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Criar User Story"}
               </Button>
@@ -159,9 +180,10 @@ export function UserStoryManager() {
           const totalHours = getTotalHoursForHU(activities, hu.id);
           const huActivities = activities.filter((a) => a.huId === hu.id);
           const pInfo = PRIORITY_MAP[hu.priority];
-          const statusCol = KANBAN_COLUMNS.find((c) => c.key === (hu.status || "aguardando_desenvolvimento"));
+          const statusCol = workflowColumns.find((c) => c.key === hu.status);
           const blocked = hasActiveImpediment(hu);
           const activeImps = (hu.impediments || []).filter((i) => !i.resolvedAt).length;
+          const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
           return (
             <Card key={hu.id} className={`group hover:shadow-md transition-shadow ${blocked ? "ring-2 ring-warning" : ""}`}>
               <CardContent className="p-4">
@@ -169,6 +191,12 @@ export function UserStoryManager() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                       <Badge variant="outline" className="font-mono text-xs font-bold">{hu.code}</Badge>
+                      {epic && (
+                        <Badge className="text-[10px] gap-1 px-1.5" style={{ backgroundColor: epic.color + "22", color: epic.color, borderColor: epic.color + "44" }}>
+                          <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: epic.color }} />
+                          {epic.name}
+                        </Badge>
+                      )}
                       <Badge className={`${pInfo.color} text-xs`}>{pInfo.label}</Badge>
                       <Badge variant="secondary" className="text-xs">{hu.storyPoints} pts</Badge>
                       {statusCol && (

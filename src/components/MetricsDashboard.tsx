@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, AreaChart, Area } from "recharts";
 import { TrendingUp, Users, Target, Gauge, CheckCircle, AlertTriangle, ShieldAlert, Clock } from "lucide-react";
-import { KANBAN_COLUMNS, isHUOverdue, hasActiveImpediment } from "@/types/sprint";
+import { isHUOverdue, hasActiveImpediment } from "@/types/sprint";
 
 const STATUS_COLORS: Record<string, string> = {
   aguardando_desenvolvimento: "hsl(220, 14%, 55%)",
@@ -15,7 +15,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function MetricsDashboard() {
-  const { activities, userStories, developers, activeSprint } = useSprint();
+  const { activities, userStories, developers, activeSprint, workflowColumns } = useSprint();
 
   const sprintStories = activeSprint
     ? userStories.filter((hu) => hu.sprintId === activeSprint.id)
@@ -25,7 +25,8 @@ export function MetricsDashboard() {
   );
 
   const totalPoints = sprintStories.reduce((s, hu) => s + hu.storyPoints, 0);
-  const completedHUs = sprintStories.filter((hu) => (hu.status || "aguardando_desenvolvimento") === "pronto_para_publicacao");
+  const lastCol = workflowColumns[workflowColumns.length - 1]?.key;
+  const completedHUs = sprintStories.filter((hu) => hu.status === lastCol);
   const completedPoints = completedHUs.reduce((s, hu) => s + hu.storyPoints, 0);
   const totalHours = sprintActivities.reduce((s, a) => s + a.hours, 0);
   const overdueCount = sprintStories.filter((hu) => isHUOverdue(hu, activities)).length;
@@ -44,10 +45,10 @@ export function MetricsDashboard() {
     : 0;
 
   // HU status distribution
-  const statusData = KANBAN_COLUMNS.map((col) => ({
+  const statusData = workflowColumns.map((col) => ({
     name: col.label,
-    value: sprintStories.filter((hu) => (hu.status || "aguardando_desenvolvimento") === col.key).length,
-    color: STATUS_COLORS[col.key],
+    value: sprintStories.filter((hu) => hu.status === col.key).length,
+    color: STATUS_COLORS[col.key] || "hsl(220, 14%, 55%)",
   })).filter((d) => d.value > 0);
 
   // Dev workload
@@ -58,7 +59,7 @@ export function MetricsDashboard() {
     const devHUIds = [...new Set(devActs.map((a) => a.huId))];
     const doneHours = devActs.filter((a) => {
       const hu = sprintStories.find((h) => h.id === a.huId);
-      return hu && hu.status === "pronto_para_publicacao";
+      return hu && hu.status === lastCol;
     }).reduce((s, a) => s + a.hours, 0);
     const bugs = devActs.filter((a) => a.activityType === "bug").length;
     return { name: dev.name.split(" ")[0], total, done: doneHours, pending: total - doneHours, bugs, tasks: devActs.length };

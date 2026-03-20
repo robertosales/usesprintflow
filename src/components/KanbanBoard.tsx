@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
-import { KANBAN_COLUMNS, KanbanStatus, isHUOverdue, hasActiveImpediment, IMPEDIMENT_CRITICALITY_LABELS, UserStory } from "@/types/sprint";
+import { KanbanStatus, isHUOverdue, hasActiveImpediment, IMPEDIMENT_CRITICALITY_LABELS, UserStory } from "@/types/sprint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,7 @@ function DraggableCard({ id, children }: { id: string; children: React.ReactNode
 }
 
 export function KanbanBoard() {
-  const { activities, userStories, developers, updateUserStoryStatus, resolveImpediment, activeSprint } = useSprint();
+  const { activities, userStories, developers, updateUserStoryStatus, resolveImpediment, activeSprint, workflowColumns } = useSprint();
   const [impedimentDialog, setImpedimentDialog] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [expandedHU, setExpandedHU] = useState<string | null>(null);
@@ -75,7 +75,7 @@ export function KanbanBoard() {
     const huId = active.id as string;
     const overId = over.id as string;
 
-    const targetColumn = KANBAN_COLUMNS.find((c) => c.key === overId);
+    const targetColumn = workflowColumns.find((c) => c.key === overId);
     if (targetColumn) {
       const hu = sprintStories.find((h) => h.id === huId);
       if (hu && hu.status !== targetColumn.key) {
@@ -90,7 +90,7 @@ export function KanbanBoard() {
       const hu = sprintStories.find((h) => h.id === huId);
       if (hu && hu.status !== targetHU.status) {
         updateUserStoryStatus(huId, targetHU.status);
-        const col = KANBAN_COLUMNS.find((c) => c.key === targetHU.status);
+        const col = workflowColumns.find((c) => c.key === targetHU.status);
         toast.success(`HU movida para ${col?.label}`);
       }
     }
@@ -124,8 +124,8 @@ export function KanbanBoard() {
           onDragEnd={handleDragEnd}
         >
           <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin">
-            {KANBAN_COLUMNS.map((col) => {
-              const colHUs = sprintStories.filter((hu) => (hu.status || "aguardando_desenvolvimento") === col.key);
+            {workflowColumns.map((col) => {
+              const colHUs = sprintStories.filter((hu) => (hu.status || workflowColumns[0]?.key) === col.key);
               return (
                 <div key={col.key} className="min-w-[300px] w-[300px] flex-shrink-0">
                   <div className={`rounded-t-lg px-3 py-2.5 ${col.colorClass} border border-b-0`}>
@@ -208,12 +208,13 @@ function HUCard({
   onImpediment: () => void;
   onResolveImpediment: (impId: string) => void;
 }) {
-  const { activities, developers } = useSprint();
+  const { activities, developers, epics } = useSprint();
   const huActivities = activities.filter((a) => a.huId === hu.id);
   const overdue = isHUOverdue(hu, activities);
   const blocked = hasActiveImpediment(hu);
   const activeImpediments = (hu.impediments || []).filter((i) => !i.resolvedAt);
   const totalHours = huActivities.reduce((s, a) => s + a.hours, 0);
+  const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
 
   return (
     <Card
@@ -224,6 +225,12 @@ function HUCard({
       <CardContent className="p-3 space-y-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           <Badge variant="outline" className="font-mono text-[10px] px-1.5 font-bold">{hu.code}</Badge>
+          {epic && (
+            <Badge className="text-[8px] px-1 gap-0.5" style={{ backgroundColor: epic.color + "22", color: epic.color }}>
+              <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: epic.color }} />
+              {epic.name}
+            </Badge>
+          )}
           <Badge className={`text-[10px] px-1.5 ${PRIORITY_COLORS[hu.priority]}`}>{PRIORITY_LABELS[hu.priority]}</Badge>
           <Badge variant="secondary" className="text-[10px] px-1.5">{hu.storyPoints} pts</Badge>
           {overdue && (
