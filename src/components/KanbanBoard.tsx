@@ -208,12 +208,13 @@ function HUCard({
   onImpediment: () => void;
   onResolveImpediment: (impId: string) => void;
 }) {
-  const { activities, developers } = useSprint();
+  const { activities, developers, epics } = useSprint();
   const huActivities = activities.filter((a) => a.huId === hu.id);
   const overdue = isHUOverdue(hu, activities);
   const blocked = hasActiveImpediment(hu);
   const activeImpediments = (hu.impediments || []).filter((i) => !i.resolvedAt);
   const totalHours = huActivities.reduce((s, a) => s + a.hours, 0);
+  const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
 
   return (
     <Card
