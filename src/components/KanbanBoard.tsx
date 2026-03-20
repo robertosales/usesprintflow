@@ -50,7 +50,7 @@ function DraggableCard({ id, children }: { id: string; children: React.ReactNode
 }
 
 export function KanbanBoard() {
-  const { activities, userStories, developers, updateUserStoryStatus, resolveImpediment, activeSprint } = useSprint();
+  const { activities, userStories, developers, updateUserStoryStatus, resolveImpediment, activeSprint, workflowColumns } = useSprint();
   const [impedimentDialog, setImpedimentDialog] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [expandedHU, setExpandedHU] = useState<string | null>(null);
