@@ -13,7 +13,7 @@ import { getTotalHoursForHU, ActivityType, ACTIVITY_TYPE_LABELS } from "@/types/
 import { toast } from "sonner";
 
 export function ActivityManager() {
-  const { activities, addActivity, removeActivity, updateActivity, userStories, developers, activeSprint } = useSprint();
+  const { activities, addActivity, removeActivity, updateActivity, closeActivity, reopenActivity, userStories, developers, activeSprint } = useSprint();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
