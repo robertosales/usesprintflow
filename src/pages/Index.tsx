@@ -10,23 +10,33 @@ import { EpicManager } from "@/components/EpicManager";
 import { WorkflowManager } from "@/components/WorkflowManager";
 import { CustomFieldManager } from "@/components/CustomFieldManager";
 import { AutomationManager } from "@/components/AutomationManager";
+import { TeamManager } from "@/components/TeamManager";
 import { useSprint } from "@/contexts/SprintContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard, Users, ListTodo, Columns3, BarChart3, Zap, ShieldAlert,
-  ChevronLeft, ChevronRight, Layers, GitBranch, SlidersHorizontal, Wand2
+  ChevronLeft, ChevronRight, Layers, GitBranch, SlidersHorizontal, Wand2,
+  LogOut, Building2, UserCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasActiveImpediment } from "@/types/sprint";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const NAV_SECTIONS = [
+  {
+    title: "Organização",
+    items: [
+      { key: "teams", label: "Times", icon: Building2 },
+    ],
+  },
   {
     title: "Planejamento",
     items: [
       { key: "backlog", label: "Backlog", icon: LayoutDashboard },
       { key: "epics", label: "Épicos", icon: Layers },
-      { key: "team", label: "Time", icon: Users },
+      { key: "team", label: "Equipe", icon: Users },
       { key: "activities", label: "Atividades", icon: ListTodo },
     ],
   },
@@ -51,12 +61,15 @@ const NAV_SECTIONS = [
 type NavKey = typeof NAV_SECTIONS[number]["items"][number]["key"];
 
 const Index = () => {
-  const [active, setActive] = useState<NavKey>("backlog");
+  const [active, setActive] = useState<NavKey>("teams");
   const [collapsed, setCollapsed] = useState(false);
-  const { activeSprint, userStories } = useSprint();
+  const { activeSprint, userStories, loading } = useSprint();
+  const { profile, signOut, isAdmin, teams, currentTeamId, setCurrentTeamId } = useAuth();
 
   const sprintStories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : [];
   const blockedCount = sprintStories.filter(hasActiveImpediment).length;
+
+  const needsTeam = !currentTeamId && active !== "teams";
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -72,6 +85,36 @@ const Index = () => {
             </div>
           )}
         </div>
+
+        {/* User info */}
+        {!collapsed && profile && (
+          <div className="px-3 py-3 border-b border-sidebar-border">
+            <div className="flex items-center gap-2">
+              <UserCircle className="h-5 w-5 text-sidebar-foreground/60 shrink-0" />
+              <div className="overflow-hidden">
+                <p className="text-xs font-medium text-sidebar-primary-foreground truncate">{profile.display_name}</p>
+                <p className="text-[10px] text-sidebar-foreground/60">{isAdmin ? "Administrador" : "Membro"}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Team selector */}
+        {!collapsed && teams.length > 0 && (
+          <div className="px-3 py-3 border-b border-sidebar-border">
+            <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/50 font-semibold mb-1">Time</p>
+            <Select value={currentTeamId || ""} onValueChange={setCurrentTeamId}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Selecione um time" />
+              </SelectTrigger>
+              <SelectContent>
+                {teams.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {!collapsed && activeSprint && (
           <div className="px-3 py-3 border-b border-sidebar-border">
@@ -119,7 +162,17 @@ const Index = () => {
           ))}
         </nav>
 
-        <div className="px-2 py-2 border-t border-sidebar-border">
+        <div className="px-2 py-2 border-t border-sidebar-border space-y-1">
+          {!collapsed && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 justify-start"
+              onClick={signOut}
+            >
+              <LogOut className="h-4 w-4 mr-2" /> Sair
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -133,21 +186,38 @@ const Index = () => {
 
       <main className="flex-1 overflow-auto">
         <div className="max-w-7xl mx-auto p-6">
-          {active === "backlog" && (
-            <div className="space-y-8">
-              <SprintManager />
-              <UserStoryManager />
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
             </div>
           )}
-          {active === "epics" && <EpicManager />}
-          {active === "team" && <DeveloperManager />}
-          {active === "activities" && <ActivityManager />}
-          {active === "kanban" && <KanbanBoard />}
-          {active === "impediments" && <ImpedimentList />}
-          {active === "metrics" && <MetricsDashboard />}
-          {active === "workflow" && <WorkflowManager />}
-          {active === "custom-fields" && <CustomFieldManager />}
-          {active === "automations" && <AutomationManager />}
+          {!loading && needsTeam && (
+            <div className="flex flex-col items-center justify-center py-20 space-y-4">
+              <Building2 className="h-12 w-12 text-muted-foreground" />
+              <p className="text-lg text-muted-foreground">Selecione ou crie um time para começar</p>
+              <Button onClick={() => setActive("teams")}>Ir para Times</Button>
+            </div>
+          )}
+          {!loading && !needsTeam && (
+            <>
+              {active === "teams" && <TeamManager />}
+              {active === "backlog" && (
+                <div className="space-y-8">
+                  <SprintManager />
+                  <UserStoryManager />
+                </div>
+              )}
+              {active === "epics" && <EpicManager />}
+              {active === "team" && <DeveloperManager />}
+              {active === "activities" && <ActivityManager />}
+              {active === "kanban" && <KanbanBoard />}
+              {active === "impediments" && <ImpedimentList />}
+              {active === "metrics" && <MetricsDashboard />}
+              {active === "workflow" && <WorkflowManager />}
+              {active === "custom-fields" && <CustomFieldManager />}
+              {active === "automations" && <AutomationManager />}
+            </>
+          )}
         </div>
       </main>
     </div>
