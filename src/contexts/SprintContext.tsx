@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Developer, UserStory, Activity, Sprint, KanbanStatus, calculateEndDate,
   Impediment, ImpedimentType, ImpedimentCriticality, ActivityType,
@@ -25,74 +27,164 @@ interface SprintContextType {
   automationRules: AutomationRule[];
   workflowColumns: WorkflowColumn[];
   activeSprint: Sprint | null;
-  addDeveloper: (dev: Omit<Developer, "id">) => void;
-  updateDeveloper: (id: string, dev: Partial<Omit<Developer, "id">>) => void;
-  removeDeveloper: (id: string) => void;
-  addUserStory: (hu: Omit<UserStory, "id" | "code" | "createdAt" | "status" | "impediments">) => void;
-  updateUserStory: (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => void;
-  removeUserStory: (id: string) => void;
-  updateUserStoryStatus: (id: string, status: KanbanStatus) => void;
-  addActivity: (act: Omit<Activity, "id" | "endDate" | "createdAt">) => void;
-  updateActivity: (id: string, act: Partial<Omit<Activity, "id" | "createdAt">>) => void;
-  removeActivity: (id: string) => void;
-  addImpediment: (huId: string, data: AddImpedimentData) => void;
-  resolveImpediment: (huId: string, impedimentId: string, resolution?: string) => void;
-  addSprint: (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => void;
-  updateSprint: (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => void;
-  removeSprint: (id: string) => void;
-  setActiveSprint: (id: string) => void;
-  addEpic: (epic: Omit<Epic, "id" | "createdAt">) => void;
-  updateEpic: (id: string, epic: Partial<Omit<Epic, "id" | "createdAt">>) => void;
-  removeEpic: (id: string) => void;
-  addCustomField: (field: Omit<CustomFieldDefinition, "id">) => void;
-  updateCustomField: (id: string, field: Partial<Omit<CustomFieldDefinition, "id">>) => void;
-  removeCustomField: (id: string) => void;
-  addAutomationRule: (rule: Omit<AutomationRule, "id" | "createdAt">) => void;
-  updateAutomationRule: (id: string, rule: Partial<Omit<AutomationRule, "id" | "createdAt">>) => void;
-  removeAutomationRule: (id: string) => void;
+  loading: boolean;
+  addDeveloper: (dev: Omit<Developer, "id">) => Promise<void>;
+  updateDeveloper: (id: string, dev: Partial<Omit<Developer, "id">>) => Promise<void>;
+  removeDeveloper: (id: string) => Promise<void>;
+  addUserStory: (hu: Omit<UserStory, "id" | "code" | "createdAt" | "status" | "impediments">) => Promise<void>;
+  updateUserStory: (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => Promise<void>;
+  removeUserStory: (id: string) => Promise<void>;
+  updateUserStoryStatus: (id: string, status: KanbanStatus) => Promise<void>;
+  addActivity: (act: Omit<Activity, "id" | "endDate" | "createdAt">) => Promise<void>;
+  updateActivity: (id: string, act: Partial<Omit<Activity, "id" | "createdAt">>) => Promise<void>;
+  removeActivity: (id: string) => Promise<void>;
+  closeActivity: (id: string) => Promise<void>;
+  reopenActivity: (id: string) => Promise<void>;
+  addImpediment: (huId: string, data: AddImpedimentData) => Promise<void>;
+  resolveImpediment: (huId: string, impedimentId: string, resolution?: string) => Promise<void>;
+  addSprint: (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => Promise<void>;
+  updateSprint: (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => Promise<void>;
+  removeSprint: (id: string) => Promise<void>;
+  setActiveSprint: (id: string) => Promise<void>;
+  addEpic: (epic: Omit<Epic, "id" | "createdAt">) => Promise<void>;
+  updateEpic: (id: string, epic: Partial<Omit<Epic, "id" | "createdAt">>) => Promise<void>;
+  removeEpic: (id: string) => Promise<void>;
+  addCustomField: (field: Omit<CustomFieldDefinition, "id">) => Promise<void>;
+  updateCustomField: (id: string, field: Partial<Omit<CustomFieldDefinition, "id">>) => Promise<void>;
+  removeCustomField: (id: string) => Promise<void>;
+  addAutomationRule: (rule: Omit<AutomationRule, "id" | "createdAt">) => Promise<void>;
+  updateAutomationRule: (id: string, rule: Partial<Omit<AutomationRule, "id" | "createdAt">>) => Promise<void>;
+  removeAutomationRule: (id: string) => Promise<void>;
   setWorkflowColumns: (columns: WorkflowColumn[]) => void;
-  addWorkflowColumn: (col: WorkflowColumn) => void;
-  removeWorkflowColumn: (key: string) => void;
-  updateWorkflowColumn: (key: string, col: Partial<WorkflowColumn>) => void;
-  reorderWorkflowColumns: (columns: WorkflowColumn[]) => void;
+  addWorkflowColumn: (col: WorkflowColumn) => Promise<void>;
+  removeWorkflowColumn: (key: string) => Promise<void>;
+  updateWorkflowColumn: (key: string, col: Partial<WorkflowColumn>) => Promise<void>;
+  reorderWorkflowColumns: (columns: WorkflowColumn[]) => Promise<void>;
+  impediments: Impediment[];
+  refreshAll: () => Promise<void>;
 }
 
 const SprintContext = createContext<SprintContextType | undefined>(undefined);
 
-function loadFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 export function SprintProvider({ children }: { children: ReactNode }) {
-  const [developers, setDevelopers] = useState<Developer[]>(() => loadFromStorage("sprint_devs", []));
-  const [userStories, setUserStories] = useState<UserStory[]>(() => loadFromStorage("sprint_hus", []));
-  const [activities, setActivities] = useState<Activity[]>(() => loadFromStorage("sprint_activities", []));
-  const [sprints, setSprints] = useState<Sprint[]>(() => loadFromStorage("sprint_sprints", []));
-  const [epics, setEpics] = useState<Epic[]>(() => loadFromStorage("sprint_epics", []));
-  const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>(() => loadFromStorage("sprint_custom_fields", []));
-  const [automationRules, setAutomationRules] = useState<AutomationRule[]>(() => loadFromStorage("sprint_automation_rules", []));
-  const [workflowColumns, setWorkflowColumnsState] = useState<WorkflowColumn[]>(() => loadFromStorage("sprint_workflow_columns", DEFAULT_KANBAN_COLUMNS));
+  const { currentTeamId } = useAuth();
+  const [developers, setDevelopers] = useState<Developer[]>([]);
+  const [userStories, setUserStories] = useState<UserStory[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [sprints, setSprints] = useState<Sprint[]>([]);
+  const [epics, setEpics] = useState<Epic[]>([]);
+  const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
+  const [automationRules, setAutomationRules] = useState<AutomationRule[]>([]);
+  const [workflowColumns, setWorkflowColumnsState] = useState<WorkflowColumn[]>(DEFAULT_KANBAN_COLUMNS);
+  const [impediments, setImpediments] = useState<Impediment[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => localStorage.setItem("sprint_devs", JSON.stringify(developers)), [developers]);
-  useEffect(() => localStorage.setItem("sprint_hus", JSON.stringify(userStories)), [userStories]);
-  useEffect(() => localStorage.setItem("sprint_activities", JSON.stringify(activities)), [activities]);
-  useEffect(() => localStorage.setItem("sprint_sprints", JSON.stringify(sprints)), [sprints]);
-  useEffect(() => localStorage.setItem("sprint_epics", JSON.stringify(epics)), [epics]);
-  useEffect(() => localStorage.setItem("sprint_custom_fields", JSON.stringify(customFields)), [customFields]);
-  useEffect(() => localStorage.setItem("sprint_automation_rules", JSON.stringify(automationRules)), [automationRules]);
-  useEffect(() => localStorage.setItem("sprint_workflow_columns", JSON.stringify(workflowColumns)), [workflowColumns]);
+  const teamId = currentTeamId;
+
+  // ---- FETCH ALL DATA ----
+  const refreshAll = useCallback(async () => {
+    if (!teamId) {
+      setDevelopers([]);
+      setUserStories([]);
+      setActivities([]);
+      setSprints([]);
+      setEpics([]);
+      setCustomFields([]);
+      setAutomationRules([]);
+      setWorkflowColumnsState(DEFAULT_KANBAN_COLUMNS);
+      setImpediments([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const [devRes, sprintRes, epicRes, huRes, actRes, impRes, cfRes, arRes, wcRes] = await Promise.all([
+        supabase.from("developers").select("*").eq("team_id", teamId),
+        supabase.from("sprints").select("*").eq("team_id", teamId),
+        supabase.from("epics").select("*").eq("team_id", teamId),
+        supabase.from("user_stories").select("*").eq("team_id", teamId),
+        supabase.from("activities").select("*").eq("team_id", teamId),
+        supabase.from("impediments").select("*").eq("team_id", teamId),
+        supabase.from("custom_field_definitions").select("*").eq("team_id", teamId),
+        supabase.from("automation_rules").select("*").eq("team_id", teamId),
+        supabase.from("workflow_columns").select("*").eq("team_id", teamId).order("sort_order"),
+      ]);
+
+      setDevelopers((devRes.data || []).map((d: any) => ({
+        id: d.id, name: d.name, email: d.email, role: d.role, avatar: d.avatar,
+      })));
+
+      setSprints((sprintRes.data || []).map((s: any) => ({
+        id: s.id, name: s.name, startDate: s.start_date, endDate: s.end_date,
+        goal: s.goal || "", isActive: s.is_active, createdAt: s.created_at,
+      })));
+
+      setEpics((epicRes.data || []).map((e: any) => ({
+        id: e.id, name: e.name, description: e.description || "", color: e.color, createdAt: e.created_at,
+      })));
+
+      // Map impediments to user stories
+      const impData = (impRes.data || []) as any[];
+      setImpediments(impData.map((imp: any) => ({
+        id: imp.id, huId: imp.hu_id, reason: imp.reason, type: imp.type, criticality: imp.criticality,
+        hasTicket: imp.has_ticket, ticketUrl: imp.ticket_url, ticketId: imp.ticket_id,
+        reportedAt: imp.reported_at, resolvedAt: imp.resolved_at, resolution: imp.resolution,
+      })));
+
+      const huData = (huRes.data || []) as any[];
+      setUserStories(huData.map((h: any) => ({
+        id: h.id, code: h.code, title: h.title, description: h.description || "",
+        storyPoints: h.story_points, priority: h.priority, status: h.status,
+        sprintId: h.sprint_id, epicId: h.epic_id,
+        impediments: impData.filter((imp: any) => imp.hu_id === h.id).map((imp: any) => ({
+          id: imp.id, reason: imp.reason, type: imp.type, criticality: imp.criticality,
+          hasTicket: imp.has_ticket, ticketUrl: imp.ticket_url, ticketId: imp.ticket_id,
+          reportedAt: imp.reported_at, resolvedAt: imp.resolved_at, resolution: imp.resolution,
+        })),
+        customFields: h.custom_fields || {},
+        createdAt: h.created_at,
+      })));
+
+      setActivities((actRes.data || []).map((a: any) => ({
+        id: a.id, huId: a.hu_id, title: a.title, description: a.description || "",
+        activityType: a.activity_type, assigneeId: a.assignee_id || "",
+        hours: Number(a.hours), startDate: a.start_date, endDate: a.end_date,
+        createdAt: a.created_at, isClosed: a.is_closed, closedAt: a.closed_at,
+      })));
+
+      setCustomFields((cfRes.data || []).map((f: any) => ({
+        id: f.id, name: f.name, type: f.field_type, options: f.options, required: f.required,
+      })));
+
+      setAutomationRules((arRes.data || []).map((r: any) => ({
+        id: r.id, name: r.name, enabled: r.enabled,
+        trigger: { type: r.trigger_type, fromStatus: r.trigger_from_status, toStatus: r.trigger_to_status },
+        action: { type: r.action_type, targetStatus: r.action_target_status, message: r.action_message },
+        createdAt: r.created_at,
+      })));
+
+      const wc = (wcRes.data || []) as any[];
+      if (wc.length > 0) {
+        setWorkflowColumnsState(wc.map((c: any) => ({
+          key: c.key, label: c.label, colorClass: c.color_class, dotColor: c.dot_color,
+        })));
+      } else {
+        setWorkflowColumnsState(DEFAULT_KANBAN_COLUMNS);
+      }
+    } catch (err) {
+      console.error("Error loading data:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [teamId]);
+
+  useEffect(() => { refreshAll(); }, [refreshAll]);
 
   const activeSprint = sprints.find((s) => s.isActive) || null;
 
-  // --- Automation engine ---
-  const runAutomations = useCallback((huId: string, fromStatus: string, toStatus: string) => {
+  // ---- AUTOMATION ENGINE ----
+  const runAutomations = useCallback(async (huId: string, fromStatus: string, toStatus: string) => {
     const rules = automationRules.filter((r) => r.enabled && r.trigger.type === "status_change");
-    rules.forEach((rule) => {
+    for (const rule of rules) {
       const matchFrom = !rule.trigger.fromStatus || rule.trigger.fromStatus === fromStatus;
       const matchTo = rule.trigger.toStatus === toStatus;
       if (matchFrom && matchTo) {
@@ -100,183 +192,302 @@ export function SprintProvider({ children }: { children: ReactNode }) {
           toast.info(`🤖 Automação "${rule.name}": ${rule.action.message}`);
         }
         if (rule.action.type === "change_status" && rule.action.targetStatus) {
-          setUserStories((prev) =>
-            prev.map((h) => (h.id === huId ? { ...h, status: rule.action.targetStatus! } : h))
-          );
+          await supabase.from("user_stories").update({ status: rule.action.targetStatus }).eq("id", huId);
           toast.info(`🤖 Automação "${rule.name}": Status alterado automaticamente`);
         }
       }
-    });
+    }
   }, [automationRules]);
 
-  // Developers
-  const addDeveloper = (dev: Omit<Developer, "id">) => {
-    setDevelopers((prev) => [...prev, { ...dev, id: crypto.randomUUID() }]);
+  // ---- DEVELOPERS ----
+  const addDeveloper = async (dev: Omit<Developer, "id">) => {
+    if (!teamId) return;
+    const { error } = await supabase.from("developers").insert({
+      team_id: teamId, name: dev.name, email: dev.email, role: dev.role, avatar: dev.avatar,
+    });
+    if (error) { toast.error("Erro ao adicionar desenvolvedor"); return; }
+    await refreshAll();
   };
-  const updateDeveloper = (id: string, dev: Partial<Omit<Developer, "id">>) => {
-    setDevelopers((prev) => prev.map((d) => (d.id === id ? { ...d, ...dev } : d)));
+  const updateDeveloper = async (id: string, dev: Partial<Omit<Developer, "id">>) => {
+    const { error } = await supabase.from("developers").update(dev).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar"); return; }
+    await refreshAll();
   };
-  const removeDeveloper = (id: string) => {
-    setDevelopers((prev) => prev.filter((d) => d.id !== id));
+  const removeDeveloper = async (id: string) => {
+    await supabase.from("developers").delete().eq("id", id);
+    await refreshAll();
   };
 
-  // User Stories
-  const addUserStory = (hu: Omit<UserStory, "id" | "code" | "createdAt" | "status" | "impediments">) => {
+  // ---- USER STORIES ----
+  const addUserStory = async (hu: Omit<UserStory, "id" | "code" | "createdAt" | "status" | "impediments">) => {
+    if (!teamId) return;
     const count = userStories.length + 1;
     const firstCol = workflowColumns[0]?.key || "aguardando_desenvolvimento";
-    setUserStories((prev) => [
-      ...prev,
-      { ...hu, id: crypto.randomUUID(), code: `HU-${String(count).padStart(3, "0")}`, status: firstCol, impediments: [], createdAt: new Date().toISOString() },
-    ]);
+    const { error } = await supabase.from("user_stories").insert({
+      team_id: teamId, sprint_id: hu.sprintId, epic_id: hu.epicId || null,
+      code: `HU-${String(count).padStart(3, "0")}`, title: hu.title,
+      description: hu.description, story_points: hu.storyPoints,
+      priority: hu.priority, status: firstCol, custom_fields: hu.customFields || {},
+    });
+    if (error) { toast.error("Erro ao criar HU"); return; }
+    await refreshAll();
   };
-  const updateUserStory = (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => {
-    setUserStories((prev) => prev.map((h) => (h.id === id ? { ...h, ...hu } : h)));
+  const updateUserStory = async (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => {
+    const updateData: any = {};
+    if (hu.title !== undefined) updateData.title = hu.title;
+    if (hu.description !== undefined) updateData.description = hu.description;
+    if (hu.storyPoints !== undefined) updateData.story_points = hu.storyPoints;
+    if (hu.priority !== undefined) updateData.priority = hu.priority;
+    if (hu.status !== undefined) updateData.status = hu.status;
+    if (hu.sprintId !== undefined) updateData.sprint_id = hu.sprintId;
+    if (hu.epicId !== undefined) updateData.epic_id = hu.epicId || null;
+    if (hu.customFields !== undefined) updateData.custom_fields = hu.customFields;
+    const { error } = await supabase.from("user_stories").update(updateData).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar HU"); return; }
+    await refreshAll();
   };
-  const removeUserStory = (id: string) => {
-    setUserStories((prev) => prev.filter((h) => h.id !== id));
-    setActivities((prev) => prev.filter((a) => a.huId !== id));
+  const removeUserStory = async (id: string) => {
+    await supabase.from("user_stories").delete().eq("id", id);
+    await refreshAll();
   };
-  const updateUserStoryStatus = (id: string, status: KanbanStatus) => {
+  const updateUserStoryStatus = async (id: string, status: KanbanStatus) => {
     const hu = userStories.find((h) => h.id === id);
     if (hu) {
       const oldStatus = hu.status;
-      setUserStories((prev) => prev.map((h) => (h.id === id ? { ...h, status } : h)));
+      await supabase.from("user_stories").update({ status }).eq("id", id);
       if (oldStatus !== status) {
-        runAutomations(id, oldStatus, status);
+        await runAutomations(id, oldStatus, status);
       }
+      await refreshAll();
     }
   };
 
-  // Activities
-  const addActivity = (act: Omit<Activity, "id" | "endDate" | "createdAt">) => {
+  // ---- ACTIVITIES ----
+  const addActivity = async (act: Omit<Activity, "id" | "endDate" | "createdAt">) => {
+    if (!teamId) return;
     const endDate = calculateEndDate(act.startDate, act.hours);
-    setActivities((prev) => [
-      ...prev,
-      { ...act, id: crypto.randomUUID(), endDate, createdAt: new Date().toISOString() },
-    ]);
+    const { error } = await supabase.from("activities").insert({
+      team_id: teamId, hu_id: act.huId, title: act.title, description: act.description,
+      activity_type: act.activityType, assignee_id: act.assigneeId || null,
+      hours: act.hours, start_date: act.startDate, end_date: endDate,
+    });
+    if (error) { toast.error("Erro ao criar atividade"); return; }
+    await refreshAll();
   };
-  const updateActivity = (id: string, act: Partial<Omit<Activity, "id" | "createdAt">>) => {
-    setActivities((prev) => prev.map((a) => {
-      if (a.id !== id) return a;
-      const updated = { ...a, ...act };
-      if (act.startDate || act.hours) {
-        updated.endDate = calculateEndDate(updated.startDate, updated.hours);
-      }
-      return updated;
-    }));
+  const updateActivity = async (id: string, act: Partial<Omit<Activity, "id" | "createdAt">>) => {
+    const existing = activities.find((a) => a.id === id);
+    if (!existing) return;
+    const updateData: any = {};
+    if (act.title !== undefined) updateData.title = act.title;
+    if (act.description !== undefined) updateData.description = act.description;
+    if (act.activityType !== undefined) updateData.activity_type = act.activityType;
+    if (act.assigneeId !== undefined) updateData.assignee_id = act.assigneeId || null;
+    if (act.hours !== undefined) updateData.hours = act.hours;
+    if (act.startDate !== undefined) updateData.start_date = act.startDate;
+    const newStart = act.startDate || existing.startDate;
+    const newHours = act.hours || existing.hours;
+    if (act.startDate || act.hours) {
+      updateData.end_date = calculateEndDate(newStart, newHours);
+    }
+    const { error } = await supabase.from("activities").update(updateData).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar atividade"); return; }
+    await refreshAll();
   };
-  const removeActivity = (id: string) => {
-    setActivities((prev) => prev.filter((a) => a.id !== id));
+  const removeActivity = async (id: string) => {
+    await supabase.from("activities").delete().eq("id", id);
+    await refreshAll();
   };
-
-  // Impediments
-  const addImpediment = (huId: string, data: AddImpedimentData) => {
-    const impediment: Impediment = {
-      id: crypto.randomUUID(),
-      reason: data.reason,
-      type: data.type,
-      criticality: data.criticality,
-      hasTicket: data.hasTicket,
-      ticketUrl: data.ticketUrl,
-      ticketId: data.ticketId,
-      reportedAt: new Date().toISOString(),
-    };
-    setUserStories((prev) =>
-      prev.map((h) =>
-        h.id === huId ? { ...h, impediments: [...(h.impediments || []), impediment] } : h
-      )
-    );
+  const closeActivity = async (id: string) => {
+    await supabase.from("activities").update({ is_closed: true, closed_at: new Date().toISOString() }).eq("id", id);
+    await refreshAll();
   };
-  const resolveImpediment = (huId: string, impedimentId: string, resolution?: string) => {
-    setUserStories((prev) =>
-      prev.map((h) =>
-        h.id === huId
-          ? { ...h, impediments: (h.impediments || []).map((imp) => imp.id === impedimentId ? { ...imp, resolvedAt: new Date().toISOString(), resolution } : imp) }
-          : h
-      )
-    );
+  const reopenActivity = async (id: string) => {
+    await supabase.from("activities").update({ is_closed: false, closed_at: null }).eq("id", id);
+    await refreshAll();
   };
 
-  // Sprints
-  const addSprint = (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => {
-    setSprints((prev) => [
-      ...prev.map((s) => ({ ...s, isActive: false })),
-      { ...sprint, id: crypto.randomUUID(), createdAt: new Date().toISOString(), isActive: true },
-    ]);
+  // ---- IMPEDIMENTS ----
+  const addImpediment = async (huId: string, data: AddImpedimentData) => {
+    if (!teamId) return;
+    const { error } = await supabase.from("impediments").insert({
+      team_id: teamId, hu_id: huId, reason: data.reason, type: data.type,
+      criticality: data.criticality, has_ticket: data.hasTicket,
+      ticket_url: data.ticketUrl, ticket_id: data.ticketId,
+    });
+    if (error) { toast.error("Erro ao adicionar impedimento"); return; }
+    await refreshAll();
   };
-  const updateSprint = (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => {
-    setSprints((prev) => prev.map((s) => (s.id === id ? { ...s, ...sprint } : s)));
-  };
-  const removeSprint = (id: string) => {
-    setSprints((prev) => prev.filter((s) => s.id !== id));
-    const storyIds = userStories.filter((hu) => hu.sprintId === id).map((hu) => hu.id);
-    setUserStories((prev) => prev.filter((hu) => hu.sprintId !== id));
-    setActivities((prev) => prev.filter((a) => !storyIds.includes(a.huId)));
-  };
-  const setActiveSprintFn = (id: string) => {
-    setSprints((prev) => prev.map((s) => ({ ...s, isActive: s.id === id })));
+  const resolveImpediment = async (_huId: string, impedimentId: string, resolution?: string) => {
+    await supabase.from("impediments").update({
+      resolved_at: new Date().toISOString(), resolution: resolution || null,
+    }).eq("id", impedimentId);
+    await refreshAll();
   };
 
-  // Epics
-  const addEpic = (epic: Omit<Epic, "id" | "createdAt">) => {
-    setEpics((prev) => [...prev, { ...epic, id: crypto.randomUUID(), createdAt: new Date().toISOString() }]);
+  // ---- SPRINTS ----
+  const addSprint = async (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => {
+    if (!teamId) return;
+    // Deactivate all sprints first
+    await supabase.from("sprints").update({ is_active: false }).eq("team_id", teamId);
+    const { error } = await supabase.from("sprints").insert({
+      team_id: teamId, name: sprint.name, start_date: sprint.startDate,
+      end_date: sprint.endDate, goal: sprint.goal, is_active: true,
+    });
+    if (error) { toast.error("Erro ao criar sprint"); return; }
+    await refreshAll();
   };
-  const updateEpic = (id: string, epic: Partial<Omit<Epic, "id" | "createdAt">>) => {
-    setEpics((prev) => prev.map((e) => (e.id === id ? { ...e, ...epic } : e)));
+  const updateSprint = async (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => {
+    const updateData: any = {};
+    if (sprint.name !== undefined) updateData.name = sprint.name;
+    if (sprint.startDate !== undefined) updateData.start_date = sprint.startDate;
+    if (sprint.endDate !== undefined) updateData.end_date = sprint.endDate;
+    if (sprint.goal !== undefined) updateData.goal = sprint.goal;
+    if (sprint.isActive !== undefined) updateData.is_active = sprint.isActive;
+    const { error } = await supabase.from("sprints").update(updateData).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar sprint"); return; }
+    await refreshAll();
   };
-  const removeEpic = (id: string) => {
-    setEpics((prev) => prev.filter((e) => e.id !== id));
-    setUserStories((prev) => prev.map((hu) => (hu.epicId === id ? { ...hu, epicId: undefined } : hu)));
+  const removeSprint = async (id: string) => {
+    await supabase.from("sprints").delete().eq("id", id);
+    await refreshAll();
+  };
+  const setActiveSprintFn = async (id: string) => {
+    if (!teamId) return;
+    await supabase.from("sprints").update({ is_active: false }).eq("team_id", teamId);
+    await supabase.from("sprints").update({ is_active: true }).eq("id", id);
+    await refreshAll();
   };
 
-  // Custom Fields
-  const addCustomField = (field: Omit<CustomFieldDefinition, "id">) => {
-    setCustomFields((prev) => [...prev, { ...field, id: crypto.randomUUID() }]);
+  // ---- EPICS ----
+  const addEpic = async (epic: Omit<Epic, "id" | "createdAt">) => {
+    if (!teamId) return;
+    const { error } = await supabase.from("epics").insert({
+      team_id: teamId, name: epic.name, description: epic.description, color: epic.color,
+    });
+    if (error) { toast.error("Erro ao criar épico"); return; }
+    await refreshAll();
   };
-  const updateCustomField = (id: string, field: Partial<Omit<CustomFieldDefinition, "id">>) => {
-    setCustomFields((prev) => prev.map((f) => (f.id === id ? { ...f, ...field } : f)));
+  const updateEpic = async (id: string, epic: Partial<Omit<Epic, "id" | "createdAt">>) => {
+    const { error } = await supabase.from("epics").update(epic).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar épico"); return; }
+    await refreshAll();
   };
-  const removeCustomField = (id: string) => {
-    setCustomFields((prev) => prev.filter((f) => f.id !== id));
-  };
-
-  // Automation Rules
-  const addAutomationRule = (rule: Omit<AutomationRule, "id" | "createdAt">) => {
-    setAutomationRules((prev) => [...prev, { ...rule, id: crypto.randomUUID(), createdAt: new Date().toISOString() }]);
-  };
-  const updateAutomationRule = (id: string, rule: Partial<Omit<AutomationRule, "id" | "createdAt">>) => {
-    setAutomationRules((prev) => prev.map((r) => (r.id === id ? { ...r, ...rule } : r)));
-  };
-  const removeAutomationRule = (id: string) => {
-    setAutomationRules((prev) => prev.filter((r) => r.id !== id));
+  const removeEpic = async (id: string) => {
+    await supabase.from("epics").delete().eq("id", id);
+    await refreshAll();
   };
 
-  // Workflow Columns
+  // ---- CUSTOM FIELDS ----
+  const addCustomField = async (field: Omit<CustomFieldDefinition, "id">) => {
+    if (!teamId) return;
+    const { error } = await supabase.from("custom_field_definitions").insert({
+      team_id: teamId, name: field.name, field_type: field.type,
+      options: field.options || null, required: field.required,
+    });
+    if (error) { toast.error("Erro ao criar campo"); return; }
+    await refreshAll();
+  };
+  const updateCustomField = async (id: string, field: Partial<Omit<CustomFieldDefinition, "id">>) => {
+    const updateData: any = {};
+    if (field.name !== undefined) updateData.name = field.name;
+    if (field.type !== undefined) updateData.field_type = field.type;
+    if (field.options !== undefined) updateData.options = field.options;
+    if (field.required !== undefined) updateData.required = field.required;
+    const { error } = await supabase.from("custom_field_definitions").update(updateData).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar campo"); return; }
+    await refreshAll();
+  };
+  const removeCustomField = async (id: string) => {
+    await supabase.from("custom_field_definitions").delete().eq("id", id);
+    await refreshAll();
+  };
+
+  // ---- AUTOMATION RULES ----
+  const addAutomationRule = async (rule: Omit<AutomationRule, "id" | "createdAt">) => {
+    if (!teamId) return;
+    const { error } = await supabase.from("automation_rules").insert({
+      team_id: teamId, name: rule.name, enabled: rule.enabled,
+      trigger_type: rule.trigger.type, trigger_from_status: rule.trigger.fromStatus || null,
+      trigger_to_status: rule.trigger.toStatus,
+      action_type: rule.action.type, action_target_status: rule.action.targetStatus || null,
+      action_message: rule.action.message || null,
+    });
+    if (error) { toast.error("Erro ao criar automação"); return; }
+    await refreshAll();
+  };
+  const updateAutomationRule = async (id: string, rule: Partial<Omit<AutomationRule, "id" | "createdAt">>) => {
+    const updateData: any = {};
+    if (rule.name !== undefined) updateData.name = rule.name;
+    if (rule.enabled !== undefined) updateData.enabled = rule.enabled;
+    if (rule.trigger) {
+      if (rule.trigger.type !== undefined) updateData.trigger_type = rule.trigger.type;
+      if (rule.trigger.fromStatus !== undefined) updateData.trigger_from_status = rule.trigger.fromStatus;
+      if (rule.trigger.toStatus !== undefined) updateData.trigger_to_status = rule.trigger.toStatus;
+    }
+    if (rule.action) {
+      if (rule.action.type !== undefined) updateData.action_type = rule.action.type;
+      if (rule.action.targetStatus !== undefined) updateData.action_target_status = rule.action.targetStatus;
+      if (rule.action.message !== undefined) updateData.action_message = rule.action.message;
+    }
+    const { error } = await supabase.from("automation_rules").update(updateData).eq("id", id);
+    if (error) { toast.error("Erro ao atualizar automação"); return; }
+    await refreshAll();
+  };
+  const removeAutomationRule = async (id: string) => {
+    await supabase.from("automation_rules").delete().eq("id", id);
+    await refreshAll();
+  };
+
+  // ---- WORKFLOW COLUMNS ----
   const setWorkflowColumns = (columns: WorkflowColumn[]) => setWorkflowColumnsState(columns);
-  const addWorkflowColumn = (col: WorkflowColumn) => {
-    setWorkflowColumnsState((prev) => [...prev, col]);
+  const addWorkflowColumn = async (col: WorkflowColumn) => {
+    if (!teamId) return;
+    const maxOrder = workflowColumns.length;
+    const { error } = await supabase.from("workflow_columns").insert({
+      team_id: teamId, key: col.key, label: col.label,
+      color_class: col.colorClass, dot_color: col.dotColor, sort_order: maxOrder,
+    });
+    if (error) { toast.error("Erro ao adicionar coluna"); return; }
+    await refreshAll();
   };
-  const removeWorkflowColumn = (key: string) => {
-    setWorkflowColumnsState((prev) => prev.filter((c) => c.key !== key));
+  const removeWorkflowColumn = async (key: string) => {
+    if (!teamId) return;
+    await supabase.from("workflow_columns").delete().eq("team_id", teamId).eq("key", key);
+    await refreshAll();
   };
-  const updateWorkflowColumn = (key: string, col: Partial<WorkflowColumn>) => {
-    setWorkflowColumnsState((prev) => prev.map((c) => (c.key === key ? { ...c, ...col } : c)));
+  const updateWorkflowColumn = async (key: string, col: Partial<WorkflowColumn>) => {
+    if (!teamId) return;
+    const updateData: any = {};
+    if (col.label !== undefined) updateData.label = col.label;
+    if (col.colorClass !== undefined) updateData.color_class = col.colorClass;
+    if (col.dotColor !== undefined) updateData.dot_color = col.dotColor;
+    await supabase.from("workflow_columns").update(updateData).eq("team_id", teamId).eq("key", key);
+    await refreshAll();
   };
-  const reorderWorkflowColumns = (columns: WorkflowColumn[]) => setWorkflowColumnsState(columns);
+  const reorderWorkflowColumns = async (columns: WorkflowColumn[]) => {
+    if (!teamId) return;
+    for (let i = 0; i < columns.length; i++) {
+      await supabase.from("workflow_columns").update({ sort_order: i })
+        .eq("team_id", teamId).eq("key", columns[i].key);
+    }
+    setWorkflowColumnsState(columns);
+  };
 
   return (
     <SprintContext.Provider
       value={{
-        developers, userStories, activities, sprints, epics, customFields, automationRules, workflowColumns, activeSprint,
+        developers, userStories, activities, sprints, epics, customFields, automationRules,
+        workflowColumns, activeSprint, loading, impediments,
         addDeveloper, updateDeveloper, removeDeveloper,
         addUserStory, updateUserStory, removeUserStory, updateUserStoryStatus,
-        addActivity, updateActivity, removeActivity,
+        addActivity, updateActivity, removeActivity, closeActivity, reopenActivity,
         addImpediment, resolveImpediment,
         addSprint, updateSprint, removeSprint, setActiveSprint: setActiveSprintFn,
         addEpic, updateEpic, removeEpic,
         addCustomField, updateCustomField, removeCustomField,
         addAutomationRule, updateAutomationRule, removeAutomationRule,
         setWorkflowColumns, addWorkflowColumn, removeWorkflowColumn, updateWorkflowColumn, reorderWorkflowColumns,
+        refreshAll,
       }}
     >
       {children}
