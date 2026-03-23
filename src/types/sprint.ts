@@ -119,6 +119,8 @@ export interface Activity {
   startDate: string;
   endDate: string;
   createdAt: string;
+  isClosed?: boolean;
+  closedAt?: string | null;
 }
 
 export interface UserStory {
