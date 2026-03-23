@@ -194,16 +194,18 @@ export function ActivityManager() {
           const hu = userStories.find((h) => h.id === act.huId);
           const dev = developers.find((d) => d.id === act.assigneeId);
           const typeInfo = ACTIVITY_TYPE_LABELS[act.activityType || "task"];
+          const isClosed = !!(act as any).isClosed;
           return (
-            <Card key={act.id} className="group hover:shadow-md transition-shadow">
+            <Card key={act.id} className={`group hover:shadow-md transition-shadow ${isClosed ? "opacity-60" : ""}`}>
               <CardContent className="p-3">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <Badge variant="outline" className="font-mono text-xs font-bold">{hu?.code}</Badge>
                       <Badge className={`text-[10px] border ${typeInfo.color}`}>{typeInfo.label}</Badge>
+                      {isClosed && <Badge className="bg-success/15 text-success border-success/30 text-[10px]">✓ Concluída</Badge>}
                     </div>
-                    <span className="text-sm font-semibold">{act.title}</span>
+                    <span className={`text-sm font-semibold ${isClosed ? "line-through" : ""}`}>{act.title}</span>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                       <span>{dev?.name || "N/A"}</span>
                       <span>{act.hours}h</span>
@@ -213,15 +215,22 @@ export function ActivityManager() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {!isClosed ? (
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-success" title="Concluir atividade"
+                        onClick={() => { closeActivity(act.id); toast.success("Atividade concluída!"); }}>
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Reabrir atividade"
+                        onClick={() => { reopenActivity(act.id); toast.info("Atividade reaberta"); }}>
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(act.id)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive"
-                      onClick={() => { removeActivity(act.id); toast.info("Atividade removida"); }}
-                    >
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                      onClick={() => { removeActivity(act.id); toast.info("Atividade removida"); }}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
