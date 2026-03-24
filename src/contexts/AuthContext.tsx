@@ -35,30 +35,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
 
   const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
-    if (data) setProfile(data as Profile);
+    try {
+      const { data } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", userId)
+        .single();
+      if (data) setProfile(data as Profile);
+    } catch (err) {
+      console.error("Error fetching profile:", err);
+    }
   };
 
   const fetchRole = async (userId: string) => {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId);
-    const admin = data?.some((r: any) => r.role === "admin") ?? false;
-    setIsAdmin(admin);
-    return admin;
+    try {
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+      const admin = data?.some((r: any) => r.role === "admin") ?? false;
+      setIsAdmin(admin);
+      return admin;
+    } catch (err) {
+      console.error("Error fetching role:", err);
+      return false;
+    }
   };
 
   const refreshTeams = async () => {
-    const { data } = await supabase.from("teams").select("id, name");
-    const teamList = (data || []) as { id: string; name: string }[];
-    setTeams(teamList);
-    if (teamList.length > 0 && !currentTeamId) {
-      setCurrentTeamId(teamList[0].id);
+    try {
+      const { data } = await supabase.from("teams").select("id, name");
+      const teamList = (data || []) as { id: string; name: string }[];
+      setTeams(teamList);
+      if (teamList.length > 0 && !currentTeamId) {
+        setCurrentTeamId(teamList[0].id);
+      }
+    } catch (err) {
+      console.error("Error fetching teams:", err);
+    }
+  };
+
+  const loadUserData = async (userId: string) => {
+    try {
+      await Promise.all([
+        fetchProfile(userId),
+        fetchRole(userId),
+        refreshTeams(),
+      ]);
+    } catch (err) {
+      console.error("Error loading user data:", err);
     }
   };
 
@@ -68,16 +93,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          await fetchProfile(session.user.id);
-          await fetchRole(session.user.id);
-          await refreshTeams();
+          // Use setTimeout to avoid potential deadlock with Supabase auth
+          setTimeout(() => {
+            loadUserData(session.user.id).finally(() => setLoading(false));
+          }, 0);
         } else {
           setProfile(null);
           setIsAdmin(false);
           setTeams([]);
           setCurrentTeamId(null);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
@@ -85,11 +111,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id);
-        fetchRole(session.user.id);
-        refreshTeams();
+        loadUserData(session.user.id).finally(() => setLoading(false));
+      } else {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -101,6 +126,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfile(null);
     setIsAdmin(false);
+    setTeams([]);
+    setCurrentTeamId(null);
   };
 
   return (
