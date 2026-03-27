@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getTotalHoursForHU, ActivityType, ACTIVITY_TYPE_LABELS } from "@/types/sprint";
 import { toast } from "sonner";
 import { ActivityComments } from "@/components/ActivityComments";
+import { FileUploader } from "@/components/FileUploader";
 
 export function ActivityManager() {
   const { activities, addActivity, removeActivity, updateActivity, closeActivity, reopenActivity, userStories, developers, activeSprint } = useSprint();
