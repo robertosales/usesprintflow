@@ -10,7 +10,8 @@ import { toast } from "sonner";
 import { Plus, Edit2, Trash2, Users } from "lucide-react";
 
 export function TeamManager() {
-  const { teams, refreshTeams, currentTeamId, setCurrentTeamId, isAdmin } = useAuth();
+  const { teams, refreshTeams, currentTeamId, setCurrentTeamId, isAdmin, hasPermission } = useAuth();
+  const canManage = hasPermission('manage_teams');
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [open, setOpen] = useState(false);
