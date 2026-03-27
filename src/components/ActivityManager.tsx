@@ -187,6 +187,7 @@ export function ActivityManager() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {(sprintStories.length === 0 || developers.length === 0) && (
