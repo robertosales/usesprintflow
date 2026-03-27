@@ -134,6 +134,7 @@ export function SprintManager() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       <div className="flex gap-3 flex-wrap">
