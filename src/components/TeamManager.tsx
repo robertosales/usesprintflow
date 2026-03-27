@@ -115,11 +115,14 @@ export function TeamManager() {
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-lg">{team.name}</CardTitle>
               <div className="flex gap-1">
+                {canManage && (
                 <Button
                   variant="ghost" size="icon"
                   onClick={(e) => { e.stopPropagation(); setEditingTeam({ ...team, description: "" }); }}
                 >
                   <Edit2 className="h-4 w-4" />
+                </Button>
+                )}
                 </Button>
                 {canManage && (
                   <Button
