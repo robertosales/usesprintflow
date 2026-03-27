@@ -240,6 +240,7 @@ export function UserStoryManager() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {!activeSprint && (
