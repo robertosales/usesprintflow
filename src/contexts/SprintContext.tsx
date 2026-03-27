@@ -300,6 +300,23 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const closeActivity = async (id: string) => {
     await supabase.from("activities").update({ is_closed: true, closed_at: new Date().toISOString() }).eq("id", id);
     await refreshAll();
+    // Auto-move HU to last column if all activities are closed
+    const act = activities.find((a) => a.id === id);
+    if (act) {
+      const huActs = activities.filter((a) => a.huId === act.huId);
+      const allClosed = huActs.every((a) => a.id === id ? true : a.isClosed);
+      if (allClosed && huActs.length > 0) {
+        const lastCol = workflowColumns[workflowColumns.length - 1]?.key;
+        if (lastCol) {
+          const hu = userStories.find((h) => h.id === act.huId);
+          if (hu && hu.status !== lastCol) {
+            await supabase.from("user_stories").update({ status: lastCol }).eq("id", act.huId);
+            toast.info(`🎉 Todas as atividades concluídas! HU movida para "${workflowColumns[workflowColumns.length - 1]?.label}"`);
+            await refreshAll();
+          }
+        }
+      }
+    }
   };
   const reopenActivity = async (id: string) => {
     await supabase.from("activities").update({ is_closed: false, closed_at: null }).eq("id", id);

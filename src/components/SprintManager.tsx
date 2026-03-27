@@ -5,13 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { Zap, Plus, Calendar, Target, Trash2, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
 export function SprintManager() {
-  const { sprints, addSprint, updateSprint, setActiveSprint, removeSprint, activeSprint } = useSprint();
+  const { sprints, addSprint, updateSprint, setActiveSprint, removeSprint, activeSprint, userStories, activities, workflowColumns } = useSprint();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -58,6 +59,26 @@ export function SprintManager() {
     setGoal(s.goal);
     setErrors({});
     setOpen(true);
+  };
+
+  const handleRemoveSprint = (sprintId: string) => {
+    const sprintHUs = userStories.filter((hu) => hu.sprintId === sprintId);
+    if (sprintHUs.length > 0) {
+      toast.error(`Não é possível excluir: esta Sprint possui ${sprintHUs.length} HU(s) vinculada(s). Remova-as primeiro.`);
+      return;
+    }
+    removeSprint(sprintId);
+    toast.info("Sprint removida");
+  };
+
+  const getSprintProgress = (sprintId: string) => {
+    const sprintHUs = userStories.filter((hu) => hu.sprintId === sprintId);
+    if (sprintHUs.length === 0) return { totalPoints: 0, completedPoints: 0, percent: 0 };
+    const lastCol = workflowColumns[workflowColumns.length - 1]?.key;
+    const totalPoints = sprintHUs.reduce((s, hu) => s + hu.storyPoints, 0);
+    const completedPoints = sprintHUs.filter((hu) => hu.status === lastCol).reduce((s, hu) => s + hu.storyPoints, 0);
+    const percent = totalPoints > 0 ? Math.round((completedPoints / totalPoints) * 100) : 0;
+    return { totalPoints, completedPoints, percent };
   };
 
   return (
@@ -110,50 +131,67 @@ export function SprintManager() {
       </div>
 
       <div className="flex gap-3 flex-wrap">
-        {sprints.map((sprint) => (
-          <Card
-            key={sprint.id}
-            className={`cursor-pointer transition-all hover:shadow-md min-w-[240px] group ${
-              sprint.isActive ? "ring-2 ring-primary shadow-md" : "opacity-70 hover:opacity-100"
-            }`}
-            onClick={() => setActiveSprint(sprint.id)}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-sm">{sprint.name}</span>
-                <div className="flex items-center gap-1">
-                  {sprint.isActive && <Badge className="bg-primary text-primary-foreground text-[10px]">Ativa</Badge>}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                    onClick={(e) => { e.stopPropagation(); openEdit(sprint.id); }}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100"
-                    onClick={(e) => { e.stopPropagation(); removeSprint(sprint.id); toast.info("Sprint removida"); }}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+        {sprints.map((sprint) => {
+          const progress = getSprintProgress(sprint.id);
+          const sprintHUs = userStories.filter((hu) => hu.sprintId === sprint.id);
+          return (
+            <Card
+              key={sprint.id}
+              className={`cursor-pointer transition-all hover:shadow-md min-w-[280px] group ${
+                sprint.isActive ? "ring-2 ring-primary shadow-md" : "opacity-70 hover:opacity-100"
+              }`}
+              onClick={() => setActiveSprint(sprint.id)}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-sm">{sprint.name}</span>
+                  <div className="flex items-center gap-1">
+                    {sprint.isActive && <Badge className="bg-primary text-primary-foreground text-[10px]">Ativa</Badge>}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                      onClick={(e) => { e.stopPropagation(); openEdit(sprint.id); }}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100"
+                      onClick={(e) => { e.stopPropagation(); handleRemoveSprint(sprint.id); }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Calendar className="h-3 w-3" />
-                {new Date(sprint.startDate).toLocaleDateString("pt-BR")} — {new Date(sprint.endDate).toLocaleDateString("pt-BR")}
-              </div>
-              {sprint.goal && (
-                <div className="flex items-start gap-1.5 text-xs text-muted-foreground mt-1.5">
-                  <Target className="h-3 w-3 mt-0.5 shrink-0" />
-                  <span className="line-clamp-2">{sprint.goal}</span>
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Calendar className="h-3 w-3" />
+                  {new Date(sprint.startDate).toLocaleDateString("pt-BR")} — {new Date(sprint.endDate).toLocaleDateString("pt-BR")}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+                {sprint.goal && (
+                  <div className="flex items-start gap-1.5 text-xs text-muted-foreground mt-1.5">
+                    <Target className="h-3 w-3 mt-0.5 shrink-0" />
+                    <span className="line-clamp-2">{sprint.goal}</span>
+                  </div>
+                )}
+                {/* Progress bar */}
+                {sprintHUs.length > 0 && (
+                  <div className="mt-3 space-y-1">
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>{progress.completedPoints}/{progress.totalPoints} pts</span>
+                      <span className="font-semibold">{progress.percent}%</span>
+                    </div>
+                    <Progress value={progress.percent} className="h-1.5" />
+                    <div className="text-[10px] text-muted-foreground">
+                      {sprintHUs.length} HU{sprintHUs.length !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
         {sprints.length === 0 && (
           <Card className="border-dashed w-full">
             <CardContent className="py-10 text-center text-muted-foreground">

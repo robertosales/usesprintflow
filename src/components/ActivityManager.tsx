@@ -1,19 +1,22 @@
 import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ListTodo, Plus, Trash2, AlertCircle, Pencil, CheckCircle2, RotateCcw } from "lucide-react";
+import { ListTodo, Plus, Trash2, AlertCircle, Pencil, CheckCircle2, RotateCcw, MessageCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getTotalHoursForHU, ActivityType, ACTIVITY_TYPE_LABELS } from "@/types/sprint";
 import { toast } from "sonner";
+import { ActivityComments } from "@/components/ActivityComments";
 
 export function ActivityManager() {
   const { activities, addActivity, removeActivity, updateActivity, closeActivity, reopenActivity, userStories, developers, activeSprint } = useSprint();
+  const { currentTeamId } = useAuth();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -24,6 +27,7 @@ export function ActivityManager() {
   const [hours, setHours] = useState("4");
   const [startDate, setStartDate] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [expandedComments, setExpandedComments] = useState<string | null>(null);
 
   const sprintStories = activeSprint
     ? userStories.filter((hu) => hu.sprintId === activeSprint.id)
@@ -79,6 +83,11 @@ export function ActivityManager() {
     setStartDate(act.startDate);
     setErrors({});
     setOpen(true);
+  };
+
+  const handleRemoveActivity = (actId: string) => {
+    removeActivity(actId);
+    toast.info("Atividade removida");
   };
 
   const sprintActivities = activeSprint
@@ -194,7 +203,8 @@ export function ActivityManager() {
           const hu = userStories.find((h) => h.id === act.huId);
           const dev = developers.find((d) => d.id === act.assigneeId);
           const typeInfo = ACTIVITY_TYPE_LABELS[act.activityType || "task"];
-          const isClosed = !!(act as any).isClosed;
+          const isClosed = !!act.isClosed;
+          const isExpanded = expandedComments === act.id;
           return (
             <Card key={act.id} className={`group hover:shadow-md transition-shadow ${isClosed ? "opacity-60" : ""}`}>
               <CardContent className="p-3">
@@ -215,6 +225,10 @@ export function ActivityManager() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" title="Comentários"
+                      onClick={() => setExpandedComments(isExpanded ? null : act.id)}>
+                      <MessageCircle className="h-3.5 w-3.5" />
+                    </Button>
                     {!isClosed ? (
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-success" title="Concluir atividade"
                         onClick={() => { closeActivity(act.id); toast.success("Atividade concluída!"); }}>
@@ -230,11 +244,14 @@ export function ActivityManager() {
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                      onClick={() => { removeActivity(act.id); toast.info("Atividade removida"); }}>
+                      onClick={() => handleRemoveActivity(act.id)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
+                {isExpanded && currentTeamId && (
+                  <ActivityComments activityId={act.id} teamId={currentTeamId} />
+                )}
               </CardContent>
             </Card>
           );
