@@ -82,6 +82,7 @@ export function TeamManager() {
           </h2>
           <p className="text-sm text-muted-foreground">Gerencie os times do projeto</p>
         </div>
+        {canManage && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" /> Novo Time</Button>
