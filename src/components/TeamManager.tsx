@@ -120,7 +120,7 @@ export function TeamManager() {
                 >
                   <Edit2 className="h-4 w-4" />
                 </Button>
-                {isAdmin && (
+                {canManage && (
                   <Button
                     variant="ghost" size="icon"
                     onClick={(e) => { e.stopPropagation(); handleDelete(team.id); }}
