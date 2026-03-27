@@ -154,6 +154,7 @@ export function SprintManager() {
                   <span className="font-semibold text-sm">{sprint.name}</span>
                   <div className="flex items-center gap-1">
                     {sprint.isActive && <Badge className="bg-primary text-primary-foreground text-[10px]">Ativa</Badge>}
+                    {canEdit && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -162,6 +163,8 @@ export function SprintManager() {
                     >
                       <Pencil className="h-3 w-3" />
                     </Button>
+                    )}
+                    {canDelete && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -170,6 +173,7 @@ export function SprintManager() {
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
