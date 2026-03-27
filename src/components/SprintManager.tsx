@@ -94,6 +94,7 @@ export function SprintManager() {
           <h2 className="text-lg font-bold tracking-tight">Sprints</h2>
           <Badge variant="secondary">{sprints.length}</Badge>
         </div>
+        {canCreate && (
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> Nova Sprint</Button>
