@@ -20,7 +20,7 @@ const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
 };
 
 export function UserStoryManager() {
-  const { userStories, addUserStory, removeUserStory, updateUserStory, activities, activeSprint, epics, workflowColumns } = useSprint();
+  const { userStories, addUserStory, removeUserStory, updateUserStory, activities, activeSprint, epics, workflowColumns, customFields } = useSprint();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -28,6 +28,7 @@ export function UserStoryManager() {
   const [storyPoints, setStoryPoints] = useState("3");
   const [priority, setPriority] = useState<"baixa" | "media" | "alta" | "critica">("media");
   const [epicId, setEpicId] = useState<string>("");
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string | number>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const sprintStories = activeSprint
@@ -35,13 +36,23 @@ export function UserStoryManager() {
     : userStories;
 
   const resetForm = () => {
-    setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setEpicId(""); setErrors({}); setEditId(null);
+    setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setEpicId("");
+    setCustomFieldValues({}); setErrors({}); setEditId(null);
   };
 
   const validate = () => {
     const e: Record<string, string> = {};
     if (!title.trim()) e.title = "Título é obrigatório";
     if (!activeSprint) e.sprint = "Selecione uma sprint ativa";
+    // Validate required custom fields
+    customFields.forEach((f) => {
+      if (f.required) {
+        const val = customFieldValues[f.id];
+        if (val === undefined || val === "" || val === null) {
+          e[`cf_${f.id}`] = `${f.name} é obrigatório`;
+        }
+      }
+    });
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -49,11 +60,24 @@ export function UserStoryManager() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate() || !activeSprint) return;
+
+    const huActivities = editId ? activities.filter((a) => a.huId === editId) : [];
+    
     if (editId) {
-      updateUserStory(editId, { title: title.trim(), description: description.trim(), storyPoints: Number(storyPoints), priority, epicId: epicId || undefined });
+      updateUserStory(editId, {
+        title: title.trim(), description: description.trim(),
+        storyPoints: Number(storyPoints), priority,
+        epicId: epicId || undefined,
+        customFields: customFieldValues,
+      });
       toast.success("User Story atualizada!");
     } else {
-      addUserStory({ title: title.trim(), description: description.trim(), storyPoints: Number(storyPoints), priority, sprintId: activeSprint.id, epicId: epicId || undefined });
+      addUserStory({
+        title: title.trim(), description: description.trim(),
+        storyPoints: Number(storyPoints), priority,
+        sprintId: activeSprint.id, epicId: epicId || undefined,
+        customFields: customFieldValues,
+      });
       toast.success("User Story criada!");
     }
     resetForm();
@@ -69,8 +93,19 @@ export function UserStoryManager() {
     setStoryPoints(String(hu.storyPoints));
     setPriority(hu.priority);
     setEpicId(hu.epicId || "");
+    setCustomFieldValues(hu.customFields || {});
     setErrors({});
     setOpen(true);
+  };
+
+  const handleRemove = (huId: string) => {
+    const huActivities = activities.filter((a) => a.huId === huId);
+    if (huActivities.length > 0) {
+      toast.error(`Não é possível excluir: esta HU possui ${huActivities.length} atividade(s) vinculada(s). Remova-as primeiro.`);
+      return;
+    }
+    removeUserStory(huId);
+    toast.info("User Story removida");
   };
 
   return (
@@ -87,7 +122,7 @@ export function UserStoryManager() {
               <Plus className="h-4 w-4" /> Nova HU
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <BookOpen className="h-5 w-5 text-primary" />
@@ -147,6 +182,53 @@ export function UserStoryManager() {
                   </Select>
                 </div>
               )}
+
+              {/* Custom Fields */}
+              {customFields.length > 0 && (
+                <div className="space-y-3 border-t pt-3">
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Campos Personalizados</Label>
+                  {customFields.map((field) => (
+                    <div key={field.id}>
+                      <Label className="text-sm">
+                        {field.name}
+                        {field.required && <span className="text-destructive"> *</span>}
+                      </Label>
+                      {field.type === "text" && (
+                        <Input
+                          value={String(customFieldValues[field.id] || "")}
+                          onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
+                          placeholder={field.name}
+                          className="mt-1"
+                        />
+                      )}
+                      {field.type === "number" && (
+                        <Input
+                          type="number"
+                          value={String(customFieldValues[field.id] || "")}
+                          onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: Number(e.target.value) }))}
+                          placeholder={field.name}
+                          className="mt-1"
+                        />
+                      )}
+                      {field.type === "select" && field.options && (
+                        <Select
+                          value={String(customFieldValues[field.id] || "")}
+                          onValueChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: v }))}
+                        >
+                          <SelectTrigger className="mt-1"><SelectValue placeholder={`Selecione ${field.name}`} /></SelectTrigger>
+                          <SelectContent>
+                            {field.options.map((opt) => (
+                              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {errors[`cf_${field.id}`] && <p className="text-xs text-destructive mt-1">{errors[`cf_${field.id}`]}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <Button type="submit" className="w-full gap-2">
                 <Plus className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Criar User Story"}
               </Button>
@@ -179,11 +261,16 @@ export function UserStoryManager() {
         {sprintStories.map((hu) => {
           const totalHours = getTotalHoursForHU(activities, hu.id);
           const huActivities = activities.filter((a) => a.huId === hu.id);
+          const closedActivities = huActivities.filter((a) => a.isClosed);
           const pInfo = PRIORITY_MAP[hu.priority];
           const statusCol = workflowColumns.find((c) => c.key === hu.status);
           const blocked = hasActiveImpediment(hu);
           const activeImps = (hu.impediments || []).filter((i) => !i.resolvedAt).length;
           const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
+          const completionPct = huActivities.length > 0
+            ? Math.round((closedActivities.length / huActivities.length) * 100)
+            : 0;
+
           return (
             <Card key={hu.id} className={`group hover:shadow-md transition-shadow ${blocked ? "ring-2 ring-warning" : ""}`}>
               <CardContent className="p-4">
@@ -212,17 +299,44 @@ export function UserStoryManager() {
                       )}
                       {huActivities.length > 0 && (
                         <Badge variant="outline" className="text-xs">
-                          {huActivities.length} tarefa{huActivities.length !== 1 ? "s" : ""}
+                          {closedActivities.length}/{huActivities.length} tarefa{huActivities.length !== 1 ? "s" : ""}
                         </Badge>
                       )}
                     </div>
                     <h3 className="font-semibold text-sm">{hu.title}</h3>
                     {hu.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{hu.description}</p>}
+
+                    {/* Custom field values display */}
+                    {hu.customFields && customFields.length > 0 && Object.keys(hu.customFields).length > 0 && (
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        {customFields.map((cf) => {
+                          const val = hu.customFields?.[cf.id];
+                          if (val === undefined || val === "" || val === null) return null;
+                          return (
+                            <Badge key={cf.id} variant="outline" className="text-[10px]">
+                              {cf.name}: {String(val)}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         {totalHours}h total
                       </span>
+                      {huActivities.length > 0 && (
+                        <div className="flex items-center gap-2 flex-1">
+                          <div className="flex-1 max-w-[120px] h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-success rounded-full transition-all"
+                              style={{ width: `${completionPct}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-medium">{completionPct}%</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -233,7 +347,7 @@ export function UserStoryManager() {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-destructive"
-                      onClick={() => { removeUserStory(hu.id); toast.info("User Story removida"); }}
+                      onClick={() => handleRemove(hu.id)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
