@@ -16,7 +16,8 @@ import { ActivityComments } from "@/components/ActivityComments";
 
 export function ActivityManager() {
   const { activities, addActivity, removeActivity, updateActivity, closeActivity, reopenActivity, userStories, developers, activeSprint } = useSprint();
-  const { currentTeamId } = useAuth();
+  const { currentTeamId, hasPermission } = useAuth();
+  const canUpdate = hasPermission('update_tasks');
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
