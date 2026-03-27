@@ -103,6 +103,7 @@ export function ActivityManager() {
           <h2 className="text-lg font-bold tracking-tight">Atividades</h2>
           <Badge variant="secondary">{sprintActivities.length}</Badge>
         </div>
+        {canUpdate && (
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5" disabled={sprintStories.length === 0 || developers.length === 0}>
