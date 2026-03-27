@@ -73,7 +73,7 @@ export function KanbanBoard() {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
-    if (!over) return;
+    if (!over || !canMove) return;
 
     const huId = active.id as string;
     const overId = over.id as string;
