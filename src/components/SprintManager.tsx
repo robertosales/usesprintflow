@@ -13,7 +13,11 @@ import { toast } from "sonner";
 
 export function SprintManager() {
   const { sprints, addSprint, updateSprint, setActiveSprint, removeSprint, activeSprint, userStories, activities, workflowColumns } = useSprint();
+  const { hasPermission } = useAuth();
   const [open, setOpen] = useState(false);
+  const canCreate = hasPermission('create_sprint');
+  const canEdit = hasPermission('edit_sprint');
+  const canDelete = hasPermission('delete_sprint');
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
