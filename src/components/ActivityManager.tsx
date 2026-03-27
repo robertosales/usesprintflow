@@ -254,7 +254,10 @@ export function ActivityManager() {
                   </div>
                 </div>
                 {isExpanded && currentTeamId && (
-                  <ActivityComments activityId={act.id} teamId={currentTeamId} />
+                  <div className="mt-3 space-y-3 border-t pt-3">
+                    <FileUploader entityType="activity" entityId={act.id} teamId={currentTeamId} />
+                    <ActivityComments activityId={act.id} teamId={currentTeamId} />
+                  </div>
                 )}
               </CardContent>
             </Card>
