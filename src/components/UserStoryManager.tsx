@@ -120,6 +120,7 @@ export function UserStoryManager() {
           <h2 className="text-lg font-bold tracking-tight">User Stories (Backlog)</h2>
           <Badge variant="secondary">{sprintStories.length}</Badge>
         </div>
+        {canCreate && (
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5" disabled={!activeSprint}>
