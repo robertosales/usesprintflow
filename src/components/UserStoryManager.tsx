@@ -346,9 +346,12 @@ export function UserStoryManager() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {canEdit && (
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(hu.id)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
+                    )}
+                    {canEdit && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -357,6 +360,7 @@ export function UserStoryManager() {
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>
