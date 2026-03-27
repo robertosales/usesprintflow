@@ -11,6 +11,8 @@ import { WorkflowManager } from "@/components/WorkflowManager";
 import { CustomFieldManager } from "@/components/CustomFieldManager";
 import { AutomationManager } from "@/components/AutomationManager";
 import { TeamManager } from "@/components/TeamManager";
+import { TeamMembersManager } from "@/components/TeamMembersManager";
+import { UserRolesManager } from "@/components/UserRolesManager";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
@@ -19,18 +21,19 @@ import type { Permission } from "@/hooks/usePermissions";
 import {
   LayoutDashboard, Users, ListTodo, Columns3, BarChart3, Zap, ShieldAlert,
   ChevronLeft, ChevronRight, Layers, GitBranch, SlidersHorizontal, Wand2,
-  LogOut, Building2, UserCircle
+  LogOut, Building2, UserCircle, UsersRound, ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasActiveImpediment } from "@/types/sprint";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-type NavKey = "teams" | "backlog" | "epics" | "team" | "activities" | "kanban" | "impediments" | "metrics" | "workflow" | "custom-fields" | "automations";
+type NavKey = "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "team" | "activities" | "kanban" | "impediments" | "metrics" | "workflow" | "custom-fields" | "automations";
 
-// Map nav keys to required permissions (undefined = always visible)
 const NAV_PERMISSIONS: Partial<Record<NavKey, Permission>> = {
   teams: 'manage_teams',
+  "team-members": 'manage_teams',
+  "user-roles": 'manage_roles',
   backlog: 'view_backlog',
   epics: 'create_epic',
   team: 'manage_developers',
@@ -48,6 +51,8 @@ const NAV_SECTIONS = [
     title: "Organização",
     items: [
       { key: "teams" as NavKey, label: "Times", icon: Building2 },
+      { key: "team-members" as NavKey, label: "Membros", icon: UsersRound },
+      { key: "user-roles" as NavKey, label: "Perfis (RBAC)", icon: ShieldCheck },
     ],
   },
   {
@@ -233,6 +238,8 @@ const Index = () => {
           {!loading && !needsTeam && (
             <>
               {active === "teams" && <TeamManager />}
+              {active === "team-members" && <TeamMembersManager />}
+              {active === "user-roles" && <UserRolesManager />}
               {active === "backlog" && (
                 <div className="space-y-8">
                   <SprintManager />

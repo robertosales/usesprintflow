@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getTotalHoursForHU, ActivityType, ACTIVITY_TYPE_LABELS } from "@/types/sprint";
 import { toast } from "sonner";
 import { ActivityComments } from "@/components/ActivityComments";
+import { FileUploader } from "@/components/FileUploader";
 
 export function ActivityManager() {
   const { activities, addActivity, removeActivity, updateActivity, closeActivity, reopenActivity, userStories, developers, activeSprint } = useSprint();
@@ -253,7 +254,10 @@ export function ActivityManager() {
                   </div>
                 </div>
                 {isExpanded && currentTeamId && (
-                  <ActivityComments activityId={act.id} teamId={currentTeamId} />
+                  <div className="mt-3 space-y-3 border-t pt-3">
+                    <FileUploader entityType="activity" entityId={act.id} teamId={currentTeamId} />
+                    <ActivityComments activityId={act.id} teamId={currentTeamId} />
+                  </div>
                 )}
               </CardContent>
             </Card>

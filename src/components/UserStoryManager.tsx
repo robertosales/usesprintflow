@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { FileUploader } from "@/components/FileUploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +23,7 @@ const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
 
 export function UserStoryManager() {
   const { userStories, addUserStory, removeUserStory, updateUserStory, activities, activeSprint, epics, workflowColumns, customFields } = useSprint();
-  const { hasPermission } = useAuth();
+  const { hasPermission, currentTeamId } = useAuth();
   const canCreate = hasPermission('create_backlog');
   const canEdit = hasPermission('edit_backlog');
   const [open, setOpen] = useState(false);
@@ -344,6 +345,8 @@ export function UserStoryManager() {
                         </div>
                       )}
                     </div>
+                    {/* File attachments */}
+                    <FileUploader entityType="user_story" entityId={hu.id} teamId={activeSprint ? currentTeamId || "" : ""} />
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {canEdit && (
