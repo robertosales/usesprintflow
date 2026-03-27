@@ -233,6 +233,8 @@ const Index = () => {
           {!loading && !needsTeam && (
             <>
               {active === "teams" && <TeamManager />}
+              {active === "team-members" && <TeamMembersManager />}
+              {active === "user-roles" && <UserRolesManager />}
               {active === "backlog" && (
                 <div className="space-y-8">
                   <SprintManager />
