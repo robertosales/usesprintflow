@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,9 @@ const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
 
 export function UserStoryManager() {
   const { userStories, addUserStory, removeUserStory, updateUserStory, activities, activeSprint, epics, workflowColumns, customFields } = useSprint();
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission('create_backlog');
+  const canEdit = hasPermission('edit_backlog');
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -116,6 +120,7 @@ export function UserStoryManager() {
           <h2 className="text-lg font-bold tracking-tight">User Stories (Backlog)</h2>
           <Badge variant="secondary">{sprintStories.length}</Badge>
         </div>
+        {canCreate && (
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5" disabled={!activeSprint}>
@@ -235,6 +240,7 @@ export function UserStoryManager() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {!activeSprint && (
@@ -340,9 +346,12 @@ export function UserStoryManager() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {canEdit && (
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(hu.id)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
+                    )}
+                    {canEdit && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -351,6 +360,7 @@ export function UserStoryManager() {
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>

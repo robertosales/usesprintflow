@@ -10,7 +10,8 @@ import { toast } from "sonner";
 import { Plus, Edit2, Trash2, Users } from "lucide-react";
 
 export function TeamManager() {
-  const { teams, refreshTeams, currentTeamId, setCurrentTeamId, isAdmin } = useAuth();
+  const { teams, refreshTeams, currentTeamId, setCurrentTeamId, isAdmin, hasPermission } = useAuth();
+  const canManage = hasPermission('manage_teams');
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [open, setOpen] = useState(false);
@@ -81,6 +82,7 @@ export function TeamManager() {
           </h2>
           <p className="text-sm text-muted-foreground">Gerencie os times do projeto</p>
         </div>
+        {canManage && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" /> Novo Time</Button>
@@ -100,6 +102,7 @@ export function TeamManager() {
             </div>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -112,13 +115,15 @@ export function TeamManager() {
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-lg">{team.name}</CardTitle>
               <div className="flex gap-1">
-                <Button
-                  variant="ghost" size="icon"
-                  onClick={(e) => { e.stopPropagation(); setEditingTeam({ ...team, description: "" }); }}
-                >
-                  <Edit2 className="h-4 w-4" />
-                </Button>
-                {isAdmin && (
+                {canManage && (
+                  <Button
+                    variant="ghost" size="icon"
+                    onClick={(e) => { e.stopPropagation(); setEditingTeam({ ...team, description: "" }); }}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                )}
+                {canManage && (
                   <Button
                     variant="ghost" size="icon"
                     onClick={(e) => { e.stopPropagation(); handleDelete(team.id); }}

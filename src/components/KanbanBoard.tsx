@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { KanbanStatus, isHUOverdue, hasActiveImpediment, IMPEDIMENT_CRITICALITY_LABELS, UserStory } from "@/types/sprint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +52,8 @@ function DraggableCard({ id, children }: { id: string; children: React.ReactNode
 
 export function KanbanBoard() {
   const { activities, userStories, developers, updateUserStoryStatus, resolveImpediment, activeSprint, workflowColumns } = useSprint();
+  const { hasPermission } = useAuth();
+  const canMove = hasPermission('move_kanban');
   const [impedimentDialog, setImpedimentDialog] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [expandedHU, setExpandedHU] = useState<string | null>(null);
@@ -70,7 +73,7 @@ export function KanbanBoard() {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
-    if (!over) return;
+    if (!over || !canMove) return;
 
     const huId = active.id as string;
     const overId = over.id as string;

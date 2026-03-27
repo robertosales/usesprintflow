@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
+import { AppRole, Permission, getPermissionsForRoles } from "@/hooks/usePermissions";
 
 interface Profile {
   id: string;
@@ -21,6 +22,8 @@ interface AuthContextType {
   setCurrentTeamId: (id: string | null) => void;
   teams: { id: string; name: string }[];
   refreshTeams: () => Promise<void>;
+  roles: AppRole[];
+  hasPermission: (permission: Permission) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,6 +33,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [roles, setRoles] = useState<AppRole[]>([]);
+  const [permissions, setPermissions] = useState<Set<Permission>>(new Set());
   const [loading, setLoading] = useState(true);
   const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
   const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
@@ -47,17 +52,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const fetchRole = async (userId: string) => {
+  const fetchRoles = async (userId: string) => {
     try {
       const { data } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", userId);
-      const admin = data?.some((r: any) => r.role === "admin") ?? false;
+      const userRoles = (data?.map((r: any) => r.role as AppRole)) ?? [];
+      setRoles(userRoles);
+      const admin = userRoles.includes('admin');
       setIsAdmin(admin);
+      setPermissions(getPermissionsForRoles(userRoles));
       return admin;
     } catch (err) {
-      console.error("Error fetching role:", err);
+      console.error("Error fetching roles:", err);
       return false;
     }
   };
@@ -75,11 +83,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const hasPermission = (permission: Permission): boolean => {
+    return permissions.has(permission);
+  };
+
   const loadUserData = async (userId: string) => {
     try {
       await Promise.all([
         fetchProfile(userId),
-        fetchRole(userId),
+        fetchRoles(userId),
         refreshTeams(),
       ]);
     } catch (err) {
@@ -93,13 +105,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          // Use setTimeout to avoid potential deadlock with Supabase auth
           setTimeout(() => {
             loadUserData(session.user.id).finally(() => setLoading(false));
           }, 0);
         } else {
           setProfile(null);
           setIsAdmin(false);
+          setRoles([]);
+          setPermissions(new Set());
           setTeams([]);
           setCurrentTeamId(null);
           setLoading(false);
@@ -126,13 +139,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfile(null);
     setIsAdmin(false);
+    setRoles([]);
+    setPermissions(new Set());
     setTeams([]);
     setCurrentTeamId(null);
   };
 
   return (
     <AuthContext.Provider
-      value={{ session, user, profile, isAdmin, loading, signOut, currentTeamId, setCurrentTeamId, teams, refreshTeams }}
+      value={{ session, user, profile, isAdmin, loading, signOut, currentTeamId, setCurrentTeamId, teams, refreshTeams, roles, hasPermission }}
     >
       {children}
     </AuthContext.Provider>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +14,11 @@ import { toast } from "sonner";
 
 export function SprintManager() {
   const { sprints, addSprint, updateSprint, setActiveSprint, removeSprint, activeSprint, userStories, activities, workflowColumns } = useSprint();
+  const { hasPermission } = useAuth();
   const [open, setOpen] = useState(false);
+  const canCreate = hasPermission('create_sprint');
+  const canEdit = hasPermission('edit_sprint');
+  const canDelete = hasPermission('delete_sprint');
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -89,6 +94,7 @@ export function SprintManager() {
           <h2 className="text-lg font-bold tracking-tight">Sprints</h2>
           <Badge variant="secondary">{sprints.length}</Badge>
         </div>
+        {canCreate && (
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> Nova Sprint</Button>
@@ -128,6 +134,7 @@ export function SprintManager() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       <div className="flex gap-3 flex-wrap">
@@ -147,6 +154,7 @@ export function SprintManager() {
                   <span className="font-semibold text-sm">{sprint.name}</span>
                   <div className="flex items-center gap-1">
                     {sprint.isActive && <Badge className="bg-primary text-primary-foreground text-[10px]">Ativa</Badge>}
+                    {canEdit && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -155,6 +163,8 @@ export function SprintManager() {
                     >
                       <Pencil className="h-3 w-3" />
                     </Button>
+                    )}
+                    {canDelete && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -163,6 +173,7 @@ export function SprintManager() {
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
