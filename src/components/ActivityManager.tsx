@@ -270,18 +270,27 @@ export function ActivityManager() {
                     <Label>
                       Horas estimadas <span className="text-destructive">*</span>
                     </Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="24"
-                      value={hours}
-                      onChange={(e) => {
-                        setHours(e.target.value);
-                        setErrors((p) => ({ ...p, hours: "" }));
-                      }}
-                      className="mt-1"
-                    />
-                    {errors.hours && <p className="text-xs text-destructive mt-1">{errors.hours}</p>}
+                    {/* 🔥 ALTERAÇÃO: max dinâmico */}
+                <Input
+                  type="number"
+                  min="1"
+                  max={isArquitetura ? undefined : 24}
+                  value={hours}
+                  onChange={(e) => {
+                    setHours(e.target.value);
+                    setErrors((p) => ({ ...p, hours: "" }));
+                  }}
+                  className="mt-1"
+                />
+
+                {errors.hours && (
+                  <p className="text-xs text-destructive mt-1">
+                    {errors.hours}
+                  </p>
+                )}
+              </div>
+
+              {/* ... restante */}
                   </div>
                   <div>
                     <Label>
