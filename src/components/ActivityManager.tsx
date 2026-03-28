@@ -67,7 +67,7 @@ export function ActivityManager() {
     if (!hours || Number(hours) < 1) e.hours = "Horas deve ser no mínimo 1";
 
     // 🔥 ALTERADO: regra por atividade (8h)
-    if (activityType === "task" && Number(hours) > 8) {
+    if (activityType === "task" && activityType === "bug" && Number(hours) > 8) {
       e.hours = "Máximo de 8 horas para tarefas do tipo Task";
     }
 
