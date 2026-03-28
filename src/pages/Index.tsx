@@ -20,14 +20,29 @@ import { getRoleLabel } from "@/hooks/usePermissions";
 import type { Permission } from "@/hooks/usePermissions";
 import {
   LayoutDashboard, Users, ListTodo, Columns3, BarChart3, Zap, ShieldAlert,
-  ChevronLeft, ChevronRight, Layers, GitBranch, SlidersHorizontal, Wand2,
+  Layers, GitBranch, SlidersHorizontal, Wand2,
   LogOut, Building2, UserCircle, UsersRound, ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasActiveImpediment } from "@/types/sprint";
-import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NotificationBell } from "@/components/NotificationBell";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+  SidebarHeader,
+  SidebarFooter,
+  SidebarSeparator,
+  useSidebar,
+} from "@/components/ui/sidebar";
 
 type NavKey = "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "team" | "activities" | "kanban" | "impediments" | "metrics" | "workflow" | "custom-fields" | "automations";
 
@@ -49,14 +64,6 @@ const NAV_PERMISSIONS: Partial<Record<NavKey, Permission>> = {
 
 const NAV_SECTIONS = [
   {
-    title: "Organização",
-    items: [
-      { key: "teams" as NavKey, label: "Times", icon: Building2 },
-      { key: "team-members" as NavKey, label: "Membros", icon: UsersRound },
-      { key: "user-roles" as NavKey, label: "Perfis (RBAC)", icon: ShieldCheck },
-    ],
-  },
-  {
     title: "Planejamento",
     items: [
       { key: "backlog" as NavKey, label: "Backlog", icon: LayoutDashboard },
@@ -74,6 +81,14 @@ const NAV_SECTIONS = [
     ],
   },
   {
+    title: "Organização",
+    items: [
+      { key: "teams" as NavKey, label: "Times", icon: Building2 },
+      { key: "team-members" as NavKey, label: "Membros", icon: UsersRound },
+      { key: "user-roles" as NavKey, label: "Perfis (RBAC)", icon: ShieldCheck },
+    ],
+  },
+  {
     title: "Configurações",
     items: [
       { key: "workflow" as NavKey, label: "Fluxo de Trabalho", icon: GitBranch },
@@ -83,18 +98,15 @@ const NAV_SECTIONS = [
   },
 ];
 
-const Index = () => {
-  const [active, setActive] = useState<NavKey>("backlog");
-  const [collapsed, setCollapsed] = useState(false);
-  const { activeSprint, userStories, loading } = useSprint();
-  const { profile, signOut, isAdmin, teams, currentTeamId, setCurrentTeamId, roles, hasPermission } = useAuth();
+function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavKey) => void }) {
+  const { activeSprint, userStories } = useSprint();
+  const { profile, signOut, teams, currentTeamId, setCurrentTeamId, roles, hasPermission } = useAuth();
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
 
   const sprintStories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : [];
   const blockedCount = sprintStories.filter(hasActiveImpediment).length;
 
-  const needsTeam = !currentTeamId && active !== "teams";
-
-  // Filter nav items by permission
   const canSeeNav = (key: NavKey): boolean => {
     const perm = NAV_PERMISSIONS[key];
     if (!perm) return true;
@@ -104,28 +116,32 @@ const Index = () => {
   const roleLabel = roles.length > 0 ? roles.map(getRoleLabel).join(', ') : 'Sem perfil';
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <aside className={`bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border transition-all duration-200 ${collapsed ? "w-16" : "w-60"} shrink-0`}>
-        <div className="flex items-center gap-2.5 px-4 py-4 border-b border-sidebar-border">
+    <Sidebar collapsible="icon" className="border-r-0">
+      <SidebarHeader className="border-b border-sidebar-border">
+        <div className="flex items-center gap-2.5 px-1 py-1">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary shrink-0">
             <Zap className="h-4 w-4 text-sidebar-primary-foreground" />
           </div>
           {!collapsed && (
             <div className="overflow-hidden">
-              <p className="text-sm font-bold text-sidebar-primary-foreground truncate">Sprint Manager</p>
+              <p className="text-sm font-bold truncate">SprintFlow</p>
               <p className="text-[10px] text-sidebar-foreground/60 truncate">Gestão Ágil</p>
             </div>
           )}
         </div>
+      </SidebarHeader>
 
+      <SidebarContent>
         {/* User info */}
         {!collapsed && profile && (
-          <div className="px-3 py-3 border-b border-sidebar-border">
-            <div className="flex items-center gap-2">
-              <UserCircle className="h-5 w-5 text-sidebar-foreground/60 shrink-0" />
+          <div className="px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-accent shrink-0">
+                <UserCircle className="h-4 w-4 text-sidebar-foreground/70" />
+              </div>
               <div className="overflow-hidden">
-                <p className="text-xs font-medium text-sidebar-primary-foreground truncate">{profile.display_name}</p>
-                <p className="text-[10px] text-sidebar-foreground/60">{roleLabel}</p>
+                <p className="text-xs font-medium truncate">{profile.display_name}</p>
+                <p className="text-[10px] text-sidebar-foreground/50">{roleLabel}</p>
               </div>
             </div>
           </div>
@@ -133,10 +149,10 @@ const Index = () => {
 
         {/* Team selector */}
         {!collapsed && teams.length > 0 && (
-          <div className="px-3 py-3 border-b border-sidebar-border">
-            <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/50 font-semibold mb-1">Time</p>
+          <div className="px-4 pb-3">
+            <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 font-semibold mb-1.5">Time Ativo</p>
             <Select value={currentTeamId || ""} onValueChange={setCurrentTeamId}>
-              <SelectTrigger className="h-8 text-xs">
+              <SelectTrigger className="h-8 text-xs bg-sidebar-accent/50 border-sidebar-border">
                 <SelectValue placeholder="Selecione um time" />
               </SelectTrigger>
               <SelectContent>
@@ -148,133 +164,168 @@ const Index = () => {
           </div>
         )}
 
+        {/* Sprint info */}
         {!collapsed && activeSprint && (
-          <div className="px-3 py-3 border-b border-sidebar-border">
-            <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/50 font-semibold mb-1">Sprint Ativa</p>
-            <p className="text-xs font-medium text-sidebar-primary-foreground truncate">{activeSprint.name}</p>
-            <p className="text-[10px] text-sidebar-foreground/60">
-              {new Date(activeSprint.startDate).toLocaleDateString("pt-BR")} — {new Date(activeSprint.endDate).toLocaleDateString("pt-BR")}
-            </p>
+          <div className="px-4 pb-3">
+            <div className="rounded-lg bg-sidebar-accent/50 p-2.5 space-y-1">
+              <div className="flex items-center gap-1.5">
+                <Zap className="h-3 w-3 text-sidebar-primary" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">Sprint</span>
+              </div>
+              <p className="text-xs font-medium truncate">{activeSprint.name}</p>
+              <p className="text-[10px] text-sidebar-foreground/50">
+                {new Date(activeSprint.startDate).toLocaleDateString("pt-BR")} — {new Date(activeSprint.endDate).toLocaleDateString("pt-BR")}
+              </p>
+            </div>
           </div>
         )}
 
-        <nav className="flex-1 py-2 px-2 space-y-1 overflow-y-auto scrollbar-thin">
-          {NAV_SECTIONS.map((section, sIdx) => {
-            const visibleItems = section.items.filter((item) => canSeeNav(item.key));
-            if (visibleItems.length === 0) return null;
-            return (
-              <div key={section.title}>
-                {!collapsed && (
-                  <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 font-semibold px-2 pt-3 pb-1">{section.title}</p>
-                )}
-                {collapsed && sIdx > 0 && <Separator className="my-1 bg-sidebar-border" />}
-                {visibleItems.map((item) => {
-                  const isActive = active === item.key;
-                  return (
-                    <button
-                      key={item.key}
-                      onClick={() => setActive(item.key)}
-                      className={`w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors ${
-                        isActive
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-                      } ${collapsed ? "justify-center" : ""}`}
-                      title={collapsed ? item.label : undefined}
-                    >
-                      <item.icon className="h-4 w-4 shrink-0" />
-                      {!collapsed && (
-                        <span className="truncate flex-1 text-left">{item.label}</span>
-                      )}
-                      {!collapsed && item.key === "impediments" && blockedCount > 0 && (
-                        <Badge className="bg-warning text-warning-foreground text-[10px] h-4 min-w-4 flex items-center justify-center px-1">
-                          {blockedCount}
-                        </Badge>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </nav>
+        <SidebarSeparator />
 
-        <div className="px-2 py-2 border-t border-sidebar-border space-y-1">
-          {!collapsed && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 justify-start"
+        {/* Navigation sections */}
+        {NAV_SECTIONS.map((section) => {
+          const visibleItems = section.items.filter((item) => canSeeNav(item.key));
+          if (visibleItems.length === 0) return null;
+          return (
+            <SidebarGroup key={section.title}>
+              <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest font-semibold">
+                {section.title}
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {visibleItems.map((item) => {
+                    const isActive = active === item.key;
+                    return (
+                      <SidebarMenuItem key={item.key}>
+                        <SidebarMenuButton
+                          isActive={isActive}
+                          onClick={() => setActive(item.key)}
+                          tooltip={item.label}
+                          className="transition-all duration-150"
+                        >
+                          <item.icon className="h-4 w-4" />
+                          <span className="flex-1">{item.label}</span>
+                          {item.key === "impediments" && blockedCount > 0 && !collapsed && (
+                            <Badge className="bg-warning text-warning-foreground text-[10px] h-5 min-w-5 flex items-center justify-center px-1 ml-auto">
+                              {blockedCount}
+                            </Badge>
+                          )}
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          );
+        })}
+      </SidebarContent>
+
+      <SidebarFooter className="border-t border-sidebar-border">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
               onClick={signOut}
+              tooltip="Sair"
+              className="text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10"
             >
-              <LogOut className="h-4 w-4 mr-2" /> Sair
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
-            onClick={() => setCollapsed(!collapsed)}
-          >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </Button>
-        </div>
-      </aside>
+              <LogOut className="h-4 w-4" />
+              <span>Sair</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
 
-      <main className="flex-1 overflow-auto">
-        {/* Header bar with notifications */}
-        <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b px-6 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold text-foreground">
-              {NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.key === active)?.label || "SprintFlow"}
-            </h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <NotificationBell />
-            {!collapsed && profile && (
-              <span className="text-xs text-muted-foreground hidden md:block">{profile.display_name}</span>
-            )}
-          </div>
-        </div>
-        <div className="max-w-7xl mx-auto p-6">
-          {loading && (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+const Index = () => {
+  const [active, setActive] = useState<NavKey>("backlog");
+  const { activeSprint, userStories, loading } = useSprint();
+  const { profile, currentTeamId, hasPermission } = useAuth();
+
+  const needsTeam = !currentTeamId && active !== "teams";
+
+  const pageTitle = NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.key === active)?.label || "SprintFlow";
+
+  return (
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full">
+        <AppSidebar active={active} setActive={setActive} />
+
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Header */}
+          <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b h-14 flex items-center justify-between px-4 md:px-6 shrink-0">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="h-8 w-8" />
+              <div className="h-5 w-px bg-border hidden md:block" />
+              <h1 className="text-base font-semibold text-foreground hidden md:block">{pageTitle}</h1>
             </div>
-          )}
-          {!loading && needsTeam && (
-            <div className="flex flex-col items-center justify-center py-20 space-y-4">
-              <Building2 className="h-12 w-12 text-muted-foreground" />
-              <p className="text-lg text-muted-foreground">Selecione ou crie um time para começar</p>
-              {hasPermission('manage_teams') && (
-                <Button onClick={() => setActive("teams")}>Ir para Times</Button>
-              )}
-            </div>
-          )}
-          {!loading && !needsTeam && (
-            <>
-              {active === "teams" && <TeamManager />}
-              {active === "team-members" && <TeamMembersManager />}
-              {active === "user-roles" && <UserRolesManager />}
-              {active === "backlog" && (
-                <div className="space-y-8">
-                  <SprintManager />
-                  <UserStoryManager />
+            <div className="flex items-center gap-3">
+              <NotificationBell />
+              {profile && (
+                <div className="hidden md:flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
+                    <span className="text-[10px] font-bold text-primary">
+                      {profile.display_name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                    </span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{profile.display_name}</span>
                 </div>
               )}
-              {active === "epics" && <EpicManager />}
-              {active === "team" && <DeveloperManager />}
-              {active === "activities" && <ActivityManager />}
-              {active === "kanban" && <KanbanBoard />}
-              {active === "impediments" && <ImpedimentList />}
-              {active === "metrics" && <MetricsDashboard />}
-              {active === "workflow" && <WorkflowManager />}
-              {active === "custom-fields" && <CustomFieldManager />}
-              {active === "automations" && <AutomationManager />}
-            </>
-          )}
+            </div>
+          </header>
+
+          {/* Main content */}
+          <main className="flex-1 overflow-auto">
+            <div className="max-w-7xl mx-auto p-4 md:p-6">
+              {/* Mobile page title */}
+              <h2 className="text-xl font-bold text-foreground mb-4 md:hidden">{pageTitle}</h2>
+
+              {loading && (
+                <div className="flex items-center justify-center py-20">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+                </div>
+              )}
+              {!loading && needsTeam && (
+                <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                  <Building2 className="h-14 w-14 text-muted-foreground/30" />
+                  <p className="text-lg text-muted-foreground font-medium">Selecione ou crie um time para começar</p>
+                  {hasPermission('manage_teams') && (
+                    <Button onClick={() => setActive("teams")} size="lg">
+                      <Building2 className="h-4 w-4 mr-2" />
+                      Ir para Times
+                    </Button>
+                  )}
+                </div>
+              )}
+              {!loading && !needsTeam && (
+                <>
+                  {active === "teams" && <TeamManager />}
+                  {active === "team-members" && <TeamMembersManager />}
+                  {active === "user-roles" && <UserRolesManager />}
+                  {active === "backlog" && (
+                    <div className="space-y-8">
+                      <SprintManager />
+                      <UserStoryManager />
+                    </div>
+                  )}
+                  {active === "epics" && <EpicManager />}
+                  {active === "team" && <DeveloperManager />}
+                  {active === "activities" && <ActivityManager />}
+                  {active === "kanban" && <KanbanBoard />}
+                  {active === "impediments" && <ImpedimentList />}
+                  {active === "metrics" && <MetricsDashboard />}
+                  {active === "workflow" && <WorkflowManager />}
+                  {active === "custom-fields" && <CustomFieldManager />}
+                  {active === "automations" && <AutomationManager />}
+                </>
+              )}
+            </div>
+          </main>
         </div>
-      </main>
-    </div>
+      </div>
+    </SidebarProvider>
   );
 };
 
