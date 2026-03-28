@@ -105,13 +105,6 @@ export function ActivityManager() {
       toast.success("Atividade atualizada!");
     } else {
       const currentHours = getTotalHoursForHU(activities, huId);
-
-      // 🔥 MANTIDO: controle de HU (não alterado)
-      if (currentHours + numHours > 24) {
-        toast.error(`HU já possui ${currentHours}h alocadas. Disponível: ${24 - currentHours}h`);
-        return;
-      }
-
       addActivity({
         title: title.trim(),
         description: description.trim(),
