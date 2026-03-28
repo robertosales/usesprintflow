@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { hasActiveImpediment } from "@/types/sprint";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { NotificationBell } from "@/components/NotificationBell";
 
 type NavKey = "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "team" | "activities" | "kanban" | "impediments" | "metrics" | "workflow" | "custom-fields" | "automations";
 
