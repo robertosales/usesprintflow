@@ -13,12 +13,12 @@ import { Plus, Trash2, Users, UserPlus, Shield } from "lucide-react";
 import { getRoleLabel, ALL_ROLES, type AppRole } from "@/hooks/usePermissions";
 
 const PREDEFINED_ROLES = [
-  "Scrum Master",
-  "Product Owner",
-  "Desenvolvedor",
   "Analista de Requisitos",
-  "Arquiteto",
-  "Analista de QA",
+  "Arquiteto de Software",
+  "Desenvolvedor Fullstack",
+  "Designer UX/UI",
+  "QA / Tester",
+  "Scrum Master",
 ];
 
 interface TeamMember {
@@ -45,10 +45,7 @@ export function TeamMembersManager() {
   const fetchMembers = async () => {
     if (!currentTeamId) return;
     setLoading(true);
-    const { data: tmData } = await supabase
-      .from("team_members")
-      .select("*")
-      .eq("team_id", currentTeamId);
+    const { data: tmData } = await supabase.from("team_members").select("*").eq("team_id", currentTeamId);
 
     const memberList = tmData || [];
     const userIds = memberList.map((m: any) => m.user_id);
@@ -64,10 +61,7 @@ export function TeamMembersManager() {
 
     let userRoles: any[] = [];
     if (userIds.length > 0 && isAdmin) {
-      const { data: rData } = await supabase
-        .from("user_roles")
-        .select("user_id, role")
-        .in("user_id", userIds);
+      const { data: rData } = await supabase.from("user_roles").select("user_id, role").in("user_id", userIds);
       userRoles = rData || [];
     }
 
@@ -75,10 +69,8 @@ export function TeamMembersManager() {
       memberList.map((m: any) => ({
         ...m,
         profile: profiles.find((p: any) => p.user_id === m.user_id),
-        user_roles: userRoles
-          .filter((r: any) => r.user_id === m.user_id)
-          .map((r: any) => r.role as AppRole),
-      }))
+        user_roles: userRoles.filter((r: any) => r.user_id === m.user_id).map((r: any) => r.role as AppRole),
+      })),
     );
     setLoading(false);
   };
@@ -133,9 +125,7 @@ export function TeamMembersManager() {
     await fetchMembers();
   };
 
-  const availableProfiles = allProfiles.filter(
-    (p) => !members.find((m) => m.user_id === p.user_id)
-  );
+  const availableProfiles = allProfiles.filter((p) => !members.find((m) => m.user_id === p.user_id));
 
   if (!currentTeamId) {
     return (
@@ -155,9 +145,7 @@ export function TeamMembersManager() {
           <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Users className="h-6 w-6 text-primary" /> Membros do Time
           </h2>
-          <p className="text-sm text-muted-foreground">
-            Gerencie os membros associados a este time
-          </p>
+          <p className="text-sm text-muted-foreground">Gerencie os membros associados a este time</p>
         </div>
         {canManage && (
           <Dialog open={open} onOpenChange={setOpen}>
@@ -189,20 +177,25 @@ export function TeamMembersManager() {
                 <div>
                   <Label>Função no Time *</Label>
                   {!showCustom ? (
-                    <Select value={memberRole} onValueChange={(v) => {
-                      if (v === "__custom__") {
-                        setShowCustom(true);
-                        setMemberRole("");
-                      } else {
-                        setMemberRole(v);
-                      }
-                    }}>
+                    <Select
+                      value={memberRole}
+                      onValueChange={(v) => {
+                        if (v === "__custom__") {
+                          setShowCustom(true);
+                          setMemberRole("");
+                        } else {
+                          setMemberRole(v);
+                        }
+                      }}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {PREDEFINED_ROLES.map((role) => (
-                          <SelectItem key={role} value={role}>{role}</SelectItem>
+                          <SelectItem key={role} value={role}>
+                            {role}
+                          </SelectItem>
                         ))}
                         <SelectItem value="__custom__">
                           <span className="text-primary font-medium">+ Outra função...</span>
@@ -216,7 +209,14 @@ export function TeamMembersManager() {
                         onChange={(e) => setCustomRole(e.target.value)}
                         placeholder="Digite a função personalizada"
                       />
-                      <Button variant="outline" size="sm" onClick={() => { setShowCustom(false); setMemberRole("Desenvolvedor"); }}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setShowCustom(false);
+                          setMemberRole("Desenvolvedor");
+                        }}
+                      >
                         Cancelar
                       </Button>
                     </div>
@@ -236,19 +236,11 @@ export function TeamMembersManager() {
           <Card key={member.id}>
             <CardHeader className="pb-2 flex flex-row items-start justify-between">
               <div className="space-y-1">
-                <CardTitle className="text-sm font-semibold">
-                  {member.profile?.display_name || "Usuário"}
-                </CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  {member.profile?.email}
-                </p>
+                <CardTitle className="text-sm font-semibold">{member.profile?.display_name || "Usuário"}</CardTitle>
+                <p className="text-xs text-muted-foreground">{member.profile?.email}</p>
               </div>
               {canManage && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleRemoveMember(member.id)}
-                >
+                <Button variant="ghost" size="icon" onClick={() => handleRemoveMember(member.id)}>
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               )}
