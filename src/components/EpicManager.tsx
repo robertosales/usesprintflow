@@ -20,6 +20,7 @@ const EPIC_COLORS = [
   "hsl(142, 71%, 40%)",
   "hsl(330, 60%, 50%)",
   "hsl(200, 70%, 45%)",
+  "hsl(240, 240%, 240%)",
 ];
 
 export function EpicManager() {
