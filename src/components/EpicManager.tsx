@@ -12,9 +12,14 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 
 const EPIC_COLORS = [
-  "hsl(173, 58%, 39%)", "hsl(210, 92%, 55%)", "hsl(262, 52%, 55%)",
-  "hsl(38, 92%, 50%)", "hsl(0, 72%, 51%)", "hsl(142, 71%, 40%)",
-  "hsl(330, 60%, 50%)", "hsl(200, 70%, 45%)",
+  "hsl(173, 58%, 39%)",
+  "hsl(210, 92%, 55%)",
+  "hsl(262, 52%, 55%)",
+  "hsl(38, 92%, 50%)",
+  "hsl(0, 72%, 51%)",
+  "hsl(142, 71%, 40%)",
+  "hsl(330, 60%, 50%)",
+  "hsl(200, 70%, 45%)",
 ];
 
 export function EpicManager() {
@@ -30,7 +35,11 @@ export function EpicManager() {
   const lastCol = workflowColumns[workflowColumns.length - 1]?.key;
 
   const resetForm = () => {
-    setName(""); setDescription(""); setColor(EPIC_COLORS[0]); setErrors({}); setEditId(null);
+    setName("");
+    setDescription("");
+    setColor(EPIC_COLORS[0]);
+    setErrors({});
+    setEditId(null);
   };
 
   const validate = () => {
@@ -57,8 +66,12 @@ export function EpicManager() {
   const openEdit = (epicId: string) => {
     const epic = epics.find((e) => e.id === epicId);
     if (!epic) return;
-    setEditId(epic.id); setName(epic.name); setDescription(epic.description); setColor(epic.color);
-    setErrors({}); setOpen(true);
+    setEditId(epic.id);
+    setName(epic.name);
+    setDescription(epic.description);
+    setColor(epic.color);
+    setErrors({});
+    setOpen(true);
   };
 
   return (
@@ -69,9 +82,17 @@ export function EpicManager() {
           <h2 className="text-lg font-bold tracking-tight">Épicos</h2>
           <Badge variant="secondary">{epics.length}</Badge>
         </div>
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
+        <Dialog
+          open={open}
+          onOpenChange={(v) => {
+            setOpen(v);
+            if (!v) resetForm();
+          }}
+        >
           <DialogTrigger asChild>
-            <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> Novo Épico</Button>
+            <Button size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" /> Novo Épico
+            </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -82,13 +103,29 @@ export function EpicManager() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label>Nome <span className="text-destructive">*</span></Label>
-                <Input value={name} onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: "" })); }} placeholder="Ex: Módulo de Pagamentos" className="mt-1" />
+                <Label>
+                  Nome <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setErrors((p) => ({ ...p, name: "" }));
+                  }}
+                  placeholder="Ex: Módulo de Pagamentos"
+                  className="mt-1"
+                />
                 {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
               </div>
               <div>
                 <Label>Descrição</Label>
-                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Objetivo do épico..." className="mt-1" rows={3} />
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Objetivo do épico..."
+                  className="mt-1"
+                  rows={3}
+                />
               </div>
               <div>
                 <Label>Cor</Label>
@@ -102,6 +139,40 @@ export function EpicManager() {
                       onClick={() => setColor(c)}
                     />
                   ))}
+                </div>
+              </div>
+              <div>
+                <Label>Cor</Label>
+
+                <div className="flex gap-2 mt-1.5 items-center">
+                  {EPIC_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      className={`h-7 w-7 rounded-full transition-all ${
+                        color === c ? "ring-2 ring-offset-2 ring-ring scale-110" : "hover:scale-105"
+                      }`}
+                      style={{ backgroundColor: c }}
+                      onClick={() => setColor(c)}
+                    />
+                  ))}
+
+                  {/* Botão de cor custom */}
+                  <button
+                    type="button"
+                    onClick={() => colorInputRef.current.click()}
+                    className="h-7 w-7 rounded-full border flex items-center justify-center text-xs hover:scale-105"
+                  >
+                    +
+                  </button>
+
+                  {/* Input escondido */}
+                  <input
+                    ref={colorInputRef}
+                    type="color"
+                    className="hidden"
+                    onChange={(e) => setColor(e.target.value)}
+                  />
                 </div>
               </div>
               <Button type="submit" className="w-full gap-2">
@@ -139,23 +210,47 @@ export function EpicManager() {
                       <div className="flex items-center gap-2 mb-1">
                         <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: epic.color }} />
                         <h3 className="font-semibold text-sm">{epic.name}</h3>
-                        <Badge variant="secondary" className="text-xs">{sprintHUs.length} HUs</Badge>
-                        <Badge variant="outline" className="text-xs">{totalPoints} pts</Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          {sprintHUs.length} HUs
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {totalPoints} pts
+                        </Badge>
                       </div>
-                      {epic.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2 ml-5">{epic.description}</p>}
+                      {epic.description && (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2 ml-5">{epic.description}</p>
+                      )}
                       <div className="flex items-center gap-3 mt-2 ml-5">
                         <Progress value={progress} className="h-1.5 flex-1 max-w-[200px]" />
                         <span className="text-xs text-muted-foreground font-medium">{progress}%</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setExpandedEpic(expanded ? null : epic.id)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => setExpandedEpic(expanded ? null : epic.id)}
+                      >
                         {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => openEdit(epic.id)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                        onClick={() => openEdit(epic.id)}
+                      >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive opacity-0 group-hover:opacity-100" onClick={() => { removeEpic(epic.id); toast.info("Épico removido"); }}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive opacity-0 group-hover:opacity-100"
+                        onClick={() => {
+                          removeEpic(epic.id);
+                          toast.info("Épico removido");
+                        }}
+                      >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -165,8 +260,13 @@ export function EpicManager() {
                       {sprintHUs.map((hu) => {
                         const col = workflowColumns.find((c) => c.key === hu.status);
                         return (
-                          <div key={hu.id} className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2.5 py-1.5">
-                            <Badge variant="outline" className="font-mono text-[10px]">{hu.code}</Badge>
+                          <div
+                            key={hu.id}
+                            className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2.5 py-1.5"
+                          >
+                            <Badge variant="outline" className="font-mono text-[10px]">
+                              {hu.code}
+                            </Badge>
                             <span className="flex-1 truncate">{hu.title}</span>
                             {col && (
                               <Badge variant="secondary" className="text-[10px] gap-1">
