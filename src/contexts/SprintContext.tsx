@@ -229,6 +229,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       code: `HU-${String(count).padStart(3, "0")}`, title: hu.title,
       description: hu.description, story_points: hu.storyPoints,
       priority: hu.priority, status: firstCol, custom_fields: hu.customFields || {},
+      start_date: hu.startDate || null, end_date: hu.endDate || null,
     });
     if (error) { toast.error("Erro ao criar HU"); return; }
     await refreshAll();
