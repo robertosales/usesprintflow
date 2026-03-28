@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
-import { Impediment, IMPEDIMENT_TYPE_LABELS, IMPEDIMENT_CRITICALITY_LABELS, ImpedimentType, ImpedimentCriticality, hasActiveImpediment } from "@/types/sprint";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
