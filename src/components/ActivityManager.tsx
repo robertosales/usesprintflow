@@ -40,6 +40,7 @@ export function ActivityManager() {
   } = useSprint();
   const { currentTeamId, hasPermission } = useAuth();
   const canUpdate = hasPermission("update_tasks");
+
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -52,6 +53,9 @@ export function ActivityManager() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [expandedComments, setExpandedComments] = useState<string | null>(null);
 
+  // 🔥 ADICIONADO: regra para arquitetura
+  const isArquitetura = activityType === "architecture";
+
   const sprintStories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : [];
 
   const validate = () => {
@@ -61,7 +65,12 @@ export function ActivityManager() {
     if (!assigneeId) e.assigneeId = "Selecione um responsável";
     if (!startDate) e.startDate = "Data de início é obrigatória";
     if (!hours || Number(hours) < 1) e.hours = "Horas deve ser no mínimo 1";
-    if (Number(hours) > 24) e.hours = "Máximo de 24 horas por atividade";
+
+    // 🔥 ALTERADO: só limita se NÃO for arquitetura
+    if (!isArquitetura && Number(hours) > 24) {
+      e.hours = "Máximo de 24 horas por atividade";
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -96,10 +105,13 @@ export function ActivityManager() {
       toast.success("Atividade atualizada!");
     } else {
       const currentHours = getTotalHoursForHU(activities, huId);
-      if (currentHours + numHours > 24) {
+
+      // 🔥 ALTERADO: só valida limite se NÃO for arquitetura
+      if (!isArquitetura && currentHours + numHours > 24) {
         toast.error(`HU já possui ${currentHours}h alocadas. Disponível: ${24 - currentHours}h`);
         return;
       }
+
       addActivity({
         title: title.trim(),
         description: description.trim(),
@@ -111,6 +123,7 @@ export function ActivityManager() {
       });
       toast.success("Atividade criada!");
     }
+
     resetForm();
     setOpen(false);
   };
@@ -145,6 +158,7 @@ export function ActivityManager() {
           <h2 className="text-lg font-bold tracking-tight">Atividades</h2>
           <Badge variant="secondary">{sprintActivities.length}</Badge>
         </div>
+
         {canUpdate && (
           <Dialog
             open={open}
@@ -158,6 +172,7 @@ export function ActivityManager() {
                 <Plus className="h-4 w-4" /> Nova Atividade
               </Button>
             </DialogTrigger>
+
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
@@ -165,6 +180,7 @@ export function ActivityManager() {
                   {editId ? "Editar Atividade" : "Nova Atividade"}
                 </DialogTitle>
               </DialogHeader>
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label>
@@ -181,6 +197,7 @@ export function ActivityManager() {
                   />
                   {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
                 </div>
+
                 <div>
                   <Label>Descrição</Label>
                   <Textarea
@@ -190,6 +207,7 @@ export function ActivityManager() {
                     className="mt-1"
                   />
                 </div>
+
                 <div>
                   <Label>
                     Tipo <span className="text-destructive">*</span>
@@ -207,6 +225,7 @@ export function ActivityManager() {
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div>
                   <Label>
                     User Story <span className="text-destructive">*</span>
@@ -234,6 +253,7 @@ export function ActivityManager() {
                   </Select>
                   {errors.huId && <p className="text-xs text-destructive mt-1">{errors.huId}</p>}
                 </div>
+
                 <div>
                   <Label>
                     Responsável <span className="text-destructive">*</span>
@@ -258,6 +278,7 @@ export function ActivityManager() {
                   </Select>
                   {errors.assigneeId && <p className="text-xs text-destructive mt-1">{errors.assigneeId}</p>}
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>
@@ -266,7 +287,7 @@ export function ActivityManager() {
                     <Input
                       type="number"
                       min="1"
-                      max="24"
+                      max={isArquitetura ? undefined : 24}
                       value={hours}
                       onChange={(e) => {
                         setHours(e.target.value);
@@ -276,6 +297,7 @@ export function ActivityManager() {
                     />
                     {errors.hours && <p className="text-xs text-destructive mt-1">{errors.hours}</p>}
                   </div>
+
                   <div>
                     <Label>
                       Data início <span className="text-destructive">*</span>
@@ -292,6 +314,7 @@ export function ActivityManager() {
                     {errors.startDate && <p className="text-xs text-destructive mt-1">{errors.startDate}</p>}
                   </div>
                 </div>
+
                 <Button type="submit" className="w-full gap-2">
                   <Plus className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Criar Atividade"}
                 </Button>
@@ -319,6 +342,7 @@ export function ActivityManager() {
           const typeInfo = ACTIVITY_TYPE_LABELS[act.activityType || "task"];
           const isClosed = !!act.isClosed;
           const isExpanded = expandedComments === act.id;
+
           return (
             <Card key={act.id} className={`group hover:shadow-md transition-shadow ${isClosed ? "opacity-60" : ""}`}>
               <CardContent className="p-3">
@@ -333,7 +357,9 @@ export function ActivityManager() {
                         <Badge className="bg-success/15 text-success border-success/30 text-[10px]">✓ Concluída</Badge>
                       )}
                     </div>
+
                     <span className={`text-sm font-semibold ${isClosed ? "line-through" : ""}`}>{act.title}</span>
+
                     <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                       <span>{dev?.name || "N/A"}</span>
                       <span>{act.hours}h</span>
@@ -343,6 +369,7 @@ export function ActivityManager() {
                       </span>
                     </div>
                   </div>
+
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button
                       variant="ghost"
@@ -353,6 +380,7 @@ export function ActivityManager() {
                     >
                       <MessageCircle className="h-3.5 w-3.5" />
                     </Button>
+
                     {!isClosed ? (
                       <Button
                         variant="ghost"
@@ -380,9 +408,11 @@ export function ActivityManager() {
                         <RotateCcw className="h-3.5 w-3.5" />
                       </Button>
                     )}
+
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(act.id)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
+
                     <Button
                       variant="ghost"
                       size="icon"
@@ -393,6 +423,7 @@ export function ActivityManager() {
                     </Button>
                   </div>
                 </div>
+
                 {isExpanded && currentTeamId && (
                   <div className="mt-3 space-y-3 border-t pt-3">
                     <FileUploader entityType="activity" entityId={act.id} teamId={currentTeamId} />
