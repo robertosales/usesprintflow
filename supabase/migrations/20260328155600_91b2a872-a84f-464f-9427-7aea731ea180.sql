@@ -1,0 +1,1 @@
+ALTER TABLE public.user_stories ADD COLUMN start_date date, ADD COLUMN end_date date;

@@ -593,10 +593,12 @@ export type Database = {
           created_at: string
           custom_fields: Json | null
           description: string | null
+          end_date: string | null
           epic_id: string | null
           id: string
           priority: string
           sprint_id: string
+          start_date: string | null
           status: string
           story_points: number
           team_id: string
@@ -608,10 +610,12 @@ export type Database = {
           created_at?: string
           custom_fields?: Json | null
           description?: string | null
+          end_date?: string | null
           epic_id?: string | null
           id?: string
           priority?: string
           sprint_id: string
+          start_date?: string | null
           status?: string
           story_points?: number
           team_id: string
@@ -623,10 +627,12 @@ export type Database = {
           created_at?: string
           custom_fields?: Json | null
           description?: string | null
+          end_date?: string | null
           epic_id?: string | null
           id?: string
           priority?: string
           sprint_id?: string
+          start_date?: string | null
           status?: string
           story_points?: number
           team_id?: string
