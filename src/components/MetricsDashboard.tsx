@@ -89,7 +89,9 @@ export function MetricsDashboard() {
       const wfCols = (wcRes.data || []) as any[];
 
       const sprintHUs = sprint ? allHUs.filter((h) => h.sprint_id === sprint.id) : allHUs;
-      const sprintActHuIds = new Set(sprintHUs.map((h: any) => h.id));
+      const sprintHUIds = new Set(sprintHUs.map((h: any) => h.id));
+      const sprintImps = allImps.filter((imp: any) => sprintHUIds.has(imp.hu_id));
+      const sprintActHuIds = sprintHUIds;
       const sprintActs = allActs.filter((a) => sprintActHuIds.has(a.hu_id));
 
       const lastCol = wfCols[wfCols.length - 1]?.key || "pronto_para_publicacao";
