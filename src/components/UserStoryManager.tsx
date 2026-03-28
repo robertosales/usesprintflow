@@ -33,6 +33,8 @@ export function UserStoryManager() {
   const [storyPoints, setStoryPoints] = useState("3");
   const [priority, setPriority] = useState<"baixa" | "media" | "alta" | "critica">("media");
   const [epicId, setEpicId] = useState<string>("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string | number>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
