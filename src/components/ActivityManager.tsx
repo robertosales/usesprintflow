@@ -53,8 +53,8 @@ export function ActivityManager() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [expandedComments, setExpandedComments] = useState<string | null>(null);
 
-  // 🔥 NOVO: tipos SEM limite de horas por atividade
-  const isSemLimite = activityType === "architecture" || activityType === "scrum" || activityType === "requirements";
+  // NOVO: tipos SEM limite de horas por atividade
+  //const isSemLimite = activityType === "architecture" || activityType === "scrum" || activityType === "requirements";
 
   const sprintStories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : [];
 
@@ -67,8 +67,8 @@ export function ActivityManager() {
     if (!hours || Number(hours) < 1) e.hours = "Horas deve ser no mínimo 1";
 
     // 🔥 ALTERADO: regra por atividade (8h)
-    if (!isSemLimite && Number(hours) > 8) {
-      e.hours = "Máximo de 8 horas por atividade";
+    if (activityType === "task" && Number(hours) > 8) {
+      e.hours = "Máximo de 8 horas para tarefas do tipo Task";
     }
 
     setErrors(e);
@@ -287,7 +287,7 @@ export function ActivityManager() {
                     <Input
                       type="number"
                       min="1"
-                      max={isSemLimite ? undefined : 8}
+                      max={activityType === "task" ? 8 : undefined}
                       value={hours}
                       onChange={(e) => {
                         setHours(e.target.value);
