@@ -141,40 +141,7 @@ export function EpicManager() {
                   ))}
                 </div>
               </div>
-              <div>
-                <Label>Cor</Label>
 
-                <div className="flex gap-2 mt-1.5 items-center">
-                  {EPIC_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      className={`h-7 w-7 rounded-full transition-all ${
-                        color === c ? "ring-2 ring-offset-2 ring-ring scale-110" : "hover:scale-105"
-                      }`}
-                      style={{ backgroundColor: c }}
-                      onClick={() => setColor(c)}
-                    />
-                  ))}
-
-                  {/* Botão de cor custom */}
-                  <button
-                    type="button"
-                    onClick={() => colorInputRef.current.click()}
-                    className="h-7 w-7 rounded-full border flex items-center justify-center text-xs hover:scale-105"
-                  >
-                    +
-                  </button>
-
-                  {/* Input escondido */}
-                  <input
-                    ref={colorInputRef}
-                    type="color"
-                    className="hidden"
-                    onChange={(e) => setColor(e.target.value)}
-                  />
-                </div>
-              </div>
               <Button type="submit" className="w-full gap-2">
                 <Layers className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Criar Épico"}
               </Button>
