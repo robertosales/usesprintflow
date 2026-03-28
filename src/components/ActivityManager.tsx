@@ -52,6 +52,7 @@ export function ActivityManager() {
   const [startDate, setStartDate] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [expandedComments, setExpandedComments] = useState<string | null>(null);
+  const isLimitado = ["task", "bug"].includes(activityType);
 
   // NOVO: tipos SEM limite de horas por atividade
   //const isSemLimite = activityType === "architecture" || activityType === "scrum" || activityType === "requirements";
@@ -66,9 +67,8 @@ export function ActivityManager() {
     if (!startDate) e.startDate = "Data de início é obrigatória";
     if (!hours || Number(hours) < 1) e.hours = "Horas deve ser no mínimo 1";
 
-    // 🔥 ALTERADO: regra por atividade (8h)
-    if ((activityType === "task" || activityType === "bug") && Number(hours) > 8) {
-      e.hours = "Máximo de 8 horas para tarefas do tipo Task/Bug";
+    if (isLimitado && Number(hours) > 8) {
+      e.hours = "Máximo de 8 horas por atividade";
     }
 
     setErrors(e);
@@ -280,7 +280,7 @@ export function ActivityManager() {
                     <Input
                       type="number"
                       min="1"
-                      max={activityType === "task" ? 8 : undefined}
+                      max={isLimitado ? 8 : undefined}
                       value={hours}
                       onChange={(e) => {
                         setHours(e.target.value);
