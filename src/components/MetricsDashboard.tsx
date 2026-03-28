@@ -16,6 +16,19 @@ const STATUS_COLORS: Record<string, string> = {
   pronto_para_publicacao: "hsl(142, 71%, 40%)",
 };
 
+interface ImpedimentRecord {
+  id: string;
+  reason: string;
+  type: string;
+  criticality: string;
+  ticketId: string | null;
+  reportedAt: string;
+  resolvedAt: string | null;
+  resolution: string | null;
+  huCode: string;
+  huTitle: string;
+}
+
 interface TeamMetrics {
   teamId: string;
   teamName: string;
@@ -33,6 +46,7 @@ interface TeamMetrics {
   sprintName: string;
   sprintStart: string;
   sprintEnd: string;
+  impedimentHistory: ImpedimentRecord[];
 }
 
 export function MetricsDashboard() {
@@ -75,7 +89,9 @@ export function MetricsDashboard() {
       const wfCols = (wcRes.data || []) as any[];
 
       const sprintHUs = sprint ? allHUs.filter((h) => h.sprint_id === sprint.id) : allHUs;
-      const sprintActHuIds = new Set(sprintHUs.map((h: any) => h.id));
+      const sprintHUIds = new Set(sprintHUs.map((h: any) => h.id));
+      const sprintImps = allImps.filter((imp: any) => sprintHUIds.has(imp.hu_id));
+      const sprintActHuIds = sprintHUIds;
       const sprintActs = allActs.filter((a) => sprintActHuIds.has(a.hu_id));
 
       const lastCol = wfCols[wfCols.length - 1]?.key || "pronto_para_publicacao";
@@ -130,6 +146,15 @@ export function MetricsDashboard() {
         sprintName: sprint?.name || "Sem sprint ativa",
         sprintStart: sprint?.start_date || "",
         sprintEnd: sprint?.end_date || "",
+        impedimentHistory: sprintImps.map((imp: any) => {
+          const hu = sprintHUs.find((h: any) => h.id === imp.hu_id);
+          return {
+            id: imp.id, reason: imp.reason, type: imp.type, criticality: imp.criticality,
+            ticketId: imp.ticket_id, reportedAt: imp.reported_at,
+            resolvedAt: imp.resolved_at, resolution: imp.resolution,
+            huCode: hu?.code || "?", huTitle: hu?.title || "",
+          };
+        }).sort((a: any, b: any) => new Date(b.reportedAt).getTime() - new Date(a.reportedAt).getTime()),
       });
     }
 
@@ -294,6 +319,66 @@ export function MetricsDashboard() {
                             <Badge variant="secondary" className="text-xs">
                               {dev.total > 0 ? Math.round((dev.done / dev.total) * 100) : 0}%
                             </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Impediment History */}
+          {metrics.impedimentHistory.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <ShieldAlert className="h-4 w-4 text-warning" /> Histórico de Impedimentos ({metrics.impedimentHistory.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-muted-foreground">
+                        <th className="text-left py-2 font-medium">HU</th>
+                        <th className="text-left py-2 font-medium">Descrição</th>
+                        <th className="text-center py-2 font-medium">Tipo</th>
+                        <th className="text-center py-2 font-medium">Criticidade</th>
+                        <th className="text-center py-2 font-medium">Chamado</th>
+                        <th className="text-center py-2 font-medium">Reportado</th>
+                        <th className="text-center py-2 font-medium">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {metrics.impedimentHistory.map((imp) => (
+                        <tr key={imp.id} className="border-b last:border-0">
+                          <td className="py-2 font-mono text-xs font-bold">{imp.huCode}</td>
+                          <td className="py-2 max-w-[200px] truncate">{imp.reason}</td>
+                          <td className="text-center py-2 capitalize text-xs">{imp.type}</td>
+                          <td className="text-center py-2">
+                            <Badge className={`text-[10px] ${
+                              imp.criticality === "critica" ? "bg-destructive/15 text-destructive" :
+                              imp.criticality === "alta" ? "bg-warning/15 text-warning" :
+                              imp.criticality === "media" ? "bg-info/15 text-info" :
+                              "bg-muted text-muted-foreground"
+                            }`}>
+                              {imp.criticality}
+                            </Badge>
+                          </td>
+                          <td className="text-center py-2 text-xs">{imp.ticketId || "—"}</td>
+                          <td className="text-center py-2 text-xs">{new Date(imp.reportedAt).toLocaleDateString("pt-BR")}</td>
+                          <td className="text-center py-2">
+                            {imp.resolvedAt ? (
+                              <Badge variant="secondary" className="text-[10px] gap-1 bg-success/15 text-success">
+                                <CheckCircle className="h-3 w-3" /> Resolvido
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-[10px] gap-1 bg-warning/15 text-warning">
+                                <ShieldAlert className="h-3 w-3" /> Ativo
+                              </Badge>
+                            )}
                           </td>
                         </tr>
                       ))}

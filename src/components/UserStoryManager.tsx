@@ -33,6 +33,8 @@ export function UserStoryManager() {
   const [storyPoints, setStoryPoints] = useState("3");
   const [priority, setPriority] = useState<"baixa" | "media" | "alta" | "critica">("media");
   const [epicId, setEpicId] = useState<string>("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string | number>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -42,6 +44,7 @@ export function UserStoryManager() {
 
   const resetForm = () => {
     setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setEpicId("");
+    setStartDate(""); setEndDate("");
     setCustomFieldValues({}); setErrors({}); setEditId(null);
   };
 
@@ -74,6 +77,8 @@ export function UserStoryManager() {
         storyPoints: Number(storyPoints), priority,
         epicId: epicId || undefined,
         customFields: customFieldValues,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
       });
       toast.success("User Story atualizada!");
     } else {
@@ -82,6 +87,8 @@ export function UserStoryManager() {
         storyPoints: Number(storyPoints), priority,
         sprintId: activeSprint.id, epicId: epicId || undefined,
         customFields: customFieldValues,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
       });
       toast.success("User Story criada!");
     }
@@ -98,6 +105,8 @@ export function UserStoryManager() {
     setStoryPoints(String(hu.storyPoints));
     setPriority(hu.priority);
     setEpicId(hu.epicId || "");
+    setStartDate(hu.startDate || "");
+    setEndDate(hu.endDate || "");
     setCustomFieldValues(hu.customFields || {});
     setErrors({});
     setOpen(true);
@@ -167,6 +176,16 @@ export function UserStoryManager() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Data de Início</Label>
+                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label>Data de Fim</Label>
+                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1" />
                 </div>
               </div>
               {epics.length > 0 && (

@@ -135,6 +135,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         id: h.id, code: h.code, title: h.title, description: h.description || "",
         storyPoints: h.story_points, priority: h.priority, status: h.status,
         sprintId: h.sprint_id, epicId: h.epic_id,
+        startDate: h.start_date || undefined, endDate: h.end_date || undefined,
         impediments: impData.filter((imp: any) => imp.hu_id === h.id).map((imp: any) => ({
           id: imp.id, reason: imp.reason, type: imp.type, criticality: imp.criticality,
           hasTicket: imp.has_ticket, ticketUrl: imp.ticket_url, ticketId: imp.ticket_id,
@@ -228,6 +229,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       code: `HU-${String(count).padStart(3, "0")}`, title: hu.title,
       description: hu.description, story_points: hu.storyPoints,
       priority: hu.priority, status: firstCol, custom_fields: hu.customFields || {},
+      start_date: hu.startDate || null, end_date: hu.endDate || null,
     });
     if (error) { toast.error("Erro ao criar HU"); return; }
     await refreshAll();
@@ -242,6 +244,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (hu.sprintId !== undefined) updateData.sprint_id = hu.sprintId;
     if (hu.epicId !== undefined) updateData.epic_id = hu.epicId || null;
     if (hu.customFields !== undefined) updateData.custom_fields = hu.customFields;
+    if (hu.startDate !== undefined) updateData.start_date = hu.startDate || null;
+    if (hu.endDate !== undefined) updateData.end_date = hu.endDate || null;
     const { error } = await supabase.from("user_stories").update(updateData).eq("id", id);
     if (error) { toast.error("Erro ao atualizar HU"); return; }
     await refreshAll();
