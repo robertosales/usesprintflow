@@ -77,6 +77,8 @@ export function UserStoryManager() {
         storyPoints: Number(storyPoints), priority,
         epicId: epicId || undefined,
         customFields: customFieldValues,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
       });
       toast.success("User Story atualizada!");
     } else {
@@ -85,6 +87,8 @@ export function UserStoryManager() {
         storyPoints: Number(storyPoints), priority,
         sprintId: activeSprint.id, epicId: epicId || undefined,
         customFields: customFieldValues,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
       });
       toast.success("User Story criada!");
     }
