@@ -178,6 +178,16 @@ export function UserStoryManager() {
                   </Select>
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Data de Início</Label>
+                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label>Data de Fim</Label>
+                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1" />
+                </div>
+              </div>
               {epics.length > 0 && (
                 <div>
                   <Label>Épico</Label>
