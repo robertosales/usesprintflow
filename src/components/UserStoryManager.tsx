@@ -44,6 +44,7 @@ export function UserStoryManager() {
 
   const resetForm = () => {
     setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setEpicId("");
+    setStartDate(""); setEndDate("");
     setCustomFieldValues({}); setErrors({}); setEditId(null);
   };
 
