@@ -106,6 +106,7 @@ export function FileUploader({ entityType, entityId, teamId }: FileUploaderProps
             className="hidden"
             onChange={handleUpload}
             disabled={uploading}
+            accept=".docx,.pdf,.png,.gif,.jpg,.jpeg,.zip"
           />
           <Button variant="outline" size="sm" asChild disabled={uploading}>
             <span>

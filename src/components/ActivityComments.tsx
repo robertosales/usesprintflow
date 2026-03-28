@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,11 @@ interface Comment {
   user_name?: string;
 }
 
+interface MentionSuggestion {
+  user_id: string;
+  display_name: string;
+}
+
 export function ActivityComments({ activityId, teamId }: { activityId: string; teamId: string }) {
   const { user } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
@@ -23,6 +28,10 @@ export function ActivityComments({ activityId, teamId }: { activityId: string; t
   const [editId, setEditId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<MentionSuggestion[]>([]);
+  const [allMembers, setAllMembers] = useState<MentionSuggestion[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const fetchComments = async () => {
     const { data } = await supabase
@@ -32,7 +41,6 @@ export function ActivityComments({ activityId, teamId }: { activityId: string; t
       .order("created_at", { ascending: true });
 
     if (data) {
-      // Fetch user names from profiles
       const userIds = [...new Set((data as any[]).map((c) => c.user_id))];
       const { data: profiles } = await supabase
         .from("profiles")
@@ -49,9 +57,83 @@ export function ActivityComments({ activityId, teamId }: { activityId: string; t
     }
   };
 
+  const fetchTeamMembers = async () => {
+    const { data: members } = await supabase
+      .from("team_members")
+      .select("user_id")
+      .eq("team_id", teamId);
+    if (!members || members.length === 0) return;
+    const userIds = members.map((m: any) => m.user_id);
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, display_name")
+      .in("user_id", userIds);
+    setAllMembers((profiles || []).map((p: any) => ({ user_id: p.user_id, display_name: p.display_name })));
+  };
+
   useEffect(() => {
     fetchComments();
+    fetchTeamMembers();
   }, [activityId]);
+
+  const handleContentChange = (value: string) => {
+    setContent(value);
+    // Detect @ mentions
+    const cursorPos = textareaRef.current?.selectionStart || value.length;
+    const textBeforeCursor = value.substring(0, cursorPos);
+    const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
+    if (mentionMatch) {
+      const query = mentionMatch[1].toLowerCase();
+      setMentionQuery(query);
+      setSuggestions(
+        allMembers.filter(
+          (m) => m.display_name.toLowerCase().includes(query) && m.user_id !== user?.id
+        ).slice(0, 5)
+      );
+    } else {
+      setMentionQuery(null);
+      setSuggestions([]);
+    }
+  };
+
+  const insertMention = (member: MentionSuggestion) => {
+    const cursorPos = textareaRef.current?.selectionStart || content.length;
+    const textBeforeCursor = content.substring(0, cursorPos);
+    const textAfterCursor = content.substring(cursorPos);
+    const beforeMention = textBeforeCursor.replace(/@\w*$/, "");
+    const newContent = `${beforeMention}@${member.display_name} ${textAfterCursor}`;
+    setContent(newContent);
+    setMentionQuery(null);
+    setSuggestions([]);
+    textareaRef.current?.focus();
+  };
+
+  const extractMentions = (text: string): string[] => {
+    const mentionRegex = /@(\S+)/g;
+    const mentions: string[] = [];
+    let match;
+    while ((match = mentionRegex.exec(text)) !== null) {
+      const name = match[1];
+      const member = allMembers.find((m) => m.display_name === name);
+      if (member) mentions.push(member.user_id);
+    }
+    return [...new Set(mentions)];
+  };
+
+  const createMentionNotifications = async (text: string) => {
+    const mentionedUserIds = extractMentions(text);
+    if (mentionedUserIds.length === 0) return;
+    const notifications = mentionedUserIds.map((uid) => ({
+      user_id: uid,
+      team_id: teamId,
+      type: "mention",
+      title: `${user?.email?.split("@")[0] || "Alguém"} mencionou você em um comentário`,
+      message: text.substring(0, 120),
+      link_type: "activity",
+      link_id: activityId,
+    }));
+    await supabase.from("notifications").insert(notifications);
+  };
 
   const handleSubmit = async () => {
     if (!content.trim() || !user) return;
@@ -65,6 +147,7 @@ export function ActivityComments({ activityId, teamId }: { activityId: string; t
     if (error) {
       toast.error("Erro ao adicionar comentário");
     } else {
+      await createMentionNotifications(content.trim());
       setContent("");
       await fetchComments();
     }
@@ -83,6 +166,20 @@ export function ActivityComments({ activityId, teamId }: { activityId: string; t
     await supabase.from("activity_comments").delete().eq("id", id);
     await fetchComments();
     toast.info("Comentário removido");
+  };
+
+  const renderContent = (text: string) => {
+    const parts = text.split(/(@\S+)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith("@")) {
+        return (
+          <span key={i} className="text-primary font-semibold bg-primary/10 rounded px-0.5">
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
   };
 
   return (
@@ -121,22 +218,38 @@ export function ActivityComments({ activityId, teamId }: { activityId: string; t
               </div>
             </div>
           ) : (
-            <p className="text-xs text-foreground whitespace-pre-wrap">{c.content}</p>
+            <p className="text-xs text-foreground whitespace-pre-wrap">{renderContent(c.content)}</p>
           )}
         </div>
       ))}
 
-      <div className="flex gap-2">
-        <Textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Adicionar comentário..."
-          className="text-xs min-h-[50px]"
-          onKeyDown={(e) => { if (e.key === "Enter" && e.ctrlKey) handleSubmit(); }}
-        />
-        <Button size="icon" className="h-[50px] w-10 shrink-0" onClick={handleSubmit} disabled={!content.trim() || loading}>
-          <Send className="h-4 w-4" />
-        </Button>
+      <div className="relative">
+        <div className="flex gap-2">
+          <Textarea
+            ref={textareaRef}
+            value={content}
+            onChange={(e) => handleContentChange(e.target.value)}
+            placeholder="Comente ou use @ para mencionar..."
+            className="text-xs min-h-[50px]"
+            onKeyDown={(e) => { if (e.key === "Enter" && e.ctrlKey) handleSubmit(); }}
+          />
+          <Button size="icon" className="h-[50px] w-10 shrink-0" onClick={handleSubmit} disabled={!content.trim() || loading}>
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+        {suggestions.length > 0 && (
+          <div className="absolute bottom-full left-0 mb-1 w-64 bg-popover border rounded-lg shadow-lg z-50 overflow-hidden">
+            {suggestions.map((s) => (
+              <button
+                key={s.user_id}
+                className="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors"
+                onClick={() => insertMention(s)}
+              >
+                <span className="font-medium">@{s.display_name}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

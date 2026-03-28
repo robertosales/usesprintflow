@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { hasActiveImpediment } from "@/types/sprint";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { NotificationBell } from "@/components/NotificationBell";
 
 type NavKey = "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "team" | "activities" | "kanban" | "impediments" | "metrics" | "workflow" | "custom-fields" | "automations";
 
@@ -220,6 +221,20 @@ const Index = () => {
       </aside>
 
       <main className="flex-1 overflow-auto">
+        {/* Header bar with notifications */}
+        <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b px-6 py-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-bold text-foreground">
+              {NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.key === active)?.label || "SprintFlow"}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            {!collapsed && profile && (
+              <span className="text-xs text-muted-foreground hidden md:block">{profile.display_name}</span>
+            )}
+          </div>
+        </div>
         <div className="max-w-7xl mx-auto p-6">
           {loading && (
             <div className="flex items-center justify-center py-12">

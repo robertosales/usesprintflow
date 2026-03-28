@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Impediment, IMPEDIMENT_TYPE_LABELS, IMPEDIMENT_CRITICALITY_LABELS, ImpedimentType, ImpedimentCriticality, hasActiveImpediment } from "@/types/sprint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +22,8 @@ interface ImpedimentDialogProps {
 }
 
 export function ImpedimentDialog({ huId, open, onClose }: ImpedimentDialogProps) {
-  const { addImpediment } = useSprint();
+  const { addImpediment, userStories } = useSprint();
+  const { currentTeamId } = useAuth();
   const [reason, setReason] = useState("");
   const [type, setType] = useState<ImpedimentType>("tecnico");
   const [criticality, setCriticality] = useState<ImpedimentCriticality>("media");
@@ -37,9 +40,9 @@ export function ImpedimentDialog({ huId, open, onClose }: ImpedimentDialogProps)
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!huId || !validate()) return;
-    addImpediment(huId, {
+    await addImpediment(huId, {
       reason: reason.trim(),
       type,
       criticality,
@@ -47,6 +50,28 @@ export function ImpedimentDialog({ huId, open, onClose }: ImpedimentDialogProps)
       ticketUrl: ticketUrl.trim() || undefined,
       ticketId: ticketId.trim() || undefined,
     });
+
+    // Create notification for all team members
+    if (currentTeamId) {
+      const hu = userStories.find((h) => h.id === huId);
+      const { data: members } = await supabase
+        .from("team_members")
+        .select("user_id")
+        .eq("team_id", currentTeamId);
+      if (members && members.length > 0) {
+        const notifications = members.map((m: any) => ({
+          user_id: m.user_id,
+          team_id: currentTeamId,
+          type: "impediment",
+          title: `⚠️ Novo impedimento na ${hu?.code || "HU"}`,
+          message: reason.trim().substring(0, 120),
+          link_type: "user_story",
+          link_id: huId,
+        }));
+        await supabase.from("notifications").insert(notifications);
+      }
+    }
+
     toast.warning("Impedimento registrado!");
     resetAndClose();
   };

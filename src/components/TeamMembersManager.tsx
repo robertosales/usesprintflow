@@ -12,6 +12,15 @@ import { toast } from "sonner";
 import { Plus, Trash2, Users, UserPlus, Shield } from "lucide-react";
 import { getRoleLabel, ALL_ROLES, type AppRole } from "@/hooks/usePermissions";
 
+const PREDEFINED_ROLES = [
+  "Scrum Master",
+  "Product Owner",
+  "Desenvolvedor",
+  "Analista de Requisitos",
+  "Arquiteto",
+  "Analista de QA",
+];
+
 interface TeamMember {
   id: string;
   user_id: string;
@@ -27,7 +36,9 @@ export function TeamMembersManager() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [allProfiles, setAllProfiles] = useState<{ user_id: string; display_name: string; email: string }[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
-  const [memberRole, setMemberRole] = useState("developer");
+  const [memberRole, setMemberRole] = useState("Desenvolvedor");
+  const [customRole, setCustomRole] = useState("");
+  const [showCustom, setShowCustom] = useState(false);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -42,7 +53,6 @@ export function TeamMembersManager() {
     const memberList = tmData || [];
     const userIds = memberList.map((m: any) => m.user_id);
 
-    // Fetch profiles for these users
     let profiles: any[] = [];
     if (userIds.length > 0) {
       const { data: pData } = await supabase
@@ -52,7 +62,6 @@ export function TeamMembersManager() {
       profiles = pData || [];
     }
 
-    // Fetch roles for these users
     let userRoles: any[] = [];
     if (userIds.length > 0 && isAdmin) {
       const { data: rData } = await supabase
@@ -95,10 +104,15 @@ export function TeamMembersManager() {
       toast.error("Usuário já é membro deste time");
       return;
     }
+    const finalRole = showCustom ? customRole.trim() : memberRole;
+    if (!finalRole) {
+      toast.error("Informe a função do membro");
+      return;
+    }
     const { error } = await supabase.from("team_members").insert({
       team_id: currentTeamId,
       user_id: selectedUserId,
-      role: memberRole,
+      role: finalRole,
     });
     if (error) {
       toast.error("Erro ao adicionar membro");
@@ -106,6 +120,8 @@ export function TeamMembersManager() {
     }
     toast.success("Membro adicionado ao time!");
     setSelectedUserId("");
+    setCustomRole("");
+    setShowCustom(false);
     setOpen(false);
     await fetchMembers();
   };
@@ -171,18 +187,40 @@ export function TeamMembersManager() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Função no Time</Label>
-                  <Select value={memberRole} onValueChange={setMemberRole}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">Admin do Time</SelectItem>
-                      <SelectItem value="developer">Desenvolvedor</SelectItem>
-                      <SelectItem value="analyst">Analista</SelectItem>
-                      <SelectItem value="architect">Arquiteto</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Função no Time *</Label>
+                  {!showCustom ? (
+                    <Select value={memberRole} onValueChange={(v) => {
+                      if (v === "__custom__") {
+                        setShowCustom(true);
+                        setMemberRole("");
+                      } else {
+                        setMemberRole(v);
+                      }
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PREDEFINED_ROLES.map((role) => (
+                          <SelectItem key={role} value={role}>{role}</SelectItem>
+                        ))}
+                        <SelectItem value="__custom__">
+                          <span className="text-primary font-medium">+ Outra função...</span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        value={customRole}
+                        onChange={(e) => setCustomRole(e.target.value)}
+                        placeholder="Digite a função personalizada"
+                      />
+                      <Button variant="outline" size="sm" onClick={() => { setShowCustom(false); setMemberRole("Desenvolvedor"); }}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 <Button onClick={handleAddMember} className="w-full">
                   Adicionar
