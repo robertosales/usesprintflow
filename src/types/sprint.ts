@@ -133,6 +133,8 @@ export interface UserStory {
   status: KanbanStatus;
   sprintId: string;
   epicId?: string;
+  startDate?: string;
+  endDate?: string;
   impediments: Impediment[];
   customFields?: Record<string, string | number>;
   createdAt: string;

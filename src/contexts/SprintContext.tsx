@@ -244,6 +244,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (hu.sprintId !== undefined) updateData.sprint_id = hu.sprintId;
     if (hu.epicId !== undefined) updateData.epic_id = hu.epicId || null;
     if (hu.customFields !== undefined) updateData.custom_fields = hu.customFields;
+    if (hu.startDate !== undefined) updateData.start_date = hu.startDate || null;
+    if (hu.endDate !== undefined) updateData.end_date = hu.endDate || null;
     const { error } = await supabase.from("user_stories").update(updateData).eq("id", id);
     if (error) { toast.error("Erro ao atualizar HU"); return; }
     await refreshAll();
