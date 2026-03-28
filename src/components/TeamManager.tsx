@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -6,8 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Edit2, Trash2, Users } from "lucide-react";
+import { Plus, Edit2, Trash2, Users, UserCircle } from "lucide-react";
+
+interface TeamMemberInfo {
+  user_id: string;
+  role: string;
+  display_name: string;
+  email: string;
+}
 
 export function TeamManager() {
   const { teams, refreshTeams, currentTeamId, setCurrentTeamId, isAdmin, hasPermission } = useAuth();
@@ -16,6 +24,36 @@ export function TeamManager() {
   const [description, setDescription] = useState("");
   const [open, setOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<{ id: string; name: string; description: string } | null>(null);
+  const [teamMembers, setTeamMembers] = useState<Record<string, TeamMemberInfo[]>>({});
+
+  useEffect(() => {
+    loadAllTeamMembers();
+  }, [teams]);
+
+  const loadAllTeamMembers = async () => {
+    if (teams.length === 0) return;
+    const teamIds = teams.map((t) => t.id);
+    const { data: tmData } = await supabase.from("team_members").select("*").in("team_id", teamIds);
+    if (!tmData || tmData.length === 0) { setTeamMembers({}); return; }
+
+    const userIds = [...new Set(tmData.map((m: any) => m.user_id))];
+    const { data: profiles } = await supabase.from("profiles").select("user_id, display_name, email").in("user_id", userIds);
+    const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
+
+    const result: Record<string, TeamMemberInfo[]> = {};
+    for (const tm of tmData) {
+      const profile = profileMap.get(tm.user_id);
+      const info: TeamMemberInfo = {
+        user_id: tm.user_id,
+        role: tm.role,
+        display_name: profile?.display_name || "Usuário",
+        email: profile?.email || "",
+      };
+      if (!result[tm.team_id]) result[tm.team_id] = [];
+      result[tm.team_id].push(info);
+    }
+    setTeamMembers(result);
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) { toast.error("Nome do time é obrigatório *"); return; }
@@ -28,12 +66,10 @@ export function TeamManager() {
     
     if (error) { toast.error("Erro ao criar time"); return; }
     
-    // Add creator as team member
     await supabase.from("team_members").insert({
       team_id: (data as any).id, user_id: user.id, role: "admin",
     });
     
-    // Insert default workflow columns
     const defaultCols = [
       { key: "aguardando_desenvolvimento", label: "Aguardando Desenvolvimento", color_class: "bg-kanban-aguardando", dot_color: "bg-muted-foreground", sort_order: 0 },
       { key: "em_desenvolvimento", label: "Em Desenvolvimento", color_class: "bg-kanban-desenvolvimento", dot_color: "bg-info", sort_order: 1 },
@@ -47,11 +83,10 @@ export function TeamManager() {
     );
     
     toast.success("Time criado com sucesso!");
-    setName("");
-    setDescription("");
-    setOpen(false);
+    setName(""); setDescription(""); setOpen(false);
     await refreshTeams();
     setCurrentTeamId((data as any).id);
+    loadAllTeamMembers();
   };
 
   const handleUpdate = async () => {
@@ -106,40 +141,53 @@ export function TeamManager() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {teams.map((team) => (
-          <Card
-            key={team.id}
-            className={`cursor-pointer transition-all ${currentTeamId === team.id ? "ring-2 ring-primary" : "hover:shadow-md"}`}
-            onClick={() => setCurrentTeamId(team.id)}
-          >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-lg">{team.name}</CardTitle>
-              <div className="flex gap-1">
-                {canManage && (
-                  <Button
-                    variant="ghost" size="icon"
-                    onClick={(e) => { e.stopPropagation(); setEditingTeam({ ...team, description: "" }); }}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
+        {teams.map((team) => {
+          const members = teamMembers[team.id] || [];
+          return (
+            <Card
+              key={team.id}
+              className={`cursor-pointer transition-all ${currentTeamId === team.id ? "ring-2 ring-primary" : "hover:shadow-md"}`}
+              onClick={() => setCurrentTeamId(team.id)}
+            >
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-lg">{team.name}</CardTitle>
+                <div className="flex gap-1">
+                  {canManage && (
+                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingTeam({ ...team, description: "" }); }}>
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {canManage && (
+                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDelete(team.id); }}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {currentTeamId === team.id && (
+                  <span className="text-xs text-primary font-medium">● Time ativo</span>
                 )}
-                {canManage && (
-                  <Button
-                    variant="ghost" size="icon"
-                    onClick={(e) => { e.stopPropagation(); handleDelete(team.id); }}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                {members.length > 0 ? (
+                  <div className="space-y-1.5 pt-1 border-t border-border/50">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                      <Users className="h-3 w-3" /> {members.length} membro{members.length !== 1 ? "s" : ""}
+                    </p>
+                    {members.map((m) => (
+                      <div key={m.user_id} className="flex items-center gap-2 text-xs">
+                        <UserCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="font-medium truncate flex-1">{m.display_name}</span>
+                        <Badge variant="secondary" className="text-[10px] shrink-0">{m.role}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground pt-1">Nenhum membro</p>
                 )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {currentTeamId === team.id && (
-                <span className="text-xs text-primary font-medium">● Time ativo</span>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {teams.length === 0 && (
