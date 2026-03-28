@@ -10,6 +10,7 @@ import { Layers, Plus, Trash2, Pencil, ChevronDown, ChevronRight } from "lucide-
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import { useRef } from "react";
 
 const EPIC_COLORS = [
   "hsl(173, 58%, 39%)",
@@ -31,6 +32,7 @@ export function EpicManager() {
   const [color, setColor] = useState(EPIC_COLORS[0]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [expandedEpic, setExpandedEpic] = useState<string | null>(null);
+  const colorInputRef = useRef<HTMLInputElement | null>(null);
 
   const lastCol = workflowColumns[workflowColumns.length - 1]?.key;
 
@@ -127,18 +129,41 @@ export function EpicManager() {
                   rows={3}
                 />
               </div>
+
               <div>
                 <Label>Cor</Label>
-                <div className="flex gap-2 mt-1.5">
+
+                <div className="flex gap-2 mt-1.5 items-center">
                   {EPIC_COLORS.map((c) => (
                     <button
                       key={c}
                       type="button"
-                      className={`h-7 w-7 rounded-full transition-all ${color === c ? "ring-2 ring-offset-2 ring-ring scale-110" : "hover:scale-105"}`}
+                      className={`h-7 w-7 rounded-full transition-all ${
+                        color === c ? "ring-2 ring-offset-2 ring-ring scale-110" : "hover:scale-105"
+                      }`}
                       style={{ backgroundColor: c }}
                       onClick={() => setColor(c)}
                     />
                   ))}
+
+                  {/* Botão para abrir seletor de cor */}
+                  <button
+                    type="button"
+                    onClick={() => colorInputRef.current?.click()}
+                    className="h-7 w-7 rounded-full border flex items-center justify-center text-xs hover:scale-105"
+                    title="Escolher cor personalizada"
+                  >
+                    +
+                  </button>
+
+                  {/* Input de cor oculto */}
+                  <input
+                    ref={colorInputRef}
+                    type="color"
+                    className="hidden"
+                    value={color}
+                    onChange={(e) => setColor(e.target.value)}
+                  />
                 </div>
               </div>
 
