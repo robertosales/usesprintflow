@@ -7,7 +7,18 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ListTodo, Plus, Trash2, AlertCircle, Pencil, CheckCircle2, RotateCcw, MessageCircle, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  ListTodo,
+  Plus,
+  Trash2,
+  AlertCircle,
+  Pencil,
+  CheckCircle2,
+  RotateCcw,
+  MessageCircle,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getTotalHoursForHU, ActivityType, ACTIVITY_TYPE_LABELS } from "@/types/sprint";
@@ -16,9 +27,19 @@ import { ActivityComments } from "@/components/ActivityComments";
 import { FileUploader } from "@/components/FileUploader";
 
 export function ActivityManager() {
-  const { activities, addActivity, removeActivity, updateActivity, closeActivity, reopenActivity, userStories, developers, activeSprint } = useSprint();
+  const {
+    activities,
+    addActivity,
+    removeActivity,
+    updateActivity,
+    closeActivity,
+    reopenActivity,
+    userStories,
+    developers,
+    activeSprint,
+  } = useSprint();
   const { currentTeamId, hasPermission } = useAuth();
-  const canUpdate = hasPermission('update_tasks');
+  const canUpdate = hasPermission("update_tasks");
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -30,10 +51,10 @@ export function ActivityManager() {
   const [startDate, setStartDate] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [expandedComments, setExpandedComments] = useState<string | null>(null);
+  // NOVO: regra para identificar arquitetura
+  const isArquitetura = activityType === "architecture";
 
-  const sprintStories = activeSprint
-    ? userStories.filter((hu) => hu.sprintId === activeSprint.id)
-    : [];
+  const sprintStories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : [];
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -48,7 +69,15 @@ export function ActivityManager() {
   };
 
   const resetForm = () => {
-    setTitle(""); setDescription(""); setActivityType("task"); setHuId(""); setAssigneeId(""); setHours("4"); setStartDate(""); setErrors({}); setEditId(null);
+    setTitle("");
+    setDescription("");
+    setActivityType("task");
+    setHuId("");
+    setAssigneeId("");
+    setHours("4");
+    setStartDate("");
+    setErrors({});
+    setEditId(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -57,7 +86,15 @@ export function ActivityManager() {
     const numHours = Number(hours);
 
     if (editId) {
-      updateActivity(editId, { title: title.trim(), description: description.trim(), activityType, huId, assigneeId, hours: numHours, startDate });
+      updateActivity(editId, {
+        title: title.trim(),
+        description: description.trim(),
+        activityType,
+        huId,
+        assigneeId,
+        hours: numHours,
+        startDate,
+      });
       toast.success("Atividade atualizada!");
     } else {
       const currentHours = getTotalHoursForHU(activities, huId);
@@ -65,7 +102,15 @@ export function ActivityManager() {
         toast.error(`HU já possui ${currentHours}h alocadas. Disponível: ${24 - currentHours}h`);
         return;
       }
-      addActivity({ title: title.trim(), description: description.trim(), activityType, huId, assigneeId, hours: numHours, startDate });
+      addActivity({
+        title: title.trim(),
+        description: description.trim(),
+        activityType,
+        huId,
+        assigneeId,
+        hours: numHours,
+        startDate,
+      });
       toast.success("Atividade criada!");
     }
     resetForm();
@@ -92,9 +137,7 @@ export function ActivityManager() {
     toast.info("Atividade removida");
   };
 
-  const sprintActivities = activeSprint
-    ? activities.filter((a) => sprintStories.some((hu) => hu.id === a.huId))
-    : [];
+  const sprintActivities = activeSprint ? activities.filter((a) => sprintStories.some((hu) => hu.id === a.huId)) : [];
 
   return (
     <div className="space-y-4">
@@ -105,89 +148,158 @@ export function ActivityManager() {
           <Badge variant="secondary">{sprintActivities.length}</Badge>
         </div>
         {canUpdate && (
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-1.5" disabled={sprintStories.length === 0 || developers.length === 0}>
-              <Plus className="h-4 w-4" /> Nova Atividade
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <ListTodo className="h-5 w-5 text-primary" />
-                {editId ? "Editar Atividade" : "Nova Atividade"}
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label>Título <span className="text-destructive">*</span></Label>
-                <Input value={title} onChange={(e) => { setTitle(e.target.value); setErrors((p) => ({ ...p, title: "" })); }} placeholder="Descrição da atividade" className="mt-1" />
-                {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
-              </div>
-              <div>
-                <Label>Descrição</Label>
-                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Detalhes técnicos, observações..." className="mt-1" />
-              </div>
-              <div>
-                <Label>Tipo <span className="text-destructive">*</span></Label>
-                <Select value={activityType} onValueChange={(v) => setActivityType(v as ActivityType)}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(ACTIVITY_TYPE_LABELS).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>User Story <span className="text-destructive">*</span></Label>
-                <Select value={huId} onValueChange={(v) => { setHuId(v); setErrors((p) => ({ ...p, huId: "" })); }}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a HU" /></SelectTrigger>
-                  <SelectContent>
-                    {sprintStories.map((hu) => {
-                      const used = getTotalHoursForHU(activities, hu.id);
-                      return (
-                        <SelectItem key={hu.id} value={hu.id}>
-                          {hu.code} — {hu.title} ({used}/24h)
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-                {errors.huId && <p className="text-xs text-destructive mt-1">{errors.huId}</p>}
-              </div>
-              <div>
-                <Label>Responsável <span className="text-destructive">*</span></Label>
-                <Select value={assigneeId} onValueChange={(v) => { setAssigneeId(v); setErrors((p) => ({ ...p, assigneeId: "" })); }}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
-                  <SelectContent>
-                    {developers.map((dev) => (
-                      <SelectItem key={dev.id} value={dev.id}>
-                        {dev.name} — {dev.role}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.assigneeId && <p className="text-xs text-destructive mt-1">{errors.assigneeId}</p>}
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Horas estimadas <span className="text-destructive">*</span></Label>
-                  <Input type="number" min="1" max="24" value={hours} onChange={(e) => { setHours(e.target.value); setErrors((p) => ({ ...p, hours: "" })); }} className="mt-1" />
-                  {errors.hours && <p className="text-xs text-destructive mt-1">{errors.hours}</p>}
-                </div>
-                <div>
-                  <Label>Data início <span className="text-destructive">*</span></Label>
-                  <Input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setErrors((p) => ({ ...p, startDate: "" })); }} className="mt-1" />
-                  {errors.startDate && <p className="text-xs text-destructive mt-1">{errors.startDate}</p>}
-                </div>
-              </div>
-              <Button type="submit" className="w-full gap-2">
-                <Plus className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Criar Atividade"}
+          <Dialog
+            open={open}
+            onOpenChange={(v) => {
+              setOpen(v);
+              if (!v) resetForm();
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button size="sm" className="gap-1.5" disabled={sprintStories.length === 0 || developers.length === 0}>
+                <Plus className="h-4 w-4" /> Nova Atividade
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <ListTodo className="h-5 w-5 text-primary" />
+                  {editId ? "Editar Atividade" : "Nova Atividade"}
+                </DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <Label>
+                    Título <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={title}
+                    onChange={(e) => {
+                      setTitle(e.target.value);
+                      setErrors((p) => ({ ...p, title: "" }));
+                    }}
+                    placeholder="Descrição da atividade"
+                    className="mt-1"
+                  />
+                  {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
+                </div>
+                <div>
+                  <Label>Descrição</Label>
+                  <Textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Detalhes técnicos, observações..."
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>
+                    Tipo <span className="text-destructive">*</span>
+                  </Label>
+                  <Select value={activityType} onValueChange={(v) => setActivityType(v as ActivityType)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(ACTIVITY_TYPE_LABELS).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>
+                          {v.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>
+                    User Story <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={huId}
+                    onValueChange={(v) => {
+                      setHuId(v);
+                      setErrors((p) => ({ ...p, huId: "" }));
+                    }}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Selecione a HU" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sprintStories.map((hu) => {
+                        const used = getTotalHoursForHU(activities, hu.id);
+                        return (
+                          <SelectItem key={hu.id} value={hu.id}>
+                            {hu.code} — {hu.title} ({used}/24h)
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  {errors.huId && <p className="text-xs text-destructive mt-1">{errors.huId}</p>}
+                </div>
+                <div>
+                  <Label>
+                    Responsável <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={assigneeId}
+                    onValueChange={(v) => {
+                      setAssigneeId(v);
+                      setErrors((p) => ({ ...p, assigneeId: "" }));
+                    }}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Selecione o responsável" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {developers.map((dev) => (
+                        <SelectItem key={dev.id} value={dev.id}>
+                          {dev.name} — {dev.role}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.assigneeId && <p className="text-xs text-destructive mt-1">{errors.assigneeId}</p>}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>
+                      Horas estimadas <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="24"
+                      value={hours}
+                      onChange={(e) => {
+                        setHours(e.target.value);
+                        setErrors((p) => ({ ...p, hours: "" }));
+                      }}
+                      className="mt-1"
+                    />
+                    {errors.hours && <p className="text-xs text-destructive mt-1">{errors.hours}</p>}
+                  </div>
+                  <div>
+                    <Label>
+                      Data início <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => {
+                        setStartDate(e.target.value);
+                        setErrors((p) => ({ ...p, startDate: "" }));
+                      }}
+                      className="mt-1"
+                    />
+                    {errors.startDate && <p className="text-xs text-destructive mt-1">{errors.startDate}</p>}
+                  </div>
+                </div>
+                <Button type="submit" className="w-full gap-2">
+                  <Plus className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Criar Atividade"}
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
         )}
       </div>
 
@@ -215,40 +327,70 @@ export function ActivityManager() {
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <Badge variant="outline" className="font-mono text-xs font-bold">{hu?.code}</Badge>
+                      <Badge variant="outline" className="font-mono text-xs font-bold">
+                        {hu?.code}
+                      </Badge>
                       <Badge className={`text-[10px] border ${typeInfo.color}`}>{typeInfo.label}</Badge>
-                      {isClosed && <Badge className="bg-success/15 text-success border-success/30 text-[10px]">✓ Concluída</Badge>}
+                      {isClosed && (
+                        <Badge className="bg-success/15 text-success border-success/30 text-[10px]">✓ Concluída</Badge>
+                      )}
                     </div>
                     <span className={`text-sm font-semibold ${isClosed ? "line-through" : ""}`}>{act.title}</span>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                       <span>{dev?.name || "N/A"}</span>
                       <span>{act.hours}h</span>
                       <span>
-                        {new Date(act.startDate).toLocaleDateString("pt-BR")} → {new Date(act.endDate).toLocaleDateString("pt-BR")}
+                        {new Date(act.startDate).toLocaleDateString("pt-BR")} →{" "}
+                        {new Date(act.endDate).toLocaleDateString("pt-BR")}
                       </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" title="Comentários"
-                      onClick={() => setExpandedComments(isExpanded ? null : act.id)}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      title="Comentários"
+                      onClick={() => setExpandedComments(isExpanded ? null : act.id)}
+                    >
                       <MessageCircle className="h-3.5 w-3.5" />
                     </Button>
                     {!isClosed ? (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-success" title="Concluir atividade"
-                        onClick={() => { closeActivity(act.id); toast.success("Atividade concluída!"); }}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-success"
+                        title="Concluir atividade"
+                        onClick={() => {
+                          closeActivity(act.id);
+                          toast.success("Atividade concluída!");
+                        }}
+                      >
                         <CheckCircle2 className="h-3.5 w-3.5" />
                       </Button>
                     ) : (
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Reabrir atividade"
-                        onClick={() => { reopenActivity(act.id); toast.info("Atividade reaberta"); }}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title="Reabrir atividade"
+                        onClick={() => {
+                          reopenActivity(act.id);
+                          toast.info("Atividade reaberta");
+                        }}
+                      >
                         <RotateCcw className="h-3.5 w-3.5" />
                       </Button>
                     )}
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(act.id)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                      onClick={() => handleRemoveActivity(act.id)}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive"
+                      onClick={() => handleRemoveActivity(act.id)}
+                    >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
