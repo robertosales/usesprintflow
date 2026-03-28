@@ -51,8 +51,6 @@ export function ActivityManager() {
   const [startDate, setStartDate] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [expandedComments, setExpandedComments] = useState<string | null>(null);
-  // NOVO: regra para identificar arquitetura
-  const isArquitetura = activityType === "architecture";
 
   const sprintStories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : [];
 
@@ -63,11 +61,7 @@ export function ActivityManager() {
     if (!assigneeId) e.assigneeId = "Selecione um responsável";
     if (!startDate) e.startDate = "Data de início é obrigatória";
     if (!hours || Number(hours) < 1) e.hours = "Horas deve ser no mínimo 1";
-    // ALTERAÇÃO: validação agora respeita arquitetura
-    if (!isArquitetura && Number(hours) > 24) {
-      e.hours = "Máximo de 24 horas para este tipo de atividade";
-    }
-
+    if (Number(hours) > 24) e.hours = "Máximo de 24 horas por atividade";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -102,8 +96,7 @@ export function ActivityManager() {
       toast.success("Atividade atualizada!");
     } else {
       const currentHours = getTotalHoursForHU(activities, huId);
-      // ALTERAÇÃO: regra da HU respeita arquitetura
-      if (!isArquitetura && currentHours + numHours > 24) {
+      if (currentHours + numHours > 24) {
         toast.error(`HU já possui ${currentHours}h alocadas. Disponível: ${24 - currentHours}h`);
         return;
       }
@@ -270,27 +263,18 @@ export function ActivityManager() {
                     <Label>
                       Horas estimadas <span className="text-destructive">*</span>
                     </Label>
-                    {/* 🔥 ALTERAÇÃO: max dinâmico */}
-                <Input
-                  type="number"
-                  min="1"
-                  max={isArquitetura ? undefined : 24}
-                  value={hours}
-                  onChange={(e) => {
-                    setHours(e.target.value);
-                    setErrors((p) => ({ ...p, hours: "" }));
-                  }}
-                  className="mt-1"
-                />
-
-                {errors.hours && (
-                  <p className="text-xs text-destructive mt-1">
-                    {errors.hours}
-                  </p>
-                )}
-              </div>
-
-              {/* ... restante */}
+                    <Input
+                      type="number"
+                      min="1"
+                      max="24"
+                      value={hours}
+                      onChange={(e) => {
+                        setHours(e.target.value);
+                        setErrors((p) => ({ ...p, hours: "" }));
+                      }}
+                      className="mt-1"
+                    />
+                    {errors.hours && <p className="text-xs text-destructive mt-1">{errors.hours}</p>}
                   </div>
                   <div>
                     <Label>
