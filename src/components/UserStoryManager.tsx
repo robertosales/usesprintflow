@@ -105,6 +105,8 @@ export function UserStoryManager() {
     setStoryPoints(String(hu.storyPoints));
     setPriority(hu.priority);
     setEpicId(hu.epicId || "");
+    setStartDate(hu.startDate || "");
+    setEndDate(hu.endDate || "");
     setCustomFieldValues(hu.customFields || {});
     setErrors({});
     setOpen(true);
