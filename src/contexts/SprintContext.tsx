@@ -135,6 +135,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         id: h.id, code: h.code, title: h.title, description: h.description || "",
         storyPoints: h.story_points, priority: h.priority, status: h.status,
         sprintId: h.sprint_id, epicId: h.epic_id,
+        startDate: h.start_date || undefined, endDate: h.end_date || undefined,
         impediments: impData.filter((imp: any) => imp.hu_id === h.id).map((imp: any) => ({
           id: imp.id, reason: imp.reason, type: imp.type, criticality: imp.criticality,
           hasTicket: imp.has_ticket, ticketUrl: imp.ticket_url, ticketId: imp.ticket_id,
