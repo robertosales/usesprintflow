@@ -146,6 +146,15 @@ export function MetricsDashboard() {
         sprintName: sprint?.name || "Sem sprint ativa",
         sprintStart: sprint?.start_date || "",
         sprintEnd: sprint?.end_date || "",
+        impedimentHistory: sprintImps.map((imp: any) => {
+          const hu = sprintHUs.find((h: any) => h.id === imp.hu_id);
+          return {
+            id: imp.id, reason: imp.reason, type: imp.type, criticality: imp.criticality,
+            ticketId: imp.ticket_id, reportedAt: imp.reported_at,
+            resolvedAt: imp.resolved_at, resolution: imp.resolution,
+            huCode: hu?.code || "?", huTitle: hu?.title || "",
+          };
+        }).sort((a: any, b: any) => new Date(b.reportedAt).getTime() - new Date(a.reportedAt).getTime()),
       });
     }
 
