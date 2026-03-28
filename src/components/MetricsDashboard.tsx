@@ -16,6 +16,19 @@ const STATUS_COLORS: Record<string, string> = {
   pronto_para_publicacao: "hsl(142, 71%, 40%)",
 };
 
+interface ImpedimentRecord {
+  id: string;
+  reason: string;
+  type: string;
+  criticality: string;
+  ticketId: string | null;
+  reportedAt: string;
+  resolvedAt: string | null;
+  resolution: string | null;
+  huCode: string;
+  huTitle: string;
+}
+
 interface TeamMetrics {
   teamId: string;
   teamName: string;
@@ -33,6 +46,7 @@ interface TeamMetrics {
   sprintName: string;
   sprintStart: string;
   sprintEnd: string;
+  impedimentHistory: ImpedimentRecord[];
 }
 
 export function MetricsDashboard() {
