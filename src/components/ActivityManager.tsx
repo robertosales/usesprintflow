@@ -53,8 +53,8 @@ export function ActivityManager() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [expandedComments, setExpandedComments] = useState<string | null>(null);
 
-  // 🔥 ADICIONADO: regra para arquitetura
-  const isArquitetura = activityType === "architecture";
+  // 🔥 NOVO: tipos SEM limite de horas por atividade
+  const isSemLimite = activityType === "architecture" || activityType === "scrum" || activityType === "requirements";
 
   const sprintStories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : [];
 
@@ -66,9 +66,9 @@ export function ActivityManager() {
     if (!startDate) e.startDate = "Data de início é obrigatória";
     if (!hours || Number(hours) < 1) e.hours = "Horas deve ser no mínimo 1";
 
-    // 🔥 ALTERADO: só limita se NÃO for arquitetura
-    if (!isArquitetura && Number(hours) > 24) {
-      e.hours = "Máximo de 24 horas por atividade";
+    // 🔥 ALTERADO: regra por atividade (8h)
+    if (!isSemLimite && Number(hours) > 8) {
+      e.hours = "Máximo de 8 horas por atividade";
     }
 
     setErrors(e);
@@ -106,8 +106,8 @@ export function ActivityManager() {
     } else {
       const currentHours = getTotalHoursForHU(activities, huId);
 
-      // 🔥 ALTERADO: só valida limite se NÃO for arquitetura
-      if (!isArquitetura && currentHours + numHours > 24) {
+      // 🔥 MANTIDO: controle de HU (não alterado)
+      if (currentHours + numHours > 24) {
         toast.error(`HU já possui ${currentHours}h alocadas. Disponível: ${24 - currentHours}h`);
         return;
       }
@@ -287,7 +287,7 @@ export function ActivityManager() {
                     <Input
                       type="number"
                       min="1"
-                      max={isArquitetura ? undefined : 24}
+                      max={isSemLimite ? undefined : 8}
                       value={hours}
                       onChange={(e) => {
                         setHours(e.target.value);
