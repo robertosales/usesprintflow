@@ -187,7 +187,7 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
           const visibleItems = section.items.filter((item) => canSeeNav(item.key));
           if (visibleItems.length === 0) return null;
           return (
-            <SidebarGroup key={section.title} defaultOpen>
+            <SidebarGroup key={section.title}>
               <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest font-semibold">
                 {section.title}
               </SidebarGroupLabel>
