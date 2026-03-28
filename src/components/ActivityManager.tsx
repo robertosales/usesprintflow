@@ -63,7 +63,7 @@ export function ActivityManager() {
     if (!assigneeId) e.assigneeId = "Selecione um responsável";
     if (!startDate) e.startDate = "Data de início é obrigatória";
     if (!hours || Number(hours) < 1) e.hours = "Horas deve ser no mínimo 1";
-    // 🔥 ALTERAÇÃO: validação agora respeita arquitetura
+    // ALTERAÇÃO: validação agora respeita arquitetura
     if (!isArquitetura && Number(hours) > 24) {
       e.hours = "Máximo de 24 horas para este tipo de atividade";
     }
@@ -102,7 +102,8 @@ export function ActivityManager() {
       toast.success("Atividade atualizada!");
     } else {
       const currentHours = getTotalHoursForHU(activities, huId);
-      if (currentHours + numHours > 24) {
+      // ALTERAÇÃO: regra da HU respeita arquitetura
+      if (!isArquitetura && currentHours + numHours > 24) {
         toast.error(`HU já possui ${currentHours}h alocadas. Disponível: ${24 - currentHours}h`);
         return;
       }
