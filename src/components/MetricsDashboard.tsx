@@ -17,12 +17,12 @@ import { IndividualPerformance } from "@/components/dashboard/IndividualPerforma
 import { ExportButton } from "@/components/dashboard/ExportButton";
 
 const STATUS_COLORS: Record<string, string> = {
-  aguardando_desenvolvimento: "hsl(220, 14%, 55%)",
-  em_desenvolvimento: "hsl(210, 92%, 55%)",
-  em_code_review: "hsl(262, 52%, 55%)",
-  em_teste: "hsl(38, 92%, 50%)",
-  bug: "hsl(0, 72%, 51%)",
-  pronto_para_publicacao: "hsl(142, 71%, 40%)",
+  aguardando_desenvolvimento: "#94a3b8",
+  em_desenvolvimento: "#3b82f6",
+  em_code_review: "#8b5cf6",
+  em_teste: "#f59e0b",
+  bug: "#ef4444",
+  pronto_para_publicacao: "#22c55e",
 };
 
 export function MetricsDashboard() {
@@ -111,24 +111,36 @@ export function MetricsDashboard() {
       filteredHUs = filteredHUs.filter((h: any) => h.priority === filters.priority);
     }
 
-    // Date filter on HUs
-    if (filters.dateFrom) {
-      filteredHUs = filteredHUs.filter((h: any) =>
-        (h.start_date && h.start_date >= filters.dateFrom) ||
-        (h.created_at && h.created_at >= filters.dateFrom)
-      );
-    }
-    if (filters.dateTo) {
-      filteredHUs = filteredHUs.filter((h: any) =>
-        (h.end_date && h.end_date <= filters.dateTo) ||
-        (h.created_at && h.created_at.split("T")[0] <= filters.dateTo)
-      );
-    }
-
     const huIds = new Set(filteredHUs.map((h: any) => h.id));
 
-    // Filter activities
+    // Filter activities by HU
     let filteredActs = activities.filter((a: any) => huIds.has(a.hu_id));
+
+    // Date filter on activities (start_date / end_date)
+    if (filters.dateFrom) {
+      filteredActs = filteredActs.filter((a: any) => a.end_date >= filters.dateFrom);
+    }
+    if (filters.dateTo) {
+      filteredActs = filteredActs.filter((a: any) => a.start_date <= filters.dateTo);
+    }
+
+    // Also filter HUs by date range
+    if (filters.dateFrom) {
+      filteredHUs = filteredHUs.filter((h: any) => {
+        if (h.end_date) return h.end_date >= filters.dateFrom;
+        return h.created_at.split("T")[0] >= filters.dateFrom;
+      });
+    }
+    if (filters.dateTo) {
+      filteredHUs = filteredHUs.filter((h: any) => {
+        if (h.start_date) return h.start_date <= filters.dateTo;
+        return h.created_at.split("T")[0] <= filters.dateTo;
+      });
+    }
+
+    // Re-compute huIds after date filter
+    const finalHuIds = new Set(filteredHUs.map((h: any) => h.id));
+    filteredActs = filteredActs.filter((a: any) => finalHuIds.has(a.hu_id));
 
     // Activity type filter
     if (filters.activityType !== "all") {
@@ -140,14 +152,16 @@ export function MetricsDashboard() {
       filteredActs = filteredActs.filter((a: any) => a.assignee_id === filters.memberId);
     }
 
-    // Status filter (map to activity closed state)
+    // Status filter
     if (filters.status !== "all") {
       if (filters.status === "concluida") {
         filteredActs = filteredActs.filter((a: any) => a.is_closed);
       } else if (filters.status === "em_progresso") {
-        filteredActs = filteredActs.filter((a: any) => !a.is_closed);
+        const today = new Date().toISOString().split("T")[0];
+        filteredActs = filteredActs.filter((a: any) => !a.is_closed && a.start_date <= today);
       } else if (filters.status === "nao_iniciada") {
-        filteredActs = filteredActs.filter((a: any) => !a.is_closed && !a.assignee_id);
+        const today = new Date().toISOString().split("T")[0];
+        filteredActs = filteredActs.filter((a: any) => !a.is_closed && a.start_date > today);
       } else if (filters.status === "bloqueada") {
         const blockedHuIds = new Set(impediments.filter((i: any) => !i.resolved_at).map((i: any) => i.hu_id));
         filteredActs = filteredActs.filter((a: any) => blockedHuIds.has(a.hu_id));
@@ -155,7 +169,7 @@ export function MetricsDashboard() {
     }
 
     // Filtered impediments
-    const filteredImps = impediments.filter((i: any) => huIds.has(i.hu_id));
+    const filteredImps = impediments.filter((i: any) => finalHuIds.has(i.hu_id));
 
     const lastCol = workflowCols.length > 0
       ? workflowCols.sort((a: any, b: any) => a.sort_order - b.sort_order)[workflowCols.length - 1]?.key
@@ -175,6 +189,8 @@ export function MetricsDashboard() {
   // Compute individual member metrics
   const memberMetrics = useMemo(() => {
     const { developers, activities, hus, impediments, lastCol } = filtered;
+    const today = new Date().toISOString().split("T")[0];
+    const blockedHuIds = new Set(impediments.filter((i: any) => !i.resolved_at).map((i: any) => i.hu_id));
 
     return developers.map((dev: any) => {
       const devActs = activities.filter((a: any) => a.assignee_id === dev.id);
@@ -182,8 +198,10 @@ export function MetricsDashboard() {
       const devHUs = hus.filter((h: any) => devHUIds.has(h.id));
 
       const closedActs = devActs.filter((a: any) => a.is_closed);
-      const openActs = devActs.filter((a: any) => !a.is_closed);
-      const notStartedActs = devActs.filter((a: any) => !a.is_closed && !a.assignee_id);
+      // Started = not closed AND start_date <= today
+      const startedActs = devActs.filter((a: any) => !a.is_closed && a.start_date <= today);
+      // Not started = assigned - started - completed
+      const notStartedCount = devActs.length - startedActs.length - closedActs.length;
 
       const hoursPlanned = devActs.reduce((s: number, a: any) => s + Number(a.hours), 0);
       const hoursCompleted = closedActs.reduce((s: number, a: any) => s + Number(a.hours), 0);
@@ -198,21 +216,26 @@ export function MetricsDashboard() {
         ? Math.round(hoursCompleted / closedActs.length * 10) / 10
         : 0;
 
-      // Tasks by status
+      // Check if any activity's HU is blocked/impeded
+      const devBlockedActs = devActs.filter((a: any) => !a.is_closed && blockedHuIds.has(a.hu_id));
+
+      // Tasks by status with fixed palette
       const tasksByStatus = [
-        { name: "Concluídas", value: closedActs.length, color: "hsl(142, 71%, 40%)" },
-        { name: "Em Progresso", value: openActs.length, color: "hsl(210, 92%, 55%)" },
-        { name: "Não Iniciadas", value: notStartedActs.length, color: "hsl(38, 92%, 50%)" },
-      ].filter((s) => s.value > 0);
+        { name: "Concluída", value: closedActs.length, color: "#22c55e" },
+        { name: "Em Progresso", value: startedActs.length - devBlockedActs.length, color: "#3b82f6" },
+        { name: "Não Iniciada", value: Math.max(0, notStartedCount), color: "#94a3b8" },
+        { name: "Bloqueada", value: devBlockedActs.length, color: "#ef4444" },
+      ].map(s => ({ ...s, value: Math.max(0, s.value) }))
+       .filter((s) => s.value > 0);
 
       return {
         id: dev.id,
         name: dev.name,
         role: dev.role || "developer",
         tasksAssigned: devActs.length,
-        tasksStarted: openActs.length,
+        tasksStarted: startedActs.length,
         tasksCompleted: closedActs.length,
-        tasksNotStarted: notStartedActs.length,
+        tasksNotStarted: Math.max(0, notStartedCount),
         hoursPlanned,
         hoursCompleted,
         hoursPending: hoursPlanned - hoursCompleted,
@@ -226,15 +249,13 @@ export function MetricsDashboard() {
     });
   }, [filtered]);
 
-  // Hours per member chart data
+  // Hours per member chart data - show ALL members including 0h
   const hoursPerMemberData = useMemo(() =>
-    memberMetrics
-      .filter((m) => m.hoursPlanned > 0)
-      .map((m) => ({
-        name: m.name.split(" ")[0],
-        concluido: m.hoursCompleted,
-        pendente: m.hoursPending,
-      })),
+    memberMetrics.map((m) => ({
+      name: m.name.split(" ")[0],
+      concluido: m.hoursCompleted,
+      pendente: m.hoursPending,
+    })),
     [memberMetrics]
   );
 
@@ -243,7 +264,6 @@ export function MetricsDashboard() {
     const { sprints: allSprints } = rawData;
     if (allSprints.length <= 1) return [];
 
-    const memberNames = filtered.developers.map((d: any) => d.name.split(" ")[0]);
     return allSprints
       .sort((a: any, b: any) => a.start_date.localeCompare(b.start_date))
       .slice(-5)
@@ -270,10 +290,12 @@ export function MetricsDashboard() {
     const totalPoints = hus.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
     const completedPoints = completedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
     const totalHours = activities.reduce((s: number, a: any) => s + Number(a.hours), 0);
+    const completedHours = activities.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + Number(a.hours), 0);
 
     const today = new Date().toISOString().split("T")[0];
     const overdueCount = hus.filter((h: any) => {
       if (h.status === lastCol) return false;
+      if (h.end_date) return h.end_date < today;
       const huActs = activities.filter((a: any) => a.hu_id === h.id);
       if (huActs.length === 0) return false;
       const maxEnd = huActs.reduce((max: string, a: any) => (a.end_date > max ? a.end_date : max), "");
@@ -290,7 +312,7 @@ export function MetricsDashboard() {
       .map((col: any) => ({
         name: col.label,
         value: hus.filter((h: any) => h.status === col.key).length,
-        color: STATUS_COLORS[col.key] || "hsl(220, 14%, 55%)",
+        color: STATUS_COLORS[col.key] || "#94a3b8",
       }))
       .filter((d: any) => d.value > 0);
 
@@ -300,7 +322,9 @@ export function MetricsDashboard() {
       totalHUs: hus.length,
       completedHUs: completedHUs.length,
       totalHours,
+      completedHours,
       totalActivities: activities.length,
+      completedActivities: activities.filter((a: any) => a.is_closed).length,
       overdueCount,
       blockedCount,
       devCount: filtered.developers.length,
@@ -330,7 +354,9 @@ export function MetricsDashboard() {
       ["Total HUs", teamOverview.totalHUs],
       ["Conclusão (%)", `${teamOverview.totalHUs > 0 ? Math.round((teamOverview.completedHUs / teamOverview.totalHUs) * 100) : 0}%`],
       ["Total Horas", teamOverview.totalHours],
+      ["Horas Concluídas", teamOverview.completedHours],
       ["Total Atividades", teamOverview.totalActivities],
+      ["Atividades Concluídas", teamOverview.completedActivities],
       ["Membros", teamOverview.devCount],
       ["HUs Atrasadas", teamOverview.overdueCount],
       ["HUs Impedidas", teamOverview.blockedCount],
@@ -378,8 +404,8 @@ export function MetricsDashboard() {
         <OverviewKPI icon={TrendingUp} label="Velocity" value={`${teamOverview.completedPoints}`} sub={`/${teamOverview.totalPoints} pts`} />
         <OverviewKPI icon={Target} label="HUs Concluídas" value={`${teamOverview.completedHUs}`} sub={`/${teamOverview.totalHUs}`} />
         <OverviewKPI icon={CheckCircle} label="Conclusão" value={`${teamOverview.totalHUs > 0 ? Math.round((teamOverview.completedHUs / teamOverview.totalHUs) * 100) : 0}%`} sub="das HUs" />
-        <OverviewKPI icon={Gauge} label="Horas" value={`${teamOverview.totalHours}h`} sub={`${teamOverview.totalActivities} tarefas`} />
-        <OverviewKPI icon={Clock} label="Atividades" value={`${teamOverview.totalActivities}`} sub="total" />
+        <OverviewKPI icon={Gauge} label="Horas" value={`${teamOverview.completedHours}h`} sub={`/${teamOverview.totalHours}h plan.`} />
+        <OverviewKPI icon={Clock} label="Atividades" value={`${teamOverview.completedActivities}`} sub={`/${teamOverview.totalActivities} total`} />
         <OverviewKPI icon={Users} label="Time" value={`${teamOverview.devCount}`} sub="membros" />
         <OverviewKPI icon={AlertTriangle} label="Atrasadas" value={`${teamOverview.overdueCount}`} sub="HUs" accent={teamOverview.overdueCount > 0 ? "destructive" : undefined} />
         <OverviewKPI icon={ShieldAlert} label="Impedidas" value={`${teamOverview.blockedCount}`} sub="HUs" accent={teamOverview.blockedCount > 0 ? "warning" : undefined} />
@@ -452,8 +478,8 @@ export function MetricsDashboard() {
                       <YAxis tick={{ fontSize: 11 }} />
                       <Tooltip />
                       <Legend wrapperStyle={{ fontSize: "11px" }} />
-                      <Bar dataKey="concluido" stackId="a" fill="hsl(142, 71%, 40%)" name="Concluído" />
-                      <Bar dataKey="pendente" stackId="a" fill="hsl(210, 92%, 55%)" name="Pendente" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="concluido" stackId="a" fill="#22c55e" name="Concluído" />
+                      <Bar dataKey="pendente" stackId="a" fill="#3b82f6" name="Pendente" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -512,8 +538,8 @@ function BugsPanel({ activities, developers }: { activities: any[]; developers: 
   }).filter((d) => d.abertos + d.resolvidos > 0);
 
   const statusPie = [
-    { name: "Abertos", value: bugsOpen, color: "hsl(0, 72%, 51%)" },
-    { name: "Resolvidos", value: bugsClosed, color: "hsl(142, 71%, 40%)" },
+    { name: "Abertos", value: bugsOpen, color: "#ef4444" },
+    { name: "Resolvidos", value: bugsClosed, color: "#22c55e" },
   ].filter((d) => d.value > 0);
 
   if (totalBugs === 0) {
@@ -582,8 +608,8 @@ function BugsPanel({ activities, developers }: { activities: any[]; developers: 
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip />
                   <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  <Bar dataKey="abertos" fill="hsl(0, 72%, 51%)" name="Abertos" />
-                  <Bar dataKey="resolvidos" fill="hsl(142, 71%, 40%)" name="Resolvidos" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="abertos" fill="#ef4444" name="Abertos" />
+                  <Bar dataKey="resolvidos" fill="#22c55e" name="Resolvidos" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -597,10 +623,11 @@ function BugsPanel({ activities, developers }: { activities: any[]; developers: 
 function ImpedimentHistoryPanel({ data }: { data: any[] }) {
   if (data.length === 0) {
     return (
-      <Card className="border-dashed">
-        <CardContent className="py-12 text-center text-muted-foreground">
-          <ShieldAlert className="h-12 w-12 mx-auto mb-3 opacity-30" />
-          <p className="font-medium">Sem impedimentos registrados</p>
+      <Card className="border-dashed border-success/30">
+        <CardContent className="py-12 text-center">
+          <CheckCircle className="h-12 w-12 mx-auto mb-3 text-success opacity-60" />
+          <p className="font-medium text-success">✅ Nenhum impedimento registrado nesta sprint.</p>
+          <p className="text-sm text-muted-foreground mt-1">O time está livre de bloqueios!</p>
         </CardContent>
       </Card>
     );
@@ -628,8 +655,8 @@ function ImpedimentHistoryPanel({ data }: { data: any[] }) {
               </tr>
             </thead>
             <tbody>
-              {data.map((imp: any) => (
-                <tr key={imp.id} className="border-b last:border-0">
+              {data.map((imp: any, idx: number) => (
+                <tr key={imp.id} className={`border-b last:border-0 ${idx % 2 !== 0 ? "bg-[#f8fafc] dark:bg-muted/10" : ""}`}>
                   <td className="py-2 font-mono text-xs font-bold">{imp.huCode}</td>
                   <td className="py-2 max-w-[200px] truncate">{imp.reason}</td>
                   <td className="text-center py-2 capitalize text-xs">{imp.type}</td>
