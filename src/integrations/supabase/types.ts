@@ -466,6 +466,45 @@ export type Database = {
         }
         Relationships: []
       }
+      releases: {
+        Row: {
+          bugs_fixed: number | null
+          created_at: string
+          hus_included: number | null
+          id: string
+          notes: string | null
+          released_at: string
+          sprint_id: string | null
+          status: string
+          team_id: string
+          version: string
+        }
+        Insert: {
+          bugs_fixed?: number | null
+          created_at?: string
+          hus_included?: number | null
+          id?: string
+          notes?: string | null
+          released_at?: string
+          sprint_id?: string | null
+          status?: string
+          team_id: string
+          version: string
+        }
+        Update: {
+          bugs_fixed?: number | null
+          created_at?: string
+          hus_included?: number | null
+          id?: string
+          notes?: string | null
+          released_at?: string
+          sprint_id?: string | null
+          status?: string
+          team_id?: string
+          version?: string
+        }
+        Relationships: []
+      }
       sprints: {
         Row: {
           created_at: string
