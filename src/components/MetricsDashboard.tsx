@@ -5,15 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, AreaChart, Area,
-} from "recharts";
-import {
-  TrendingUp, Users, Target, Gauge, CheckCircle, AlertTriangle,
-  ShieldAlert, Clock, BarChart3, User, Layers, Bug,
+  TrendingUp, TrendingDown, Minus, Users, Target, Gauge, CheckCircle, AlertTriangle,
+  ShieldAlert, Clock, BarChart3, User, Bug, Rocket,
 } from "lucide-react";
 import { DashboardFilters, DashboardFilterState, INITIAL_FILTERS } from "@/components/dashboard/DashboardFilters";
 import { IndividualPerformance } from "@/components/dashboard/IndividualPerformance";
+import { TeamPerformance } from "@/components/dashboard/TeamPerformance";
+import { QualityPanel } from "@/components/dashboard/QualityPanel";
+import { ReleasesPanel } from "@/components/dashboard/ReleasesPanel";
 import { ExportButton } from "@/components/dashboard/ExportButton";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -80,12 +79,8 @@ export function MetricsDashboard() {
     }
 
     setRawData({
-      sprints: allSprints,
-      hus: allHUs,
-      activities: allActs,
-      impediments: allImps,
-      developers: allDevs,
-      workflowCols: allWfCols,
+      sprints: allSprints, hus: allHUs, activities: allActs,
+      impediments: allImps, developers: allDevs, workflowCols: allWfCols,
     });
     setLoading(false);
   };
@@ -94,7 +89,6 @@ export function MetricsDashboard() {
   const filtered = useMemo(() => {
     const { sprints, hus, activities, impediments, developers, workflowCols } = rawData;
 
-    // Filter sprints
     let filteredSprints = sprints;
     if (filters.sprintId === "active") {
       filteredSprints = sprints.filter((s: any) => s.is_active);
@@ -103,28 +97,18 @@ export function MetricsDashboard() {
     }
     const sprintIds = new Set(filteredSprints.map((s: any) => s.id));
 
-    // Filter HUs by sprint
     let filteredHUs = filters.sprintId === "all" ? hus : hus.filter((h: any) => sprintIds.has(h.sprint_id));
 
-    // Priority filter
     if (filters.priority !== "all") {
       filteredHUs = filteredHUs.filter((h: any) => h.priority === filters.priority);
     }
 
     const huIds = new Set(filteredHUs.map((h: any) => h.id));
-
-    // Filter activities by HU
     let filteredActs = activities.filter((a: any) => huIds.has(a.hu_id));
 
-    // Date filter on activities (start_date / end_date)
-    if (filters.dateFrom) {
-      filteredActs = filteredActs.filter((a: any) => a.end_date >= filters.dateFrom);
-    }
-    if (filters.dateTo) {
-      filteredActs = filteredActs.filter((a: any) => a.start_date <= filters.dateTo);
-    }
+    if (filters.dateFrom) filteredActs = filteredActs.filter((a: any) => a.end_date >= filters.dateFrom);
+    if (filters.dateTo) filteredActs = filteredActs.filter((a: any) => a.start_date <= filters.dateTo);
 
-    // Also filter HUs by date range
     if (filters.dateFrom) {
       filteredHUs = filteredHUs.filter((h: any) => {
         if (h.end_date) return h.end_date >= filters.dateFrom;
@@ -138,55 +122,33 @@ export function MetricsDashboard() {
       });
     }
 
-    // Re-compute huIds after date filter
     const finalHuIds = new Set(filteredHUs.map((h: any) => h.id));
     filteredActs = filteredActs.filter((a: any) => finalHuIds.has(a.hu_id));
 
-    // Activity type filter
-    if (filters.activityType !== "all") {
-      filteredActs = filteredActs.filter((a: any) => a.activity_type === filters.activityType);
-    }
+    if (filters.activityType !== "all") filteredActs = filteredActs.filter((a: any) => a.activity_type === filters.activityType);
+    if (filters.memberId !== "all") filteredActs = filteredActs.filter((a: any) => a.assignee_id === filters.memberId);
 
-    // Member filter
-    if (filters.memberId !== "all") {
-      filteredActs = filteredActs.filter((a: any) => a.assignee_id === filters.memberId);
-    }
-
-    // Status filter
     if (filters.status !== "all") {
-      if (filters.status === "concluida") {
-        filteredActs = filteredActs.filter((a: any) => a.is_closed);
-      } else if (filters.status === "em_progresso") {
-        const today = new Date().toISOString().split("T")[0];
-        filteredActs = filteredActs.filter((a: any) => !a.is_closed && a.start_date <= today);
-      } else if (filters.status === "nao_iniciada") {
-        const today = new Date().toISOString().split("T")[0];
-        filteredActs = filteredActs.filter((a: any) => !a.is_closed && a.start_date > today);
-      } else if (filters.status === "bloqueada") {
+      const today = new Date().toISOString().split("T")[0];
+      if (filters.status === "concluida") filteredActs = filteredActs.filter((a: any) => a.is_closed);
+      else if (filters.status === "em_progresso") filteredActs = filteredActs.filter((a: any) => !a.is_closed && a.start_date <= today);
+      else if (filters.status === "nao_iniciada") filteredActs = filteredActs.filter((a: any) => !a.is_closed && a.start_date > today);
+      else if (filters.status === "bloqueada") {
         const blockedHuIds = new Set(impediments.filter((i: any) => !i.resolved_at).map((i: any) => i.hu_id));
         filteredActs = filteredActs.filter((a: any) => blockedHuIds.has(a.hu_id));
       }
     }
 
-    // Filtered impediments
     const filteredImps = impediments.filter((i: any) => finalHuIds.has(i.hu_id));
 
     const lastCol = workflowCols.length > 0
       ? workflowCols.sort((a: any, b: any) => a.sort_order - b.sort_order)[workflowCols.length - 1]?.key
       : "pronto_para_publicacao";
 
-    return {
-      sprints: filteredSprints,
-      hus: filteredHUs,
-      activities: filteredActs,
-      impediments: filteredImps,
-      developers,
-      workflowCols,
-      lastCol,
-    };
+    return { sprints: filteredSprints, hus: filteredHUs, activities: filteredActs, impediments: filteredImps, developers, workflowCols, lastCol };
   }, [rawData, filters]);
 
-  // Compute individual member metrics
+  // Member metrics
   const memberMetrics = useMemo(() => {
     const { developers, activities, hus, impediments, lastCol } = filtered;
     const today = new Date().toISOString().split("T")[0];
@@ -198,9 +160,7 @@ export function MetricsDashboard() {
       const devHUs = hus.filter((h: any) => devHUIds.has(h.id));
 
       const closedActs = devActs.filter((a: any) => a.is_closed);
-      // Started = not closed AND start_date <= today
       const startedActs = devActs.filter((a: any) => !a.is_closed && a.start_date <= today);
-      // Not started = assigned - started - completed
       const notStartedCount = devActs.length - startedActs.length - closedActs.length;
 
       const hoursPlanned = devActs.reduce((s: number, a: any) => s + Number(a.hours), 0);
@@ -216,54 +176,54 @@ export function MetricsDashboard() {
         ? Math.round(hoursCompleted / closedActs.length * 10) / 10
         : 0;
 
-      // Check if any activity's HU is blocked/impeded
+      // WIP = tasks in progress (started but not closed)
+      const wip = startedActs.length;
+
+      // Cycle time = avg days from start_date to closed_at for completed tasks
+      let cycleTime = 0;
+      if (closedActs.length > 0) {
+        const totalDays = closedActs.reduce((s: number, a: any) => {
+          if (a.closed_at && a.start_date) {
+            const diff = (new Date(a.closed_at).getTime() - new Date(a.start_date).getTime()) / (1000 * 60 * 60 * 24);
+            return s + Math.max(0, diff);
+          }
+          // Fallback: use end_date - start_date
+          const diff = (new Date(a.end_date).getTime() - new Date(a.start_date).getTime()) / (1000 * 60 * 60 * 24);
+          return s + Math.max(0, diff);
+        }, 0);
+        cycleTime = Math.round(totalDays / closedActs.length * 10) / 10;
+      }
+
       const devBlockedActs = devActs.filter((a: any) => !a.is_closed && blockedHuIds.has(a.hu_id));
 
-      // Tasks by status with fixed palette
       const tasksByStatus = [
         { name: "Concluída", value: closedActs.length, color: "#22c55e" },
-        { name: "Em Progresso", value: startedActs.length - devBlockedActs.length, color: "#3b82f6" },
+        { name: "Em Progresso", value: Math.max(0, startedActs.length - devBlockedActs.length), color: "#3b82f6" },
         { name: "Não Iniciada", value: Math.max(0, notStartedCount), color: "#94a3b8" },
         { name: "Bloqueada", value: devBlockedActs.length, color: "#ef4444" },
-      ].map(s => ({ ...s, value: Math.max(0, s.value) }))
-       .filter((s) => s.value > 0);
+      ].filter((s) => s.value > 0);
 
       return {
-        id: dev.id,
-        name: dev.name,
-        role: dev.role || "developer",
-        tasksAssigned: devActs.length,
-        tasksStarted: startedActs.length,
-        tasksCompleted: closedActs.length,
-        tasksNotStarted: Math.max(0, notStartedCount),
-        hoursPlanned,
-        hoursCompleted,
-        hoursPending: hoursPlanned - hoursCompleted,
+        id: dev.id, name: dev.name, role: dev.role || "developer",
+        tasksAssigned: devActs.length, tasksStarted: startedActs.length,
+        tasksCompleted: closedActs.length, tasksNotStarted: Math.max(0, notStartedCount),
+        hoursPlanned, hoursCompleted, hoursPending: hoursPlanned - hoursCompleted,
         efficiency: hoursPlanned > 0 ? Math.round((hoursCompleted / hoursPlanned) * 100) : 0,
-        bugsAssigned: bugActs.length,
-        bugsResolved: bugsClosed.length,
-        storyPointsCompleted: spCompleted,
-        avgTimePerActivity: avgTime,
-        tasksByStatus,
+        bugsAssigned: bugActs.length, bugsResolved: bugsClosed.length,
+        storyPointsCompleted: spCompleted, avgTimePerActivity: avgTime,
+        wip, cycleTime, tasksByStatus,
       };
     });
   }, [filtered]);
 
-  // Hours per member chart data - show ALL members including 0h
   const hoursPerMemberData = useMemo(() =>
-    memberMetrics.map((m) => ({
-      name: m.name.split(" ")[0],
-      concluido: m.hoursCompleted,
-      pendente: m.hoursPending,
-    })),
+    memberMetrics.map((m) => ({ name: m.name.split(" ")[0], concluido: m.hoursCompleted, pendente: m.hoursPending })),
     [memberMetrics]
   );
 
-  // Progress by sprint line data
   const progressBySprintData = useMemo(() => {
     const { sprints: allSprints } = rawData;
     if (allSprints.length <= 1) return [];
-
     return allSprints
       .sort((a: any, b: any) => a.start_date.localeCompare(b.start_date))
       .slice(-5)
@@ -271,7 +231,6 @@ export function MetricsDashboard() {
         const sprintHUs = rawData.hus.filter((h: any) => h.sprint_id === sprint.id);
         const huIds = new Set(sprintHUs.map((h: any) => h.id));
         const sprintActs = rawData.activities.filter((a: any) => huIds.has(a.hu_id));
-
         const entry: any = { sprint: sprint.name };
         filtered.developers.forEach((dev: any) => {
           const devActs = sprintActs.filter((a: any) => a.assignee_id === dev.id);
@@ -296,10 +255,7 @@ export function MetricsDashboard() {
     const overdueCount = hus.filter((h: any) => {
       if (h.status === lastCol) return false;
       if (h.end_date) return h.end_date < today;
-      const huActs = activities.filter((a: any) => a.hu_id === h.id);
-      if (huActs.length === 0) return false;
-      const maxEnd = huActs.reduce((max: string, a: any) => (a.end_date > max ? a.end_date : max), "");
-      return maxEnd < today;
+      return false;
     }).length;
 
     const blockedCount = hus.filter((h: any) =>
@@ -316,22 +272,41 @@ export function MetricsDashboard() {
       }))
       .filter((d: any) => d.value > 0);
 
+    // Sprint Commitment Accuracy
+    const commitmentAccuracy = hus.length > 0
+      ? Math.round((completedHUs.length / hus.length) * 100)
+      : 0;
+
+    // Cycle Time Médio (HUs)
+    const cycleTimeDays = (() => {
+      if (completedHUs.length === 0) return 0;
+      const total = completedHUs.reduce((s: number, h: any) => {
+        if (h.start_date && h.end_date) {
+          const diff = (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / (1000 * 60 * 60 * 24);
+          return s + Math.max(0, diff);
+        }
+        return s;
+      }, 0);
+      const withDates = completedHUs.filter((h: any) => h.start_date && h.end_date).length;
+      return withDates > 0 ? Math.round(total / withDates * 10) / 10 : 0;
+    })();
+
+    // Bug reopen rate (approximation)
+    const bugActs = activities.filter((a: any) => a.activity_type === "bug");
+    const bugsResolved = bugActs.filter((a: any) => a.is_closed).length;
+    const bugReopenRate = 0; // No reopen tracking yet
+
     return {
-      totalPoints,
-      completedPoints,
-      totalHUs: hus.length,
-      completedHUs: completedHUs.length,
-      totalHours,
-      completedHours,
+      totalPoints, completedPoints, totalHUs: hus.length, completedHUs: completedHUs.length,
+      totalHours, completedHours,
       totalActivities: activities.length,
       completedActivities: activities.filter((a: any) => a.is_closed).length,
-      overdueCount,
-      blockedCount,
-      devCount: filtered.developers.length,
+      overdueCount, blockedCount, devCount: filtered.developers.length,
       statusData,
       sprintName: filtered.sprints[0]?.name || "Sem sprint",
       sprintStart: filtered.sprints[0]?.start_date || "",
       sprintEnd: filtered.sprints[0]?.end_date || "",
+      commitmentAccuracy, cycleTimeDays, bugReopenRate,
       impedimentHistory: impediments.map((imp: any) => {
         const hu = hus.find((h: any) => h.id === imp.hu_id);
         return {
@@ -344,6 +319,38 @@ export function MetricsDashboard() {
     };
   }, [filtered]);
 
+  // Trend: compare with previous sprint
+  const trends = useMemo(() => {
+    const sorted = [...rawData.sprints].sort((a, b) => a.start_date.localeCompare(b.start_date));
+    if (sorted.length < 2 || filtered.sprints.length === 0) return null;
+
+    const currentIdx = sorted.findIndex((s) => s.id === filtered.sprints[0].id);
+    if (currentIdx <= 0) return null;
+
+    const prev = sorted[currentIdx - 1];
+    const prevHUs = rawData.hus.filter((h: any) => h.sprint_id === prev.id);
+    const prevHuIds = new Set(prevHUs.map((h: any) => h.id));
+    const prevActs = rawData.activities.filter((a: any) => prevHuIds.has(a.hu_id));
+    const { lastCol } = filtered;
+
+    const prevCompletedHUs = prevHUs.filter((h: any) => h.status === lastCol);
+    const prevVelocity = prevCompletedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
+    const prevCommitment = prevHUs.length > 0 ? Math.round((prevCompletedHUs.length / prevHUs.length) * 100) : 0;
+    const prevCompletedWithDates = prevCompletedHUs.filter((h: any) => h.start_date && h.end_date);
+    const prevCycleTime = prevCompletedWithDates.length > 0
+      ? Math.round(prevCompletedWithDates.reduce((s: number, h: any) => s + Math.max(0, (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / (1000 * 60 * 60 * 24)), 0) / prevCompletedWithDates.length * 10) / 10
+      : 0;
+    const prevTotalHrs = prevActs.reduce((s: number, a: any) => s + Number(a.hours), 0);
+    const prevDoneHrs = prevActs.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + Number(a.hours), 0);
+
+    return {
+      velocity: prevVelocity,
+      commitment: prevCommitment,
+      cycleTime: prevCycleTime,
+      hours: prevDoneHrs,
+    };
+  }, [rawData, filtered]);
+
   const getTeamExportData = () => ({
     title: `Métricas do Time - ${teamOverview.sprintName}`,
     headers: ["Métrica", "Valor"],
@@ -352,7 +359,8 @@ export function MetricsDashboard() {
       ["Total Story Points", teamOverview.totalPoints],
       ["HUs Concluídas", teamOverview.completedHUs],
       ["Total HUs", teamOverview.totalHUs],
-      ["Conclusão (%)", `${teamOverview.totalHUs > 0 ? Math.round((teamOverview.completedHUs / teamOverview.totalHUs) * 100) : 0}%`],
+      ["Sprint Commitment Accuracy", `${teamOverview.commitmentAccuracy}%`],
+      ["Cycle Time Médio (dias)", teamOverview.cycleTimeDays],
       ["Total Horas", teamOverview.totalHours],
       ["Horas Concluídas", teamOverview.completedHours],
       ["Total Atividades", teamOverview.totalActivities],
@@ -372,10 +380,10 @@ export function MetricsDashboard() {
   }
 
   const memberNames = filtered.developers.map((d: any) => d.name.split(" ")[0]);
+  const effectiveTeamId = filters.teamId === "all" ? (currentTeamId || "") : filters.teamId;
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
       <DashboardFilters
         filters={filters}
         onChange={setFilters}
@@ -385,7 +393,7 @@ export function MetricsDashboard() {
         isAdmin={isAdmin}
       />
 
-      {/* Sprint info & overview KPIs */}
+      {/* Sprint info */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-primary" />
@@ -399,13 +407,20 @@ export function MetricsDashboard() {
         <ExportButton getData={getTeamExportData} />
       </div>
 
-      {/* Overview KPI Cards */}
+      {/* Overview KPI Cards with trends */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-        <OverviewKPI icon={TrendingUp} label="Velocity" value={`${teamOverview.completedPoints}`} sub={`/${teamOverview.totalPoints} pts`} />
-        <OverviewKPI icon={Target} label="HUs Concluídas" value={`${teamOverview.completedHUs}`} sub={`/${teamOverview.totalHUs}`} />
-        <OverviewKPI icon={CheckCircle} label="Conclusão" value={`${teamOverview.totalHUs > 0 ? Math.round((teamOverview.completedHUs / teamOverview.totalHUs) * 100) : 0}%`} sub="das HUs" />
-        <OverviewKPI icon={Gauge} label="Horas" value={`${teamOverview.completedHours}h`} sub={`/${teamOverview.totalHours}h plan.`} />
-        <OverviewKPI icon={Clock} label="Atividades" value={`${teamOverview.completedActivities}`} sub={`/${teamOverview.totalActivities} total`} />
+        <OverviewKPI icon={TrendingUp} label="Velocity" value={`${teamOverview.completedPoints}`} sub={`/${teamOverview.totalPoints} pts`}
+          trend={trends ? getTrend(teamOverview.completedPoints, trends.velocity) : undefined} />
+        <OverviewKPI icon={Target} label="HUs Concluídas" value={`${teamOverview.completedHUs}`} sub={`/${teamOverview.totalHUs}`}
+          trend={trends ? getTrend(teamOverview.completedHUs, teamOverview.totalHUs > 0 ? trends.velocity : 0) : undefined} />
+        <OverviewKPI icon={CheckCircle} label="Commitment"
+          value={`${teamOverview.commitmentAccuracy}%`} sub="HUs entregues/plan."
+          accent={teamOverview.commitmentAccuracy >= 80 ? undefined : teamOverview.commitmentAccuracy >= 60 ? "warning" : "destructive"}
+          trend={trends ? getTrend(teamOverview.commitmentAccuracy, trends.commitment) : undefined} />
+        <OverviewKPI icon={Clock} label="Cycle Time" value={`${teamOverview.cycleTimeDays}d`} sub="média por HU"
+          trend={trends ? getTrend(trends.cycleTime, teamOverview.cycleTimeDays, true) : undefined} />
+        <OverviewKPI icon={Gauge} label="Horas" value={`${teamOverview.completedHours}h`} sub={`/${teamOverview.totalHours}h plan.`}
+          trend={trends ? getTrend(teamOverview.completedHours, trends.hours) : undefined} />
         <OverviewKPI icon={Users} label="Time" value={`${teamOverview.devCount}`} sub="membros" />
         <OverviewKPI icon={AlertTriangle} label="Atrasadas" value={`${teamOverview.overdueCount}`} sub="HUs" accent={teamOverview.overdueCount > 0 ? "destructive" : undefined} />
         <OverviewKPI icon={ShieldAlert} label="Impedidas" value={`${teamOverview.blockedCount}`} sub="HUs" accent={teamOverview.blockedCount > 0 ? "warning" : undefined} />
@@ -413,7 +428,7 @@ export function MetricsDashboard() {
 
       {/* Tabs */}
       <Tabs defaultValue="individual" className="space-y-4">
-        <TabsList className="grid grid-cols-4 w-full max-w-xl">
+        <TabsList className="grid grid-cols-5 w-full max-w-2xl">
           <TabsTrigger value="individual" className="text-xs gap-1">
             <User className="h-3.5 w-3.5" /> Individual
           </TabsTrigger>
@@ -426,9 +441,11 @@ export function MetricsDashboard() {
           <TabsTrigger value="impediments" className="text-xs gap-1">
             <ShieldAlert className="h-3.5 w-3.5" /> Impedimentos
           </TabsTrigger>
+          <TabsTrigger value="releases" className="text-xs gap-1">
+            <Rocket className="h-3.5 w-3.5" /> Releases
+          </TabsTrigger>
         </TabsList>
 
-        {/* Individual Performance */}
         <TabsContent value="individual">
           <IndividualPerformance
             members={memberMetrics}
@@ -439,82 +456,72 @@ export function MetricsDashboard() {
           />
         </TabsContent>
 
-        {/* Team Performance */}
         <TabsContent value="team">
-          <div className="grid md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold">HUs por Status</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {teamOverview.statusData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <PieChart>
-                      <Pie data={teamOverview.statusData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" label={({ value }) => `${value}`} paddingAngle={2}>
-                        {teamOverview.statusData.map((entry: any, i: number) => (
-                          <Cell key={i} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend wrapperStyle={{ fontSize: "11px" }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <EmptyChart />
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold">Carga por Membro (horas)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {hoursPerMemberData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={hoursPerMemberData}>
-                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip />
-                      <Legend wrapperStyle={{ fontSize: "11px" }} />
-                      <Bar dataKey="concluido" stackId="a" fill="#22c55e" name="Concluído" />
-                      <Bar dataKey="pendente" stackId="a" fill="#3b82f6" name="Pendente" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <EmptyChart />
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          <TeamPerformance
+            sprints={filtered.sprints}
+            hus={filtered.hus}
+            activities={filtered.activities}
+            developers={filtered.developers}
+            impediments={filtered.impediments}
+            lastCol={filtered.lastCol}
+            allSprints={rawData.sprints}
+            allHUs={rawData.hus}
+            allActivities={rawData.activities}
+            statusData={teamOverview.statusData}
+            hoursPerMemberData={hoursPerMemberData}
+          />
         </TabsContent>
 
-        {/* Quality / Bugs */}
         <TabsContent value="quality">
-          <BugsPanel activities={filtered.activities} developers={filtered.developers} />
+          <QualityPanel
+            activities={filtered.activities}
+            developers={filtered.developers}
+            hus={filtered.hus}
+            lastCol={filtered.lastCol}
+          />
         </TabsContent>
 
-        {/* Impediments */}
         <TabsContent value="impediments">
           <ImpedimentHistoryPanel data={teamOverview.impedimentHistory} />
+        </TabsContent>
+
+        <TabsContent value="releases">
+          <ReleasesPanel
+            teamId={effectiveTeamId}
+            sprints={rawData.sprints.map((s: any) => ({ id: s.id, name: s.name }))}
+          />
         </TabsContent>
       </Tabs>
     </div>
   );
 }
 
+// === Helpers ===
+
+function getTrend(current: number, previous: number, invertColor = false): { direction: "up" | "down" | "same"; isGood: boolean } {
+  if (current > previous) return { direction: "up", isGood: !invertColor };
+  if (current < previous) return { direction: "down", isGood: invertColor };
+  return { direction: "same", isGood: true };
+}
+
 // === Sub-components ===
 
-function OverviewKPI({ icon: Icon, label, value, sub, accent }: {
+function OverviewKPI({ icon: Icon, label, value, sub, accent, trend }: {
   icon: React.ElementType; label: string; value: string; sub: string;
   accent?: "destructive" | "warning";
+  trend?: { direction: "up" | "down" | "same"; isGood: boolean };
 }) {
+  const TrendIcon = trend?.direction === "up" ? TrendingUp : trend?.direction === "down" ? TrendingDown : Minus;
   return (
-    <Card className={accent === "destructive" ? "border-destructive/30" : accent === "warning" ? "border-warning/30" : ""}>
+    <Card className={accent === "destructive" ? "border-destructive/30" : accent === "warning" ? "border-[#eab308]/30" : ""}>
       <CardContent className="p-3 text-center">
-        <Icon className={`h-4 w-4 mx-auto mb-1 ${accent === "destructive" ? "text-destructive" : accent === "warning" ? "text-warning" : "text-primary"}`} />
-        <p className={`text-xl font-bold ${accent === "destructive" ? "text-destructive" : accent === "warning" ? "text-warning" : ""}`}>{value}</p>
+        <Icon className={`h-4 w-4 mx-auto mb-1 ${accent === "destructive" ? "text-destructive" : accent === "warning" ? "text-[#eab308]" : "text-primary"}`} />
+        <div className="flex items-center justify-center gap-1">
+          <p className={`text-xl font-bold ${accent === "destructive" ? "text-destructive" : accent === "warning" ? "text-[#eab308]" : ""}`}>{value}</p>
+          {trend && (
+            <TrendIcon className={`h-3.5 w-3.5 ${trend.isGood ? "text-[#22c55e]" : "text-[#ef4444]"}`} />
+          )}
+        </div>
         <p className="text-[10px] text-muted-foreground leading-tight">{sub}</p>
         <p className="text-[10px] font-medium text-muted-foreground mt-0.5">{label}</p>
       </CardContent>
@@ -522,111 +529,13 @@ function OverviewKPI({ icon: Icon, label, value, sub, accent }: {
   );
 }
 
-function BugsPanel({ activities, developers }: { activities: any[]; developers: any[] }) {
-  const bugActs = activities.filter((a: any) => a.activity_type === "bug");
-  const bugsOpen = bugActs.filter((a: any) => !a.is_closed).length;
-  const bugsClosed = bugActs.filter((a: any) => a.is_closed).length;
-  const totalBugs = bugActs.length;
-
-  const bugsByMember = developers.map((dev: any) => {
-    const devBugs = bugActs.filter((a: any) => a.assignee_id === dev.id);
-    return {
-      name: dev.name.split(" ")[0],
-      abertos: devBugs.filter((a: any) => !a.is_closed).length,
-      resolvidos: devBugs.filter((a: any) => a.is_closed).length,
-    };
-  }).filter((d) => d.abertos + d.resolvidos > 0);
-
-  const statusPie = [
-    { name: "Abertos", value: bugsOpen, color: "#ef4444" },
-    { name: "Resolvidos", value: bugsClosed, color: "#22c55e" },
-  ].filter((d) => d.value > 0);
-
-  if (totalBugs === 0) {
-    return (
-      <Card className="border-dashed">
-        <CardContent className="py-12 text-center text-muted-foreground">
-          <Bug className="h-12 w-12 mx-auto mb-3 opacity-30" />
-          <p className="font-medium">Nenhum bug registrado</p>
-          <p className="text-sm mt-1">Crie atividades do tipo "Bug" para ver métricas de qualidade</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
-        <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-destructive">{bugsOpen}</p>
-            <p className="text-[10px] text-muted-foreground">Bugs Abertos</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-success">{bugsClosed}</p>
-            <p className="text-[10px] text-muted-foreground">Bugs Resolvidos</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold">{totalBugs}</p>
-            <p className="text-[10px] text-muted-foreground">Total de Bugs</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Bugs por Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
-              <PieChart>
-                <Pie data={statusPie} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value" label paddingAngle={3}>
-                  {statusPie.map((e, i) => <Cell key={i} fill={e.color} />)}
-                </Pie>
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: "11px" }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {bugsByMember.length > 0 && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">Bugs por Membro</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={bugsByMember}>
-                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  <Bar dataKey="abertos" fill="#ef4444" name="Abertos" />
-                  <Bar dataKey="resolvidos" fill="#22c55e" name="Resolvidos" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function ImpedimentHistoryPanel({ data }: { data: any[] }) {
   if (data.length === 0) {
     return (
-      <Card className="border-dashed border-success/30">
+      <Card className="border-dashed border-[#22c55e]/30">
         <CardContent className="py-12 text-center">
-          <CheckCircle className="h-12 w-12 mx-auto mb-3 text-success opacity-60" />
-          <p className="font-medium text-success">✅ Nenhum impedimento registrado nesta sprint.</p>
+          <CheckCircle className="h-12 w-12 mx-auto mb-3 text-[#22c55e] opacity-60" />
+          <p className="font-medium text-[#22c55e]">✅ Nenhum impedimento registrado nesta sprint.</p>
           <p className="text-sm text-muted-foreground mt-1">O time está livre de bloqueios!</p>
         </CardContent>
       </Card>
@@ -637,7 +546,7 @@ function ImpedimentHistoryPanel({ data }: { data: any[] }) {
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <ShieldAlert className="h-4 w-4 text-warning" /> Histórico de Impedimentos ({data.length})
+          <ShieldAlert className="h-4 w-4 text-[#eab308]" /> Histórico de Impedimentos ({data.length})
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -663,8 +572,8 @@ function ImpedimentHistoryPanel({ data }: { data: any[] }) {
                   <td className="text-center py-2">
                     <Badge className={`text-[10px] ${
                       imp.criticality === "critica" ? "bg-destructive/15 text-destructive" :
-                      imp.criticality === "alta" ? "bg-warning/15 text-warning" :
-                      imp.criticality === "media" ? "bg-info/15 text-info" :
+                      imp.criticality === "alta" ? "bg-[#eab308]/15 text-[#eab308]" :
+                      imp.criticality === "media" ? "bg-[#3b82f6]/15 text-[#3b82f6]" :
                       "bg-muted text-muted-foreground"
                     }`}>
                       {imp.criticality}
@@ -674,11 +583,11 @@ function ImpedimentHistoryPanel({ data }: { data: any[] }) {
                   <td className="text-center py-2 text-xs">{new Date(imp.reportedAt).toLocaleDateString("pt-BR")}</td>
                   <td className="text-center py-2">
                     {imp.resolvedAt ? (
-                      <Badge variant="secondary" className="text-[10px] gap-1 bg-success/15 text-success">
+                      <Badge variant="secondary" className="text-[10px] gap-1 bg-[#22c55e]/15 text-[#22c55e]">
                         <CheckCircle className="h-3 w-3" /> Resolvido
                       </Badge>
                     ) : (
-                      <Badge variant="secondary" className="text-[10px] gap-1 bg-warning/15 text-warning">
+                      <Badge variant="secondary" className="text-[10px] gap-1 bg-[#eab308]/15 text-[#eab308]">
                         <ShieldAlert className="h-3 w-3" /> Ativo
                       </Badge>
                     )}
