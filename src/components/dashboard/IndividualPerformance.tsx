@@ -1,6 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import {
   Tooltip as UITooltip,
   TooltipContent,
@@ -34,6 +33,8 @@ interface MemberMetrics {
   bugsResolved: number;
   storyPointsCompleted: number;
   avgTimePerActivity: number;
+  wip: number;
+  cycleTime: number;
   tasksByStatus: { name: string; value: number; color: string }[];
 }
 
@@ -45,7 +46,6 @@ interface Props {
   memberNames: string[];
 }
 
-// Fixed color palette for statuses - consistent across entire system
 const STATUS_PIE_COLORS: Record<string, string> = {
   "Concluída": "#22c55e",
   "Em Progresso": "#3b82f6",
@@ -86,19 +86,18 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
     title: `Desempenho Individual - ${sprintName}`,
     headers: [
       "Membro", "Função", "Tarefas Atribuídas", "Iniciadas", "Concluídas",
-      "Não Iniciadas", "Horas Planejadas", "Horas Concluídas", "Horas Pendentes",
-      "Eficiência %", "Bugs Atribuídos", "Bugs Resolvidos", "Story Points",
-      "Tempo Médio (h)",
+      "Não Iniciadas", "WIP", "Cycle Time (dias)", "Horas Planejadas", "Horas Concluídas",
+      "Horas Pendentes", "Eficiência %", "Bugs Atribuídos", "Bugs Resolvidos",
+      "Story Points", "Tempo Médio (h)",
     ],
     rows: members.map((m) => [
       m.name, m.role, m.tasksAssigned, m.tasksStarted, m.tasksCompleted,
-      m.tasksNotStarted, m.hoursPlanned, m.hoursCompleted, m.hoursPending,
-      m.efficiency, m.bugsAssigned, m.bugsResolved, m.storyPointsCompleted,
-      m.avgTimePerActivity,
+      m.tasksNotStarted, m.wip, m.cycleTime, m.hoursPlanned, m.hoursCompleted,
+      m.hoursPending, m.efficiency, m.bugsAssigned, m.bugsResolved,
+      m.storyPointsCompleted, m.avgTimePerActivity,
     ]),
   });
 
-  // Aggregate status pie data with fixed colors
   const allStatusData: Record<string, number> = {};
   members.forEach((m) => {
     m.tasksByStatus.forEach((s) => {
@@ -108,17 +107,17 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
   const statusPieData = Object.entries(allStatusData)
     .filter(([, v]) => v > 0)
     .map(([name, value]) => ({
-      name,
-      value,
+      name, value,
       color: STATUS_PIE_COLORS[name] || "#94a3b8",
     }));
 
-  // Totals for footer
   const totals = {
     tasksAssigned: members.reduce((s, m) => s + m.tasksAssigned, 0),
     tasksStarted: members.reduce((s, m) => s + m.tasksStarted, 0),
     tasksCompleted: members.reduce((s, m) => s + m.tasksCompleted, 0),
     tasksNotStarted: members.reduce((s, m) => s + m.tasksNotStarted, 0),
+    wip: members.reduce((s, m) => s + m.wip, 0),
+    cycleTime: members.length > 0 ? Math.round(members.reduce((s, m) => s + m.cycleTime, 0) / members.length * 10) / 10 : 0,
     hoursPlanned: members.reduce((s, m) => s + m.hoursPlanned, 0),
     hoursCompleted: members.reduce((s, m) => s + m.hoursCompleted, 0),
     hoursPending: members.reduce((s, m) => s + m.hoursPending, 0),
@@ -129,7 +128,6 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
     efficiency: members.length > 0 ? Math.round(members.reduce((s, m) => s + m.efficiency, 0) / members.length) : 0,
   };
 
-  // Radar: one radar per member with individual colors
   const radarMetrics = ["Tarefas", "Horas", "Eficiência", "SP", "Bugs Res."];
   const radarData = radarMetrics.map((metric) => {
     const entry: any = { metric };
@@ -153,6 +151,8 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
     "Iniciadas": "Tarefas em andamento (não concluídas e com data de início atingida)",
     "Concluídas": "Tarefas finalizadas (is_closed = true)",
     "Não Inic.": "Tarefas atribuídas mas ainda não iniciadas",
+    "WIP": "Work In Progress — tarefas simultâneas em progresso",
+    "Cycle": "Cycle Time médio em dias por tarefa concluída",
     "Hrs Plan.": "Soma das horas estimadas de todas as tarefas atribuídas",
     "Hrs Conc.": "Soma das horas das tarefas concluídas",
     "Hrs Pend.": "Diferença entre horas planejadas e concluídas",
@@ -165,7 +165,6 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
   return (
     <TooltipProvider>
       <div className="space-y-4">
-        {/* Header with export */}
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold flex items-center gap-2">
             <User className="h-4 w-4 text-primary" /> Desempenho Individual
@@ -176,8 +175,8 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
         {/* Summary KPI Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
           <KPICard icon={Target} label="Tarefas Atribuídas" value={totals.tasksAssigned} color="text-primary" />
-          <KPICard icon={ActivityIcon} label="Iniciadas" value={totals.tasksStarted} color="text-info" />
-          <KPICard icon={CheckCircle} label="Concluídas" value={totals.tasksCompleted} color="text-success" />
+          <KPICard icon={ActivityIcon} label="Iniciadas" value={totals.tasksStarted} color="text-[#3b82f6]" />
+          <KPICard icon={CheckCircle} label="Concluídas" value={totals.tasksCompleted} color="text-[#22c55e]" />
           <KPICard icon={Clock} label="Horas Planejadas" value={`${totals.hoursPlanned}h`} color="text-muted-foreground" />
           <KPICard
             icon={TrendingUp}
@@ -192,7 +191,6 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
 
         {/* Charts Row */}
         <div className="grid md:grid-cols-2 gap-4">
-          {/* Hours: Completed vs Pending per member - show ALL members */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Horas Concluídas vs Pendentes</CardTitle>
@@ -216,7 +214,6 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
             </CardContent>
           </Card>
 
-          {/* Tasks by status pie - fixed 5 statuses */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Tarefas por Status</CardTitle>
@@ -225,16 +222,7 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
               {statusPieData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={260}>
                   <PieChart>
-                    <Pie
-                      data={statusPieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={45}
-                      outerRadius={80}
-                      dataKey="value"
-                      label={({ name, value }) => `${name}: ${value}`}
-                      paddingAngle={2}
-                    >
+                    <Pie data={statusPieData} cx="50%" cy="50%" innerRadius={45} outerRadius={80} dataKey="value" label={({ name, value }) => `${name}: ${value}`} paddingAngle={2}>
                       {statusPieData.map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
                       ))}
@@ -266,14 +254,7 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
                     <Tooltip />
                     <Legend wrapperStyle={{ fontSize: "11px" }} />
                     {memberNames.map((name, i) => (
-                      <Line
-                        key={name}
-                        type="monotone"
-                        dataKey={name}
-                        stroke={MEMBER_COLORS[i % MEMBER_COLORS.length]}
-                        strokeWidth={2}
-                        dot={{ r: 3 }}
-                      />
+                      <Line key={name} type="monotone" dataKey={name} stroke={MEMBER_COLORS[i % MEMBER_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
                     ))}
                   </LineChart>
                 </ResponsiveContainer>
@@ -281,7 +262,6 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
             </Card>
           )}
 
-          {/* Radar chart - one line per member with unique colors */}
           {members.length > 0 && members.length <= 8 && (
             <Card>
               <CardHeader className="pb-2">
@@ -294,18 +274,13 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
                     <PolarAngleAxis dataKey="metric" tick={{ fontSize: 10 }} />
                     <PolarRadiusAxis tick={{ fontSize: 9 }} />
                     {members.map((m, i) => (
-                      <Radar
-                        key={m.id}
-                        name={m.name.split(" ")[0]}
-                        dataKey={m.name.split(" ")[0]}
+                      <Radar key={m.id} name={m.name.split(" ")[0]} dataKey={m.name.split(" ")[0]}
                         stroke={MEMBER_COLORS[i % MEMBER_COLORS.length]}
                         fill={MEMBER_COLORS[i % MEMBER_COLORS.length]}
-                        fillOpacity={0.1}
-                        strokeWidth={2}
-                      />
+                        fillOpacity={0.1} strokeWidth={2} />
                     ))}
                     <Tooltip />
-                    <Legend wrapperStyle={{ fontSize: "11px" }} onClick={() => {}} />
+                    <Legend wrapperStyle={{ fontSize: "11px" }} />
                   </RadarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -313,7 +288,7 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
           )}
         </div>
 
-        {/* Detail Table */}
+        {/* Detail Table with WIP and Cycle Time */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Detalhamento por Membro</CardTitle>
@@ -371,6 +346,16 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
                           </Badge>
                         ) : "—"}
                       </td>
+                      {/* WIP */}
+                      <td className="text-center py-2.5">
+                        <span className={`font-semibold ${m.wip > 2 ? "text-[#eab308] bg-[#eab308]/10 px-1.5 py-0.5 rounded" : ""}`}>
+                          {m.wip}
+                        </span>
+                      </td>
+                      {/* Cycle Time */}
+                      <td className="text-center py-2.5 font-mono text-xs">
+                        {m.cycleTime > 0 ? `${m.cycleTime}d` : "—"}
+                      </td>
                       <td className="text-center py-2.5">{m.hoursPlanned}h</td>
                       <td className="text-center py-2.5" style={{ color: "#22c55e" }}>{m.hoursCompleted}h</td>
                       <td className="text-center py-2.5" style={{ color: "#3b82f6" }}>{m.hoursPending}h</td>
@@ -387,7 +372,6 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
                     </tr>
                   ))}
                 </tbody>
-                {/* Totals Footer */}
                 <tfoot>
                   <tr className="border-t-2 font-semibold bg-muted/20">
                     <td className="py-2.5">
@@ -401,6 +385,8 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
                     <td className="text-center py-2.5">{totals.tasksStarted}</td>
                     <td className="text-center py-2.5">{totals.tasksCompleted}</td>
                     <td className="text-center py-2.5">{totals.tasksNotStarted}</td>
+                    <td className="text-center py-2.5">{totals.wip}</td>
+                    <td className="text-center py-2.5 font-mono text-xs">{totals.cycleTime}d</td>
                     <td className="text-center py-2.5">{totals.hoursPlanned}h</td>
                     <td className="text-center py-2.5">{totals.hoursCompleted}h</td>
                     <td className="text-center py-2.5">{totals.hoursPending}h</td>
@@ -445,7 +431,7 @@ function KPICard({ icon: Icon, label, value, color, alert }: {
   color: string; alert?: "warning" | "destructive";
 }) {
   return (
-    <Card className={alert === "warning" ? "border-warning/30" : alert === "destructive" ? "border-destructive/30" : ""}>
+    <Card className={alert === "warning" ? "border-[#eab308]/30" : alert === "destructive" ? "border-destructive/30" : ""}>
       <CardContent className="p-3 text-center">
         <Icon className={`h-4 w-4 mx-auto mb-1 ${color}`} />
         <p className="text-xl font-bold">{value}</p>
