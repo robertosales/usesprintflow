@@ -36,7 +36,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [permissions, setPermissions] = useState<Set<Permission>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
+  const [currentTeamId, setCurrentTeamIdState] = useState<string | null>(null);
+
+  const setCurrentTeamId = (id: string | null) => {
+    setCurrentTeamIdState(id);
+    if (id) {
+      localStorage.setItem("selectedTeamId", id);
+    } else {
+      localStorage.removeItem("selectedTeamId");
+    }
+  };
   const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
 
   const fetchProfile = async (userId: string) => {
