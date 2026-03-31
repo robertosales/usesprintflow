@@ -85,7 +85,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const teamList = (data || []) as { id: string; name: string }[];
       setTeams(teamList);
       if (teamList.length > 0 && !currentTeamId) {
-        setCurrentTeamId(teamList[0].id);
+        const savedTeamId = localStorage.getItem("selectedTeamId");
+        const validSaved = savedTeamId && teamList.some((t) => t.id === savedTeamId);
+        const initialTeam = validSaved ? savedTeamId : teamList[0].id;
+        setCurrentTeamId(initialTeam);
       }
     } catch (err) {
       console.error("Error fetching teams:", err);
