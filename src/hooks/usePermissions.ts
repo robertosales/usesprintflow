@@ -78,6 +78,11 @@ const PERMISSIONS_MATRIX: Record<AppRole, Permission[]> = {
     'comment_tasks',
     'view_kanban',
   ],
+  qa_analyst: [
+    'view_backlog', 'create_backlog', 'edit_backlog',
+    'view_kanban',
+    'comment_tasks',
+  ],
   member: [
     'view_backlog',
     'view_kanban',
