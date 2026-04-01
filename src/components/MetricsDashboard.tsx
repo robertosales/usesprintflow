@@ -14,6 +14,7 @@ import { TeamPerformance } from "@/components/dashboard/TeamPerformance";
 import { QualityPanel } from "@/components/dashboard/QualityPanel";
 import { ReleasesPanel } from "@/components/dashboard/ReleasesPanel";
 import { ExportButton } from "@/components/dashboard/ExportButton";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const STATUS_COLORS: Record<string, string> = {
   aguardando_desenvolvimento: "#94a3b8",
