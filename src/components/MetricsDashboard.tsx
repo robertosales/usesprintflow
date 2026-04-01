@@ -212,6 +212,7 @@ export function MetricsDashboard() {
         bugsAssigned: bugActs.length, bugsResolved: bugsClosed.length,
         storyPointsCompleted: spCompleted, avgTimePerActivity: avgTime,
         wip, cycleTime, tasksByStatus,
+        activities: devActs,
       };
     });
   }, [filtered]);
