@@ -501,7 +501,7 @@ export function MetricsDashboard() {
           accent={
             teamOverview.commitmentAccuracy >= 80
               ? undefined
-              : teamOverview.commitmentAccuracy >= 60
+              : teamOverview.commitmentAccuracy >= 30
                 ? "warning"
                 : "destructive"
           }
