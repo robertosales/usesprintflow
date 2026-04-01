@@ -107,9 +107,10 @@ export function getRoleLabel(role: AppRole): string {
     developer: 'Desenvolvedor',
     analyst: 'Analista de Requisitos',
     architect: 'Arquiteto',
+    qa_analyst: 'Analista de QA',
     member: 'Membro',
   };
   return labels[role] || role;
 }
 
-export const ALL_ROLES: AppRole[] = ['admin', 'scrum_master', 'product_owner', 'developer', 'analyst', 'architect', 'member'];
+export const ALL_ROLES: AppRole[] = ['admin', 'scrum_master', 'product_owner', 'developer', 'analyst', 'architect', 'qa_analyst', 'member'];
