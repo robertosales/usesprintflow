@@ -426,7 +426,7 @@ export function MetricsDashboard() {
       ["Total Story Points", teamOverview.totalPoints],
       ["HUs Concluídas", teamOverview.completedHUs],
       ["Total HUs", teamOverview.totalHUs],
-      ["Sprint Commitment Accuracy", `${teamOverview.commitmentAccuracy}%`],
+      ["Precisão do compromisso da sprint", `${teamOverview.commitmentAccuracy}%`],
       ["Cycle Time Médio (dias)", teamOverview.cycleTimeDays],
       ["Total Horas", teamOverview.totalHours],
       ["Horas Concluídas", teamOverview.completedHours],
