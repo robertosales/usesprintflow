@@ -1,7 +1,7 @@
 // Permissions matrix for RBAC
 // Roles: admin, scrum_master, product_owner, developer, analyst, architect, member
 
-export type AppRole = 'admin' | 'scrum_master' | 'product_owner' | 'developer' | 'analyst' | 'architect' | 'member';
+export type AppRole = 'admin' | 'scrum_master' | 'product_owner' | 'developer' | 'analyst' | 'architect' | 'member' | 'qa_analyst';
 
 export type Permission =
   // Planning
@@ -78,6 +78,11 @@ const PERMISSIONS_MATRIX: Record<AppRole, Permission[]> = {
     'comment_tasks',
     'view_kanban',
   ],
+  qa_analyst: [
+    'view_backlog', 'create_backlog', 'edit_backlog',
+    'view_kanban',
+    'comment_tasks',
+  ],
   member: [
     'view_backlog',
     'view_kanban',
@@ -102,9 +107,10 @@ export function getRoleLabel(role: AppRole): string {
     developer: 'Desenvolvedor',
     analyst: 'Analista de Requisitos',
     architect: 'Arquiteto',
+    qa_analyst: 'Analista de QA',
     member: 'Membro',
   };
   return labels[role] || role;
 }
 
-export const ALL_ROLES: AppRole[] = ['admin', 'scrum_master', 'product_owner', 'developer', 'analyst', 'architect', 'member'];
+export const ALL_ROLES: AppRole[] = ['admin', 'scrum_master', 'product_owner', 'developer', 'analyst', 'architect', 'qa_analyst', 'member'];
