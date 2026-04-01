@@ -1,7 +1,7 @@
 // Permissions matrix for RBAC
 // Roles: admin, scrum_master, product_owner, developer, analyst, architect, member
 
-export type AppRole = 'admin' | 'scrum_master' | 'product_owner' | 'developer' | 'analyst' | 'architect' | 'member';
+export type AppRole = 'admin' | 'scrum_master' | 'product_owner' | 'developer' | 'analyst' | 'architect' | 'member' | 'qa_analyst';
 
 export type Permission =
   // Planning
