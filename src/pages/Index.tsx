@@ -46,7 +46,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-type NavKey = "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "team" | "activities" | "kanban" | "impediments" | "metrics" | "workflow" | "custom-fields" | "automations";
+type NavKey = "dashboard" | "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "team" | "activities" | "kanban" | "impediments" | "metrics" | "workflow" | "custom-fields" | "automations" | "calendar";
 
 const NAV_PERMISSIONS: Partial<Record<NavKey, Permission>> = {
   teams: 'manage_teams',
