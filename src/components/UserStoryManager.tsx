@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { FileUploader } from "@/components/FileUploader";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { BookOpen, Plus, Trash2, Clock, AlertCircle, Pencil, ShieldAlert } from "lucide-react";
+import { BookOpen, Plus, Trash2, Clock, AlertCircle, Pencil, ShieldAlert, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getTotalHoursForHU, hasActiveImpediment } from "@/types/sprint";
