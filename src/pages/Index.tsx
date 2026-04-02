@@ -249,7 +249,7 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
 }
 
 const Index = () => {
-  const [active, setActive] = useState<NavKey>("backlog");
+  const [active, setActive] = useState<NavKey>("dashboard");
   const { activeSprint, userStories, loading } = useSprint();
   const { profile, currentTeamId, hasPermission } = useAuth();
 
