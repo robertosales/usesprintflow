@@ -23,7 +23,7 @@ import type { Permission } from "@/hooks/usePermissions";
 import {
   LayoutDashboard, Users, ListTodo, Columns3, BarChart3, Zap, ShieldAlert,
   Layers, GitBranch, SlidersHorizontal, Wand2,
-  LogOut, Building2, UserCircle, UsersRound, ShieldCheck
+  LogOut, Building2, UserCircle, UsersRound, ShieldCheck, CalendarDays, Home
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasActiveImpediment } from "@/types/sprint";
