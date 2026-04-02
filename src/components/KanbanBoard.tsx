@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { KanbanStatus, isHUOverdue, hasActiveImpediment, IMPEDIMENT_CRITICALITY_LABELS, UserStory } from "@/types/sprint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ShieldAlert, CheckCircle2, Clock, Target, Link2, ChevronDown, ChevronRight } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertTriangle, ShieldAlert, CheckCircle2, Clock, Link2, ChevronDown, ChevronRight, Search, Filter, X } from "lucide-react";
 import { toast } from "sonner";
 import { ImpedimentDialog } from "@/components/ImpedimentManager";
 import {
@@ -50,25 +52,129 @@ function DraggableCard({ id, children }: { id: string; children: React.ReactNode
   );
 }
 
+// --- Filters Bar ---
+function BoardFilters({
+  search, setSearch,
+  priorityFilter, setPriorityFilter,
+  epicFilter, setEpicFilter,
+  assigneeFilter, setAssigneeFilter,
+  epics,
+  developers,
+  hasFilters,
+  clearFilters,
+}: {
+  search: string; setSearch: (v: string) => void;
+  priorityFilter: string; setPriorityFilter: (v: string) => void;
+  epicFilter: string; setEpicFilter: (v: string) => void;
+  assigneeFilter: string; setAssigneeFilter: (v: string) => void;
+  epics: { id: string; name: string; color: string }[];
+  developers: { id: string; name: string }[];
+  hasFilters: boolean;
+  clearFilters: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className="relative flex-1 min-w-[180px] max-w-[280px]">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar HU..."
+          className="pl-8 h-8 text-xs"
+        />
+      </div>
+      <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+        <SelectTrigger className="h-8 w-[130px] text-xs">
+          <SelectValue placeholder="Prioridade" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todas</SelectItem>
+          <SelectItem value="critica">Crítica</SelectItem>
+          <SelectItem value="alta">Alta</SelectItem>
+          <SelectItem value="media">Média</SelectItem>
+          <SelectItem value="baixa">Baixa</SelectItem>
+        </SelectContent>
+      </Select>
+      {epics.length > 0 && (
+        <Select value={epicFilter} onValueChange={setEpicFilter}>
+          <SelectTrigger className="h-8 w-[140px] text-xs">
+            <SelectValue placeholder="Épico" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos épicos</SelectItem>
+            {epics.map((ep) => (
+              <SelectItem key={ep.id} value={ep.id}>{ep.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      {developers.length > 0 && (
+        <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+          <SelectTrigger className="h-8 w-[150px] text-xs">
+            <SelectValue placeholder="Responsável" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            {developers.map((dev) => (
+              <SelectItem key={dev.id} value={dev.id}>{dev.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      {hasFilters && (
+        <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-muted-foreground" onClick={clearFilters}>
+          <X className="h-3 w-3" /> Limpar
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function KanbanBoard() {
-  const { activities, userStories, developers, updateUserStoryStatus, resolveImpediment, activeSprint, workflowColumns } = useSprint();
+  const { activities, userStories, developers, updateUserStoryStatus, resolveImpediment, activeSprint, workflowColumns, epics } = useSprint();
   const { hasPermission } = useAuth();
   const canMove = hasPermission('move_kanban');
   const [impedimentDialog, setImpedimentDialog] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [expandedHU, setExpandedHU] = useState<string | null>(null);
 
+  // Filters
+  const [search, setSearch] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [epicFilter, setEpicFilter] = useState("all");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
+
+  const hasFilters = search !== "" || priorityFilter !== "all" || epicFilter !== "all" || assigneeFilter !== "all";
+  const clearFilters = () => { setSearch(""); setPriorityFilter("all"); setEpicFilter("all"); setAssigneeFilter("all"); };
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
-  const sprintStories = activeSprint
-    ? userStories.filter((hu) => hu.sprintId === activeSprint.id)
-    : [];
+  const sprintStories = useMemo(() => {
+    if (!activeSprint) return [];
+    let stories = userStories.filter((hu) => hu.sprintId === activeSprint.id);
+    
+    if (search) {
+      const q = search.toLowerCase();
+      stories = stories.filter((hu) => hu.title.toLowerCase().includes(q) || hu.code.toLowerCase().includes(q));
+    }
+    if (priorityFilter !== "all") {
+      stories = stories.filter((hu) => hu.priority === priorityFilter);
+    }
+    if (epicFilter !== "all") {
+      stories = stories.filter((hu) => hu.epicId === epicFilter);
+    }
+    if (assigneeFilter !== "all") {
+      stories = stories.filter((hu) => {
+        const huActs = activities.filter((a) => a.huId === hu.id);
+        return huActs.some((a) => a.assigneeId === assigneeFilter);
+      });
+    }
+    return stories;
+  }, [activeSprint, userStories, search, priorityFilter, epicFilter, assigneeFilter, activities]);
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
+  const handleDragStart = (event: DragStartEvent) => { setActiveId(event.active.id as string); };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -111,6 +217,18 @@ export function KanbanBoard() {
           </Badge>
         )}
       </div>
+
+      {/* Filters */}
+      {activeSprint && (
+        <BoardFilters
+          search={search} setSearch={setSearch}
+          priorityFilter={priorityFilter} setPriorityFilter={setPriorityFilter}
+          epicFilter={epicFilter} setEpicFilter={setEpicFilter}
+          assigneeFilter={assigneeFilter} setAssigneeFilter={setAssigneeFilter}
+          epics={epics} developers={developers}
+          hasFilters={hasFilters} clearFilters={clearFilters}
+        />
+      )}
 
       {!activeSprint ? (
         <Card className="border-dashed">
@@ -219,6 +337,11 @@ function HUCard({
   const totalHours = huActivities.reduce((s, a) => s + a.hours, 0);
   const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
 
+  // Get unique assignees for this HU
+  const assignees = huActivities
+    .map((a) => developers.find((d) => d.id === a.assigneeId))
+    .filter((d, i, arr) => d && arr.findIndex((x) => x?.id === d.id) === i);
+
   return (
     <Card
       className={`shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${
@@ -281,7 +404,7 @@ function HUCard({
           </div>
         )}
 
-        {/* Tasks summary */}
+        {/* Footer: tasks + assignees */}
         <div className="flex items-center justify-between pt-1 border-t border-border/50">
           <div className="flex items-center gap-2">
             <button
@@ -295,15 +418,34 @@ function HUCard({
               <Clock className="h-3 w-3" />{totalHours}h
             </span>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-5 w-5 text-warning hover:bg-warning/10"
-            title="Reportar Impedimento"
-            onClick={(e) => { e.stopPropagation(); onImpediment(); }}
-          >
-            <ShieldAlert className="h-3 w-3" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {/* Assignee avatars */}
+            <div className="flex -space-x-1.5">
+              {assignees.slice(0, 3).map((dev) => (
+                <div
+                  key={dev!.id}
+                  className="h-5 w-5 rounded-full bg-primary/10 border-2 border-card flex items-center justify-center text-[7px] font-bold text-primary"
+                  title={dev!.name}
+                >
+                  {dev!.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                </div>
+              ))}
+              {assignees.length > 3 && (
+                <div className="h-5 w-5 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[7px] font-bold text-muted-foreground">
+                  +{assignees.length - 3}
+                </div>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 text-warning hover:bg-warning/10"
+              title="Reportar Impedimento"
+              onClick={(e) => { e.stopPropagation(); onImpediment(); }}
+            >
+              <ShieldAlert className="h-3 w-3" />
+            </Button>
+          </div>
         </div>
 
         {/* Expanded tasks list */}
