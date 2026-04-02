@@ -13,6 +13,8 @@ import { AutomationManager } from "@/components/AutomationManager";
 import { TeamManager } from "@/components/TeamManager";
 import { TeamMembersManager } from "@/components/TeamMembersManager";
 import { UserRolesManager } from "@/components/UserRolesManager";
+import { DashboardHome } from "@/components/DashboardHome";
+import { CalendarView } from "@/components/CalendarView";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +23,7 @@ import type { Permission } from "@/hooks/usePermissions";
 import {
   LayoutDashboard, Users, ListTodo, Columns3, BarChart3, Zap, ShieldAlert,
   Layers, GitBranch, SlidersHorizontal, Wand2,
-  LogOut, Building2, UserCircle, UsersRound, ShieldCheck
+  LogOut, Building2, UserCircle, UsersRound, ShieldCheck, CalendarDays, Home
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasActiveImpediment } from "@/types/sprint";
@@ -44,7 +46,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-type NavKey = "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "team" | "activities" | "kanban" | "impediments" | "metrics" | "workflow" | "custom-fields" | "automations";
+type NavKey = "dashboard" | "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "team" | "activities" | "kanban" | "impediments" | "metrics" | "workflow" | "custom-fields" | "automations" | "calendar";
 
 const NAV_PERMISSIONS: Partial<Record<NavKey, Permission>> = {
   teams: 'manage_teams',
@@ -64,6 +66,12 @@ const NAV_PERMISSIONS: Partial<Record<NavKey, Permission>> = {
 
 const NAV_SECTIONS = [
   {
+    title: "Geral",
+    items: [
+      { key: "dashboard" as NavKey, label: "Dashboard", icon: Home },
+    ],
+  },
+  {
     title: "Planejamento",
     items: [
       { key: "backlog" as NavKey, label: "Backlog", icon: LayoutDashboard },
@@ -76,6 +84,7 @@ const NAV_SECTIONS = [
     title: "Execução",
     items: [
       { key: "kanban" as NavKey, label: "Board", icon: Columns3 },
+      { key: "calendar" as NavKey, label: "Calendário", icon: CalendarDays },
       { key: "impediments" as NavKey, label: "Impedimentos", icon: ShieldAlert },
       { key: "metrics" as NavKey, label: "Métricas", icon: BarChart3 },
     ],
@@ -240,7 +249,7 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
 }
 
 const Index = () => {
-  const [active, setActive] = useState<NavKey>("backlog");
+  const [active, setActive] = useState<NavKey>("dashboard");
   const { activeSprint, userStories, loading } = useSprint();
   const { profile, currentTeamId, hasPermission } = useAuth();
 
@@ -301,6 +310,7 @@ const Index = () => {
               )}
               {!loading && !needsTeam && (
                 <>
+                  {active === "dashboard" && <DashboardHome />}
                   {active === "teams" && <TeamManager />}
                   {active === "team-members" && <TeamMembersManager />}
                   {active === "user-roles" && <UserRolesManager />}
@@ -314,6 +324,7 @@ const Index = () => {
                   {active === "team" && <DeveloperManager />}
                   {active === "activities" && <ActivityManager />}
                   {active === "kanban" && <KanbanBoard />}
+                  {active === "calendar" && <CalendarView />}
                   {active === "impediments" && <ImpedimentList />}
                   {active === "metrics" && <MetricsDashboard />}
                   {active === "workflow" && <WorkflowManager />}

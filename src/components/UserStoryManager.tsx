@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { FileUploader } from "@/components/FileUploader";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { BookOpen, Plus, Trash2, Clock, AlertCircle, Pencil, ShieldAlert } from "lucide-react";
+import { BookOpen, Plus, Trash2, Clock, AlertCircle, Pencil, ShieldAlert, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getTotalHoursForHU, hasActiveImpediment } from "@/types/sprint";
@@ -38,9 +38,28 @@ export function UserStoryManager() {
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string | number>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const sprintStories = activeSprint
-    ? userStories.filter((hu) => hu.sprintId === activeSprint.id)
-    : userStories;
+  // Filters
+  const [searchFilter, setSearchFilter] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [epicFilter, setEpicFilter] = useState("all");
+  const hasFilters = searchFilter !== "" || priorityFilter !== "all" || statusFilter !== "all" || epicFilter !== "all";
+  const clearFilters = () => { setSearchFilter(""); setPriorityFilter("all"); setStatusFilter("all"); setEpicFilter("all"); };
+
+  const sprintStories = useMemo(() => {
+    let stories = activeSprint
+      ? userStories.filter((hu) => hu.sprintId === activeSprint.id)
+      : userStories;
+
+    if (searchFilter) {
+      const q = searchFilter.toLowerCase();
+      stories = stories.filter((hu) => hu.title.toLowerCase().includes(q) || hu.code.toLowerCase().includes(q));
+    }
+    if (priorityFilter !== "all") stories = stories.filter((hu) => hu.priority === priorityFilter);
+    if (statusFilter !== "all") stories = stories.filter((hu) => hu.status === statusFilter);
+    if (epicFilter !== "all") stories = stories.filter((hu) => hu.epicId === epicFilter);
+    return stories;
+  }, [activeSprint, userStories, searchFilter, priorityFilter, statusFilter, epicFilter]);
 
   const resetForm = () => {
     setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setEpicId("");
@@ -262,6 +281,62 @@ export function UserStoryManager() {
         </Dialog>
         )}
       </div>
+
+      {/* Filters */}
+      {activeSprint && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[180px] max-w-[280px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              placeholder="Buscar HU..."
+              className="pl-8 h-8 text-xs"
+            />
+          </div>
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SelectTrigger className="h-8 w-[130px] text-xs">
+              <SelectValue placeholder="Prioridade" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              <SelectItem value="critica">Crítica</SelectItem>
+              <SelectItem value="alta">Alta</SelectItem>
+              <SelectItem value="media">Média</SelectItem>
+              <SelectItem value="baixa">Baixa</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-8 w-[160px] text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos status</SelectItem>
+              {workflowColumns.map((col) => (
+                <SelectItem key={col.key} value={col.key}>{col.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {epics.length > 0 && (
+            <Select value={epicFilter} onValueChange={setEpicFilter}>
+              <SelectTrigger className="h-8 w-[140px] text-xs">
+                <SelectValue placeholder="Épico" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos épicos</SelectItem>
+                {epics.map((ep) => (
+                  <SelectItem key={ep.id} value={ep.id}>{ep.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {hasFilters && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-muted-foreground" onClick={clearFilters}>
+              <X className="h-3 w-3" /> Limpar
+            </Button>
+          )}
+        </div>
+      )}
 
       {!activeSprint && (
         <Card className="border-dashed">
