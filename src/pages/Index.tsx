@@ -66,6 +66,12 @@ const NAV_PERMISSIONS: Partial<Record<NavKey, Permission>> = {
 
 const NAV_SECTIONS = [
   {
+    title: "Geral",
+    items: [
+      { key: "dashboard" as NavKey, label: "Dashboard", icon: Home },
+    ],
+  },
+  {
     title: "Planejamento",
     items: [
       { key: "backlog" as NavKey, label: "Backlog", icon: LayoutDashboard },
@@ -78,6 +84,7 @@ const NAV_SECTIONS = [
     title: "Execução",
     items: [
       { key: "kanban" as NavKey, label: "Board", icon: Columns3 },
+      { key: "calendar" as NavKey, label: "Calendário", icon: CalendarDays },
       { key: "impediments" as NavKey, label: "Impedimentos", icon: ShieldAlert },
       { key: "metrics" as NavKey, label: "Métricas", icon: BarChart3 },
     ],
