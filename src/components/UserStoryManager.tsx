@@ -282,6 +282,62 @@ export function UserStoryManager() {
         )}
       </div>
 
+      {/* Filters */}
+      {activeSprint && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[180px] max-w-[280px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              placeholder="Buscar HU..."
+              className="pl-8 h-8 text-xs"
+            />
+          </div>
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SelectTrigger className="h-8 w-[130px] text-xs">
+              <SelectValue placeholder="Prioridade" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              <SelectItem value="critica">Crítica</SelectItem>
+              <SelectItem value="alta">Alta</SelectItem>
+              <SelectItem value="media">Média</SelectItem>
+              <SelectItem value="baixa">Baixa</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-8 w-[160px] text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos status</SelectItem>
+              {workflowColumns.map((col) => (
+                <SelectItem key={col.key} value={col.key}>{col.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {epics.length > 0 && (
+            <Select value={epicFilter} onValueChange={setEpicFilter}>
+              <SelectTrigger className="h-8 w-[140px] text-xs">
+                <SelectValue placeholder="Épico" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos épicos</SelectItem>
+                {epics.map((ep) => (
+                  <SelectItem key={ep.id} value={ep.id}>{ep.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {hasFilters && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-muted-foreground" onClick={clearFilters}>
+              <X className="h-3 w-3" /> Limpar
+            </Button>
+          )}
+        </div>
+      )}
+
       {!activeSprint && (
         <Card className="border-dashed">
           <CardContent className="py-8 text-center text-muted-foreground">
