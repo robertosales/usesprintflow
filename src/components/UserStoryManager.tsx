@@ -38,9 +38,28 @@ export function UserStoryManager() {
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string | number>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const sprintStories = activeSprint
-    ? userStories.filter((hu) => hu.sprintId === activeSprint.id)
-    : userStories;
+  // Filters
+  const [searchFilter, setSearchFilter] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [epicFilter, setEpicFilter] = useState("all");
+  const hasFilters = searchFilter !== "" || priorityFilter !== "all" || statusFilter !== "all" || epicFilter !== "all";
+  const clearFilters = () => { setSearchFilter(""); setPriorityFilter("all"); setStatusFilter("all"); setEpicFilter("all"); };
+
+  const sprintStories = useMemo(() => {
+    let stories = activeSprint
+      ? userStories.filter((hu) => hu.sprintId === activeSprint.id)
+      : userStories;
+
+    if (searchFilter) {
+      const q = searchFilter.toLowerCase();
+      stories = stories.filter((hu) => hu.title.toLowerCase().includes(q) || hu.code.toLowerCase().includes(q));
+    }
+    if (priorityFilter !== "all") stories = stories.filter((hu) => hu.priority === priorityFilter);
+    if (statusFilter !== "all") stories = stories.filter((hu) => hu.status === statusFilter);
+    if (epicFilter !== "all") stories = stories.filter((hu) => hu.epicId === epicFilter);
+    return stories;
+  }, [activeSprint, userStories, searchFilter, priorityFilter, statusFilter, epicFilter]);
 
   const resetForm = () => {
     setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setEpicId("");
