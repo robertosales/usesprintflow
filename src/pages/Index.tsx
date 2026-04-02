@@ -310,6 +310,7 @@ const Index = () => {
               )}
               {!loading && !needsTeam && (
                 <>
+                  {active === "dashboard" && <DashboardHome />}
                   {active === "teams" && <TeamManager />}
                   {active === "team-members" && <TeamMembersManager />}
                   {active === "user-roles" && <UserRolesManager />}
@@ -323,6 +324,7 @@ const Index = () => {
                   {active === "team" && <DeveloperManager />}
                   {active === "activities" && <ActivityManager />}
                   {active === "kanban" && <KanbanBoard />}
+                  {active === "calendar" && <CalendarView />}
                   {active === "impediments" && <ImpedimentList />}
                   {active === "metrics" && <MetricsDashboard />}
                   {active === "workflow" && <WorkflowManager />}
