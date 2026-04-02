@@ -13,6 +13,8 @@ import { AutomationManager } from "@/components/AutomationManager";
 import { TeamManager } from "@/components/TeamManager";
 import { TeamMembersManager } from "@/components/TeamMembersManager";
 import { UserRolesManager } from "@/components/UserRolesManager";
+import { DashboardHome } from "@/components/DashboardHome";
+import { CalendarView } from "@/components/CalendarView";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
