@@ -102,12 +102,19 @@ export function TeamManager() {
     await refreshTeams();
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Excluir este time? Todos os dados serão perdidos.")) return;
-    await supabase.from("teams").delete().eq("id", id);
-    toast.success("Time excluído!");
-    await refreshTeams();
-    if (currentTeamId === id) setCurrentTeamId(teams.find((t) => t.id !== id)?.id || null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await supabase.from("teams").delete().eq("id", deleteTarget);
+      toast.success("Registro excluído com sucesso");
+      await refreshTeams();
+      if (currentTeamId === deleteTarget) setCurrentTeamId(teams.find((t) => t.id !== deleteTarget)?.id || null);
+    } catch {
+      toast.error("Falha ao excluir item");
+    }
+    setDeleteTarget(null);
   };
 
   return (
