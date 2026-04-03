@@ -8,11 +8,17 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { BookOpen, Plus, Trash2, Clock, AlertCircle, Pencil, ShieldAlert, Search, X } from "lucide-react";
+import { BookOpen, Plus, Trash2, Clock, Pencil, ShieldAlert, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getTotalHoursForHU, hasActiveImpediment } from "@/types/sprint";
 import { toast } from "sonner";
+import { PaginationControls } from "@/shared/components/common/Pagination";
+import { EmptyState } from "@/shared/components/common/EmptyState";
+import { SkeletonList } from "@/shared/components/common/SkeletonList";
+import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
+import { usePagination } from "@/shared/hooks/usePagination";
+import { useDebounce } from "@/shared/hooks/useDebounce";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
   baixa: { label: "Baixa", color: "bg-muted text-muted-foreground" },
@@ -22,7 +28,7 @@ const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
 };
 
 export function UserStoryManager() {
-  const { userStories, addUserStory, removeUserStory, updateUserStory, activities, activeSprint, epics, workflowColumns, customFields } = useSprint();
+  const { userStories, addUserStory, removeUserStory, updateUserStory, activities, activeSprint, epics, workflowColumns, customFields, loading } = useSprint();
   const { hasPermission, currentTeamId } = useAuth();
   const canCreate = hasPermission('create_backlog');
   const canEdit = hasPermission('edit_backlog');
@@ -37,29 +43,34 @@ export function UserStoryManager() {
   const [endDate, setEndDate] = useState("");
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string | number>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // Filters
   const [searchFilter, setSearchFilter] = useState("");
+  const debouncedSearch = useDebounce(searchFilter);
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [epicFilter, setEpicFilter] = useState("all");
   const hasFilters = searchFilter !== "" || priorityFilter !== "all" || statusFilter !== "all" || epicFilter !== "all";
   const clearFilters = () => { setSearchFilter(""); setPriorityFilter("all"); setStatusFilter("all"); setEpicFilter("all"); };
 
-  const sprintStories = useMemo(() => {
+  const filteredStories = useMemo(() => {
     let stories = activeSprint
       ? userStories.filter((hu) => hu.sprintId === activeSprint.id)
       : userStories;
 
-    if (searchFilter) {
-      const q = searchFilter.toLowerCase();
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
       stories = stories.filter((hu) => hu.title.toLowerCase().includes(q) || hu.code.toLowerCase().includes(q));
     }
     if (priorityFilter !== "all") stories = stories.filter((hu) => hu.priority === priorityFilter);
     if (statusFilter !== "all") stories = stories.filter((hu) => hu.status === statusFilter);
     if (epicFilter !== "all") stories = stories.filter((hu) => hu.epicId === epicFilter);
     return stories;
-  }, [activeSprint, userStories, searchFilter, priorityFilter, statusFilter, epicFilter]);
+  }, [activeSprint, userStories, debouncedSearch, priorityFilter, statusFilter, epicFilter]);
+
+  const { paginatedItems: sprintStories, currentPage, setCurrentPage, totalItems, pageSize } = usePagination(filteredStories, { pageSize: 10 });
 
   const resetForm = () => {
     setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setEpicId("");
@@ -71,7 +82,6 @@ export function UserStoryManager() {
     const e: Record<string, string> = {};
     if (!title.trim()) e.title = "Título é obrigatório";
     if (!activeSprint) e.sprint = "Selecione uma sprint ativa";
-    // Validate required custom fields
     customFields.forEach((f) => {
       if (f.required) {
         const val = customFieldValues[f.id];
@@ -84,35 +94,39 @@ export function UserStoryManager() {
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate() || !activeSprint) return;
-
-    const huActivities = editId ? activities.filter((a) => a.huId === editId) : [];
-    
-    if (editId) {
-      updateUserStory(editId, {
-        title: title.trim(), description: description.trim(),
-        storyPoints: Number(storyPoints), priority,
-        epicId: epicId || undefined,
-        customFields: customFieldValues,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-      });
-      toast.success("User Story atualizada!");
-    } else {
-      addUserStory({
-        title: title.trim(), description: description.trim(),
-        storyPoints: Number(storyPoints), priority,
-        sprintId: activeSprint.id, epicId: epicId || undefined,
-        customFields: customFieldValues,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-      });
-      toast.success("User Story criada!");
+    setSubmitting(true);
+    try {
+      if (editId) {
+        await updateUserStory(editId, {
+          title: title.trim(), description: description.trim(),
+          storyPoints: Number(storyPoints), priority,
+          epicId: epicId || undefined,
+          customFields: customFieldValues,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+        });
+        toast.success("Alterações salvas com sucesso");
+      } else {
+        await addUserStory({
+          title: title.trim(), description: description.trim(),
+          storyPoints: Number(storyPoints), priority,
+          sprintId: activeSprint.id, epicId: epicId || undefined,
+          customFields: customFieldValues,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+        });
+        toast.success("Registro criado com sucesso");
+      }
+      resetForm();
+      setOpen(false);
+    } catch {
+      toast.error("Erro ao salvar. Tente novamente.");
+    } finally {
+      setSubmitting(false);
     }
-    resetForm();
-    setOpen(false);
   };
 
   const openEdit = (huId: string) => {
@@ -131,15 +145,24 @@ export function UserStoryManager() {
     setOpen(true);
   };
 
-  const handleRemove = (huId: string) => {
-    const huActivities = activities.filter((a) => a.huId === huId);
+  const handleConfirmRemove = async () => {
+    if (!deleteTarget) return;
+    const huActivities = activities.filter((a) => a.huId === deleteTarget);
     if (huActivities.length > 0) {
       toast.error(`Não é possível excluir: esta HU possui ${huActivities.length} atividade(s) vinculada(s). Remova-as primeiro.`);
+      setDeleteTarget(null);
       return;
     }
-    removeUserStory(huId);
-    toast.info("User Story removida");
+    try {
+      await removeUserStory(deleteTarget);
+      toast.success("Registro excluído com sucesso");
+    } catch {
+      toast.error("Falha ao excluir item");
+    }
+    setDeleteTarget(null);
   };
+
+  if (loading) return <SkeletonList count={5} variant="row" />;
 
   return (
     <div className="space-y-4">
@@ -147,7 +170,7 @@ export function UserStoryManager() {
         <div className="flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-bold tracking-tight">User Stories (Backlog)</h2>
-          <Badge variant="secondary">{sprintStories.length}</Badge>
+          <Badge variant="secondary">{totalItems}</Badge>
         </div>
         {canCreate && (
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
@@ -273,8 +296,13 @@ export function UserStoryManager() {
                 </div>
               )}
 
-              <Button type="submit" className="w-full gap-2">
-                <Plus className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Criar User Story"}
+              <Button type="submit" className="w-full gap-2" disabled={submitting}>
+                {submitting ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                {editId ? "Salvar Alterações" : "Criar User Story"}
               </Button>
             </form>
           </DialogContent>
@@ -289,15 +317,13 @@ export function UserStoryManager() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               value={searchFilter}
-              onChange={(e) => setSearchFilter(e.target.value)}
+              onChange={(e) => { setSearchFilter(e.target.value); setCurrentPage(1); }}
               placeholder="Buscar HU..."
               className="pl-8 h-8 text-xs"
             />
           </div>
-          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-            <SelectTrigger className="h-8 w-[130px] text-xs">
-              <SelectValue placeholder="Prioridade" />
-            </SelectTrigger>
+          <Select value={priorityFilter} onValueChange={(v) => { setPriorityFilter(v); setCurrentPage(1); }}>
+            <SelectTrigger className="h-8 w-[130px] text-xs"><SelectValue placeholder="Prioridade" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
               <SelectItem value="critica">Crítica</SelectItem>
@@ -306,10 +332,8 @@ export function UserStoryManager() {
               <SelectItem value="baixa">Baixa</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-8 w-[160px] text-xs">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
+            <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos status</SelectItem>
               {workflowColumns.map((col) => (
@@ -318,10 +342,8 @@ export function UserStoryManager() {
             </SelectContent>
           </Select>
           {epics.length > 0 && (
-            <Select value={epicFilter} onValueChange={setEpicFilter}>
-              <SelectTrigger className="h-8 w-[140px] text-xs">
-                <SelectValue placeholder="Épico" />
-              </SelectTrigger>
+            <Select value={epicFilter} onValueChange={(v) => { setEpicFilter(v); setCurrentPage(1); }}>
+              <SelectTrigger className="h-8 w-[140px] text-xs"><SelectValue placeholder="Épico" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos épicos</SelectItem>
                 {epics.map((ep) => (
@@ -331,7 +353,7 @@ export function UserStoryManager() {
             </Select>
           )}
           {hasFilters && (
-            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-muted-foreground" onClick={clearFilters}>
+            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-muted-foreground" onClick={() => { clearFilters(); setCurrentPage(1); }}>
               <X className="h-3 w-3" /> Limpar
             </Button>
           )}
@@ -339,23 +361,17 @@ export function UserStoryManager() {
       )}
 
       {!activeSprint && (
-        <Card className="border-dashed">
-          <CardContent className="py-8 text-center text-muted-foreground">
-            <AlertCircle className="h-10 w-10 mx-auto mb-2 opacity-30" />
-            <p className="font-medium">Crie uma Sprint primeiro</p>
-            <p className="text-sm mt-1">As User Stories são vinculadas a uma Sprint ativa</p>
-          </CardContent>
-        </Card>
+        <EmptyState icon={BookOpen} title="Crie uma Sprint primeiro" description="As User Stories são vinculadas a uma Sprint ativa" />
       )}
 
-      {activeSprint && sprintStories.length === 0 && (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-            <BookOpen className="h-12 w-12 mb-3 opacity-30" />
-            <p className="font-medium">Backlog vazio</p>
-            <p className="text-sm mt-1">Adicione as User Stories desta Sprint</p>
-          </CardContent>
-        </Card>
+      {activeSprint && totalItems === 0 && (
+        <EmptyState
+          icon={BookOpen}
+          title="Nenhum item encontrado"
+          description={hasFilters ? "Tente ajustar os filtros" : "Adicione as User Stories desta Sprint"}
+          actionLabel={!hasFilters && canCreate ? "Criar novo" : undefined}
+          onAction={!hasFilters && canCreate ? () => setOpen(true) : undefined}
+        />
       )}
 
       <div className="space-y-3">
@@ -407,7 +423,6 @@ export function UserStoryManager() {
                     <h3 className="font-semibold text-sm">{hu.title}</h3>
                     {hu.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{hu.description}</p>}
 
-                    {/* Custom field values display */}
                     {hu.customFields && customFields.length > 0 && Object.keys(hu.customFields).length > 0 && (
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         {customFields.map((cf) => {
@@ -439,7 +454,6 @@ export function UserStoryManager() {
                         </div>
                       )}
                     </div>
-                    {/* File attachments */}
                     <FileUploader entityType="user_story" entityId={hu.id} teamId={activeSprint ? currentTeamId || "" : ""} />
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -453,7 +467,7 @@ export function UserStoryManager() {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-destructive"
-                      onClick={() => handleRemove(hu.id)}
+                      onClick={() => setDeleteTarget(hu.id)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -465,6 +479,19 @@ export function UserStoryManager() {
           );
         })}
       </div>
+
+      <PaginationControls
+        currentPage={currentPage}
+        totalItems={totalItems}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        onConfirm={handleConfirmRemove}
+      />
     </div>
   );
 }

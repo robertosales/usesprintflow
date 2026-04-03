@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Edit2, Trash2, Users, UserCircle } from "lucide-react";
+import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
+import { EmptyState } from "@/shared/components/common/EmptyState";
 
 interface TeamMemberInfo {
   user_id: string;
@@ -100,12 +102,19 @@ export function TeamManager() {
     await refreshTeams();
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Excluir este time? Todos os dados serão perdidos.")) return;
-    await supabase.from("teams").delete().eq("id", id);
-    toast.success("Time excluído!");
-    await refreshTeams();
-    if (currentTeamId === id) setCurrentTeamId(teams.find((t) => t.id !== id)?.id || null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await supabase.from("teams").delete().eq("id", deleteTarget);
+      toast.success("Registro excluído com sucesso");
+      await refreshTeams();
+      if (currentTeamId === deleteTarget) setCurrentTeamId(teams.find((t) => t.id !== deleteTarget)?.id || null);
+    } catch {
+      toast.error("Falha ao excluir item");
+    }
+    setDeleteTarget(null);
   };
 
   return (
@@ -158,7 +167,7 @@ export function TeamManager() {
                     </Button>
                   )}
                   {canManage && (
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDelete(team.id); }}>
+                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeleteTarget(team.id); }}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   )}
@@ -191,9 +200,7 @@ export function TeamManager() {
       </div>
 
       {teams.length === 0 && (
-        <Card className="p-8 text-center">
-          <p className="text-muted-foreground">Nenhum time criado ainda. Crie seu primeiro time para começar!</p>
-        </Card>
+        <EmptyState icon={Users} title="Nenhum item encontrado" description="Crie seu primeiro time para começar!" actionLabel={canManage ? "Criar novo" : undefined} onAction={canManage ? () => setOpen(true) : undefined} />
       )}
 
       {/* Edit Dialog */}
@@ -215,6 +222,7 @@ export function TeamManager() {
           )}
         </DialogContent>
       </Dialog>
+      <ConfirmDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)} onConfirm={handleConfirmDelete} title="Confirmar exclusão" description="Excluir este time? Todos os dados associados serão perdidos. Esta ação não poderá ser desfeita." />
     </div>
   );
 }
