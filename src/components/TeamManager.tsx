@@ -201,7 +201,7 @@ export function TeamManager() {
 
       {teams.length === 0 && (
         <EmptyState icon={Users} title="Nenhum item encontrado" description="Crie seu primeiro time para começar!" actionLabel={canManage ? "Criar novo" : undefined} onAction={canManage ? () => setOpen(true) : undefined} />
-      )
+      )}
 
       {/* Edit Dialog */}
       <Dialog open={!!editingTeam} onOpenChange={(o) => !o && setEditingTeam(null)}>
