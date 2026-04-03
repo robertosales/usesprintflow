@@ -200,10 +200,8 @@ export function TeamManager() {
       </div>
 
       {teams.length === 0 && (
-        <Card className="p-8 text-center">
-          <p className="text-muted-foreground">Nenhum time criado ainda. Crie seu primeiro time para começar!</p>
-        </Card>
-      )}
+        <EmptyState icon={Users} title="Nenhum item encontrado" description="Crie seu primeiro time para começar!" actionLabel={canManage ? "Criar novo" : undefined} onAction={canManage ? () => setOpen(true) : undefined} />
+      )
 
       {/* Edit Dialog */}
       <Dialog open={!!editingTeam} onOpenChange={(o) => !o && setEditingTeam(null)}>
