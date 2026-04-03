@@ -222,6 +222,7 @@ export function TeamManager() {
           )}
         </DialogContent>
       </Dialog>
+      <ConfirmDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)} onConfirm={handleConfirmDelete} title="Confirmar exclusão" description="Excluir este time? Todos os dados associados serão perdidos. Esta ação não poderá ser desfeita." />
     </div>
   );
 }
