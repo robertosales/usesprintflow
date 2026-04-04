@@ -5,6 +5,7 @@ import { DemandasList } from "./components/DemandasList";
 import { ProjetosManager } from "./components/ProjetosManager";
 import { ImportacaoView } from "./components/ImportacaoView";
 import { SustentacaoDashboard } from "./components/SustentacaoDashboard";
+import { SustentacaoRelatorios } from "./components/reports/SustentacaoRelatorios";
 import { TeamManager } from "@/components/TeamManager";
 import { TeamMembersManager } from "@/components/TeamMembersManager";
 import { UserRolesManager } from "@/components/UserRolesManager";
@@ -200,13 +201,7 @@ export function SustentacaoPage() {
                   {active === 'workflow' && <SustentacaoWorkflow />}
                   {active === 'custom-fields' && <CustomFieldManager />}
                   {active === 'automations' && <AutomationManager />}
-                  {active === 'relatorios' && (
-                    <div className="flex flex-col items-center justify-center py-20 text-muted-foreground space-y-2">
-                      <FileBarChart className="h-12 w-12 text-muted-foreground/30" />
-                      <p className="text-lg font-medium">Relatórios</p>
-                      <p className="text-sm">Em breve — relatórios de tempo médio, SLA compliance e produtividade</p>
-                    </div>
-                  )}
+                  {active === 'relatorios' && <SustentacaoRelatorios />}
                 </>
               )}
             </div>
