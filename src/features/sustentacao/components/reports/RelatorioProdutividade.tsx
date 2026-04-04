@@ -6,6 +6,7 @@ import { useDemandas } from "../../hooks/useDemandas";
 import { useAllTransitions, useAllHours, useProfiles } from "../../hooks/useAllTransitions";
 import { calcProdutividade, formatHours } from "../../utils/kpiCalculations";
 import { ReportFilters } from "./ReportFilters";
+import { ReportHeader, ReportLegend } from "./ReportHeader";
 import { ExportButton } from "@/components/dashboard/ExportButton";
 import { Users, Trophy, Zap, AlertTriangle } from "lucide-react";
 
@@ -74,6 +75,19 @@ export function RelatorioProdutividade() {
     else { setSortKey(key); setSortDir('desc'); }
   };
 
+  // Totals
+  const totals = useMemo(() => {
+    if (sorted.length === 0) return null;
+    return {
+      atribuidos: sorted.reduce((s, a) => s + a.atribuidos, 0),
+      resolvidos: sorted.reduce((s, a) => s + a.resolvidos, 0),
+      horasLancadas: sorted.reduce((s, a) => s + a.horasLancadas, 0),
+      emAberto: sorted.reduce((s, a) => s + a.emAberto, 0),
+      taxaResolucao: sorted.reduce((s, a) => s + a.atribuidos, 0) > 0
+        ? (sorted.reduce((s, a) => s + a.resolvidos, 0) / sorted.reduce((s, a) => s + a.atribuidos, 0)) * 100 : 0,
+    };
+  }, [sorted]);
+
   const getExportData = () => ({
     title: 'Relatorio_Produtividade_Equipe',
     headers: ['Analista', 'Atribuídos', 'Resolvidos', 'Taxa Resolução', 'Horas Lançadas', 'Em Aberto'],
@@ -81,16 +95,23 @@ export function RelatorioProdutividade() {
   });
 
   const SortableHead = ({ label, field }: { label: string; field: string }) => (
-    <TableHead className="text-right cursor-pointer hover:text-foreground select-none" onClick={() => toggleSort(field)}>
+    <TableHead className="text-right cursor-pointer hover:text-foreground select-none font-semibold" onClick={() => toggleSort(field)}>
       {label} {sortKey === field ? (sortDir === 'desc' ? '↓' : '↑') : ''}
     </TableHead>
   );
 
+  const rateColor = (rate: number) =>
+    rate >= 80 ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+    rate >= 40 ? 'bg-orange-100 text-orange-700 border-orange-200' :
+    'bg-destructive/10 text-destructive border-destructive/20';
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      <ReportHeader tipoRelatorio="Relatório — Produtividade da Equipe" periodo={periodo} />
+
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Relatório — Produtividade da Equipe</h2>
+          <h2 className="text-lg font-semibold">Produtividade da Equipe</h2>
           <p className="text-sm text-muted-foreground">Capacidade de entrega individual e coletiva</p>
         </div>
         <div className="flex items-center gap-2">
@@ -133,8 +154,8 @@ export function RelatorioProdutividade() {
             <div className="overflow-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Analista</TableHead>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="font-semibold">Analista</TableHead>
                     <SortableHead label="Atribuídos" field="atribuidos" />
                     <SortableHead label="Resolvidos" field="resolvidos" />
                     <SortableHead label="Taxa Resolução" field="taxaResolucao" />
@@ -149,9 +170,7 @@ export function RelatorioProdutividade() {
                       <TableCell className="text-right text-xs">{a.atribuidos}</TableCell>
                       <TableCell className="text-right text-xs">{a.resolvidos}</TableCell>
                       <TableCell className="text-right text-xs">
-                        <Badge className={`text-[10px] ${a.taxaResolucao >= 80 ? 'bg-info/10 text-info border-info/20' : a.taxaResolucao >= 40 ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-destructive/10 text-destructive border-destructive/20'}`}>
-                          {a.taxaResolucao.toFixed(1)}%
-                        </Badge>
+                        <Badge className={`text-[10px] ${rateColor(a.taxaResolucao)}`}>{a.taxaResolucao.toFixed(1)}%</Badge>
                       </TableCell>
                       <TableCell className="text-right text-xs">{a.horasLancadas.toFixed(1)}h</TableCell>
                       <TableCell className="text-right text-xs">
@@ -159,6 +178,19 @@ export function RelatorioProdutividade() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {/* Totals */}
+                  {totals && (
+                    <TableRow className="bg-muted/30 font-semibold border-t-2">
+                      <TableCell className="text-xs">Total / Média</TableCell>
+                      <TableCell className="text-right text-xs">{totals.atribuidos}</TableCell>
+                      <TableCell className="text-right text-xs">{totals.resolvidos}</TableCell>
+                      <TableCell className="text-right text-xs">
+                        <Badge className={`text-[10px] ${rateColor(totals.taxaResolucao)}`}>{totals.taxaResolucao.toFixed(1)}%</Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-xs">{totals.horasLancadas.toFixed(1)}h</TableCell>
+                      <TableCell className="text-right text-xs">{totals.emAberto}</TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -166,7 +198,7 @@ export function RelatorioProdutividade() {
         </CardContent>
       </Card>
 
-      {/* Bar chart comparison */}
+      {/* Bar chart */}
       {sorted.length > 0 && (
         <Card>
           <CardHeader><CardTitle className="text-sm">Comparativo — Chamados Resolvidos</CardTitle></CardHeader>
@@ -188,6 +220,13 @@ export function RelatorioProdutividade() {
           </CardContent>
         </Card>
       )}
+
+      <ReportLegend items={[
+        { sigla: 'Taxa Resolução', descricao: 'Chamados resolvidos ÷ atribuídos × 100' },
+        { sigla: 'MTTR', descricao: 'Tempo Médio de Resolução individual' },
+        { sigla: 'FCR', descricao: 'Resolução no Primeiro Contato — sem reabertura' },
+        { sigla: 'Backlog', descricao: 'Chamados ainda em aberto atribuídos ao analista' },
+      ]} />
     </div>
   );
 }
