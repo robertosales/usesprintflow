@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("selectedTeamId");
     }
   };
-  const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
+  const [teams, setTeams] = useState<{ id: string; name: string; module: string }[]>([]);
 
   const fetchProfile = async (userId: string) => {
     try {
