@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Clock, History, FileText, Plus, Trash2 } from "lucide-react";
+import { Clock, History, FileText, Plus, Trash2, Users, CheckCircle2 } from "lucide-react";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import type { Demanda } from "../types/demanda";
 import { SITUACAO_LABELS, SITUACAO_COLORS, FASES, FASE_LABELS, getResponsavelAtivo, ALL_SITUACOES, REQUIRES_JUSTIFICATIVA } from "../types/demanda";
@@ -23,6 +23,16 @@ interface Props {
   onMoveTo: (demanda: Demanda, newStatus: string, justificativa?: string) => Promise<boolean>;
 }
 
+const STEPPER_STEPS = ['nova', 'execucao_dev', 'teste', 'aguardando_homologacao', 'producao', 'aceite_final'];
+const STEPPER_LABELS: Record<string, string> = {
+  nova: 'Nova', execucao_dev: 'Execução', teste: 'Teste',
+  aguardando_homologacao: 'Homologação', producao: 'Produção', aceite_final: 'Aceite',
+};
+
+const PAPEL_LABELS: Record<string, string> = {
+  requisitos: 'Requisitos', dev: 'Desenvolvedor', teste: 'Teste', arquiteto: 'Arquiteto',
+};
+
 export function DemandaDetail({ demanda, open, onClose, onUpdate, onMoveTo }: Props) {
   const { transitions, loading: tLoading } = useTransitions(demanda?.id ?? null);
   const { hours, total, add: addHour, remove: removeHour, loading: hLoading } = useHours(demanda?.id ?? null);
@@ -35,6 +45,7 @@ export function DemandaDetail({ demanda, open, onClose, onUpdate, onMoveTo }: Pr
   if (!demanda) return null;
 
   const papel = getResponsavelAtivo(demanda);
+  const currentStepIdx = STEPPER_STEPS.indexOf(demanda.situacao);
 
   const handleMove = async () => {
     if (!newStatus) return;
@@ -62,23 +73,48 @@ export function DemandaDetail({ demanda, open, onClose, onUpdate, onMoveTo }: Pr
   return (
     <>
       <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-        <SheetContent className="w-full sm:max-w-xl overflow-hidden flex flex-col">
+        <SheetContent className="w-full sm:max-w-2xl overflow-hidden flex flex-col">
           <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <span className="font-mono text-primary">{demanda.rhm}</span>
+            <SheetTitle className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-info font-bold">{demanda.rhm}</span>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-sm">{demanda.projeto}</span>
               <Badge variant="outline" className="capitalize">{demanda.tipo}</Badge>
               {demanda.sla === '24x7' && <Badge variant="destructive" className="text-[10px]">24x7</Badge>}
             </SheetTitle>
           </SheetHeader>
 
           <ScrollArea className="flex-1 -mx-6 px-6">
-            <div className="space-y-4 pb-6">
+            <div className="space-y-5 pb-6">
+              {/* Stepper */}
+              <div className="flex items-center gap-1 overflow-x-auto py-2">
+                {STEPPER_STEPS.map((step, idx) => {
+                  const isActive = demanda.situacao === step;
+                  const isPast = currentStepIdx >= 0 && idx < currentStepIdx;
+                  return (
+                    <div key={step} className="flex items-center gap-1 shrink-0">
+                      <div className={`flex items-center justify-center h-7 px-2.5 rounded-full text-[10px] font-medium border transition-colors ${
+                        isActive ? 'bg-info text-info-foreground border-info' :
+                        isPast ? 'bg-success/20 text-success border-success/30' :
+                        'bg-muted text-muted-foreground border-border'
+                      }`}>
+                        {isPast ? <CheckCircle2 className="h-3 w-3 mr-1" /> : null}
+                        {STEPPER_LABELS[step] || step}
+                      </div>
+                      {idx < STEPPER_STEPS.length - 1 && (
+                        <div className={`w-4 h-px ${isPast ? 'bg-success' : 'bg-border'}`} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
               {/* Status & Move */}
               <div className="flex items-center gap-2 flex-wrap">
                 <Badge className={SITUACAO_COLORS[demanda.situacao] || ''}>
                   {SITUACAO_LABELS[demanda.situacao] || demanda.situacao}
                 </Badge>
-                {papel && <span className="text-xs text-muted-foreground">Responsável ativo: <strong className="capitalize">{papel}</strong></span>}
+                {papel && <span className="text-xs text-muted-foreground">Responsável ativo: <strong className="capitalize">{PAPEL_LABELS[papel] || papel}</strong></span>}
               </div>
 
               <div className="flex gap-2">
@@ -100,17 +136,35 @@ export function DemandaDetail({ demanda, open, onClose, onUpdate, onMoveTo }: Pr
               {/* Info */}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><span className="text-muted-foreground">Projeto:</span> <strong>{demanda.projeto}</strong></div>
-                <div><span className="text-muted-foreground">SLA:</span> <strong>{demanda.sla}</strong></div>
+                <div><span className="text-muted-foreground">SLA:</span> <strong>{demanda.sla === '24x7' ? '24x7' : 'Padrão'}</strong></div>
               </div>
               {demanda.descricao && <p className="text-sm text-muted-foreground">{demanda.descricao}</p>}
 
               <Separator />
 
-              <Tabs defaultValue="historico">
+              {/* Tabs */}
+              <Tabs defaultValue="detalhes">
                 <TabsList className="w-full">
-                  <TabsTrigger value="historico" className="flex-1 gap-1"><History className="h-3.5 w-3.5" />Histórico</TabsTrigger>
-                  <TabsTrigger value="horas" className="flex-1 gap-1"><Clock className="h-3.5 w-3.5" />Horas ({total}h)</TabsTrigger>
+                  <TabsTrigger value="detalhes" className="flex-1 gap-1 text-xs"><FileText className="h-3.5 w-3.5" />Detalhes</TabsTrigger>
+                  <TabsTrigger value="historico" className="flex-1 gap-1 text-xs"><History className="h-3.5 w-3.5" />Histórico</TabsTrigger>
+                  <TabsTrigger value="horas" className="flex-1 gap-1 text-xs"><Clock className="h-3.5 w-3.5" />Horas ({total}h)</TabsTrigger>
+                  <TabsTrigger value="responsaveis" className="flex-1 gap-1 text-xs"><Users className="h-3.5 w-3.5" />Responsáveis</TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="detalhes" className="space-y-3 mt-3">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div><span className="text-muted-foreground text-xs">Tipo:</span><p className="capitalize font-medium">{demanda.tipo}</p></div>
+                    <div><span className="text-muted-foreground text-xs">SLA:</span><p className="font-medium">{demanda.sla}</p></div>
+                    <div><span className="text-muted-foreground text-xs">Criado em:</span><p className="font-medium">{new Date(demanda.created_at).toLocaleDateString('pt-BR')}</p></div>
+                    <div><span className="text-muted-foreground text-xs">Atualizado:</span><p className="font-medium">{new Date(demanda.updated_at).toLocaleDateString('pt-BR')}</p></div>
+                  </div>
+                  {demanda.descricao && (
+                    <div>
+                      <span className="text-muted-foreground text-xs">Descrição:</span>
+                      <p className="text-sm mt-1">{demanda.descricao}</p>
+                    </div>
+                  )}
+                </TabsContent>
 
                 <TabsContent value="historico" className="space-y-2 mt-3">
                   {tLoading && <p className="text-xs text-muted-foreground">Carregando...</p>}
@@ -129,6 +183,9 @@ export function DemandaDetail({ demanda, open, onClose, onUpdate, onMoveTo }: Pr
                 </TabsContent>
 
                 <TabsContent value="horas" className="space-y-3 mt-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">Total: <strong>{total}h</strong></p>
+                  </div>
                   <div className="flex gap-2">
                     <Input type="number" placeholder="Horas" value={hourForm.horas} onChange={e => setHourForm(p => ({ ...p, horas: e.target.value }))} className="h-8 w-20 text-xs" />
                     <Select value={hourForm.fase} onValueChange={v => setHourForm(p => ({ ...p, fase: v }))}>
@@ -154,6 +211,24 @@ export function DemandaDetail({ demanda, open, onClose, onUpdate, onMoveTo }: Pr
                     </div>
                   ))}
                 </TabsContent>
+
+                <TabsContent value="responsaveis" className="space-y-3 mt-3">
+                  {(['requisitos', 'dev', 'teste', 'arquiteto'] as const).map(role => {
+                    const key = `responsavel_${role}` as keyof Demanda;
+                    const isActive = papel === role;
+                    return (
+                      <div key={role} className={`border rounded-lg p-3 space-y-1 ${isActive ? 'border-info bg-info/5' : ''}`}>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold capitalize">{PAPEL_LABELS[role]}</p>
+                          {isActive && <Badge className="bg-info text-info-foreground text-[10px]">Ativo</Badge>}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {demanda[key] ? `ID: ${demanda[key]}` : 'Não atribuído'}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </TabsContent>
               </Tabs>
 
               {/* Aceite Final */}
@@ -169,7 +244,6 @@ export function DemandaDetail({ demanda, open, onClose, onUpdate, onMoveTo }: Pr
         </SheetContent>
       </Sheet>
 
-      {/* Justificativa modal */}
       <ConfirmDialog
         open={showJustModal}
         onOpenChange={setShowJustModal}
