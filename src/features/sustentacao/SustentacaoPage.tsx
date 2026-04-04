@@ -197,7 +197,7 @@ export function SustentacaoPage() {
                   {active === 'team-members' && <TeamMembersManager />}
                   {active === 'user-roles' && <UserRolesManager />}
                   {active === 'equipe' && <DeveloperManager />}
-                  {active === 'workflow' && <WorkflowManager />}
+                  {active === 'workflow' && <SustentacaoWorkflow />}
                   {active === 'custom-fields' && <CustomFieldManager />}
                   {active === 'automations' && <AutomationManager />}
                   {active === 'relatorios' && (
