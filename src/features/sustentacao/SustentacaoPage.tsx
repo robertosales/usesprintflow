@@ -9,7 +9,7 @@ import { TeamManager } from "@/components/TeamManager";
 import { TeamMembersManager } from "@/components/TeamMembersManager";
 import { UserRolesManager } from "@/components/UserRolesManager";
 import { DeveloperManager } from "@/components/DeveloperManager";
-import { WorkflowManager } from "@/components/WorkflowManager";
+import { SustentacaoWorkflow } from "./components/SustentacaoWorkflow";
 import { CustomFieldManager } from "@/components/CustomFieldManager";
 import { AutomationManager } from "@/components/AutomationManager";
 import { Badge } from "@/components/ui/badge";
