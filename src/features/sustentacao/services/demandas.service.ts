@@ -1,0 +1,88 @@
+import { supabase } from "@/integrations/supabase/client";
+import type { Demanda, DemandaTransition, DemandaHour } from "../types/demanda";
+
+export async function fetchDemandas(teamId: string): Promise<Demanda[]> {
+  const { data, error } = await supabase
+    .from("demandas" as any)
+    .select("*")
+    .eq("team_id", teamId)
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as unknown as Demanda[];
+}
+
+export async function createDemanda(demanda: Partial<Demanda> & { team_id: string; rhm: string }) {
+  const { data, error } = await supabase.from("demandas" as any).insert(demanda as any).select().single();
+  if (error) throw error;
+  return data as unknown as Demanda;
+}
+
+export async function updateDemanda(id: string, updates: Partial<Demanda>) {
+  const { data, error } = await supabase.from("demandas" as any).update(updates as any).eq("id", id).select().single();
+  if (error) throw error;
+  return data as unknown as Demanda;
+}
+
+export async function deleteDemanda(id: string) {
+  const { error } = await supabase.from("demandas" as any).delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function addTransition(t: Omit<DemandaTransition, 'id' | 'created_at'>) {
+  const { error } = await supabase.from("demanda_transitions" as any).insert(t as any);
+  if (error) throw error;
+}
+
+export async function fetchTransitions(demandaId: string): Promise<DemandaTransition[]> {
+  const { data, error } = await supabase
+    .from("demanda_transitions" as any)
+    .select("*")
+    .eq("demanda_id", demandaId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as unknown as DemandaTransition[];
+}
+
+export async function addHours(h: Omit<DemandaHour, 'id' | 'created_at'>) {
+  const { error } = await supabase.from("demanda_hours" as any).insert(h as any);
+  if (error) throw error;
+}
+
+export async function fetchHours(demandaId: string): Promise<DemandaHour[]> {
+  const { data, error } = await supabase
+    .from("demanda_hours" as any)
+    .select("*")
+    .eq("demanda_id", demandaId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as unknown as DemandaHour[];
+}
+
+export async function deleteHour(id: string) {
+  const { error } = await supabase.from("demanda_hours" as any).delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function upsertDemandas(teamId: string, rows: Array<{ rhm: string; projeto: string; situacao: string; tipo: string }>) {
+  const results = { importados: 0, atualizados: 0, erros: 0 };
+  for (const row of rows) {
+    try {
+      const { data: existing } = await supabase
+        .from("demandas" as any)
+        .select("id")
+        .eq("team_id", teamId)
+        .eq("rhm", row.rhm)
+        .maybeSingle();
+      if ((existing as any)?.id) {
+        await supabase.from("demandas" as any).update({ projeto: row.projeto, situacao: row.situacao, tipo: row.tipo } as any).eq("id", (existing as any).id);
+        results.atualizados++;
+      } else {
+        await supabase.from("demandas" as any).insert({ team_id: teamId, rhm: row.rhm, projeto: row.projeto, situacao: row.situacao, tipo: row.tipo } as any);
+        results.importados++;
+      }
+    } catch {
+      results.erros++;
+    }
+  }
+  return results;
+}
