@@ -100,7 +100,7 @@ function SustSidebar({ active, setActive }: { active: SustNav; setActive: (k: Su
             <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 font-semibold mb-1.5">Time Ativo</p>
             <Select value={currentTeamId || ""} onValueChange={setCurrentTeamId}>
               <SelectTrigger className="h-8 text-xs bg-sidebar-accent/50 border-sidebar-border"><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+              <SelectContent>{teams.filter(t => t.module === 'sustentacao').map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
         )}
