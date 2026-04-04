@@ -111,7 +111,7 @@ export function DemandasList() {
               </TableBody>
             </Table>
           </div>
-          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={totalItems} />
+          <PaginationControls currentPage={currentPage} totalItems={totalItems} pageSize={20} onPageChange={setCurrentPage} />
         </>
       )}
 
