@@ -87,7 +87,7 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const navigate = useNavigate();
-  const moduleAccess = (profile as any)?.module_access || 'sala_agil';
+  const moduleAccess = profile?.module_access || 'sala_agil';
   const showModuleSwitch = moduleAccess === 'admin';
 
   const sprintStories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : [];
