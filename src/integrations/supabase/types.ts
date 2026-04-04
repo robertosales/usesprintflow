@@ -303,6 +303,182 @@ export type Database = {
           },
         ]
       }
+      demanda_hours: {
+        Row: {
+          created_at: string
+          demanda_id: string
+          descricao: string | null
+          fase: string
+          horas: number
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          demanda_id: string
+          descricao?: string | null
+          fase?: string
+          horas?: number
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          demanda_id?: string
+          descricao?: string | null
+          fase?: string
+          horas?: number
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demanda_hours_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "demandas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      demanda_transitions: {
+        Row: {
+          created_at: string
+          demanda_id: string
+          from_status: string | null
+          id: string
+          justificativa: string | null
+          to_status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          demanda_id: string
+          from_status?: string | null
+          id?: string
+          justificativa?: string | null
+          to_status: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          demanda_id?: string
+          from_status?: string | null
+          id?: string
+          justificativa?: string | null
+          to_status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demanda_transitions_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "demandas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      demandas: {
+        Row: {
+          aceite_data: string | null
+          aceite_responsavel: string | null
+          created_at: string
+          descricao: string | null
+          id: string
+          projeto: string
+          responsavel_arquiteto: string | null
+          responsavel_dev: string | null
+          responsavel_requisitos: string | null
+          responsavel_teste: string | null
+          rhm: string
+          situacao: string
+          sla: string
+          team_id: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          aceite_data?: string | null
+          aceite_responsavel?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          projeto?: string
+          responsavel_arquiteto?: string | null
+          responsavel_dev?: string | null
+          responsavel_requisitos?: string | null
+          responsavel_teste?: string | null
+          rhm: string
+          situacao?: string
+          sla?: string
+          team_id: string
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          aceite_data?: string | null
+          aceite_responsavel?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          projeto?: string
+          responsavel_arquiteto?: string | null
+          responsavel_dev?: string | null
+          responsavel_requisitos?: string | null
+          responsavel_teste?: string | null
+          rhm?: string
+          situacao?: string
+          sla?: string
+          team_id?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demandas_aceite_responsavel_fkey"
+            columns: ["aceite_responsavel"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demandas_responsavel_arquiteto_fkey"
+            columns: ["responsavel_arquiteto"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demandas_responsavel_dev_fkey"
+            columns: ["responsavel_dev"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demandas_responsavel_requisitos_fkey"
+            columns: ["responsavel_requisitos"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demandas_responsavel_teste_fkey"
+            columns: ["responsavel_teste"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demandas_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       developers: {
         Row: {
           avatar: string | null
@@ -490,6 +666,7 @@ export type Database = {
           display_name: string
           email: string
           id: string
+          module_access: string
           updated_at: string
           user_id: string
         }
@@ -499,6 +676,7 @@ export type Database = {
           display_name?: string
           email?: string
           id?: string
+          module_access?: string
           updated_at?: string
           user_id: string
         }
@@ -508,6 +686,7 @@ export type Database = {
           display_name?: string
           email?: string
           id?: string
+          module_access?: string
           updated_at?: string
           user_id?: string
         }

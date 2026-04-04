@@ -8,6 +8,8 @@ import { SprintProvider } from "@/contexts/SprintContext";
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import { SustentacaoPage } from "./features/sustentacao/SustentacaoPage";
+import { ModuleSelector } from "./features/sustentacao/components/ModuleSelector";
 
 const queryClient = new QueryClient();
 
@@ -27,9 +29,40 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth();
+  const { session, loading, profile } = useAuth();
   if (loading) return null;
-  return session ? <Navigate to="/" replace /> : <>{children}</>;
+  if (!session) return <>{children}</>;
+  // Redirect based on module_access
+  const moduleAccess = (profile as any)?.module_access || 'sala_agil';
+  if (moduleAccess === 'admin') return <Navigate to="/modulos" replace />;
+  if (moduleAccess === 'sustentacao') return <Navigate to="/sustentacao" replace />;
+  return <Navigate to="/sala-agil" replace />;
+}
+
+function ModuleRedirect() {
+  const { profile, loading } = useAuth();
+  if (loading) return null;
+  const moduleAccess = (profile as any)?.module_access || 'sala_agil';
+  if (moduleAccess === 'admin') return <Navigate to="/modulos" replace />;
+  if (moduleAccess === 'sustentacao') return <Navigate to="/sustentacao" replace />;
+  return <Navigate to="/sala-agil" replace />;
+}
+
+function ModuleGuard({ module, children }: { module: 'sala_agil' | 'sustentacao'; children: React.ReactNode }) {
+  const { profile, isAdmin } = useAuth();
+  const moduleAccess = (profile as any)?.module_access || 'sala_agil';
+  // Admin can access everything
+  if (isAdmin || moduleAccess === 'admin' || moduleAccess === module) {
+    return <>{children}</>;
+  }
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="text-center space-y-4">
+        <p className="text-lg font-semibold text-destructive">Acesso Restrito</p>
+        <p className="text-muted-foreground">Você não tem permissão para acessar este módulo.</p>
+      </div>
+    </div>
+  );
 }
 
 const App = () => (
@@ -42,7 +75,10 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
-              <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+              <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
+              <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
+              <Route path="/sala-agil" element={<ProtectedRoute><ModuleGuard module="sala_agil"><Index /></ModuleGuard></ProtectedRoute>} />
+              <Route path="/sustentacao" element={<ProtectedRoute><ModuleGuard module="sustentacao"><SustentacaoPage /></ModuleGuard></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
