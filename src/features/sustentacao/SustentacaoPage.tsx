@@ -2,29 +2,35 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { SustentacaoBoard } from "./components/SustentacaoBoard";
 import { DemandasList } from "./components/DemandasList";
+import { ProjetosManager } from "./components/ProjetosManager";
 import { ImportacaoView } from "./components/ImportacaoView";
 import { SustentacaoDashboard } from "./components/SustentacaoDashboard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NotificationBell } from "@/components/NotificationBell";
+import { APP_NAME } from "@/lib/constants";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger,
   SidebarHeader, SidebarFooter, SidebarSeparator, useSidebar,
 } from "@/components/ui/sidebar";
 import {
-  LayoutDashboard, Columns3, ListTodo, Upload, LogOut, Zap, UserCircle, Wrench,
+  LayoutDashboard, Columns3, ListTodo, Upload, LogOut, UserCircle, Wrench,
+  FolderKanban, FileBarChart, Hexagon,
 } from "lucide-react";
 import { getRoleLabel } from "@/hooks/usePermissions";
+import { useNavigate } from "react-router-dom";
 
-type SustNav = 'dashboard' | 'board' | 'demandas' | 'importacao';
+type SustNav = 'dashboard' | 'board' | 'demandas' | 'projetos' | 'importacao' | 'relatorios';
 
 const NAV_ITEMS: { key: SustNav; label: string; icon: any }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { key: 'board', label: 'Board', icon: Columns3 },
+  { key: 'board', label: 'Board Kanban', icon: Columns3 },
   { key: 'demandas', label: 'Demandas', icon: ListTodo },
-  { key: 'importacao', label: 'Importação', icon: Upload },
+  { key: 'projetos', label: 'Projetos', icon: FolderKanban },
+  { key: 'importacao', label: 'Importação Excel', icon: Upload },
+  { key: 'relatorios', label: 'Relatórios', icon: FileBarChart },
 ];
 
 function SustSidebar({ active, setActive }: { active: SustNav; setActive: (k: SustNav) => void }) {
@@ -32,18 +38,21 @@ function SustSidebar({ active, setActive }: { active: SustNav; setActive: (k: Su
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const roleLabel = roles.length > 0 ? roles.map(getRoleLabel).join(', ') : 'Sem perfil';
+  const navigate = useNavigate();
+  const moduleAccess = (profile as any)?.module_access || 'sala_agil';
+  const showModuleSwitch = moduleAccess === 'admin';
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center gap-2.5 px-1 py-1">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary shrink-0">
-            <Wrench className="h-4 w-4 text-sidebar-primary-foreground" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-info shrink-0">
+            <Wrench className="h-4 w-4 text-info-foreground" />
           </div>
           {!collapsed && (
             <div className="overflow-hidden">
               <p className="text-sm font-bold truncate">Sustentação</p>
-              <p className="text-[10px] text-sidebar-foreground/60 truncate">SprintFlow</p>
+              <p className="text-[10px] text-sidebar-foreground/60 truncate">{APP_NAME}</p>
             </div>
           )}
         </div>
@@ -94,6 +103,13 @@ function SustSidebar({ active, setActive }: { active: SustNav; setActive: (k: Su
 
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
+          {showModuleSwitch && (
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={() => navigate('/modulos')} tooltip="Trocar Módulo" className="text-sidebar-foreground/50 hover:text-sidebar-foreground">
+                <Hexagon className="h-4 w-4" /><span>Trocar Módulo</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <SidebarMenuButton onClick={signOut} tooltip="Sair" className="text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10">
               <LogOut className="h-4 w-4" /><span>Sair</span>
@@ -126,8 +142,8 @@ export function SustentacaoPage() {
               <NotificationBell />
               {profile && (
                 <div className="hidden md:flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
-                    <span className="text-[10px] font-bold text-primary">{profile.display_name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}</span>
+                  <div className="h-7 w-7 rounded-full bg-info/10 flex items-center justify-center">
+                    <span className="text-[10px] font-bold text-info">{profile.display_name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}</span>
                   </div>
                   <span className="text-xs text-muted-foreground">{profile.display_name}</span>
                 </div>
@@ -145,7 +161,15 @@ export function SustentacaoPage() {
                   {active === 'dashboard' && <SustentacaoDashboard />}
                   {active === 'board' && <SustentacaoBoard />}
                   {active === 'demandas' && <DemandasList />}
+                  {active === 'projetos' && <ProjetosManager />}
                   {active === 'importacao' && <ImportacaoView />}
+                  {active === 'relatorios' && (
+                    <div className="flex flex-col items-center justify-center py-20 text-muted-foreground space-y-2">
+                      <FileBarChart className="h-12 w-12 text-muted-foreground/30" />
+                      <p className="text-lg font-medium">Relatórios</p>
+                      <p className="text-sm">Em breve — relatórios de tempo médio, SLA compliance e produtividade</p>
+                    </div>
+                  )}
                 </>
               )}
             </div>

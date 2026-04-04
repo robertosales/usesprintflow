@@ -20,30 +20,21 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { getRoleLabel } from "@/hooks/usePermissions";
 import type { Permission } from "@/hooks/usePermissions";
+import { APP_NAME } from "@/lib/constants";
 import {
   LayoutDashboard, Users, ListTodo, Columns3, BarChart3, Zap, ShieldAlert,
   Layers, GitBranch, SlidersHorizontal, Wand2,
-  LogOut, Building2, UserCircle, UsersRound, ShieldCheck, CalendarDays, Home
+  LogOut, Building2, UserCircle, UsersRound, ShieldCheck, CalendarDays, Home, Hexagon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasActiveImpediment } from "@/types/sprint";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NotificationBell } from "@/components/NotificationBell";
+import { useNavigate } from "react-router-dom";
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarTrigger,
-  SidebarHeader,
-  SidebarFooter,
-  SidebarSeparator,
-  useSidebar,
+  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
+  SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger,
+  SidebarHeader, SidebarFooter, SidebarSeparator, useSidebar,
 } from "@/components/ui/sidebar";
 
 type NavKey = "dashboard" | "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "team" | "activities" | "kanban" | "impediments" | "metrics" | "workflow" | "custom-fields" | "automations" | "calendar";
@@ -65,46 +56,29 @@ const NAV_PERMISSIONS: Partial<Record<NavKey, Permission>> = {
 };
 
 const NAV_SECTIONS = [
-  {
-    title: "Geral",
-    items: [
-      { key: "dashboard" as NavKey, label: "Dashboard", icon: Home },
-    ],
-  },
-  {
-    title: "Planejamento",
-    items: [
-      { key: "backlog" as NavKey, label: "Backlog", icon: LayoutDashboard },
-      { key: "epics" as NavKey, label: "Épicos", icon: Layers },
-      { key: "team" as NavKey, label: "Equipe", icon: Users },
-      { key: "activities" as NavKey, label: "Atividades", icon: ListTodo },
-    ],
-  },
-  {
-    title: "Execução",
-    items: [
-      { key: "kanban" as NavKey, label: "Board", icon: Columns3 },
-      { key: "calendar" as NavKey, label: "Calendário", icon: CalendarDays },
-      { key: "impediments" as NavKey, label: "Impedimentos", icon: ShieldAlert },
-      { key: "metrics" as NavKey, label: "Métricas", icon: BarChart3 },
-    ],
-  },
-  {
-    title: "Organização",
-    items: [
-      { key: "teams" as NavKey, label: "Times", icon: Building2 },
-      { key: "team-members" as NavKey, label: "Membros", icon: UsersRound },
-      { key: "user-roles" as NavKey, label: "Perfis (RBAC)", icon: ShieldCheck },
-    ],
-  },
-  {
-    title: "Configurações",
-    items: [
-      { key: "workflow" as NavKey, label: "Fluxo de Trabalho", icon: GitBranch },
-      { key: "custom-fields" as NavKey, label: "Campos Custom", icon: SlidersHorizontal },
-      { key: "automations" as NavKey, label: "Automações", icon: Wand2 },
-    ],
-  },
+  { title: "Geral", items: [{ key: "dashboard" as NavKey, label: "Dashboard", icon: Home }] },
+  { title: "Planejamento", items: [
+    { key: "backlog" as NavKey, label: "Backlog", icon: LayoutDashboard },
+    { key: "epics" as NavKey, label: "Épicos", icon: Layers },
+    { key: "team" as NavKey, label: "Equipe", icon: Users },
+    { key: "activities" as NavKey, label: "Atividades", icon: ListTodo },
+  ]},
+  { title: "Execução", items: [
+    { key: "kanban" as NavKey, label: "Board", icon: Columns3 },
+    { key: "calendar" as NavKey, label: "Calendário", icon: CalendarDays },
+    { key: "impediments" as NavKey, label: "Impedimentos", icon: ShieldAlert },
+    { key: "metrics" as NavKey, label: "Métricas", icon: BarChart3 },
+  ]},
+  { title: "Organização", items: [
+    { key: "teams" as NavKey, label: "Times", icon: Building2 },
+    { key: "team-members" as NavKey, label: "Membros", icon: UsersRound },
+    { key: "user-roles" as NavKey, label: "Perfis (RBAC)", icon: ShieldCheck },
+  ]},
+  { title: "Configurações", items: [
+    { key: "workflow" as NavKey, label: "Fluxo de Trabalho", icon: GitBranch },
+    { key: "custom-fields" as NavKey, label: "Campos Custom", icon: SlidersHorizontal },
+    { key: "automations" as NavKey, label: "Automações", icon: Wand2 },
+  ]},
 ];
 
 function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavKey) => void }) {
@@ -112,6 +86,9 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
   const { profile, signOut, teams, currentTeamId, setCurrentTeamId, roles, hasPermission } = useAuth();
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
+  const navigate = useNavigate();
+  const moduleAccess = (profile as any)?.module_access || 'sala_agil';
+  const showModuleSwitch = moduleAccess === 'admin';
 
   const sprintStories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : [];
   const blockedCount = sprintStories.filter(hasActiveImpediment).length;
@@ -128,20 +105,19 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center gap-2.5 px-1 py-1">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary shrink-0">
-            <Zap className="h-4 w-4 text-sidebar-primary-foreground" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success shrink-0">
+            <Zap className="h-4 w-4 text-success-foreground" />
           </div>
           {!collapsed && (
             <div className="overflow-hidden">
-              <p className="text-sm font-bold truncate">SprintFlow</p>
-              <p className="text-[10px] text-sidebar-foreground/60 truncate">Gestão Ágil</p>
+              <p className="text-sm font-bold truncate">Sala Ágil</p>
+              <p className="text-[10px] text-sidebar-foreground/60 truncate">{APP_NAME}</p>
             </div>
           )}
         </div>
       </SidebarHeader>
 
       <SidebarContent>
-        {/* User info */}
         {!collapsed && profile && (
           <div className="px-4 py-3">
             <div className="flex items-center gap-2.5">
@@ -156,7 +132,6 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
           </div>
         )}
 
-        {/* Team selector */}
         {!collapsed && teams.length > 0 && (
           <div className="px-4 pb-3">
             <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 font-semibold mb-1.5">Time Ativo</p>
@@ -173,12 +148,11 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
           </div>
         )}
 
-        {/* Sprint info */}
         {!collapsed && activeSprint && (
           <div className="px-4 pb-3">
             <div className="rounded-lg bg-sidebar-accent/50 p-2.5 space-y-1">
               <div className="flex items-center gap-1.5">
-                <Zap className="h-3 w-3 text-sidebar-primary" />
+                <Zap className="h-3 w-3 text-success" />
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">Sprint</span>
               </div>
               <p className="text-xs font-medium truncate">{activeSprint.name}</p>
@@ -191,7 +165,6 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
 
         <SidebarSeparator />
 
-        {/* Navigation sections */}
         {NAV_SECTIONS.map((section) => {
           const visibleItems = section.items.filter((item) => canSeeNav(item.key));
           if (visibleItems.length === 0) return null;
@@ -206,12 +179,7 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
                     const isActive = active === item.key;
                     return (
                       <SidebarMenuItem key={item.key}>
-                        <SidebarMenuButton
-                          isActive={isActive}
-                          onClick={() => setActive(item.key)}
-                          tooltip={item.label}
-                          className="transition-all duration-150"
-                        >
+                        <SidebarMenuButton isActive={isActive} onClick={() => setActive(item.key)} tooltip={item.label} className="transition-all duration-150">
                           <item.icon className="h-4 w-4" />
                           <span className="flex-1">{item.label}</span>
                           {item.key === "impediments" && blockedCount > 0 && !collapsed && (
@@ -232,12 +200,15 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
 
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
+          {showModuleSwitch && (
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={() => navigate('/modulos')} tooltip="Trocar Módulo" className="text-sidebar-foreground/50 hover:text-sidebar-foreground">
+                <Hexagon className="h-4 w-4" /><span>Trocar Módulo</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={signOut}
-              tooltip="Sair"
-              className="text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10"
-            >
+            <SidebarMenuButton onClick={signOut} tooltip="Sair" className="text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10">
               <LogOut className="h-4 w-4" />
               <span>Sair</span>
             </SidebarMenuButton>
@@ -254,16 +225,13 @@ const Index = () => {
   const { profile, currentTeamId, hasPermission } = useAuth();
 
   const needsTeam = !currentTeamId && active !== "teams";
-
-  const pageTitle = NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.key === active)?.label || "SprintFlow";
+  const pageTitle = NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.key === active)?.label || APP_NAME;
 
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar active={active} setActive={setActive} />
-
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Header */}
           <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b h-14 flex items-center justify-between px-4 md:px-6 shrink-0">
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-8 w-8" />
@@ -274,8 +242,8 @@ const Index = () => {
               <NotificationBell />
               {profile && (
                 <div className="hidden md:flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
-                    <span className="text-[10px] font-bold text-primary">
+                  <div className="h-7 w-7 rounded-full bg-success/10 flex items-center justify-center">
+                    <span className="text-[10px] font-bold text-success">
                       {profile.display_name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
                     </span>
                   </div>
@@ -284,16 +252,12 @@ const Index = () => {
               )}
             </div>
           </header>
-
-          {/* Main content */}
           <main className="flex-1 overflow-auto">
             <div className="max-w-7xl mx-auto p-4 md:p-6">
-              {/* Mobile page title */}
               <h2 className="text-xl font-bold text-foreground mb-4 md:hidden">{pageTitle}</h2>
-
               {loading && (
                 <div className="flex items-center justify-center py-20">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-success" />
                 </div>
               )}
               {!loading && needsTeam && (
@@ -302,8 +266,7 @@ const Index = () => {
                   <p className="text-lg text-muted-foreground font-medium">Selecione ou crie um time para começar</p>
                   {hasPermission('manage_teams') && (
                     <Button onClick={() => setActive("teams")} size="lg">
-                      <Building2 className="h-4 w-4 mr-2" />
-                      Ir para Times
+                      <Building2 className="h-4 w-4 mr-2" />Ir para Times
                     </Button>
                   )}
                 </div>
