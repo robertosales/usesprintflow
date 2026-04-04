@@ -182,7 +182,7 @@ export function SustentacaoDashboard() {
           <CardContent className="space-y-2">
             {alertas.length === 0 && (
               <div className="text-center py-4">
-                <CheckCircle2 className="h-8 w-8 text-success mx-auto mb-2" />
+                <CheckCircle2 className="h-8 w-8 text-info mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">Nenhum alerta no momento</p>
               </div>
             )}

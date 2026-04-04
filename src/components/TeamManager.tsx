@@ -239,7 +239,7 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
       </div>
 
       {allTeams.length === 0 && (
-        <EmptyState icon={Users} title="Nenhum time encontrado" description="Crie seu primeiro time para começar!" actionLabel={canManage ? "Criar novo" : undefined} onAction={canManage ? () => setOpen(true) : undefined} />
+        <EmptyState icon={Users} title="Nenhum time encontrado" description="Utilize o botão acima para criar seu primeiro time." />
       )}
 
       <Dialog open={!!editingTeam} onOpenChange={(o) => !o && setEditingTeam(null)}>

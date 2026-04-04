@@ -163,7 +163,7 @@ export function ProjetosManager() {
                 <SelectTrigger><SelectValue placeholder="Selecione uma equipe" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">Nenhuma</SelectItem>
-                  {teams.map(t => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
+                  {teams.filter(t => t.module === 'sustentacao').map(t => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
