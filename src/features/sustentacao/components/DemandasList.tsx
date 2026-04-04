@@ -9,7 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { EmptyState } from "@/shared/components/common/EmptyState";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
-import { Pagination } from "@/shared/components/common/Pagination";
+import { PaginationControls } from "@/shared/components/common/Pagination";
 import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { useDemandas } from "../hooks/useDemandas";
