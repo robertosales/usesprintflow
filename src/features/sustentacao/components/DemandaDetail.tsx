@@ -3,14 +3,15 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Clock, History, FileText, Plus, Trash2, Users, CheckCircle2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Clock, History, FileText, Plus, Trash2, Users, CheckCircle2, Edit, MoreHorizontal } from "lucide-react";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { Demanda } from "../types/demanda";
 import { SITUACAO_LABELS, SITUACAO_COLORS, FASES, FASE_LABELS, getResponsavelAtivo, ALL_SITUACOES, REQUIRES_JUSTIFICATIVA } from "../types/demanda";
 import { useTransitions, useHours } from "../hooks/useDemandas";
@@ -25,12 +26,12 @@ interface Props {
 
 const STEPPER_STEPS = ['nova', 'execucao_dev', 'teste', 'aguardando_homologacao', 'producao', 'aceite_final'];
 const STEPPER_LABELS: Record<string, string> = {
-  nova: 'Nova', execucao_dev: 'Execução', teste: 'Teste',
-  aguardando_homologacao: 'Homologação', producao: 'Produção', aceite_final: 'Aceite',
+  nova: 'Nova', execucao_dev: 'Execução / Dev', teste: 'Teste',
+  aguardando_homologacao: 'Aguard. Homologação', producao: 'Produção', aceite_final: 'Aceite Final',
 };
 
 const PAPEL_LABELS: Record<string, string> = {
-  requisitos: 'Requisitos', dev: 'Desenvolvedor', teste: 'Teste', arquiteto: 'Arquiteto',
+  requisitos: 'Requisitos', dev: 'Dev', teste: 'Teste', arquiteto: 'Arquiteto',
 };
 
 export function DemandaDetail({ demanda, open, onClose, onUpdate, onMoveTo }: Props) {
@@ -74,170 +75,215 @@ export function DemandaDetail({ demanda, open, onClose, onUpdate, onMoveTo }: Pr
     <>
       <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
         <SheetContent className="w-full sm:max-w-2xl overflow-hidden flex flex-col">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-info font-bold">{demanda.rhm}</span>
-              <span className="text-muted-foreground">·</span>
-              <span className="text-sm">{demanda.projeto}</span>
-              <Badge variant="outline" className="capitalize">{demanda.tipo}</Badge>
-              {demanda.sla === '24x7' && <Badge variant="destructive" className="text-[10px]">24x7</Badge>}
-            </SheetTitle>
+          <SheetHeader className="space-y-3">
+            {/* Breadcrumb */}
+            <p className="text-xs text-muted-foreground">Demandas &gt; {demanda.rhm}</p>
+            
+            {/* Title row */}
+            <div className="flex items-center justify-between">
+              <SheetTitle className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-info font-bold text-lg">{demanda.rhm}</span>
+                {demanda.sla === '24x7' && <Badge variant="destructive" className="text-[10px]">SLA 24x7</Badge>}
+              </SheetTitle>
+              <div className="flex items-center gap-1">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-7 text-xs gap-1"><MoreHorizontal className="h-3.5 w-3.5" />Ações</Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem><Edit className="h-3.5 w-3.5 mr-1.5" />Editar</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+            
+            {/* Subtitle */}
+            <p className="text-sm text-muted-foreground">{demanda.projeto} · <span className="capitalize">{demanda.tipo}</span></p>
           </SheetHeader>
 
           <ScrollArea className="flex-1 -mx-6 px-6">
             <div className="space-y-5 pb-6">
-              {/* Stepper */}
-              <div className="flex items-center gap-1 overflow-x-auto py-2">
+              {/* Stepper - matching reference image style */}
+              <div className="flex items-center gap-0.5 overflow-x-auto py-3">
                 {STEPPER_STEPS.map((step, idx) => {
                   const isActive = demanda.situacao === step;
                   const isPast = currentStepIdx >= 0 && idx < currentStepIdx;
                   return (
-                    <div key={step} className="flex items-center gap-1 shrink-0">
-                      <div className={`flex items-center justify-center h-7 px-2.5 rounded-full text-[10px] font-medium border transition-colors ${
-                        isActive ? 'bg-info text-info-foreground border-info' :
-                        isPast ? 'bg-success/20 text-success border-success/30' :
-                        'bg-muted text-muted-foreground border-border'
-                      }`}>
-                        {isPast ? <CheckCircle2 className="h-3 w-3 mr-1" /> : null}
-                        {STEPPER_LABELS[step] || step}
-                      </div>
-                      {idx < STEPPER_STEPS.length - 1 && (
-                        <div className={`w-4 h-px ${isPast ? 'bg-success' : 'bg-border'}`} />
-                      )}
+                    <div key={step} className={`flex-1 text-center py-1.5 px-1 text-[10px] font-medium border-b-2 transition-colors ${
+                      isActive ? 'border-info bg-info/10 text-info' :
+                      isPast ? 'border-success bg-success/5 text-success' :
+                      'border-border text-muted-foreground'
+                    }`}>
+                      {STEPPER_LABELS[step]}
                     </div>
                   );
                 })}
               </div>
-
-              {/* Status & Move */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge className={SITUACAO_COLORS[demanda.situacao] || ''}>
-                  {SITUACAO_LABELS[demanda.situacao] || demanda.situacao}
-                </Badge>
-                {papel && <span className="text-xs text-muted-foreground">Responsável ativo: <strong className="capitalize">{PAPEL_LABELS[papel] || papel}</strong></span>}
-              </div>
-
-              <div className="flex gap-2">
-                <Select value={newStatus} onValueChange={setNewStatus}>
-                  <SelectTrigger className="h-8 text-xs flex-1">
-                    <SelectValue placeholder="Mover para..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ALL_SITUACOES.filter(s => s !== demanda.situacao).map(s => (
-                      <SelectItem key={s} value={s}>{SITUACAO_LABELS[s]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button size="sm" onClick={handleMove} disabled={!newStatus}>Mover</Button>
-              </div>
-
-              <Separator />
-
-              {/* Info */}
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-muted-foreground">Projeto:</span> <strong>{demanda.projeto}</strong></div>
-                <div><span className="text-muted-foreground">SLA:</span> <strong>{demanda.sla === '24x7' ? '24x7' : 'Padrão'}</strong></div>
-              </div>
-              {demanda.descricao && <p className="text-sm text-muted-foreground">{demanda.descricao}</p>}
-
-              <Separator />
 
               {/* Tabs */}
               <Tabs defaultValue="detalhes">
                 <TabsList className="w-full">
                   <TabsTrigger value="detalhes" className="flex-1 gap-1 text-xs"><FileText className="h-3.5 w-3.5" />Detalhes</TabsTrigger>
                   <TabsTrigger value="historico" className="flex-1 gap-1 text-xs"><History className="h-3.5 w-3.5" />Histórico</TabsTrigger>
-                  <TabsTrigger value="horas" className="flex-1 gap-1 text-xs"><Clock className="h-3.5 w-3.5" />Horas ({total}h)</TabsTrigger>
+                  <TabsTrigger value="horas" className="flex-1 gap-1 text-xs"><Clock className="h-3.5 w-3.5" />Atividades ({total}h)</TabsTrigger>
                   <TabsTrigger value="responsaveis" className="flex-1 gap-1 text-xs"><Users className="h-3.5 w-3.5" />Responsáveis</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="detalhes" className="space-y-3 mt-3">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div><span className="text-muted-foreground text-xs">Tipo:</span><p className="capitalize font-medium">{demanda.tipo}</p></div>
-                    <div><span className="text-muted-foreground text-xs">SLA:</span><p className="font-medium">{demanda.sla}</p></div>
-                    <div><span className="text-muted-foreground text-xs">Criado em:</span><p className="font-medium">{new Date(demanda.created_at).toLocaleDateString('pt-BR')}</p></div>
-                    <div><span className="text-muted-foreground text-xs">Atualizado:</span><p className="font-medium">{new Date(demanda.updated_at).toLocaleDateString('pt-BR')}</p></div>
+                <TabsContent value="detalhes" className="mt-3">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {/* Left: Description */}
+                    <Card>
+                      <CardContent className="p-4 space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase">Descrição</p>
+                        <p className="text-sm">{demanda.descricao || 'Sem descrição'}</p>
+                      </CardContent>
+                    </Card>
+                    
+                    {/* Right: Info */}
+                    <Card>
+                      <CardContent className="p-4 space-y-3">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase">Histórico de Situações</p>
+                        {/* Current status */}
+                        <div className="flex items-center gap-2">
+                          <Badge className={`text-[10px] ${SITUACAO_COLORS[demanda.situacao] || ''}`}>
+                            {SITUACAO_LABELS[demanda.situacao] || demanda.situacao}
+                          </Badge>
+                          {papel && <span className="text-[10px] text-muted-foreground">Resp: <strong className="capitalize">{PAPEL_LABELS[papel]}</strong></span>}
+                        </div>
+                        
+                        {/* Quick info */}
+                        <div className="space-y-1.5 text-xs">
+                          <div className="flex justify-between"><span className="text-muted-foreground">Projeto:</span><span className="font-medium">{demanda.projeto}</span></div>
+                          <div className="flex justify-between"><span className="text-muted-foreground">Tipo:</span><span className="font-medium capitalize">{demanda.tipo}</span></div>
+                          <div className="flex justify-between"><span className="text-muted-foreground">Criada em:</span><span className="font-medium">{new Date(demanda.created_at).toLocaleDateString('pt-BR')} {new Date(demanda.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span></div>
+                          <div className="flex justify-between"><span className="text-muted-foreground">SLA:</span><span className="font-medium">{demanda.sla === '24x7' ? '24x7' : 'Padrão'}</span></div>
+                        </div>
+                      </CardContent>
+                    </Card>
                   </div>
-                  {demanda.descricao && (
-                    <div>
-                      <span className="text-muted-foreground text-xs">Descrição:</span>
-                      <p className="text-sm mt-1">{demanda.descricao}</p>
-                    </div>
-                  )}
+
+                  {/* Move status */}
+                  <div className="flex gap-2 mt-4">
+                    <Select value={newStatus} onValueChange={setNewStatus}>
+                      <SelectTrigger className="h-8 text-xs flex-1">
+                        <SelectValue placeholder="Mover para..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ALL_SITUACOES.filter(s => s !== demanda.situacao).map(s => (
+                          <SelectItem key={s} value={s}>{SITUACAO_LABELS[s]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button size="sm" className="bg-info hover:bg-info/90 text-info-foreground" onClick={handleMove} disabled={!newStatus}>Mover</Button>
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="historico" className="space-y-2 mt-3">
                   {tLoading && <p className="text-xs text-muted-foreground">Carregando...</p>}
                   {!tLoading && transitions.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma transição registrada</p>}
                   {transitions.map(t => (
-                    <div key={t.id} className="text-xs border rounded-lg p-2.5 space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        {t.from_status && <Badge variant="outline" className="text-[10px] h-4">{SITUACAO_LABELS[t.from_status] || t.from_status}</Badge>}
-                        <span>→</span>
-                        <Badge variant="outline" className="text-[10px] h-4">{SITUACAO_LABELS[t.to_status] || t.to_status}</Badge>
+                    <div key={t.id} className="flex items-start gap-3 text-xs border-l-2 border-info/30 pl-3 py-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <Badge className="bg-info/10 text-info border-info/20 text-[10px]">{SITUACAO_LABELS[t.to_status] || t.to_status}</Badge>
+                        </div>
+                        <p className="text-muted-foreground mt-0.5">{new Date(t.created_at).toLocaleString('pt-BR')}</p>
+                        {t.justificativa && <p className="italic text-muted-foreground mt-0.5">"{t.justificativa}"</p>}
+                        {t.from_status && <p className="text-[10px] text-muted-foreground">De: {SITUACAO_LABELS[t.from_status]}</p>}
                       </div>
-                      <p className="text-muted-foreground">{new Date(t.created_at).toLocaleString('pt-BR')}</p>
-                      {t.justificativa && <p className="italic text-muted-foreground">"{t.justificativa}"</p>}
                     </div>
                   ))}
                 </TabsContent>
 
                 <TabsContent value="horas" className="space-y-3 mt-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">Total: <strong>{total}h</strong></p>
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-info/10 text-info border-info/20">Total Acumulado: {total}h</Badge>
+                    </div>
+                    <Button size="sm" className="bg-info hover:bg-info/90 text-info-foreground h-7 text-xs" onClick={() => {}}>
+                      <Plus className="h-3.5 w-3.5 mr-1" />Nova Atividade
+                    </Button>
                   </div>
-                  <div className="flex gap-2">
+                  
+                  {/* Add hour form */}
+                  <div className="flex gap-2 flex-wrap">
                     <Input type="number" placeholder="Horas" value={hourForm.horas} onChange={e => setHourForm(p => ({ ...p, horas: e.target.value }))} className="h-8 w-20 text-xs" />
                     <Select value={hourForm.fase} onValueChange={v => setHourForm(p => ({ ...p, fase: v }))}>
-                      <SelectTrigger className="h-8 text-xs flex-1"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-8 text-xs w-[140px]"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {FASES.map(f => <SelectItem key={f} value={f}>{FASE_LABELS[f]}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    <Button size="sm" className="h-8" onClick={handleAddHour}><Plus className="h-3.5 w-3.5" /></Button>
+                    <Input placeholder="Descrição" value={hourForm.descricao} onChange={e => setHourForm(p => ({ ...p, descricao: e.target.value }))} className="h-8 text-xs flex-1 min-w-[120px]" />
+                    <Button size="sm" className="h-8 bg-info hover:bg-info/90 text-info-foreground" onClick={handleAddHour}><Plus className="h-3.5 w-3.5" /></Button>
                   </div>
-                  <Input placeholder="Descrição (opcional)" value={hourForm.descricao} onChange={e => setHourForm(p => ({ ...p, descricao: e.target.value }))} className="h-8 text-xs" />
 
-                  {hours.map(h => (
-                    <div key={h.id} className="text-xs border rounded-lg p-2.5 flex items-center justify-between">
-                      <div>
-                        <strong>{h.horas}h</strong> — {FASE_LABELS[h.fase] || h.fase}
-                        {h.descricao && <span className="text-muted-foreground ml-1">· {h.descricao}</span>}
-                        <p className="text-muted-foreground">{new Date(h.created_at).toLocaleString('pt-BR')}</p>
-                      </div>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setDeleteHourId(h.id)}>
-                        <Trash2 className="h-3 w-3 text-destructive" />
-                      </Button>
+                  {/* Hours table */}
+                  {hours.length > 0 && (
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b bg-muted/50">
+                            <th className="text-left p-2 font-medium">Data</th>
+                            <th className="text-left p-2 font-medium">Fase</th>
+                            <th className="text-left p-2 font-medium">Descrição</th>
+                            <th className="text-right p-2 font-medium">Horas</th>
+                            <th className="w-8"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {hours.map(h => (
+                            <tr key={h.id} className="border-b last:border-0">
+                              <td className="p-2">{new Date(h.created_at).toLocaleDateString('pt-BR')}</td>
+                              <td className="p-2"><Badge className="text-[10px] bg-info/10 text-info border-info/20">{FASE_LABELS[h.fase] || h.fase}</Badge></td>
+                              <td className="p-2 text-muted-foreground">{h.descricao || '-'}</td>
+                              <td className="p-2 text-right font-medium">{h.horas}h</td>
+                              <td className="p-2">
+                                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setDeleteHourId(h.id)}>
+                                  <Trash2 className="h-3 w-3 text-destructive" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  ))}
+                  )}
                 </TabsContent>
 
-                <TabsContent value="responsaveis" className="space-y-3 mt-3">
-                  {(['requisitos', 'dev', 'teste', 'arquiteto'] as const).map(role => {
-                    const key = `responsavel_${role}` as keyof Demanda;
-                    const isActive = papel === role;
-                    return (
-                      <div key={role} className={`border rounded-lg p-3 space-y-1 ${isActive ? 'border-info bg-info/5' : ''}`}>
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold capitalize">{PAPEL_LABELS[role]}</p>
-                          {isActive && <Badge className="bg-info text-info-foreground text-[10px]">Ativo</Badge>}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {demanda[key] ? `ID: ${demanda[key]}` : 'Não atribuído'}
-                        </p>
-                      </div>
-                    );
-                  })}
+                <TabsContent value="responsaveis" className="mt-3">
+                  <p className="text-xs text-muted-foreground mb-3">O papel ativo muda automaticamente conforme a situação da demanda.</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {(['requisitos', 'dev', 'teste', 'arquiteto'] as const).map(role => {
+                      const key = `responsavel_${role}` as keyof Demanda;
+                      const isActive = papel === role;
+                      return (
+                        <Card key={role} className={`${isActive ? 'border-info bg-info/5' : ''}`}>
+                          <CardContent className="p-3 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-semibold capitalize">{PAPEL_LABELS[role]}</p>
+                              {isActive && <Badge className="bg-info text-info-foreground text-[10px]">Ativo</Badge>}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {demanda[key] ? `ID: ${String(demanda[key]).slice(0, 8)}...` : 'Não atribuído'}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
                 </TabsContent>
               </Tabs>
 
               {/* Aceite Final */}
               {demanda.situacao === 'producao' && !demanda.aceite_data && (
-                <div className="border rounded-lg p-3 bg-accent/50 space-y-2">
-                  <p className="text-sm font-medium">Aceite Final</p>
-                  <p className="text-xs text-muted-foreground">Registre o aceite para encerrar a demanda.</p>
-                  <Button size="sm" onClick={() => onMoveTo(demanda, 'aceite_final')}>Registrar Aceite</Button>
-                </div>
+                <Card className="border-info/30 bg-info/5">
+                  <CardContent className="p-3 space-y-2">
+                    <p className="text-sm font-medium">Aceite Final</p>
+                    <p className="text-xs text-muted-foreground">Registre o aceite para encerrar a demanda.</p>
+                    <Button size="sm" className="bg-info hover:bg-info/90 text-info-foreground" onClick={() => onMoveTo(demanda, 'aceite_final')}>Registrar Aceite</Button>
+                  </CardContent>
+                </Card>
               )}
             </div>
           </ScrollArea>
