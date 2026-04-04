@@ -6,8 +6,11 @@ import { useDemandas } from "../../hooks/useDemandas";
 import { useAllTransitions, useProfiles } from "../../hooks/useAllTransitions";
 import { calcSLA, formatHours } from "../../utils/kpiCalculations";
 import { ReportFilters } from "./ReportFilters";
+import { ReportHeader, ReportLegend } from "./ReportHeader";
 import { ExportButton } from "@/components/dashboard/ExportButton";
 import { Shield, AlertTriangle, CheckCircle2 } from "lucide-react";
+
+const META_SLA = 95; // %
 
 export function RelatorioSLA() {
   const { demandas } = useDemandas();
@@ -44,7 +47,6 @@ export function RelatorioSLA() {
     return criticos >= padrao ? 'Crítico' : 'Padrão';
   }, [sla]);
 
-  // Bar chart data - group by status
   const barData = useMemo(() => {
     const dentro = sla.results.filter(r => r.statusSLA === 'dentro').length;
     const emRisco = sla.results.filter(r => r.statusSLA === 'em_risco').length;
@@ -67,17 +69,21 @@ export function RelatorioSLA() {
   });
 
   const statusBadge = (s: string) => {
-    if (s === 'dentro') return <Badge className="bg-info/10 text-info border-info/20 text-[10px]">Dentro</Badge>;
-    if (s === 'em_risco') return <Badge variant="outline" className="border-orange-300 text-orange-600 text-[10px]">Em risco</Badge>;
+    if (s === 'dentro') return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]">Dentro</Badge>;
+    if (s === 'em_risco') return <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-[10px]">Em risco</Badge>;
     return <Badge variant="destructive" className="text-[10px]">Violado</Badge>;
   };
 
+  const complianceColor = sla.compliance >= META_SLA ? 'text-emerald-600' : sla.compliance >= 80 ? 'text-orange-500' : 'text-destructive';
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      <ReportHeader tipoRelatorio="Relatório — SLA Compliance" periodo={periodo} />
+
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Relatório — SLA Compliance</h2>
-          <p className="text-sm text-muted-foreground">Auditoria de cumprimento de SLA por período e prioridade</p>
+          <h2 className="text-lg font-semibold">SLA Compliance</h2>
+          <p className="text-sm text-muted-foreground">Auditoria de cumprimento de SLA · Meta: ≥ {META_SLA}%</p>
         </div>
         <div className="flex items-center gap-2">
           <ReportFilters periodo={periodo} setPeriodo={setPeriodo} analista={analista} setAnalista={setAnalista} analistas={analistas} />
@@ -85,12 +91,18 @@ export function RelatorioSLA() {
         </div>
       </div>
 
-      {/* Summary header */}
+      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className={sla.compliance < META_SLA ? 'border-destructive/30' : ''}>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-info/10 flex items-center justify-center"><Shield className="h-4 w-4 text-info" /></div>
-            <div><p className="text-[10px] text-muted-foreground">Compliance</p><p className="text-lg font-bold">{sla.compliance.toFixed(1)}%</p></div>
+            <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${sla.compliance >= META_SLA ? 'bg-emerald-100' : 'bg-destructive/10'}`}>
+              <Shield className={`h-4 w-4 ${sla.compliance >= META_SLA ? 'text-emerald-600' : 'text-destructive'}`} />
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Compliance</p>
+              <p className={`text-lg font-bold ${complianceColor}`}>{sla.compliance.toFixed(1)}%</p>
+              <p className="text-[10px] text-muted-foreground">Meta: {META_SLA}%</p>
+            </div>
           </CardContent>
         </Card>
         <Card className={sla.violados > 0 ? 'border-destructive/30' : ''}>
@@ -120,12 +132,12 @@ export function RelatorioSLA() {
         <CardHeader><CardTitle className="text-sm">Distribuição SLA</CardTitle></CardHeader>
         <CardContent>
           <div className="h-8 rounded-full overflow-hidden flex bg-muted">
-            {barData.dentro > 0 && <div className="bg-info h-full transition-all" style={{ width: `${(barData.dentro / barData.total) * 100}%` }} title={`Dentro: ${barData.dentro}`} />}
-            {barData.emRisco > 0 && <div className="bg-orange-400 h-full transition-all" style={{ width: `${(barData.emRisco / barData.total) * 100}%` }} title={`Em risco: ${barData.emRisco}`} />}
-            {barData.violado > 0 && <div className="bg-destructive h-full transition-all" style={{ width: `${(barData.violado / barData.total) * 100}%` }} title={`Violado: ${barData.violado}`} />}
+            {barData.dentro > 0 && <div className="bg-emerald-500 h-full transition-all" style={{ width: `${(barData.dentro / barData.total) * 100}%` }} />}
+            {barData.emRisco > 0 && <div className="bg-orange-400 h-full transition-all" style={{ width: `${(barData.emRisco / barData.total) * 100}%` }} />}
+            {barData.violado > 0 && <div className="bg-destructive h-full transition-all" style={{ width: `${(barData.violado / barData.total) * 100}%` }} />}
           </div>
           <div className="flex gap-4 mt-2 text-[10px] text-muted-foreground">
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-info" />Dentro ({barData.dentro})</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />Dentro ({barData.dentro})</span>
             <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-400" />Em risco ({barData.emRisco})</span>
             <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-destructive" />Violado ({barData.violado})</span>
           </div>
@@ -142,15 +154,15 @@ export function RelatorioSLA() {
             <div className="overflow-auto max-h-[400px]">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>RHM</TableHead>
-                    <TableHead>Projeto</TableHead>
-                    <TableHead>Prioridade</TableHead>
-                    <TableHead>Abertura</TableHead>
-                    <TableHead>Prazo SLA</TableHead>
-                    <TableHead>Resolução</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Atraso</TableHead>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="font-semibold">RHM</TableHead>
+                    <TableHead className="font-semibold">Projeto</TableHead>
+                    <TableHead className="font-semibold">Prioridade</TableHead>
+                    <TableHead className="font-semibold">Abertura</TableHead>
+                    <TableHead className="font-semibold">Prazo SLA</TableHead>
+                    <TableHead className="font-semibold">Resolução</TableHead>
+                    <TableHead className="font-semibold">Status</TableHead>
+                    <TableHead className="text-right font-semibold">Atraso</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -166,12 +178,26 @@ export function RelatorioSLA() {
                       <TableCell className="text-right text-xs">{r.atraso > 0 ? <span className="text-destructive font-medium">{formatHours(r.atraso)}</span> : '-'}</TableCell>
                     </TableRow>
                   ))}
+                  {/* Totals */}
+                  <TableRow className="bg-muted/30 font-semibold border-t-2">
+                    <TableCell className="text-xs" colSpan={6}>Total: {sla.results.length} chamados</TableCell>
+                    <TableCell className="text-xs" colSpan={2}>
+                      <span className="text-emerald-600">{barData.dentro} dentro</span> · <span className="text-orange-500">{barData.emRisco} risco</span> · <span className="text-destructive">{barData.violado} violados</span>
+                    </TableCell>
+                  </TableRow>
                 </TableBody>
               </Table>
             </div>
           )}
         </CardContent>
       </Card>
+
+      <ReportLegend items={[
+        { sigla: 'SLA', descricao: 'Acordo de Nível de Serviço — prazo máximo para resolução' },
+        { sigla: 'Dentro', descricao: 'Chamado resolvido ou em andamento dentro do prazo' },
+        { sigla: 'Em risco', descricao: 'Menos de 2 horas restantes para o vencimento' },
+        { sigla: 'Violado', descricao: 'Prazo de SLA excedido' },
+      ]} />
     </div>
   );
 }

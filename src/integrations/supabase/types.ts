@@ -303,6 +303,62 @@ export type Database = {
           },
         ]
       }
+      demanda_evidencias: {
+        Row: {
+          created_at: string
+          demanda_id: string
+          descricao: string | null
+          fase: string
+          file_name: string | null
+          file_path: string | null
+          id: string
+          mime_type: string | null
+          obrigatoria: boolean
+          tipo: string
+          titulo: string
+          url_externa: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          demanda_id: string
+          descricao?: string | null
+          fase?: string
+          file_name?: string | null
+          file_path?: string | null
+          id?: string
+          mime_type?: string | null
+          obrigatoria?: boolean
+          tipo?: string
+          titulo?: string
+          url_externa?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          demanda_id?: string
+          descricao?: string | null
+          fase?: string
+          file_name?: string | null
+          file_path?: string | null
+          id?: string
+          mime_type?: string | null
+          obrigatoria?: boolean
+          tipo?: string
+          titulo?: string
+          url_externa?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demanda_evidencias_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "demandas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       demanda_hours: {
         Row: {
           created_at: string

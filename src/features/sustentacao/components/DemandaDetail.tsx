@@ -7,16 +7,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, History, FileText, Plus, Trash2, Users, Edit, Save, X, Search, UserPlus, ArrowLeft, Check, Circle, ChevronRight, MoveRight } from "lucide-react";
+import { Clock, History, FileText, Plus, Trash2, Users, Edit, Save, X, Search, UserPlus, ArrowLeft, Check, Circle, ChevronRight, MoveRight, ShieldCheck, Upload, Link2, AlertCircle } from "lucide-react";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Demanda } from "../types/demanda";
-import { SITUACAO_LABELS, SITUACAO_COLORS, FASES, FASE_LABELS, ALL_SITUACOES, REQUIRES_JUSTIFICATIVA } from "../types/demanda";
+import { SITUACAO_LABELS, SITUACAO_COLORS, FASES, FASE_LABELS, ALL_SITUACOES, REQUIRES_JUSTIFICATIVA, SITUACOES_CORRETIVA, SITUACOES_EVOLUTIVA_PREFIX } from "../types/demanda";
 import { useTransitions, useHours } from "../hooks/useDemandas";
 import { useProjetos } from "../hooks/useProjetos";
 import * as respSvc from "../services/responsaveis.service";
+import * as evidSvc from "../services/evidencias.service";
 import type { DemandaResponsavel } from "../services/responsaveis.service";
+import type { DemandaEvidencia } from "../services/evidencias.service";
 
 interface Props {
   demanda: Demanda | null;
@@ -38,6 +40,27 @@ const PAPEIS_OPTIONS = [
   { value: 'testador', label: 'Testador' },
   { value: 'gestor', label: 'Gestor' },
 ];
+
+const EVIDENCIA_FASES = ['nova', 'execucao_dev', 'teste', 'aguardando_homologacao', 'producao', 'aceite_final'];
+const EVIDENCIA_FASE_LABELS: Record<string, string> = {
+  nova: 'Abertura', execucao_dev: 'Desenvolvimento', teste: 'Testes',
+  aguardando_homologacao: 'Homologação', producao: 'Produção', aceite_final: 'Aceite Final',
+};
+
+function getFlowOrder(demanda: Demanda): string[] {
+  if (demanda.tipo === 'evolutiva') {
+    return [...SITUACOES_EVOLUTIVA_PREFIX, ...Array.from(SITUACOES_CORRETIVA).slice(1)];
+  }
+  return [...SITUACOES_CORRETIVA];
+}
+
+function getNextStatuses(demanda: Demanda): string[] {
+  const flow = getFlowOrder(demanda);
+  const currentIdx = flow.indexOf(demanda.situacao);
+  if (currentIdx < 0) return [];
+  // Only forward movement allowed, skip 'bloqueada' and 'aguardando_retorno' as they are special
+  return flow.slice(currentIdx + 1).filter(s => s !== 'bloqueada' && s !== 'aguardando_retorno');
+}
 
 export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
   const { user, profile } = useAuth();
@@ -64,6 +87,23 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
 
   const [profilesMap, setProfilesMap] = useState<Map<string, string>>(new Map());
 
+  // Evidências
+  const [evidencias, setEvidencias] = useState<DemandaEvidencia[]>([]);
+  const [evidLoading, setEvidLoading] = useState(false);
+  const [evidForm, setEvidForm] = useState({ fase: 'execucao_dev', tipo: 'arquivo', titulo: '', descricao: '', url_externa: '' });
+  const [evidFile, setEvidFile] = useState<File | null>(null);
+  const [deleteEvidId, setDeleteEvidId] = useState<string | null>(null);
+
+  const loadEvidencias = useCallback(async () => {
+    if (!demanda?.id) return;
+    setEvidLoading(true);
+    try {
+      const data = await evidSvc.fetchEvidencias(demanda.id);
+      setEvidencias(data);
+    } catch { /* ignore */ }
+    setEvidLoading(false);
+  }, [demanda?.id]);
+
   const loadResponsaveis = useCallback(async () => {
     if (!demanda?.id) return;
     setRespLoading(true);
@@ -77,9 +117,10 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
   useEffect(() => {
     if (demanda?.id) {
       loadResponsaveis();
+      loadEvidencias();
       setEditing(false);
     }
-  }, [demanda?.id, loadResponsaveis]);
+  }, [demanda?.id, loadResponsaveis, loadEvidencias]);
 
   useEffect(() => {
     if (hours.length === 0) return;
@@ -103,6 +144,18 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
   if (!demanda) return null;
 
   const currentStepIdx = STEPPER_STEPS.indexOf(demanda.situacao);
+  const allowedNextStatuses = getNextStatuses(demanda);
+  // Also allow bloqueada as a special action
+  const canBlock = demanda.situacao !== 'bloqueada' && demanda.situacao !== 'aceite_final';
+
+  // Check required evidences before allowing move
+  const getMissingEvidencias = (targetStatus: string): string[] => {
+    const required = evidSvc.EVIDENCIAS_OBRIGATORIAS[demanda.situacao] || [];
+    if (required.length === 0) return [];
+    const faseEvidencias = evidencias.filter(e => e.fase === demanda.situacao);
+    if (faseEvidencias.length >= required.length) return [];
+    return required;
+  };
 
   const startEdit = () => {
     setEditForm({ projeto: demanda.projeto, tipo: demanda.tipo, descricao: demanda.descricao || '', sla: demanda.sla });
@@ -118,6 +171,12 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
 
   const handleMove = async () => {
     if (!newStatus) return;
+    // Check required evidences
+    const missing = getMissingEvidencias(newStatus);
+    if (missing.length > 0) {
+      toast.error(`Evidência obrigatória pendente na fase "${EVIDENCIA_FASE_LABELS[demanda.situacao] || demanda.situacao}": ${missing.join(', ')}`);
+      return;
+    }
     if (REQUIRES_JUSTIFICATIVA.includes(newStatus)) { setShowJustModal(true); return; }
     const ok = await onMoveTo(demanda, newStatus);
     if (ok) setNewStatus('');
@@ -126,6 +185,17 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
     if (!newStatus) return;
     const ok = await onMoveTo(demanda, newStatus, justificativa);
     if (ok) { setNewStatus(''); setJustificativa(''); setShowJustModal(false); }
+  };
+
+  // Handle unblock: auto-return to previous status
+  const handleUnblock = async () => {
+    if (demanda.situacao !== 'bloqueada') return;
+    // Find the status before blocking
+    const sorted = [...transitions].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const blockTransition = sorted.find(t => t.to_status === 'bloqueada');
+    const previousStatus = blockTransition?.from_status || 'nova';
+    const ok = await onMoveTo(demanda, previousStatus, 'Desbloqueio automático — retorno à etapa anterior');
+    if (ok) toast.success(`Demanda desbloqueada → ${SITUACAO_LABELS[previousStatus]}`);
   };
 
   const handleAddHour = async () => {
@@ -164,6 +234,58 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
       await loadResponsaveis();
     } catch { toast.error("Erro ao remover responsável"); }
   };
+
+  // Evidência handlers
+  const handleAddEvidencia = async () => {
+    if (!demanda?.id || !user?.id) return;
+    if (!evidForm.titulo.trim()) { toast.error("Informe o título da evidência"); return; }
+
+    try {
+      let filePath: string | undefined;
+      let fileName: string | undefined;
+      let mimeType: string | undefined;
+
+      if (evidForm.tipo === 'arquivo' && evidFile) {
+        const result = await evidSvc.uploadEvidenciaFile(evidFile, demanda.id);
+        filePath = result.path;
+        fileName = evidFile.name;
+        mimeType = evidFile.type;
+      }
+
+      await evidSvc.addEvidencia({
+        demanda_id: demanda.id,
+        fase: evidForm.fase,
+        tipo: evidForm.tipo,
+        titulo: evidForm.titulo,
+        descricao: evidForm.descricao || undefined,
+        file_path: filePath,
+        file_name: fileName,
+        mime_type: mimeType,
+        url_externa: evidForm.tipo === 'link' ? evidForm.url_externa : undefined,
+        user_id: user.id,
+      });
+      toast.success("Evidência adicionada");
+      setEvidForm({ fase: 'execucao_dev', tipo: 'arquivo', titulo: '', descricao: '', url_externa: '' });
+      setEvidFile(null);
+      await loadEvidencias();
+    } catch { toast.error("Erro ao adicionar evidência"); }
+  };
+
+  const handleRemoveEvidencia = async () => {
+    if (!deleteEvidId) return;
+    try {
+      await evidSvc.removeEvidencia(deleteEvidId);
+      toast.success("Evidência removida");
+      setDeleteEvidId(null);
+      await loadEvidencias();
+    } catch { toast.error("Erro ao remover evidência"); }
+  };
+
+  // Group evidências by fase
+  const evidenciasByFase = EVIDENCIA_FASES.reduce((acc, fase) => {
+    acc[fase] = evidencias.filter(e => e.fase === fase);
+    return acc;
+  }, {} as Record<string, DemandaEvidencia[]>);
 
   return (
     <>
@@ -248,30 +370,45 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
           {/* Move Action */}
           {!editing && (
             <div className="px-6 py-3 border-b bg-info/5">
-              <div className="flex items-center gap-3">
-                <MoveRight className="h-4 w-4 text-info shrink-0" />
-                <span className="text-sm font-medium text-foreground shrink-0">Mover para:</span>
-                <Select value={newStatus} onValueChange={setNewStatus}>
-                  <SelectTrigger className="h-9 text-sm flex-1 max-w-xs bg-card">
-                    <SelectValue placeholder="Selecione a próxima etapa..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ALL_SITUACOES.filter(s => s !== demanda.situacao).map(s => (
-                      <SelectItem key={s} value={s}>{SITUACAO_LABELS[s]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button className="bg-info hover:bg-info/90 text-info-foreground" onClick={handleMove} disabled={!newStatus}>
-                  Avançar
-                </Button>
-              </div>
+              {demanda.situacao === 'bloqueada' ? (
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
+                  <span className="text-sm font-medium text-destructive shrink-0">Demanda bloqueada</span>
+                  <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleUnblock}>
+                    Desbloquear (retornar à etapa anterior)
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <MoveRight className="h-4 w-4 text-info shrink-0" />
+                  <span className="text-sm font-medium text-foreground shrink-0">Mover para:</span>
+                  <Select value={newStatus} onValueChange={setNewStatus}>
+                    <SelectTrigger className="h-9 text-sm flex-1 max-w-xs bg-card">
+                      <SelectValue placeholder="Selecione a próxima etapa..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allowedNextStatuses.map(s => (
+                        <SelectItem key={s} value={s}>{SITUACAO_LABELS[s]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button className="bg-info hover:bg-info/90 text-info-foreground" onClick={handleMove} disabled={!newStatus}>
+                    Avançar
+                  </Button>
+                  {canBlock && (
+                    <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => { setNewStatus('bloqueada'); setShowJustModal(true); }}>
+                      Bloquear
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           {/* Tabs Content */}
           <div className="px-6 py-5">
             <Tabs defaultValue="detalhes">
-              <TabsList className="bg-muted/50 p-1 h-auto">
+              <TabsList className="bg-muted/50 p-1 h-auto flex-wrap">
                 <TabsTrigger value="detalhes" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">
                   <FileText className="h-4 w-4" />Detalhes
                 </TabsTrigger>
@@ -283,6 +420,9 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
                 </TabsTrigger>
                 <TabsTrigger value="responsaveis" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">
                   <Users className="h-4 w-4" />Responsáveis <Badge variant="secondary" className="ml-1 text-[10px] h-5">{responsaveis.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="evidencias" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                  <ShieldCheck className="h-4 w-4" />Evidências <Badge variant="secondary" className="ml-1 text-[10px] h-5">{evidencias.length}</Badge>
                 </TabsTrigger>
               </TabsList>
 
@@ -359,7 +499,6 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
                       </CardContent>
                     </Card>
 
-                    {/* Responsáveis resumo */}
                     {responsaveis.length > 0 && (
                       <Card className="md:col-span-2 shadow-none">
                         <CardHeader className="pb-3">
@@ -390,13 +529,11 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
                 {!tLoading && transitions.length === 0 && <p className="text-sm text-muted-foreground py-4">Nenhuma transição registrada.</p>}
                 {transitions.length > 0 && (
                   <div className="relative pl-8 space-y-0">
-                    {/* Vertical line */}
                     <div className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-border" />
                     {transitions.map((t, idx) => {
                       const isFirst = idx === 0;
                       return (
                         <div key={t.id} className="relative pb-6 last:pb-0">
-                          {/* Dot */}
                           <div className={`absolute -left-8 top-0.5 flex items-center justify-center h-[14px] w-[14px] rounded-full border-2 ${
                             isFirst ? 'bg-info border-info' : 'bg-card border-muted-foreground/30'
                           }`}>
@@ -555,6 +692,129 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
                   </div>
                 )}
               </TabsContent>
+
+              {/* EVIDÊNCIAS */}
+              <TabsContent value="evidencias" className="mt-5 space-y-5">
+                <p className="text-sm text-muted-foreground">Registre evidências por fase do fluxo. Algumas evidências são obrigatórias para avançar a demanda.</p>
+
+                {/* Add evidence form */}
+                <Card className="shadow-none">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Adicionar Evidência</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid md:grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">Fase</Label>
+                        <Select value={evidForm.fase} onValueChange={v => setEvidForm(p => ({ ...p, fase: v }))}>
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {EVIDENCIA_FASES.map(f => <SelectItem key={f} value={f}>{EVIDENCIA_FASE_LABELS[f]}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Tipo</Label>
+                        <Select value={evidForm.tipo} onValueChange={v => setEvidForm(p => ({ ...p, tipo: v }))}>
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="arquivo">Arquivo (upload)</SelectItem>
+                            <SelectItem value="link">Link externo</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Título *</Label>
+                      <Input value={evidForm.titulo} onChange={e => setEvidForm(p => ({ ...p, titulo: e.target.value }))} placeholder="Ex: Print do erro reportado" className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Descrição (opcional)</Label>
+                      <Input value={evidForm.descricao} onChange={e => setEvidForm(p => ({ ...p, descricao: e.target.value }))} placeholder="Detalhes adicionais" className="mt-1" />
+                    </div>
+                    {evidForm.tipo === 'arquivo' ? (
+                      <div>
+                        <Label className="text-xs">Arquivo</Label>
+                        <Input type="file" className="mt-1" accept=".pdf,.png,.jpg,.jpeg,.gif,.docx,.xlsx,.zip,.mp4,.txt,.sql,.log" onChange={e => setEvidFile(e.target.files?.[0] || null)} />
+                      </div>
+                    ) : (
+                      <div>
+                        <Label className="text-xs">URL</Label>
+                        <Input value={evidForm.url_externa} onChange={e => setEvidForm(p => ({ ...p, url_externa: e.target.value }))} placeholder="https://..." className="mt-1" />
+                      </div>
+                    )}
+                    <Button className="bg-info hover:bg-info/90 text-info-foreground" onClick={handleAddEvidencia}>
+                      <Plus className="h-4 w-4 mr-1" />Adicionar Evidência
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Evidence by phase */}
+                {evidLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
+                {!evidLoading && EVIDENCIA_FASES.map(fase => {
+                  const items = evidenciasByFase[fase];
+                  const required = evidSvc.EVIDENCIAS_OBRIGATORIAS[fase] || [];
+                  const conditional = (evidSvc.EVIDENCIAS_CONDICIONAIS[demanda.tipo] || {})[fase] || [];
+                  const hasItems = items.length > 0 || required.length > 0 || conditional.length > 0;
+                  if (!hasItems) return null;
+
+                  const isMissing = required.length > 0 && items.length === 0;
+
+                  return (
+                    <Card key={fase} className={`shadow-none ${isMissing ? 'border-orange-300' : ''}`}>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          {EVIDENCIA_FASE_LABELS[fase]}
+                          {required.length > 0 && (
+                            <Badge className={`text-[10px] ${items.length > 0 ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-orange-100 text-orange-700 border-orange-200'}`}>
+                              {items.length > 0 ? 'Obrigatória ✓' : 'Obrigatória — pendente'}
+                            </Badge>
+                          )}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {required.map((req, i) => items.length === 0 && (
+                          <p key={i} className="text-xs text-orange-600 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />{req}
+                          </p>
+                        ))}
+                        {conditional.map((cond, i) => (
+                          <p key={`c-${i}`} className="text-xs text-muted-foreground flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />{cond} (condicional)
+                          </p>
+                        ))}
+                        {items.length > 0 && (
+                          <div className="border rounded-lg divide-y">
+                            {items.map(ev => (
+                              <div key={ev.id} className="flex items-center justify-between p-3 hover:bg-muted/30 transition-colors">
+                                <div className="flex items-center gap-3">
+                                  <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${ev.tipo === 'link' ? 'bg-info/10' : 'bg-muted'}`}>
+                                    {ev.tipo === 'link' ? <Link2 className="h-4 w-4 text-info" /> : <Upload className="h-4 w-4 text-muted-foreground" />}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium">
+                                      {ev.tipo === 'link' && ev.url_externa ? (
+                                        <a href={ev.url_externa} target="_blank" rel="noopener noreferrer" className="text-info hover:underline">{ev.titulo}</a>
+                                      ) : ev.titulo}
+                                    </p>
+                                    <p className="text-[11px] text-muted-foreground">
+                                      {ev.profile?.display_name} · {new Date(ev.created_at).toLocaleString('pt-BR')}
+                                      {ev.file_name && ` · ${ev.file_name}`}
+                                    </p>
+                                  </div>
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteEvidId(ev.id)}>
+                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </TabsContent>
             </Tabs>
 
             {/* Aceite Final */}
@@ -576,6 +836,7 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
       <ConfirmDialog open={showJustModal} onOpenChange={setShowJustModal} title="Justificativa obrigatória" description="Informe a justificativa para esta mudança de status." confirmLabel="Confirmar" variant="default" onConfirm={confirmMove} />
       <ConfirmDialog open={!!deleteHourId} onOpenChange={(o) => !o && setDeleteHourId(null)} onConfirm={() => { if (deleteHourId) { removeHour(deleteHourId); setDeleteHourId(null); } }} />
       <ConfirmDialog open={!!deleteRespId} onOpenChange={(o) => !o && setDeleteRespId(null)} title="Remover responsável" description="Deseja realmente remover este responsável da demanda?" onConfirm={handleRemoveResp} />
+      <ConfirmDialog open={!!deleteEvidId} onOpenChange={(o) => !o && setDeleteEvidId(null)} title="Remover evidência" description="Deseja realmente remover esta evidência?" onConfirm={handleRemoveEvidencia} />
     </>
   );
 }
