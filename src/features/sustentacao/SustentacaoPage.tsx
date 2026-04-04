@@ -62,7 +62,7 @@ function SustSidebar({ active, setActive }: { active: SustNav; setActive: (k: Su
   const roleLabel = roles.length > 0 ? roles.map(getRoleLabel).join(', ') : 'Sem perfil';
   const navigate = useNavigate();
   const moduleAccess = profile?.module_access || 'sala_agil';
-  const showModuleSwitch = moduleAccess === 'admin';
+  const showModuleSwitch = moduleAccess === 'admin' || roles.some(r => r === 'admin');
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">

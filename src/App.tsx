@@ -49,7 +49,6 @@ function ModuleRedirect() {
 function ModuleGuard({ module, children }: { module: 'sala_agil' | 'sustentacao'; children: React.ReactNode }) {
   const { profile, isAdmin } = useAuth();
   const moduleAccess = profile?.module_access || 'sala_agil';
-  // Admin can access everything
   if (isAdmin || moduleAccess === 'admin' || moduleAccess === module) {
     return <>{children}</>;
   }
