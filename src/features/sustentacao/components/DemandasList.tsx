@@ -115,7 +115,7 @@ export function DemandasList() {
         </>
       )}
 
-      <DemandaForm open={showForm} onClose={() => setShowForm(false)} onSubmit={create} />
+      <DemandaForm open={showForm} onClose={() => setShowForm(false)} onSubmit={(d) => create(d as any)} />
       <DemandaDetail demanda={selected} open={!!selected} onClose={() => setSelected(null)} onUpdate={update} onMoveTo={moveTo} />
       <ConfirmDialog open={!!deleteTarget} onOpenChange={o => !o && setDeleteTarget(null)} onConfirm={() => { if (deleteTarget) { remove(deleteTarget.id); setDeleteTarget(null); } }} />
     </div>
