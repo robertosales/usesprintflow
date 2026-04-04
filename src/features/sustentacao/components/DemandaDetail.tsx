@@ -111,7 +111,7 @@ export function DemandaDetail({ demanda, open, onClose, onUpdate, onMoveTo }: Pr
                   return (
                     <div key={step} className={`flex-1 text-center py-1.5 px-1 text-[10px] font-medium border-b-2 transition-colors ${
                       isActive ? 'border-info bg-info/10 text-info' :
-                      isPast ? 'border-success bg-success/5 text-success' :
+                      isPast ? 'border-info/50 bg-info/5 text-info/70' :
                       'border-border text-muted-foreground'
                     }`}>
                       {STEPPER_LABELS[step]}

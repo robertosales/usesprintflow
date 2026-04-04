@@ -104,7 +104,7 @@ export function ProjetosManager() {
       </div>
 
       {filtered.length === 0 ? (
-        <EmptyState icon={FolderKanban} title="Nenhum projeto encontrado" actionLabel="Novo Projeto" onAction={openCreate} />
+        <EmptyState icon={FolderKanban} title="Nenhum projeto encontrado" />
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -163,7 +163,7 @@ export function ProjetosManager() {
                 <SelectTrigger><SelectValue placeholder="Selecione uma equipe" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">Nenhuma</SelectItem>
-                  {teams.map(t => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
+                  {teams.filter(t => t.module === 'sustentacao').map(t => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
