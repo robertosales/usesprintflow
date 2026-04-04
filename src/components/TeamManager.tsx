@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, Edit2, Trash2, Users, UserCircle } from "lucide-react";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
@@ -19,22 +20,33 @@ interface TeamMemberInfo {
   email: string;
 }
 
-export function TeamManager() {
+interface TeamManagerProps {
+  moduleFilter?: 'sala_agil' | 'sustentacao';
+}
+
+export function TeamManager({ moduleFilter }: TeamManagerProps) {
   const { teams, refreshTeams, currentTeamId, setCurrentTeamId, isAdmin, hasPermission } = useAuth();
   const canManage = hasPermission('manage_teams');
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [module, setModule] = useState<string>(moduleFilter || "sala_agil");
   const [open, setOpen] = useState(false);
-  const [editingTeam, setEditingTeam] = useState<{ id: string; name: string; description: string } | null>(null);
+  const [editingTeam, setEditingTeam] = useState<{ id: string; name: string; description: string; module: string } | null>(null);
   const [teamMembers, setTeamMembers] = useState<Record<string, TeamMemberInfo[]>>({});
+  const [allTeams, setAllTeams] = useState<any[]>([]);
 
-  useEffect(() => {
-    loadAllTeamMembers();
-  }, [teams]);
+  const loadTeams = async () => {
+    let query = supabase.from("teams").select("*");
+    if (moduleFilter) {
+      query = query.eq("module", moduleFilter);
+    }
+    const { data } = await query;
+    setAllTeams(data || []);
+    if (data && data.length > 0) loadTeamMembers(data.map((t: any) => t.id));
+  };
 
-  const loadAllTeamMembers = async () => {
-    if (teams.length === 0) return;
-    const teamIds = teams.map((t) => t.id);
+  const loadTeamMembers = async (teamIds: string[]) => {
+    if (teamIds.length === 0) { setTeamMembers({}); return; }
     const { data: tmData } = await supabase.from("team_members").select("*").in("team_id", teamIds);
     if (!tmData || tmData.length === 0) { setTeamMembers({}); return; }
 
@@ -57,14 +69,18 @@ export function TeamManager() {
     setTeamMembers(result);
   };
 
+  useEffect(() => {
+    loadTeams();
+  }, [moduleFilter]);
+
   const handleCreate = async () => {
     if (!name.trim()) { toast.error("Nome do time é obrigatório *"); return; }
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     
     const { data, error } = await supabase.from("teams").insert({
-      name: name.trim(), description: description.trim(), created_by: user.id,
-    }).select().single();
+      name: name.trim(), description: description.trim(), created_by: user.id, module: module,
+    } as any).select().single();
     
     if (error) { toast.error("Erro ao criar time"); return; }
     
@@ -72,34 +88,37 @@ export function TeamManager() {
       team_id: (data as any).id, user_id: user.id, role: "admin",
     });
     
-    const defaultCols = [
-      { key: "aguardando_desenvolvimento", label: "Aguardando Desenvolvimento", color_class: "bg-kanban-aguardando", dot_color: "bg-muted-foreground", sort_order: 0 },
-      { key: "em_desenvolvimento", label: "Em Desenvolvimento", color_class: "bg-kanban-desenvolvimento", dot_color: "bg-info", sort_order: 1 },
-      { key: "em_code_review", label: "Em Code Review", color_class: "bg-kanban-review", dot_color: "bg-accent", sort_order: 2 },
-      { key: "em_teste", label: "Em Teste", color_class: "bg-kanban-teste", dot_color: "bg-warning", sort_order: 3 },
-      { key: "bug", label: "Bug", color_class: "bg-kanban-bug", dot_color: "bg-destructive", sort_order: 4 },
-      { key: "pronto_para_publicacao", label: "Pronto para Publicação", color_class: "bg-kanban-pronto", dot_color: "bg-success", sort_order: 5 },
-    ];
-    await supabase.from("workflow_columns").insert(
-      defaultCols.map((c) => ({ ...c, team_id: (data as any).id }))
-    );
+    if (module === 'sala_agil') {
+      const defaultCols = [
+        { key: "aguardando_desenvolvimento", label: "Aguardando Desenvolvimento", color_class: "bg-kanban-aguardando", dot_color: "bg-muted-foreground", sort_order: 0 },
+        { key: "em_desenvolvimento", label: "Em Desenvolvimento", color_class: "bg-kanban-desenvolvimento", dot_color: "bg-info", sort_order: 1 },
+        { key: "em_code_review", label: "Em Code Review", color_class: "bg-kanban-review", dot_color: "bg-accent", sort_order: 2 },
+        { key: "em_teste", label: "Em Teste", color_class: "bg-kanban-teste", dot_color: "bg-warning", sort_order: 3 },
+        { key: "bug", label: "Bug", color_class: "bg-kanban-bug", dot_color: "bg-destructive", sort_order: 4 },
+        { key: "pronto_para_publicacao", label: "Pronto para Publicação", color_class: "bg-kanban-pronto", dot_color: "bg-success", sort_order: 5 },
+      ];
+      await supabase.from("workflow_columns").insert(
+        defaultCols.map((c) => ({ ...c, team_id: (data as any).id }))
+      );
+    }
     
     toast.success("Time criado com sucesso!");
-    setName(""); setDescription(""); setOpen(false);
+    setName(""); setDescription(""); setModule(moduleFilter || "sala_agil"); setOpen(false);
     await refreshTeams();
+    await loadTeams();
     setCurrentTeamId((data as any).id);
-    loadAllTeamMembers();
   };
 
   const handleUpdate = async () => {
     if (!editingTeam) return;
     const { error } = await supabase.from("teams").update({
-      name: editingTeam.name, description: editingTeam.description,
-    }).eq("id", editingTeam.id);
+      name: editingTeam.name, description: editingTeam.description, module: editingTeam.module,
+    } as any).eq("id", editingTeam.id);
     if (error) { toast.error("Erro ao atualizar"); return; }
     toast.success("Time atualizado!");
     setEditingTeam(null);
     await refreshTeams();
+    await loadTeams();
   };
 
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -110,12 +129,15 @@ export function TeamManager() {
       await supabase.from("teams").delete().eq("id", deleteTarget);
       toast.success("Registro excluído com sucesso");
       await refreshTeams();
-      if (currentTeamId === deleteTarget) setCurrentTeamId(teams.find((t) => t.id !== deleteTarget)?.id || null);
+      await loadTeams();
+      if (currentTeamId === deleteTarget) setCurrentTeamId(allTeams.find((t) => t.id !== deleteTarget)?.id || null);
     } catch {
       toast.error("Falha ao excluir item");
     }
     setDeleteTarget(null);
   };
+
+  const MODULE_LABELS: Record<string, string> = { sala_agil: 'Sala Ágil', sustentacao: 'Sustentação' };
 
   return (
     <div className="space-y-6">
@@ -124,7 +146,9 @@ export function TeamManager() {
           <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Users className="h-6 w-6 text-primary" /> Times / Squads
           </h2>
-          <p className="text-sm text-muted-foreground">Gerencie os times do projeto</p>
+          <p className="text-sm text-muted-foreground">
+            {moduleFilter ? `Times do módulo ${MODULE_LABELS[moduleFilter]}` : 'Gerencie os times do projeto'}
+          </p>
         </div>
         {canManage && (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -142,6 +166,18 @@ export function TeamManager() {
                 <Label>Descrição</Label>
                 <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição do time" />
               </div>
+              {!moduleFilter && (
+                <div>
+                  <Label>Tipo de Time *</Label>
+                  <Select value={module} onValueChange={setModule}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sala_agil">Sala Ágil</SelectItem>
+                      <SelectItem value="sustentacao">Sustentação</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <Button onClick={handleCreate} className="w-full">Criar Time</Button>
             </div>
           </DialogContent>
@@ -150,7 +186,7 @@ export function TeamManager() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {teams.map((team) => {
+        {allTeams.map((team) => {
           const members = teamMembers[team.id] || [];
           return (
             <Card
@@ -159,10 +195,13 @@ export function TeamManager() {
               onClick={() => setCurrentTeamId(team.id)}
             >
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-lg">{team.name}</CardTitle>
+                <div className="space-y-0.5">
+                  <CardTitle className="text-lg">{team.name}</CardTitle>
+                  <Badge variant="outline" className="text-[10px]">{MODULE_LABELS[team.module] || team.module}</Badge>
+                </div>
                 <div className="flex gap-1">
                   {canManage && (
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingTeam({ ...team, description: "" }); }}>
+                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingTeam({ id: team.id, name: team.name, description: team.description || "", module: team.module || "sala_agil" }); }}>
                       <Edit2 className="h-4 w-4" />
                     </Button>
                   )}
@@ -199,11 +238,10 @@ export function TeamManager() {
         })}
       </div>
 
-      {teams.length === 0 && (
-        <EmptyState icon={Users} title="Nenhum item encontrado" description="Crie seu primeiro time para começar!" actionLabel={canManage ? "Criar novo" : undefined} onAction={canManage ? () => setOpen(true) : undefined} />
+      {allTeams.length === 0 && (
+        <EmptyState icon={Users} title="Nenhum time encontrado" description="Crie seu primeiro time para começar!" actionLabel={canManage ? "Criar novo" : undefined} onAction={canManage ? () => setOpen(true) : undefined} />
       )}
 
-      {/* Edit Dialog */}
       <Dialog open={!!editingTeam} onOpenChange={(o) => !o && setEditingTeam(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Editar Time</DialogTitle></DialogHeader>
@@ -217,6 +255,18 @@ export function TeamManager() {
                 <Label>Descrição</Label>
                 <Input value={editingTeam.description} onChange={(e) => setEditingTeam({ ...editingTeam, description: e.target.value })} />
               </div>
+              {!moduleFilter && (
+                <div>
+                  <Label>Tipo de Time</Label>
+                  <Select value={editingTeam.module} onValueChange={v => setEditingTeam({ ...editingTeam, module: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sala_agil">Sala Ágil</SelectItem>
+                      <SelectItem value="sustentacao">Sustentação</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <Button onClick={handleUpdate} className="w-full">Salvar</Button>
             </div>
           )}

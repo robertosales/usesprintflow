@@ -5,8 +5,14 @@ import { DemandasList } from "./components/DemandasList";
 import { ProjetosManager } from "./components/ProjetosManager";
 import { ImportacaoView } from "./components/ImportacaoView";
 import { SustentacaoDashboard } from "./components/SustentacaoDashboard";
+import { TeamManager } from "@/components/TeamManager";
+import { TeamMembersManager } from "@/components/TeamMembersManager";
+import { UserRolesManager } from "@/components/UserRolesManager";
+import { DeveloperManager } from "@/components/DeveloperManager";
+import { WorkflowManager } from "@/components/WorkflowManager";
+import { CustomFieldManager } from "@/components/CustomFieldManager";
+import { AutomationManager } from "@/components/AutomationManager";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NotificationBell } from "@/components/NotificationBell";
 import { APP_NAME } from "@/lib/constants";
@@ -17,20 +23,36 @@ import {
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard, Columns3, ListTodo, Upload, LogOut, UserCircle, Wrench,
-  FolderKanban, FileBarChart, Hexagon,
+  FolderKanban, FileBarChart, Hexagon, Building2, UsersRound, ShieldCheck,
+  Users, GitBranch, SlidersHorizontal, Wand2,
 } from "lucide-react";
 import { getRoleLabel } from "@/hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
 
-type SustNav = 'dashboard' | 'board' | 'demandas' | 'projetos' | 'importacao' | 'relatorios';
+type SustNav = 'dashboard' | 'board' | 'demandas' | 'projetos' | 'importacao' | 'relatorios'
+  | 'teams' | 'team-members' | 'user-roles' | 'equipe'
+  | 'workflow' | 'custom-fields' | 'automations';
 
-const NAV_ITEMS: { key: SustNav; label: string; icon: any }[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { key: 'board', label: 'Board Kanban', icon: Columns3 },
-  { key: 'demandas', label: 'Demandas', icon: ListTodo },
-  { key: 'projetos', label: 'Projetos', icon: FolderKanban },
-  { key: 'importacao', label: 'Importação Excel', icon: Upload },
-  { key: 'relatorios', label: 'Relatórios', icon: FileBarChart },
+const NAV_SECTIONS = [
+  { title: "Menu", items: [
+    { key: 'dashboard' as SustNav, label: 'Dashboard', icon: LayoutDashboard },
+    { key: 'board' as SustNav, label: 'Board Kanban', icon: Columns3 },
+    { key: 'demandas' as SustNav, label: 'Demandas', icon: ListTodo },
+    { key: 'projetos' as SustNav, label: 'Projetos', icon: FolderKanban },
+    { key: 'importacao' as SustNav, label: 'Importação Excel', icon: Upload },
+    { key: 'relatorios' as SustNav, label: 'Relatórios', icon: FileBarChart },
+  ]},
+  { title: "Organização", items: [
+    { key: 'teams' as SustNav, label: 'Times', icon: Building2 },
+    { key: 'team-members' as SustNav, label: 'Membros', icon: UsersRound },
+    { key: 'user-roles' as SustNav, label: 'Perfis (RBAC)', icon: ShieldCheck },
+    { key: 'equipe' as SustNav, label: 'Equipe', icon: Users },
+  ]},
+  { title: "Configurações", items: [
+    { key: 'workflow' as SustNav, label: 'Fluxo de Trabalho', icon: GitBranch },
+    { key: 'custom-fields' as SustNav, label: 'Campos Custom', icon: SlidersHorizontal },
+    { key: 'automations' as SustNav, label: 'Automações', icon: Wand2 },
+  ]},
 ];
 
 function SustSidebar({ active, setActive }: { active: SustNav; setActive: (k: SustNav) => void }) {
@@ -39,7 +61,7 @@ function SustSidebar({ active, setActive }: { active: SustNav; setActive: (k: Su
   const collapsed = state === "collapsed";
   const roleLabel = roles.length > 0 ? roles.map(getRoleLabel).join(', ') : 'Sem perfil';
   const navigate = useNavigate();
-  const moduleAccess = (profile as any)?.module_access || 'sala_agil';
+  const moduleAccess = profile?.module_access || 'sala_agil';
   const showModuleSwitch = moduleAccess === 'admin';
 
   return (
@@ -85,20 +107,22 @@ function SustSidebar({ active, setActive }: { active: SustNav; setActive: (k: Su
 
         <SidebarSeparator />
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest font-semibold">Menu</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {NAV_ITEMS.map(item => (
-                <SidebarMenuItem key={item.key}>
-                  <SidebarMenuButton isActive={active === item.key} onClick={() => setActive(item.key)} tooltip={item.label} className="transition-all duration-150">
-                    <item.icon className="h-4 w-4" /><span>{item.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {NAV_SECTIONS.map(section => (
+          <SidebarGroup key={section.title}>
+            <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest font-semibold">{section.title}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {section.items.map(item => (
+                  <SidebarMenuItem key={item.key}>
+                    <SidebarMenuButton isActive={active === item.key} onClick={() => setActive(item.key)} tooltip={item.label} className="transition-all duration-150">
+                      <item.icon className="h-4 w-4" /><span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border">
@@ -125,7 +149,8 @@ export function SustentacaoPage() {
   const [active, setActive] = useState<SustNav>('dashboard');
   const { profile, currentTeamId } = useAuth();
 
-  const pageTitle = NAV_ITEMS.find(i => i.key === active)?.label || 'Sustentação';
+  const allItems = NAV_SECTIONS.flatMap(s => s.items);
+  const pageTitle = allItems.find(i => i.key === active)?.label || 'Sustentação';
 
   return (
     <SidebarProvider>
@@ -157,7 +182,7 @@ export function SustentacaoPage() {
           </header>
           <main className="flex-1 overflow-auto">
             <div className={`mx-auto p-4 md:p-6 ${active === 'board' ? 'max-w-full' : 'max-w-7xl'}`}>
-              {!currentTeamId ? (
+              {!currentTeamId && active !== 'teams' ? (
                 <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                   <p className="text-lg font-medium">Selecione um time para começar</p>
                 </div>
@@ -168,6 +193,13 @@ export function SustentacaoPage() {
                   {active === 'demandas' && <DemandasList />}
                   {active === 'projetos' && <ProjetosManager />}
                   {active === 'importacao' && <ImportacaoView />}
+                  {active === 'teams' && <TeamManager moduleFilter="sustentacao" />}
+                  {active === 'team-members' && <TeamMembersManager />}
+                  {active === 'user-roles' && <UserRolesManager />}
+                  {active === 'equipe' && <DeveloperManager />}
+                  {active === 'workflow' && <WorkflowManager />}
+                  {active === 'custom-fields' && <CustomFieldManager />}
+                  {active === 'automations' && <AutomationManager />}
                   {active === 'relatorios' && (
                     <div className="flex flex-col items-center justify-center py-20 text-muted-foreground space-y-2">
                       <FileBarChart className="h-12 w-12 text-muted-foreground/30" />

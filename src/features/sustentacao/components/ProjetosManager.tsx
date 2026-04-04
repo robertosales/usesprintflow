@@ -11,6 +11,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { EmptyState } from "@/shared/components/common/EmptyState";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
+import { PaginationControls } from "@/shared/components/common/Pagination";
+import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { useProjetos } from "../hooks/useProjetos";
 import { useDemandas } from "../hooks/useDemandas";
@@ -39,6 +41,8 @@ export function ProjetosManager() {
       return true;
     });
   }, [projetos, debouncedSearch, filterSla]);
+
+  const { paginatedItems, currentPage, setCurrentPage, totalPages, totalItems } = usePagination(filtered, { pageSize: 20 });
 
   const demandasPorProjeto = useMemo(() => {
     const map: Record<string, number> = {};
@@ -102,46 +106,49 @@ export function ProjetosManager() {
       {filtered.length === 0 ? (
         <EmptyState icon={FolderKanban} title="Nenhum projeto encontrado" actionLabel="Novo Projeto" onAction={openCreate} />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(p => (
-            <Card key={p.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-sm truncate">{p.nome}</h3>
-                      {p.sla === '24x7' ? (
-                        <Badge variant="destructive" className="text-[10px] shrink-0">SLA 24x7</Badge>
-                      ) : (
-                        <Badge className="text-[10px] shrink-0 bg-info/10 text-info border-info/20">SLA Padrão 8h-20h</Badge>
-                      )}
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {paginatedItems.map(p => (
+              <Card key={p.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-sm truncate">{p.nome}</h3>
+                        {p.sla === '24x7' ? (
+                          <Badge variant="destructive" className="text-[10px] shrink-0">SLA 24x7</Badge>
+                        ) : (
+                          <Badge className="text-[10px] shrink-0 bg-info/10 text-info border-info/20">SLA Padrão 8h-20h</Badge>
+                        )}
+                      </div>
+                      {p.descricao && <p className="text-xs text-muted-foreground line-clamp-2">{p.descricao}</p>}
                     </div>
-                    {p.descricao && <p className="text-xs text-muted-foreground line-clamp-2">{p.descricao}</p>}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"><MoreHorizontal className="h-4 w-4" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEdit(p)}>Editar</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(p)}>Excluir</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"><MoreHorizontal className="h-4 w-4" /></Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openEdit(p)}>Editar</DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(p)}>Excluir</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
-                  {p.equipe && (
+                  <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
+                    {p.equipe && (
+                      <div className="flex items-center gap-1">
+                        <Users className="h-3 w-3" />Equipe: {p.equipe}
+                      </div>
+                    )}
                     <div className="flex items-center gap-1">
-                      <Users className="h-3 w-3" />Equipe: {p.equipe}
+                      <FileText className="h-3 w-3" />{demandasPorProjeto[p.nome] || 0} demandas ativas
                     </div>
-                  )}
-                  <div className="flex items-center gap-1">
-                    <FileText className="h-3 w-3" />{demandasPorProjeto[p.nome] || 0} demandas ativas
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <PaginationControls currentPage={currentPage} totalItems={totalItems} pageSize={20} onPageChange={setCurrentPage} />
+        </>
       )}
 
       <Dialog open={showForm} onOpenChange={o => !o && setShowForm(false)}>

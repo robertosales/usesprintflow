@@ -72,7 +72,7 @@ export function DemandasList() {
       </div>
 
       {filtered.length === 0 ? (
-        <EmptyState icon={ListTodo} title="Nenhuma demanda encontrada" actionLabel="Nova Demanda" onAction={() => setShowForm(true)} />
+        <EmptyState icon={ListTodo} title="Nenhuma demanda encontrada" />
       ) : (
         <>
           <div className="border rounded-lg">
