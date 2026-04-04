@@ -27,12 +27,12 @@ export function DemandaCard({ demanda, onOpen, onDelete, draggable, onDragStart 
       <div className="flex items-start justify-between gap-2">
         <div className="space-y-1.5 min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-mono font-bold text-primary">{demanda.rhm}</span>
+            <span className="text-xs font-mono font-bold text-info">{demanda.rhm}</span>
             {demanda.sla === '24x7' && (
               <Badge variant="destructive" className="text-[10px] h-4 px-1">24x7</Badge>
             )}
             {demanda.situacao === 'bloqueada' && (
-              <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+              <Badge className="text-[10px] h-4 px-1 bg-destructive/10 text-destructive border-destructive/20">Bloqueada</Badge>
             )}
           </div>
           <p className="text-xs text-muted-foreground truncate">{demanda.projeto}</p>

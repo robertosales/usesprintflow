@@ -15,13 +15,13 @@ interface Props {
 }
 
 export function DemandaForm({ open, onClose, onSubmit }: Props) {
-  const { projetos } = useProjetos();
+  const { projetos, loading: loadingProjetos } = useProjetos();
   const [form, setForm] = useState({ rhm: '', projeto: '', tipo: 'corretiva', descricao: '', sla: 'padrao' });
   const [loading, setLoading] = useState(false);
 
   const handle = async () => {
-    if (!form.rhm.trim() || !form.projeto.trim()) {
-      toast.error("Preencha os campos obrigatórios");
+    if (!form.rhm.trim() || !form.projeto) {
+      toast.error("Preencha os campos obrigatórios (RHM e Projeto)");
       return;
     }
     setLoading(true);
@@ -42,15 +42,15 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
           </div>
           <div>
             <Label>Projeto *</Label>
-            {projetos.length > 0 ? (
-              <Select value={form.projeto} onValueChange={v => setForm(p => ({ ...p, projeto: v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione um projeto" /></SelectTrigger>
-                <SelectContent>
-                  {projetos.map(p => <SelectItem key={p.id} value={p.nome}>{p.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input value={form.projeto} onChange={e => setForm(p => ({ ...p, projeto: e.target.value }))} placeholder="Nome do projeto" />
+            <Select value={form.projeto || '_none'} onValueChange={v => setForm(p => ({ ...p, projeto: v === '_none' ? '' : v }))}>
+              <SelectTrigger><SelectValue placeholder="Selecione um projeto" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none" disabled>Selecione um projeto</SelectItem>
+                {projetos.map(p => <SelectItem key={p.id} value={p.nome}>{p.nome}{p.sla === '24x7' ? ' (24x7)' : ''}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {projetos.length === 0 && !loadingProjetos && (
+              <p className="text-[10px] text-muted-foreground mt-1">Nenhum projeto cadastrado. Crie um projeto primeiro.</p>
             )}
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -82,7 +82,7 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handle} disabled={loading}>{loading ? 'Criando...' : 'Criar Demanda'}</Button>
+          <Button className="bg-info hover:bg-info/90 text-info-foreground" onClick={handle} disabled={loading}>{loading ? 'Criando...' : 'Criar Demanda'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

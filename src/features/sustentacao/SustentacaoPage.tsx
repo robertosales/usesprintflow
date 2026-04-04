@@ -136,7 +136,10 @@ export function SustentacaoPage() {
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-8 w-8" />
               <div className="h-5 w-px bg-border hidden md:block" />
-              <h1 className="text-base font-semibold text-foreground hidden md:block">{pageTitle}</h1>
+              <div className="hidden md:flex items-center gap-2">
+                <Badge className="bg-info/10 text-info border-info/20 text-[10px]">Sustentação</Badge>
+                <h1 className="text-base font-semibold text-foreground">{pageTitle}</h1>
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <NotificationBell />
@@ -145,7 +148,9 @@ export function SustentacaoPage() {
                   <div className="h-7 w-7 rounded-full bg-info/10 flex items-center justify-center">
                     <span className="text-[10px] font-bold text-info">{profile.display_name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">{profile.display_name}</span>
+                  <div className="text-right">
+                    <span className="text-xs font-medium block">{profile.display_name}</span>
+                  </div>
                 </div>
               )}
             </div>

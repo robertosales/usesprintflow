@@ -46,7 +46,7 @@ export function DemandasList() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Demandas</h2>
-        <Button size="sm" onClick={() => setShowForm(true)}><Plus className="h-4 w-4 mr-1" />Nova Demanda</Button>
+        <Button size="sm" className="bg-info hover:bg-info/90 text-info-foreground" onClick={() => setShowForm(true)}><Plus className="h-4 w-4 mr-1" />Nova Demanda</Button>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -90,7 +90,7 @@ export function DemandasList() {
               <TableBody>
                 {paginatedItems.map(d => (
                   <TableRow key={d.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelected(d)}>
-                    <TableCell className="font-mono font-bold text-primary">{d.rhm}</TableCell>
+                    <TableCell className="font-mono font-bold text-info">{d.rhm}</TableCell>
                     <TableCell>{d.projeto}</TableCell>
                     <TableCell><Badge variant="outline" className="capitalize text-[10px]">{d.tipo}</Badge></TableCell>
                     <TableCell><Badge className={`text-[10px] ${SITUACAO_COLORS[d.situacao] || ''}`}>{SITUACAO_LABELS[d.situacao] || d.situacao}</Badge></TableCell>
