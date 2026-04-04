@@ -32,8 +32,7 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   const { session, loading, profile } = useAuth();
   if (loading) return null;
   if (!session) return <>{children}</>;
-  // Redirect based on module_access
-  const moduleAccess = (profile as any)?.module_access || 'sala_agil';
+  const moduleAccess = profile?.module_access || 'sala_agil';
   if (moduleAccess === 'admin') return <Navigate to="/modulos" replace />;
   if (moduleAccess === 'sustentacao') return <Navigate to="/sustentacao" replace />;
   return <Navigate to="/sala-agil" replace />;
@@ -42,7 +41,7 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
 function ModuleRedirect() {
   const { profile, loading } = useAuth();
   if (loading) return null;
-  const moduleAccess = (profile as any)?.module_access || 'sala_agil';
+  const moduleAccess = profile?.module_access || 'sala_agil';
   if (moduleAccess === 'admin') return <Navigate to="/modulos" replace />;
   if (moduleAccess === 'sustentacao') return <Navigate to="/sustentacao" replace />;
   return <Navigate to="/sala-agil" replace />;
