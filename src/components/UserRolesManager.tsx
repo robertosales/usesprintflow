@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ShieldCheck, Save } from "lucide-react";
 import { ALL_ROLES, getRoleLabel, type AppRole } from "@/hooks/usePermissions";
@@ -13,17 +15,19 @@ interface UserWithRoles {
   display_name: string;
   email: string;
   roles: AppRole[];
+  module_access: string;
 }
 
 export function UserRolesManager() {
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [pendingRoles, setPendingRoles] = useState<AppRole[]>([]);
+  const [pendingModule, setPendingModule] = useState<string>('sala_agil');
   const [loading, setLoading] = useState(false);
 
   const fetchUsers = async () => {
     setLoading(true);
-    const { data: profiles } = await supabase.from("profiles").select("user_id, display_name, email");
+    const { data: profiles } = await supabase.from("profiles").select("user_id, display_name, email, module_access");
     const { data: roles } = await supabase.from("user_roles").select("user_id, role");
 
     const profileList = profiles || [];
@@ -34,6 +38,7 @@ export function UserRolesManager() {
         user_id: p.user_id,
         display_name: p.display_name,
         email: p.email,
+        module_access: p.module_access || 'sala_agil',
         roles: roleList
           .filter((r: any) => r.user_id === p.user_id)
           .map((r: any) => r.role as AppRole),
@@ -49,6 +54,7 @@ export function UserRolesManager() {
   const startEditing = (user: UserWithRoles) => {
     setEditingUser(user.user_id);
     setPendingRoles([...user.roles]);
+    setPendingModule(user.module_access);
   };
 
   const toggleRole = (role: AppRole) => {
@@ -71,9 +77,19 @@ export function UserRolesManager() {
       await supabase.from("user_roles").insert({ user_id: userId, role });
     }
 
+    if (currentUser.module_access !== pendingModule) {
+      await supabase.from("profiles").update({ module_access: pendingModule }).eq("user_id", userId);
+    }
+
     toast.success("Perfis atualizados!");
     setEditingUser(null);
     await fetchUsers();
+  };
+
+  const MODULE_LABELS: Record<string, string> = {
+    sala_agil: 'Sala Ágil',
+    sustentacao: 'Sustentação',
+    admin: 'Administrador (ambos)',
   };
 
   return (
@@ -83,7 +99,7 @@ export function UserRolesManager() {
           <ShieldCheck className="h-6 w-6 text-primary" /> Gestão de Perfis
         </h2>
         <p className="text-sm text-muted-foreground">
-          Atribua e remova perfis de acesso (RBAC) para cada usuário
+          Atribua perfis de acesso (RBAC) e módulo para cada usuário
         </p>
       </div>
 
@@ -99,17 +115,14 @@ export function UserRolesManager() {
                   </CardTitle>
                   <p className="text-xs text-muted-foreground">{user.email}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                  <Badge variant="outline" className="text-[10px]">{MODULE_LABELS[user.module_access] || user.module_access}</Badge>
                   {isEditing ? (
                     <Button size="sm" onClick={() => saveRoles(user.user_id)}>
                       <Save className="h-4 w-4 mr-1" /> Salvar
                     </Button>
                   ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => startEditing(user)}
-                    >
+                    <Button size="sm" variant="outline" onClick={() => startEditing(user)}>
                       Editar Perfis
                     </Button>
                   )}
@@ -117,19 +130,32 @@ export function UserRolesManager() {
               </CardHeader>
               <CardContent className="pt-0">
                 {isEditing ? (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
-                    {ALL_ROLES.map((role) => (
-                      <label
-                        key={role}
-                        className="flex items-center gap-2 text-sm cursor-pointer"
-                      >
-                        <Checkbox
-                          checked={pendingRoles.includes(role)}
-                          onCheckedChange={() => toggleRole(role)}
-                        />
-                        {getRoleLabel(role)}
-                      </label>
-                    ))}
+                  <div className="space-y-4 mt-2">
+                    <div>
+                      <Label className="text-xs font-semibold">Módulo de Acesso</Label>
+                      <Select value={pendingModule} onValueChange={setPendingModule}>
+                        <SelectTrigger className="h-8 mt-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sala_agil">Sala Ágil</SelectItem>
+                          <SelectItem value="sustentacao">Sustentação</SelectItem>
+                          <SelectItem value="admin">Administrador (ambos)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-semibold">Perfis</Label>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-1">
+                        {ALL_ROLES.map((role) => (
+                          <label key={role} className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox
+                              checked={pendingRoles.includes(role)}
+                              onCheckedChange={() => toggleRole(role)}
+                            />
+                            {getRoleLabel(role)}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-1.5 mt-1">

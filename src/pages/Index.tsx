@@ -274,7 +274,7 @@ const Index = () => {
               {!loading && !needsTeam && (
                 <>
                   {active === "dashboard" && <DashboardHome />}
-                  {active === "teams" && <TeamManager />}
+                  {active === "teams" && <TeamManager moduleFilter="sala_agil" />}
                   {active === "team-members" && <TeamMembersManager />}
                   {active === "user-roles" && <UserRolesManager />}
                   {active === "backlog" && (
