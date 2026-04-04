@@ -159,13 +159,16 @@ export function SustentacaoBoard() {
 
       <p className="text-[10px] text-muted-foreground text-center">Arraste os cards para alterar a situação</p>
 
-      <DemandaDetail
-        demanda={selected}
-        open={!!selected}
-        onClose={() => setSelected(null)}
-        onUpdate={update}
-        onMoveTo={moveTo}
-      />
+      {selected && (
+        <div className="fixed inset-0 z-50 bg-background overflow-auto">
+          <DemandaDetail
+            demanda={demandas.find(d => d.id === selected.id) || selected}
+            onBack={() => setSelected(null)}
+            onUpdate={update}
+            onMoveTo={moveTo}
+          />
+        </div>
+      )}
 
       <ConfirmDialog
         open={!!deleteTarget}
