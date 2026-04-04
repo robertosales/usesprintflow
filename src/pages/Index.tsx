@@ -88,7 +88,7 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
   const collapsed = state === "collapsed";
   const navigate = useNavigate();
   const moduleAccess = profile?.module_access || 'sala_agil';
-  const showModuleSwitch = moduleAccess === 'admin';
+  const showModuleSwitch = moduleAccess === 'admin' || roles.some(r => r === 'admin');
 
   const sprintStories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : [];
   const blockedCount = sprintStories.filter(hasActiveImpediment).length;
@@ -140,7 +140,7 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
                 <SelectValue placeholder="Selecione um time" />
               </SelectTrigger>
               <SelectContent>
-                {teams.map((t) => (
+                {teams.filter(t => t.module === 'sala_agil').map((t) => (
                   <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                 ))}
               </SelectContent>

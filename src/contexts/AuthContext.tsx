@@ -21,7 +21,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   currentTeamId: string | null;
   setCurrentTeamId: (id: string | null) => void;
-  teams: { id: string; name: string }[];
+  teams: { id: string; name: string; module: string }[];
   refreshTeams: () => Promise<void>;
   roles: AppRole[];
   hasPermission: (permission: Permission) => boolean;
@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("selectedTeamId");
     }
   };
-  const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
+  const [teams, setTeams] = useState<{ id: string; name: string; module: string }[]>([]);
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -82,8 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshTeams = async () => {
     try {
-      const { data } = await supabase.from("teams").select("id, name");
-      const teamList = (data || []) as { id: string; name: string }[];
+      const { data } = await supabase.from("teams").select("id, name, module");
+      const teamList = (data || []) as { id: string; name: string; module: string }[];
       setTeams(teamList);
       if (teamList.length > 0 && !currentTeamId) {
         const savedTeamId = localStorage.getItem("selectedTeamId");

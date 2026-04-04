@@ -29,28 +29,26 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading, profile } = useAuth();
+  const { session, loading, profile, isAdmin } = useAuth();
   if (loading) return null;
   if (!session) return <>{children}</>;
-  const moduleAccess = profile?.module_access || 'sala_agil';
-  if (moduleAccess === 'admin') return <Navigate to="/modulos" replace />;
-  if (moduleAccess === 'sustentacao') return <Navigate to="/sustentacao" replace />;
+  // Admin (by role) or module_access='admin' → module selector
+  if (isAdmin || profile?.module_access === 'admin') return <Navigate to="/modulos" replace />;
+  if (profile?.module_access === 'sustentacao') return <Navigate to="/sustentacao" replace />;
   return <Navigate to="/sala-agil" replace />;
 }
 
 function ModuleRedirect() {
-  const { profile, loading } = useAuth();
+  const { profile, loading, isAdmin } = useAuth();
   if (loading) return null;
-  const moduleAccess = profile?.module_access || 'sala_agil';
-  if (moduleAccess === 'admin') return <Navigate to="/modulos" replace />;
-  if (moduleAccess === 'sustentacao') return <Navigate to="/sustentacao" replace />;
+  if (isAdmin || profile?.module_access === 'admin') return <Navigate to="/modulos" replace />;
+  if (profile?.module_access === 'sustentacao') return <Navigate to="/sustentacao" replace />;
   return <Navigate to="/sala-agil" replace />;
 }
 
 function ModuleGuard({ module, children }: { module: 'sala_agil' | 'sustentacao'; children: React.ReactNode }) {
   const { profile, isAdmin } = useAuth();
   const moduleAccess = profile?.module_access || 'sala_agil';
-  // Admin can access everything
   if (isAdmin || moduleAccess === 'admin' || moduleAccess === module) {
     return <>{children}</>;
   }

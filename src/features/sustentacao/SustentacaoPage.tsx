@@ -9,7 +9,7 @@ import { TeamManager } from "@/components/TeamManager";
 import { TeamMembersManager } from "@/components/TeamMembersManager";
 import { UserRolesManager } from "@/components/UserRolesManager";
 import { DeveloperManager } from "@/components/DeveloperManager";
-import { WorkflowManager } from "@/components/WorkflowManager";
+import { SustentacaoWorkflow } from "./components/SustentacaoWorkflow";
 import { CustomFieldManager } from "@/components/CustomFieldManager";
 import { AutomationManager } from "@/components/AutomationManager";
 import { Badge } from "@/components/ui/badge";
@@ -62,7 +62,7 @@ function SustSidebar({ active, setActive }: { active: SustNav; setActive: (k: Su
   const roleLabel = roles.length > 0 ? roles.map(getRoleLabel).join(', ') : 'Sem perfil';
   const navigate = useNavigate();
   const moduleAccess = profile?.module_access || 'sala_agil';
-  const showModuleSwitch = moduleAccess === 'admin';
+  const showModuleSwitch = moduleAccess === 'admin' || roles.some(r => r === 'admin');
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
@@ -100,7 +100,7 @@ function SustSidebar({ active, setActive }: { active: SustNav; setActive: (k: Su
             <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 font-semibold mb-1.5">Time Ativo</p>
             <Select value={currentTeamId || ""} onValueChange={setCurrentTeamId}>
               <SelectTrigger className="h-8 text-xs bg-sidebar-accent/50 border-sidebar-border"><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>{teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+              <SelectContent>{teams.filter(t => t.module === 'sustentacao').map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
         )}
@@ -197,7 +197,7 @@ export function SustentacaoPage() {
                   {active === 'team-members' && <TeamMembersManager />}
                   {active === 'user-roles' && <UserRolesManager />}
                   {active === 'equipe' && <DeveloperManager />}
-                  {active === 'workflow' && <WorkflowManager />}
+                  {active === 'workflow' && <SustentacaoWorkflow />}
                   {active === 'custom-fields' && <CustomFieldManager />}
                   {active === 'automations' && <AutomationManager />}
                   {active === 'relatorios' && (
