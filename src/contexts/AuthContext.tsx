@@ -21,7 +21,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   currentTeamId: string | null;
   setCurrentTeamId: (id: string | null) => void;
-  teams: { id: string; name: string }[];
+  teams: { id: string; name: string; module: string }[];
   refreshTeams: () => Promise<void>;
   roles: AppRole[];
   hasPermission: (permission: Permission) => boolean;
