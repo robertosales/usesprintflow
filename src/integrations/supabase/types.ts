@@ -692,6 +692,47 @@ export type Database = {
         }
         Relationships: []
       }
+      projetos: {
+        Row: {
+          created_at: string
+          descricao: string | null
+          equipe: string | null
+          id: string
+          nome: string
+          sla: string
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string | null
+          equipe?: string | null
+          id?: string
+          nome: string
+          sla?: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string | null
+          equipe?: string | null
+          id?: string
+          nome?: string
+          sla?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projetos_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       releases: {
         Row: {
           bugs_fixed: number | null
