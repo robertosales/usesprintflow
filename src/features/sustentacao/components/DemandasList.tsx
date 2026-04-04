@@ -39,6 +39,20 @@ export function DemandasList() {
 
   const { paginatedItems, currentPage, setCurrentPage, totalPages, totalItems } = usePagination(filtered, { pageSize: 20 });
 
+  // If a demanda is selected, show the full-page detail view
+  if (selected) {
+    // Find the latest version from the list after updates
+    const current = demandas.find(d => d.id === selected.id) || selected;
+    return (
+      <DemandaDetail
+        demanda={current}
+        onBack={() => setSelected(null)}
+        onUpdate={async (id, updates) => { await update(id, updates); }}
+        onMoveTo={moveTo}
+      />
+    );
+  }
+
   if (loading) return <SkeletonList count={5} />;
   if (error) return <div className="text-center py-10 text-destructive">{error} <button onClick={reload} className="underline ml-2">Tentar novamente</button></div>;
 
@@ -116,7 +130,6 @@ export function DemandasList() {
       )}
 
       <DemandaForm open={showForm} onClose={() => setShowForm(false)} onSubmit={(d) => create(d as any)} />
-      <DemandaDetail demanda={selected} open={!!selected} onClose={() => setSelected(null)} onUpdate={update} onMoveTo={moveTo} />
       <ConfirmDialog open={!!deleteTarget} onOpenChange={o => !o && setDeleteTarget(null)} onConfirm={() => { if (deleteTarget) { remove(deleteTarget.id); setDeleteTarget(null); } }} />
     </div>
   );
