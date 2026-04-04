@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Zap, Mail, Lock, User } from "lucide-react";
+import { Mail, Lock, User, Hexagon } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { APP_NAME } from "@/lib/constants";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
@@ -66,11 +67,11 @@ const Auth = () => {
         <CardHeader className="text-center space-y-2">
           <div className="flex justify-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <Zap className="h-6 w-6 text-primary-foreground" />
+              <Hexagon className="h-6 w-6 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Sprint Manager</CardTitle>
-          <CardDescription>Gestão Ágil Profissional</CardDescription>
+          <CardTitle className="text-2xl font-bold">{APP_NAME}</CardTitle>
+          <CardDescription>Gestão Inteligente</CardDescription>
         </CardHeader>
         <CardContent>
           <Button
@@ -107,30 +108,14 @@ const Auth = () => {
                   <Label htmlFor="login-email">Email *</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="login-email"
-                      type="email"
-                      placeholder="seu@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-9"
-                      required
-                    />
+                    <Input id="login-email" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-9" required />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="login-password">Senha *</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="login-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-9"
-                      required
-                    />
+                    <Input id="login-password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-9" required />
                   </div>
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
@@ -145,45 +130,21 @@ const Auth = () => {
                   <Label htmlFor="signup-name">Nome completo *</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="signup-name"
-                      type="text"
-                      placeholder="Seu nome"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="pl-9"
-                      required
-                    />
+                    <Input id="signup-name" type="text" placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} className="pl-9" required />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email *</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      placeholder="seu@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-9"
-                      required
-                    />
+                    <Input id="signup-email" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-9" required />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Senha *</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-9"
-                      required
-                    />
+                    <Input id="signup-password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-9" required />
                   </div>
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
