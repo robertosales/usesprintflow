@@ -82,8 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshTeams = async () => {
     try {
-      const { data } = await supabase.from("teams").select("id, name");
-      const teamList = (data || []) as { id: string; name: string }[];
+      const { data } = await supabase.from("teams").select("id, name, module");
+      const teamList = (data || []) as { id: string; name: string; module: string }[];
       setTeams(teamList);
       if (teamList.length > 0 && !currentTeamId) {
         const savedTeamId = localStorage.getItem("selectedTeamId");
