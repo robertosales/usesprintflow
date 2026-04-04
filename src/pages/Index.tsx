@@ -140,7 +140,7 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
                 <SelectValue placeholder="Selecione um time" />
               </SelectTrigger>
               <SelectContent>
-                {teams.map((t) => (
+                {teams.filter(t => t.module === 'sala_agil').map((t) => (
                   <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                 ))}
               </SelectContent>
