@@ -1,0 +1,177 @@
+import { useState, useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { useDemandas } from "../../hooks/useDemandas";
+import { useAllTransitions, useProfiles } from "../../hooks/useAllTransitions";
+import { calcSLA, formatHours } from "../../utils/kpiCalculations";
+import { ReportFilters } from "./ReportFilters";
+import { ExportButton } from "@/components/dashboard/ExportButton";
+import { Shield, AlertTriangle, CheckCircle2 } from "lucide-react";
+
+export function RelatorioSLA() {
+  const { demandas } = useDemandas();
+  const { transitions } = useAllTransitions();
+  const profiles = useProfiles();
+  const [periodo, setPeriodo] = useState('30');
+  const [analista, setAnalista] = useState('all');
+
+  const filtered = useMemo(() => {
+    let items = demandas;
+    if (periodo !== 'all') {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - parseInt(periodo));
+      items = items.filter(d => new Date(d.created_at) >= cutoff);
+    }
+    if (analista !== 'all') items = items.filter(d => d.responsavel_dev === analista);
+    return items;
+  }, [demandas, periodo, analista]);
+
+  const sla = useMemo(() => calcSLA(filtered, transitions), [filtered, transitions]);
+
+  const analistas = useMemo(() => {
+    const ids = [...new Set(demandas.map(d => d.responsavel_dev).filter(Boolean))] as string[];
+    return ids.map(id => {
+      const p = profiles.find(pr => pr.user_id === id);
+      return { user_id: id, display_name: p?.display_name || id.slice(0, 8) };
+    });
+  }, [demandas, profiles]);
+
+  const maiorViolacao = useMemo(() => {
+    const violados = sla.results.filter(r => r.statusSLA === 'violado');
+    const criticos = violados.filter(r => r.prioridade === 'Crítico').length;
+    const padrao = violados.filter(r => r.prioridade === 'Padrão').length;
+    return criticos >= padrao ? 'Crítico' : 'Padrão';
+  }, [sla]);
+
+  // Bar chart data - group by status
+  const barData = useMemo(() => {
+    const dentro = sla.results.filter(r => r.statusSLA === 'dentro').length;
+    const emRisco = sla.results.filter(r => r.statusSLA === 'em_risco').length;
+    const violado = sla.results.filter(r => r.statusSLA === 'violado').length;
+    const total = Math.max(dentro + emRisco + violado, 1);
+    return { dentro, emRisco, violado, total };
+  }, [sla]);
+
+  const getExportData = () => ({
+    title: 'Relatorio_SLA_Compliance',
+    headers: ['RHM', 'Projeto', 'Prioridade', 'Abertura', 'Prazo SLA', 'Resolução', 'Status SLA', 'Atraso'],
+    rows: sla.results.map(r => [
+      r.rhm, r.projeto, r.prioridade,
+      new Date(r.abertura).toLocaleDateString('pt-BR'),
+      new Date(r.prazoSLA).toLocaleDateString('pt-BR') + ' ' + new Date(r.prazoSLA).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      r.resolucao ? new Date(r.resolucao).toLocaleDateString('pt-BR') : 'Em aberto',
+      r.statusSLA === 'dentro' ? 'Dentro do prazo' : r.statusSLA === 'em_risco' ? 'Em risco' : 'Violado',
+      r.atraso > 0 ? formatHours(r.atraso) : '-',
+    ]),
+  });
+
+  const statusBadge = (s: string) => {
+    if (s === 'dentro') return <Badge className="bg-info/10 text-info border-info/20 text-[10px]">Dentro</Badge>;
+    if (s === 'em_risco') return <Badge variant="outline" className="border-orange-300 text-orange-600 text-[10px]">Em risco</Badge>;
+    return <Badge variant="destructive" className="text-[10px]">Violado</Badge>;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Relatório — SLA Compliance</h2>
+          <p className="text-sm text-muted-foreground">Auditoria de cumprimento de SLA por período e prioridade</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <ReportFilters periodo={periodo} setPeriodo={setPeriodo} analista={analista} setAnalista={setAnalista} analistas={analistas} />
+          <ExportButton getData={getExportData} />
+        </div>
+      </div>
+
+      {/* Summary header */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-info/10 flex items-center justify-center"><Shield className="h-4 w-4 text-info" /></div>
+            <div><p className="text-[10px] text-muted-foreground">Compliance</p><p className="text-lg font-bold">{sla.compliance.toFixed(1)}%</p></div>
+          </CardContent>
+        </Card>
+        <Card className={sla.violados > 0 ? 'border-destructive/30' : ''}>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${sla.violados > 0 ? 'bg-destructive/10' : 'bg-muted'}`}>
+              <AlertTriangle className={`h-4 w-4 ${sla.violados > 0 ? 'text-destructive' : 'text-muted-foreground'}`} />
+            </div>
+            <div><p className="text-[10px] text-muted-foreground">Violados</p><p className="text-lg font-bold">{sla.violados}</p></div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-orange-100 flex items-center justify-center"><AlertTriangle className="h-4 w-4 text-orange-500" /></div>
+            <div><p className="text-[10px] text-muted-foreground">Em Risco</p><p className="text-lg font-bold">{sla.emRisco}</p></div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center"><CheckCircle2 className="h-4 w-4 text-muted-foreground" /></div>
+            <div><p className="text-[10px] text-muted-foreground">Maior Violação</p><p className="text-lg font-bold">{maiorViolacao}</p></div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Stacked bar */}
+      <Card>
+        <CardHeader><CardTitle className="text-sm">Distribuição SLA</CardTitle></CardHeader>
+        <CardContent>
+          <div className="h-8 rounded-full overflow-hidden flex bg-muted">
+            {barData.dentro > 0 && <div className="bg-info h-full transition-all" style={{ width: `${(barData.dentro / barData.total) * 100}%` }} title={`Dentro: ${barData.dentro}`} />}
+            {barData.emRisco > 0 && <div className="bg-orange-400 h-full transition-all" style={{ width: `${(barData.emRisco / barData.total) * 100}%` }} title={`Em risco: ${barData.emRisco}`} />}
+            {barData.violado > 0 && <div className="bg-destructive h-full transition-all" style={{ width: `${(barData.violado / barData.total) * 100}%` }} title={`Violado: ${barData.violado}`} />}
+          </div>
+          <div className="flex gap-4 mt-2 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-info" />Dentro ({barData.dentro})</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-400" />Em risco ({barData.emRisco})</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-destructive" />Violado ({barData.violado})</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Detail table */}
+      <Card>
+        <CardHeader><CardTitle className="text-sm">Detalhamento por Chamado</CardTitle></CardHeader>
+        <CardContent>
+          {sla.results.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">Nenhum dado</p>
+          ) : (
+            <div className="overflow-auto max-h-[400px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>RHM</TableHead>
+                    <TableHead>Projeto</TableHead>
+                    <TableHead>Prioridade</TableHead>
+                    <TableHead>Abertura</TableHead>
+                    <TableHead>Prazo SLA</TableHead>
+                    <TableHead>Resolução</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Atraso</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sla.results.map(r => (
+                    <TableRow key={r.demandaId}>
+                      <TableCell className="text-xs font-medium">{r.rhm}</TableCell>
+                      <TableCell className="text-xs">{r.projeto}</TableCell>
+                      <TableCell className="text-xs">{r.prioridade}</TableCell>
+                      <TableCell className="text-xs">{new Date(r.abertura).toLocaleDateString('pt-BR')}</TableCell>
+                      <TableCell className="text-xs">{new Date(r.prazoSLA).toLocaleDateString('pt-BR')} {new Date(r.prazoSLA).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</TableCell>
+                      <TableCell className="text-xs">{r.resolucao ? new Date(r.resolucao).toLocaleDateString('pt-BR') : <span className="text-muted-foreground">Em aberto</span>}</TableCell>
+                      <TableCell>{statusBadge(r.statusSLA)}</TableCell>
+                      <TableCell className="text-right text-xs">{r.atraso > 0 ? <span className="text-destructive font-medium">{formatHours(r.atraso)}</span> : '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
