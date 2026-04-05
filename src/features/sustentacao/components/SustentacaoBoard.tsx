@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,15 +9,32 @@ import { useDemandas } from "../hooks/useDemandas";
 import { DemandaCard } from "./DemandaCard";
 import { DemandaDetail } from "./DemandaDetail";
 import { JustificativaDialog } from "./JustificativaDialog";
-import { ALL_SITUACOES, SITUACAO_LABELS, REQUIRES_JUSTIFICATIVA } from "../types/demanda";
+import { ALL_SITUACOES, SITUACAO_LABELS, REQUIRES_JUSTIFICATIVA, SITUACOES_CORRETIVA, SITUACOES_EVOLUTIVA_PREFIX } from "../types/demanda";
 import type { Demanda } from "../types/demanda";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { EmptyState } from "@/shared/components/common/EmptyState";
 import { Columns3 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { EVIDENCIAS_OBRIGATORIAS } from "../services/evidencias.service";
+import { toast } from "sonner";
 
-// Only show main board columns matching the reference image
 const BOARD_COLUMNS = ['nova', 'execucao_dev', 'teste', 'aguardando_homologacao'] as const;
+
+function getFlowOrder(demanda: Demanda): string[] {
+  if (demanda.tipo === 'evolutiva') {
+    return [...SITUACOES_EVOLUTIVA_PREFIX, ...Array.from(SITUACOES_CORRETIVA).slice(1)];
+  }
+  return [...SITUACOES_CORRETIVA];
+}
+
+function isForwardMove(demanda: Demanda, targetStatus: string): boolean {
+  const flow = getFlowOrder(demanda);
+  const currentIdx = flow.indexOf(demanda.situacao);
+  const targetIdx = flow.indexOf(targetStatus);
+  if (currentIdx < 0 || targetIdx < 0) return false;
+  return targetIdx > currentIdx;
+}
 
 export function SustentacaoBoard() {
   const { demandas, loading, error, moveTo, update, remove, reload } = useDemandas();
@@ -26,6 +43,9 @@ export function SustentacaoBoard() {
   const [justTarget, setJustTarget] = useState<{ demanda: Demanda; status: string } | null>(null);
   const [showAllColumns, setShowAllColumns] = useState(false);
 
+  // Evidence cache for validation
+  const [evidenceCache, setEvidenceCache] = useState<Record<string, number>>({});
+
   // Filters
   const [search, setSearch] = useState('');
   const [filterTipo, setFilterTipo] = useState('all');
@@ -33,6 +53,24 @@ export function SustentacaoBoard() {
   const [filterProjeto, setFilterProjeto] = useState('all');
   const [filterResponsavel, setFilterResponsavel] = useState('all');
   const debouncedSearch = useDebounce(search, 300);
+
+  // Pre-load evidence counts for all demandas
+  useEffect(() => {
+    if (demandas.length === 0) return;
+    const ids = demandas.map(d => d.id);
+    supabase
+      .from("demanda_evidencias" as any)
+      .select("demanda_id, fase")
+      .in("demanda_id", ids)
+      .then(({ data }) => {
+        const counts: Record<string, number> = {};
+        (data || []).forEach((row: any) => {
+          const key = `${row.demanda_id}:${row.fase}`;
+          counts[key] = (counts[key] || 0) + 1;
+        });
+        setEvidenceCache(counts);
+      });
+  }, [demandas]);
 
   const projetos = useMemo(() => [...new Set(demandas.map(d => d.projeto).filter(Boolean))], [demandas]);
 
@@ -48,11 +86,46 @@ export function SustentacaoBoard() {
 
   const columns = showAllColumns ? [...ALL_SITUACOES] : [...BOARD_COLUMNS];
 
+  const validateDrop = (demanda: Demanda, targetStatus: string): string | null => {
+    // Don't allow same status
+    if (demanda.situacao === targetStatus) return null;
+
+    // Block special statuses from direct drag
+    if (targetStatus === 'bloqueada' || targetStatus === 'aguardando_retorno') {
+      return null; // handled by justification dialog
+    }
+
+    // Only forward movement allowed
+    if (!isForwardMove(demanda, targetStatus)) {
+      return `Movimentação não permitida: apenas avanço sequencial é permitido.`;
+    }
+
+    // Check required evidences for current phase
+    const required = EVIDENCIAS_OBRIGATORIAS[demanda.situacao] || [];
+    if (required.length > 0) {
+      const key = `${demanda.id}:${demanda.situacao}`;
+      const count = evidenceCache[key] || 0;
+      if (count === 0) {
+        return `Evidência obrigatória pendente na fase "${SITUACAO_LABELS[demanda.situacao]}". Adicione a evidência antes de avançar.`;
+      }
+    }
+
+    return null; // valid
+  };
+
   const handleDrop = async (e: React.DragEvent, status: string) => {
     e.preventDefault();
     const id = e.dataTransfer.getData('demanda-id');
     const demanda = demandas.find(d => d.id === id);
     if (!demanda || demanda.situacao === status) return;
+
+    // Validate business rules
+    const validationError = validateDrop(demanda, status);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
     if (REQUIRES_JUSTIFICATIVA.includes(status)) {
       setJustTarget({ demanda, status });
       return;
@@ -105,12 +178,6 @@ export function SustentacaoBoard() {
             <SelectItem value="padrao">Padrão</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={filterResponsavel} onValueChange={setFilterResponsavel}>
-          <SelectTrigger className="w-[140px] h-9 text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-          </SelectContent>
-        </Select>
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar demanda..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9 text-xs" />
@@ -157,7 +224,7 @@ export function SustentacaoBoard() {
         })}
       </div>
 
-      <p className="text-[10px] text-muted-foreground text-center">Arraste os cards para alterar a situação</p>
+      <p className="text-[10px] text-muted-foreground text-center">Arraste os cards para alterar a situação. O sistema valida progressão sequencial e evidências obrigatórias automaticamente.</p>
 
       {selected && (
         <div className="fixed inset-0 z-50 bg-background overflow-auto">
