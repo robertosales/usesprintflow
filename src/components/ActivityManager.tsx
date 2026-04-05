@@ -466,7 +466,7 @@ export function ActivityManager() {
                     </div>
                     <span className={`text-sm font-semibold ${isClosed ? "line-through" : ""}`}>{act.title}</span>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                      <span>{dev?.name || "0.0%"}</span>
+                      <span>{dev?.name || "N/A"}</span>
                       <span>{act.hours}h</span>
                       <span>
                         {new Date(act.startDate).toLocaleDateString("pt-BR")} →{" "}
