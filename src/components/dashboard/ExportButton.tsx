@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Download, FileSpreadsheet, FileText, Table2 } from "lucide-react";
+import { Download, FileSpreadsheet, FileText, Table2, FileCode } from "lucide-react";
 import { toast } from "sonner";
 
 interface ExportData {
@@ -41,10 +41,7 @@ export function ExportButton({ getData }: { getData: () => ExportData }) {
       const XLSX = await import("xlsx");
       const { headers, rows, title } = getData();
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-
-      // Style column widths
       ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 12) }));
-
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Dados");
       XLSX.writeFile(wb, `${title}.xlsx`);
@@ -87,6 +84,24 @@ export function ExportButton({ getData }: { getData: () => ExportData }) {
     }
   };
 
+  const exportMarkdown = () => {
+    const { headers, rows, title } = getData();
+    const now = new Date();
+
+    let md = `# ${title}\n\n`;
+    md += `**Data:** ${now.toLocaleDateString("pt-BR")} às ${now.toLocaleTimeString("pt-BR")}  \n\n`;
+    md += `| ${headers.join(" | ")} |\n`;
+    md += `| ${headers.map(() => "---").join(" | ")} |\n`;
+    rows.forEach(row => {
+      md += `| ${row.map(c => String(c).replace(/\|/g, '\\|')).join(" | ")} |\n`;
+    });
+    md += `\n---\n*Total de registros: ${rows.length}*\n`;
+
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8;" });
+    downloadBlob(blob, `${title}.md`);
+    toast.success("Markdown exportado com sucesso!");
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -104,6 +119,9 @@ export function ExportButton({ getData }: { getData: () => ExportData }) {
         </DropdownMenuItem>
         <DropdownMenuItem onClick={exportPDF} className="gap-2 text-xs">
           <FileText className="h-3.5 w-3.5" /> PDF
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={exportMarkdown} className="gap-2 text-xs">
+          <FileCode className="h-3.5 w-3.5" /> Markdown (.md)
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

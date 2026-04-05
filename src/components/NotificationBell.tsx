@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Bell, Check, CheckCheck, ShieldAlert, MessageCircle, AlertTriangle } from "lucide-react";
+import { Bell, CheckCheck, ShieldAlert, MessageCircle, AlertTriangle, Eye } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -72,7 +72,7 @@ export function NotificationBell() {
         <Button variant="ghost" size="icon" className="relative h-9 w-9">
           <Bell className="h-4.5 w-4.5" />
           {unreadCount > 0 && (
-            <Badge className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center px-1 text-[10px] bg-destructive text-destructive-foreground">
+            <Badge className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center px-1 text-[10px] bg-destructive text-destructive-foreground animate-pulse">
               {unreadCount > 9 ? "9+" : unreadCount}
             </Badge>
           )}
@@ -83,7 +83,7 @@ export function NotificationBell() {
           <h4 className="text-sm font-semibold">Notificações</h4>
           {unreadCount > 0 && (
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={markAllAsRead}>
-              <CheckCheck className="h-3 w-3" /> Marcar todas
+              <CheckCheck className="h-3 w-3" /> Marcar todas como lidas
             </Button>
           )}
         </div>
@@ -96,29 +96,42 @@ export function NotificationBell() {
           ) : (
             <div className="divide-y">
               {notifications.map((n) => (
-                <button
+                <div
                   key={n.id}
-                  className={`w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors flex gap-3 ${
-                    !n.is_read ? "bg-primary/5" : ""
+                  className={`w-full text-left px-4 py-3 transition-colors ${
+                    !n.is_read ? "bg-primary/5 border-l-2 border-l-primary" : ""
                   }`}
-                  onClick={() => markAsRead(n.id)}
                 >
-                  <div className="mt-0.5 shrink-0">{getIcon(n.type)}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-xs leading-tight ${!n.is_read ? "font-semibold" : ""}`}>
-                      {n.title}
-                    </p>
-                    {n.message && (
-                      <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+                  <div className="flex gap-3">
+                    <div className="mt-0.5 shrink-0">{getIcon(n.type)}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs leading-tight ${!n.is_read ? "font-semibold" : ""}`}>
+                        {n.title}
+                      </p>
+                      {n.message && (
+                        <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+                      )}
+                      <div className="flex items-center justify-between mt-1.5">
+                        <p className="text-[10px] text-muted-foreground">
+                          {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: ptBR })}
+                        </p>
+                        {!n.is_read && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-[10px] gap-1 text-primary hover:text-primary"
+                            onClick={() => markAsRead(n.id)}
+                          >
+                            <Eye className="h-3 w-3" /> Ciente
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    {!n.is_read && (
+                      <div className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5 animate-pulse" />
                     )}
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: ptBR })}
-                    </p>
                   </div>
-                  {!n.is_read && (
-                    <div className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5" />
-                  )}
-                </button>
+                </div>
               ))}
             </div>
           )}
