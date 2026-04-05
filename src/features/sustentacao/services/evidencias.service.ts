@@ -68,6 +68,12 @@ export async function uploadEvidenciaFile(file: File, demandaId: string): Promis
   return { path };
 }
 
+export async function getEvidenciaSignedUrl(filePath: string): Promise<string | null> {
+  const { data, error } = await supabase.storage.from("attachments").createSignedUrl(filePath, 300);
+  if (error) return null;
+  return data.signedUrl;
+}
+
 // Evidências obrigatórias por fase
 export const EVIDENCIAS_OBRIGATORIAS: Record<string, string[]> = {
   nova: ['Evidência do erro / solicitação'],
