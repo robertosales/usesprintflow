@@ -15,17 +15,36 @@ interface SustentacaoStep {
 }
 
 const COLOR_OPTIONS = [
-  { colorClass: "bg-blue-100 border-blue-200", label: "Azul" },
-  { colorClass: "bg-yellow-100 border-yellow-200", label: "Amarelo" },
-  { colorClass: "bg-red-100 border-red-200", label: "Vermelho" },
-  { colorClass: "bg-green-100 border-green-200", label: "Verde" },
-  { colorClass: "bg-purple-100 border-purple-200", label: "Roxo" },
-  { colorClass: "bg-orange-100 border-orange-200", label: "Laranja" },
-  { colorClass: "bg-cyan-100 border-cyan-200", label: "Ciano" },
-  { colorClass: "bg-emerald-100 border-emerald-200", label: "Esmeralda" },
-  { colorClass: "bg-teal-100 border-teal-200", label: "Teal" },
-  { colorClass: "bg-indigo-100 border-indigo-200", label: "Índigo" },
+  { hex: "#3b82f6", label: "Azul" },
+  { hex: "#eab308", label: "Amarelo" },
+  { hex: "#ef4444", label: "Vermelho" },
+  { hex: "#22c55e", label: "Verde" },
+  { hex: "#a855f7", label: "Roxo" },
+  { hex: "#f97316", label: "Laranja" },
+  { hex: "#06b6d4", label: "Ciano" },
+  { hex: "#10b981", label: "Esmeralda" },
+  { hex: "#14b8a6", label: "Teal" },
+  { hex: "#6366f1", label: "Índigo" },
+  { hex: "#8b5cf6", label: "Violeta" },
+  { hex: "#f59e0b", label: "Âmbar" },
+  { hex: "#84cc16", label: "Lima" },
 ];
+
+const SITUACAO_HEX: Record<string, string> = {
+  nova: "#3b82f6",
+  planejamento: "#6366f1",
+  envio_aprovacao: "#a855f7",
+  planejamento_aprovado: "#8b5cf6",
+  execucao_dev: "#eab308",
+  bloqueada: "#ef4444",
+  aguardando_retorno: "#f97316",
+  teste: "#06b6d4",
+  aguardando_homologacao: "#f59e0b",
+  homologada: "#10b981",
+  fila_producao: "#14b8a6",
+  producao: "#22c55e",
+  aceite_final: "#84cc16",
+};
 
 function buildDefaultSteps(): SustentacaoStep[] {
   return ALL_SITUACOES.map((sit) => ({

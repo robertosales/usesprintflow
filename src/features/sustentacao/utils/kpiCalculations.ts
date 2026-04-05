@@ -150,9 +150,9 @@ export function calcSLA(demandas: Demanda[], transitions: DemandaTransition[]): 
   const dentro = results.filter(r => r.statusSLA === 'dentro').length;
   const violados = results.filter(r => r.statusSLA === 'violado').length;
   const emRisco = results.filter(r => r.statusSLA === 'em_risco').length;
-  const compliance = total > 0 ? (dentro / total) * 100 : 100;
+  const compliance = total > 0 ? (dentro / total) * 100 : 0;
 
-  return { results, compliance, violados, emRisco };
+  return { results, compliance, violados, emRisco, total };
 }
 
 // ── Produtividade por Analista ──
