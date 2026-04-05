@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { TeamSelectionModal } from "@/shared/components/common/TeamSelectionModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { SustentacaoBoard } from "./components/SustentacaoBoard";
 import { DemandasList } from "./components/DemandasList";
