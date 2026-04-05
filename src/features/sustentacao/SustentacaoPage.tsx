@@ -170,6 +170,12 @@ export function SustentacaoPage() {
 
   return (
     <SidebarProvider>
+      <TeamSelectionModal
+        open={showTeamModal}
+        teams={moduleTeams}
+        moduleLabel="Sustentação"
+        onSelect={(id) => { setCurrentTeamId(id); setShowTeamModal(false); }}
+      />
       <div className="min-h-screen flex w-full">
         <SustSidebar active={active} setActive={setActive} />
         <div className="flex-1 flex flex-col min-w-0">
