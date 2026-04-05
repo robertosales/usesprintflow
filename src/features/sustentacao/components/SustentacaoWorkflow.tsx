@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,12 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { GitBranch, Plus, Trash2, GripVertical, RotateCcw, Save, Pencil, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
-import { ALL_SITUACOES, SITUACAO_LABELS, SITUACAO_COLORS } from "../types/demanda";
+import { ALL_SITUACOES, SITUACAO_LABELS } from "../types/demanda";
 
 interface SustentacaoStep {
   key: string;
   label: string;
-  colorClass: string;
+  hex: string;
 }
 
 const COLOR_OPTIONS = [
@@ -50,7 +50,7 @@ function buildDefaultSteps(): SustentacaoStep[] {
   return ALL_SITUACOES.map((sit) => ({
     key: sit,
     label: SITUACAO_LABELS[sit] || sit,
-    colorClass: SITUACAO_COLORS[sit]?.split(" ").slice(0, 2).join(" ") || COLOR_OPTIONS[0].colorClass,
+    hex: SITUACAO_HEX[sit] || COLOR_OPTIONS[0].hex,
   }));
 }
 
@@ -80,7 +80,7 @@ export function SustentacaoWorkflow() {
     const newStep: SustentacaoStep = {
       key,
       label: "Nova Etapa",
-      colorClass: COLOR_OPTIONS[0].colorClass,
+      hex: COLOR_OPTIONS[0].hex,
     };
     const newDraft = [...draft, newStep];
     markChanged(newDraft);
@@ -101,7 +101,7 @@ export function SustentacaoWorkflow() {
   const startEdit = (step: SustentacaoStep) => {
     setEditingKey(step.key);
     setEditLabel(step.label);
-    const idx = COLOR_OPTIONS.findIndex((o) => step.colorClass.includes(o.colorClass.split(" ")[0]));
+    const idx = COLOR_OPTIONS.findIndex((o) => o.hex === step.hex);
     setEditColorIdx(String(Math.max(0, idx)));
   };
 
@@ -110,7 +110,7 @@ export function SustentacaoWorkflow() {
     const colorOpt = COLOR_OPTIONS[Number(editColorIdx)];
     markChanged(
       draft.map((c) =>
-        c.key === editingKey ? { ...c, label: editLabel.trim(), colorClass: colorOpt.colorClass } : c
+        c.key === editingKey ? { ...c, label: editLabel.trim(), hex: colorOpt.hex } : c
       )
     );
     setEditingKey(null);
@@ -129,9 +129,11 @@ export function SustentacaoWorkflow() {
     toast.info("Padrão restaurado — salve para confirmar.");
   };
 
-  const getDotColor = (colorClass: string) => {
-    const base = colorClass.split(" ")[0];
-    return base.replace("100", "500");
+  const getActiveHex = (step: SustentacaoStep) => {
+    if (editingKey === step.key) {
+      return COLOR_OPTIONS[Number(editColorIdx)]?.hex || step.hex;
+    }
+    return step.hex;
   };
 
   return (
@@ -176,6 +178,11 @@ export function SustentacaoWorkflow() {
                           className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${
                             snapshot.isDragging ? "bg-accent shadow-md" : "bg-background hover:bg-muted/50"
                           }`}
+                          style={{
+                            ...provided.draggableProps.style,
+                            borderLeftWidth: "4px",
+                            borderLeftColor: getActiveHex(step),
+                          }}
                         >
                           <div {...provided.dragHandleProps} className="cursor-grab text-muted-foreground">
                             <GripVertical className="h-4 w-4" />
@@ -185,11 +192,10 @@ export function SustentacaoWorkflow() {
                             {idx + 1}
                           </span>
 
-                          <div className={`h-3 w-3 rounded-full shrink-0 ${
-                            editingKey === step.key
-                              ? getDotColor(COLOR_OPTIONS[Number(editColorIdx)]?.colorClass || step.colorClass)
-                              : getDotColor(step.colorClass)
-                          }`} />
+                          <div
+                            className="h-3 w-3 rounded-full shrink-0"
+                            style={{ backgroundColor: getActiveHex(step) }}
+                          />
 
                           {editingKey === step.key ? (
                             <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -211,7 +217,10 @@ export function SustentacaoWorkflow() {
                                   {COLOR_OPTIONS.map((opt, i) => (
                                     <SelectItem key={i} value={String(i)}>
                                       <div className="flex items-center gap-2">
-                                        <div className={`h-2.5 w-2.5 rounded-full ${getDotColor(opt.colorClass)}`} />
+                                        <div
+                                          className="h-2.5 w-2.5 rounded-full"
+                                          style={{ backgroundColor: opt.hex }}
+                                        />
                                         {opt.label}
                                       </div>
                                     </SelectItem>
@@ -219,7 +228,7 @@ export function SustentacaoWorkflow() {
                                 </SelectContent>
                               </Select>
                               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={confirmEdit}>
-                                <Check className="h-3.5 w-3.5 text-success" />
+                                <Check className="h-3.5 w-3.5 text-primary" />
                               </Button>
                               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={cancelEdit}>
                                 <X className="h-3.5 w-3.5" />

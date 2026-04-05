@@ -96,7 +96,7 @@ export interface SLAResult {
   analista: string | null;
 }
 
-export function calcSLA(demandas: Demanda[], transitions: DemandaTransition[]): { results: SLAResult[]; compliance: number; violados: number; emRisco: number } {
+export function calcSLA(demandas: Demanda[], transitions: DemandaTransition[]): { results: SLAResult[]; compliance: number; violados: number; emRisco: number; total: number } {
   // SLA thresholds in hours
   const SLA_HOURS: Record<string, number> = { '24x7': 4, 'padrao': 24 };
 
