@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { TeamSelectionModal } from "@/shared/components/common/TeamSelectionModal";
 import { SprintManager } from "@/components/SprintManager";
 import { DeveloperManager } from "@/components/DeveloperManager";
 import { UserStoryManager } from "@/components/UserStoryManager";
@@ -222,13 +223,34 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
 const Index = () => {
   const [active, setActive] = useState<NavKey>("dashboard");
   const { activeSprint, userStories, loading } = useSprint();
-  const { profile, currentTeamId, hasPermission } = useAuth();
+  const { profile, currentTeamId, setCurrentTeamId, teams, hasPermission } = useAuth();
+  const [showTeamModal, setShowTeamModal] = useState(false);
+
+  const moduleTeams = teams.filter(t => t.module === 'sala_agil');
+
+  // Auto-select team for this module on mount
+  useEffect(() => {
+    if (loading || moduleTeams.length === 0) return;
+    const currentIsValid = currentTeamId && moduleTeams.some(t => t.id === currentTeamId);
+    if (currentIsValid) return;
+    if (moduleTeams.length === 1) {
+      setCurrentTeamId(moduleTeams[0].id);
+    } else {
+      setShowTeamModal(true);
+    }
+  }, [loading, teams]);
 
   const needsTeam = !currentTeamId && active !== "teams";
   const pageTitle = NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.key === active)?.label || APP_NAME;
 
   return (
     <SidebarProvider>
+      <TeamSelectionModal
+        open={showTeamModal}
+        teams={moduleTeams}
+        moduleLabel="Sala Ágil"
+        onSelect={(id) => { setCurrentTeamId(id); setShowTeamModal(false); }}
+      />
       <div className="min-h-screen flex w-full">
         <AppSidebar active={active} setActive={setActive} />
         <div className="flex-1 flex flex-col min-w-0">

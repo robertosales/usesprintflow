@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { TeamSelectionModal } from "@/shared/components/common/TeamSelectionModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { SustentacaoBoard } from "./components/SustentacaoBoard";
 import { DemandasList } from "./components/DemandasList";
@@ -148,13 +149,33 @@ function SustSidebar({ active, setActive }: { active: SustNav; setActive: (k: Su
 
 export function SustentacaoPage() {
   const [active, setActive] = useState<SustNav>('dashboard');
-  const { profile, currentTeamId } = useAuth();
+  const { profile, currentTeamId, setCurrentTeamId, teams, loading } = useAuth();
+  const [showTeamModal, setShowTeamModal] = useState(false);
+
+  const moduleTeams = teams.filter(t => t.module === 'sustentacao');
+
+  useEffect(() => {
+    if (loading || moduleTeams.length === 0) return;
+    const currentIsValid = currentTeamId && moduleTeams.some(t => t.id === currentTeamId);
+    if (currentIsValid) return;
+    if (moduleTeams.length === 1) {
+      setCurrentTeamId(moduleTeams[0].id);
+    } else {
+      setShowTeamModal(true);
+    }
+  }, [loading, teams]);
 
   const allItems = NAV_SECTIONS.flatMap(s => s.items);
   const pageTitle = allItems.find(i => i.key === active)?.label || 'Sustentação';
 
   return (
     <SidebarProvider>
+      <TeamSelectionModal
+        open={showTeamModal}
+        teams={moduleTeams}
+        moduleLabel="Sustentação"
+        onSelect={(id) => { setCurrentTeamId(id); setShowTeamModal(false); }}
+      />
       <div className="min-h-screen flex w-full">
         <SustSidebar active={active} setActive={setActive} />
         <div className="flex-1 flex flex-col min-w-0">
