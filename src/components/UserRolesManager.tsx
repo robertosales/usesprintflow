@@ -1,14 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ShieldCheck, Save } from "lucide-react";
+import { ShieldCheck, Save, Search } from "lucide-react";
 import { ALL_ROLES, getRoleLabel, type AppRole } from "@/hooks/usePermissions";
+import { PaginationControls } from "@/shared/components/common/Pagination";
+import { usePagination } from "@/shared/hooks/usePagination";
+import { useDebounce } from "@/shared/hooks/useDebounce";
 
 interface UserWithRoles {
   user_id: string;
@@ -24,6 +28,8 @@ export function UserRolesManager() {
   const [pendingRoles, setPendingRoles] = useState<AppRole[]>([]);
   const [pendingModule, setPendingModule] = useState<string>('sala_agil');
   const [loading, setLoading] = useState(false);
+  const [searchFilter, setSearchFilter] = useState('');
+  const debouncedSearch = useDebounce(searchFilter);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -50,6 +56,14 @@ export function UserRolesManager() {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  const filteredUsers = useMemo(() => {
+    if (!debouncedSearch) return users;
+    const q = debouncedSearch.toLowerCase();
+    return users.filter(u => u.display_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+  }, [users, debouncedSearch]);
+
+  const { paginatedItems, currentPage, setCurrentPage, totalItems, pageSize } = usePagination(filteredUsers, { pageSize: 10 });
 
   const startEditing = (user: UserWithRoles) => {
     setEditingUser(user.user_id);
@@ -94,17 +108,25 @@ export function UserRolesManager() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <ShieldCheck className="h-6 w-6 text-primary" /> Gestão de Perfis
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Atribua perfis de acesso (RBAC) e módulo para cada usuário
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <ShieldCheck className="h-6 w-6 text-primary" /> Gestão de Perfis
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Atribua perfis de acesso (RBAC) e módulo para cada usuário
+          </p>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input placeholder="Buscar por nome ou e-mail..." value={searchFilter} onChange={e => setSearchFilter(e.target.value)} className="pl-9 h-9 text-sm" />
       </div>
 
       <div className="grid gap-4">
-        {users.map((user) => {
+        {paginatedItems.map((user) => {
           const isEditing = editingUser === user.user_id;
           return (
             <Card key={user.user_id}>
@@ -178,11 +200,18 @@ export function UserRolesManager() {
         })}
       </div>
 
-      {users.length === 0 && !loading && (
+      {filteredUsers.length === 0 && !loading && (
         <Card className="border-dashed p-8 text-center">
           <p className="text-muted-foreground">Nenhum usuário encontrado.</p>
         </Card>
       )}
+
+      <PaginationControls
+        currentPage={currentPage}
+        totalItems={totalItems}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+      />
     </div>
   );
 }

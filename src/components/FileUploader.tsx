@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Paperclip, Trash2, FileText, Image, Download } from "lucide-react";
+import { Paperclip, Trash2, FileText, Download } from "lucide-react";
 
 interface Attachment {
   id: string;
@@ -84,9 +84,18 @@ export function FileUploader({ entityType, entityId, teamId }: FileUploaderProps
     await fetchAttachments();
   };
 
-  const getPublicUrl = (path: string) => {
-    const { data } = supabase.storage.from("attachments").getPublicUrl(path);
-    return data.publicUrl;
+  const getSignedUrl = async (path: string): Promise<string | null> => {
+    const { data, error } = await supabase.storage
+      .from("attachments")
+      .createSignedUrl(path, 3600); // 1 hour
+    if (error || !data?.signedUrl) return null;
+    return data.signedUrl;
+  };
+
+  const handleDownload = async (att: Attachment) => {
+    const url = await getSignedUrl(att.file_path);
+    if (!url) { toast.error("Erro ao gerar link de download"); return; }
+    window.open(url, "_blank");
   };
 
   const isImage = (mime: string) => mime.startsWith("image/");
@@ -124,26 +133,14 @@ export function FileUploader({ entityType, entityId, teamId }: FileUploaderProps
               key={att.id}
               className="flex items-center gap-3 p-2 rounded-md border bg-muted/30 text-sm"
             >
-              {isImage(att.mime_type) ? (
-                <a href={getPublicUrl(att.file_path)} target="_blank" rel="noopener">
-                  <img
-                    src={getPublicUrl(att.file_path)}
-                    alt={att.file_name}
-                    className="h-10 w-10 rounded object-cover border"
-                  />
-                </a>
-              ) : (
-                <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
-              )}
+              <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="truncate font-medium text-xs">{att.file_name}</p>
                 <p className="text-[10px] text-muted-foreground">{formatSize(att.file_size)}</p>
               </div>
-              <a href={getPublicUrl(att.file_path)} target="_blank" rel="noopener">
-                <Button variant="ghost" size="icon" className="h-7 w-7">
-                  <Download className="h-3.5 w-3.5" />
-                </Button>
-              </a>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownload(att)}>
+                <Download className="h-3.5 w-3.5" />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
