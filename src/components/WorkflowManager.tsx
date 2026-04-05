@@ -5,10 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GitBranch, Plus, Trash2, Pencil, GripVertical, ArrowUp, ArrowDown, RotateCcw } from "lucide-react";
+import { GitBranch, Plus, Trash2, Pencil, ArrowUp, ArrowDown, RotateCcw, Check, Circle } from "lucide-react";
 import { toast } from "sonner";
 import { DEFAULT_KANBAN_COLUMNS } from "@/types/sprint";
 
@@ -26,7 +25,7 @@ export function WorkflowManager() {
 
   const validate = () => {
     const e: Record<string, string> = {};
-    if (!label.trim()) e.label = "Nome da coluna é obrigatório";
+    if (!label.trim()) e.label = "Nome da etapa é obrigatório";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -37,11 +36,11 @@ export function WorkflowManager() {
     const colorOpt = COLUMN_COLOR_OPTIONS[Number(colorIdx)];
     if (editKey) {
       updateWorkflowColumn(editKey, { label: label.trim(), colorClass: colorOpt.colorClass, dotColor: colorOpt.dotColor });
-      toast.success("Coluna atualizada!");
+      toast.success("Etapa atualizada!");
     } else {
       const key = label.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") + "_" + Date.now();
       addWorkflowColumn({ key, label: label.trim(), colorClass: colorOpt.colorClass, dotColor: colorOpt.dotColor });
-      toast.success("Coluna adicionada ao fluxo!");
+      toast.success("Etapa adicionada ao fluxo!");
     }
     resetForm();
     setOpen(false);
@@ -72,12 +71,15 @@ export function WorkflowManager() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <GitBranch className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-bold tracking-tight">Fluxo de Trabalho</h2>
-          <Badge variant="secondary">{workflowColumns.length} etapas</Badge>
+        <div>
+          <div className="flex items-center gap-2">
+            <GitBranch className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-bold tracking-tight">Fluxo de Trabalho</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">Defina as etapas do fluxo. O Board Kanban seguirá esta ordem.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={resetToDefaults}>
@@ -96,7 +98,7 @@ export function WorkflowManager() {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <Label>Nome da Coluna <span className="text-destructive">*</span></Label>
+                  <Label>Nome da Etapa <span className="text-destructive">*</span></Label>
                   <Input value={label} onChange={(e) => { setLabel(e.target.value); setErrors((p) => ({ ...p, label: "" })); }} placeholder="Ex: Em Homologação" className="mt-1" />
                   {errors.label && <p className="text-xs text-destructive mt-1">{errors.label}</p>}
                 </div>
@@ -125,48 +127,53 @@ export function WorkflowManager() {
         </div>
       </div>
 
+      {/* Stepper-style pipeline view */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
-            {workflowColumns.map((col, idx) => (
-              <div key={col.key} className="flex items-center gap-1 shrink-0">
-                <div className={`rounded-lg px-3 py-2 ${col.colorClass} border min-w-[140px]`}>
-                  <div className="flex items-center gap-2">
-                    <GripVertical className="h-3 w-3 text-muted-foreground/50" />
-                    <div className={`h-2 w-2 rounded-full ${col.dotColor}`} />
-                    <span className="text-xs font-semibold">{col.label}</span>
+        <CardContent className="p-6">
+          <div className="flex items-center gap-0 overflow-x-auto pb-2">
+            {workflowColumns.map((col, idx) => {
+              const isFirst = idx === 0;
+              const isLast = idx === workflowColumns.length - 1;
+              return (
+                <div key={col.key} className="flex items-center shrink-0">
+                  <div className="flex flex-col items-center gap-2 min-w-[120px]">
+                    <div className={`flex items-center justify-center h-10 w-10 rounded-full border-2 ${col.colorClass} transition-all`}>
+                      <div className={`h-3 w-3 rounded-full ${col.dotColor}`} />
+                    </div>
+                    <span className="text-xs font-semibold text-center leading-tight max-w-[100px]">{col.label}</span>
+                    <div className="flex items-center gap-0.5">
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveColumn(idx, -1)} disabled={isFirst}>
+                        <ArrowUp className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveColumn(idx, 1)} disabled={isLast}>
+                        <ArrowDown className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(col.key)}>
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => {
+                        if (workflowColumns.length <= 2) { toast.error("Mínimo de 2 etapas no fluxo"); return; }
+                        removeWorkflowColumn(col.key);
+                        toast.info("Etapa removida");
+                      }}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 mt-2">
-                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => moveColumn(idx, -1)} disabled={idx === 0}>
-                      <ArrowUp className="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => moveColumn(idx, 1)} disabled={idx === workflowColumns.length - 1}>
-                      <ArrowDown className="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => openEdit(col.key)}>
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive" onClick={() => {
-                      if (workflowColumns.length <= 2) { toast.error("Mínimo de 2 etapas no fluxo"); return; }
-                      removeWorkflowColumn(col.key);
-                      toast.info("Etapa removida");
-                    }}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
+                  {!isLast && (
+                    <div className="w-8 h-0.5 bg-border mx-1 mt-[-28px]" />
+                  )}
                 </div>
-                {idx < workflowColumns.length - 1 && (
-                  <div className="text-muted-foreground/40 text-lg">→</div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>
 
-      <p className="text-xs text-muted-foreground">
-        Use as setas para reordenar as etapas. O Board Kanban seguirá esta ordem. A primeira etapa é o status padrão para novas HUs.
-      </p>
+      <div className="space-y-2 text-xs text-muted-foreground">
+        <p>Use as setas para reordenar as etapas. A primeira etapa é o status padrão para novas HUs.</p>
+        <p>As regras do Kanban seguem este fluxo: ao arrastar um card, o sistema valida a progressão sequencial e evidências obrigatórias automaticamente.</p>
+      </div>
     </div>
   );
 }
