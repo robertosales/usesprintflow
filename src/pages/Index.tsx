@@ -222,7 +222,22 @@ function AppSidebar({ active, setActive }: { active: NavKey; setActive: (k: NavK
 const Index = () => {
   const [active, setActive] = useState<NavKey>("dashboard");
   const { activeSprint, userStories, loading } = useSprint();
-  const { profile, currentTeamId, hasPermission } = useAuth();
+  const { profile, currentTeamId, setCurrentTeamId, teams, hasPermission } = useAuth();
+  const [showTeamModal, setShowTeamModal] = useState(false);
+
+  const moduleTeams = teams.filter(t => t.module === 'sala_agil');
+
+  // Auto-select team for this module on mount
+  useEffect(() => {
+    if (loading || moduleTeams.length === 0) return;
+    const currentIsValid = currentTeamId && moduleTeams.some(t => t.id === currentTeamId);
+    if (currentIsValid) return;
+    if (moduleTeams.length === 1) {
+      setCurrentTeamId(moduleTeams[0].id);
+    } else {
+      setShowTeamModal(true);
+    }
+  }, [loading, teams]);
 
   const needsTeam = !currentTeamId && active !== "teams";
   const pageTitle = NAV_SECTIONS.flatMap((s) => s.items).find((i) => i.key === active)?.label || APP_NAME;
