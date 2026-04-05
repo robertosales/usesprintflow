@@ -816,9 +816,20 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
                                     </p>
                                   </div>
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteEvidId(ev.id)}>
-                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                  {ev.tipo === 'arquivo' && ev.file_path && (
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={async () => {
+                                      const url = await evidSvc.getEvidenciaSignedUrl(ev.file_path!);
+                                      if (url) window.open(url, '_blank');
+                                      else toast.error("Não foi possível abrir o arquivo.");
+                                    }}>
+                                      <Eye className="h-3.5 w-3.5 text-info" />
+                                    </Button>
+                                  )}
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteEvidId(ev.id)}>
+                                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                  </Button>
+                                </div>
                               </div>
                             ))}
                           </div>
