@@ -857,7 +857,7 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
         </div>
       </div>
 
-      <ConfirmDialog open={showJustModal} onOpenChange={setShowJustModal} title="Justificativa obrigatória" description="Informe a justificativa para esta mudança de status." confirmLabel="Confirmar" variant="default" onConfirm={confirmMove} />
+      <JustificativaDialog open={showJustModal} onClose={() => setShowJustModal(false)} onConfirm={confirmMove} />
       <ConfirmDialog open={!!deleteHourId} onOpenChange={(o) => !o && setDeleteHourId(null)} onConfirm={() => { if (deleteHourId) { removeHour(deleteHourId); setDeleteHourId(null); } }} />
       <ConfirmDialog open={!!deleteRespId} onOpenChange={(o) => !o && setDeleteRespId(null)} title="Remover responsável" description="Deseja realmente remover este responsável da demanda?" onConfirm={handleRemoveResp} />
       <ConfirmDialog open={!!deleteEvidId} onOpenChange={(o) => !o && setDeleteEvidId(null)} title="Remover evidência" description="Deseja realmente remover esta evidência?" onConfirm={handleRemoveEvidencia} />
