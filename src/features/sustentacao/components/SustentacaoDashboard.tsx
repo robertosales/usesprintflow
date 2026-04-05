@@ -107,7 +107,7 @@ export function SustentacaoDashboard() {
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">SLA</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <KPICard icon={Shield} label="SLA Compliance" value={`${sla.compliance.toFixed(1)}%`} color={sla.compliance >= 95 ? "info" : "destructive"} sub="Meta: ≥ 95%" />
+          <KPICard icon={Shield} label="SLA Compliance" value={sla.total === 0 ? "N/A" : `${sla.compliance.toFixed(1)}%`} color={sla.total === 0 ? "muted" : sla.compliance >= 95 ? "info" : "destructive"} sub={sla.total === 0 ? "Sem demandas" : "Meta: ≥ 95%"} />
           <KPICard icon={AlertTriangle} label="Em Risco" value={sla.emRisco} color={sla.emRisco > 0 ? "destructive" : "muted"} sub="< 2h restantes" />
           <KPICard icon={AlertTriangle} label="SLA Violado" value={sla.violados} color={sla.violados > 0 ? "destructive" : "muted"} />
         </div>
