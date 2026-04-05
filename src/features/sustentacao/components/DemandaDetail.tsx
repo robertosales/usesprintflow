@@ -7,7 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, History, FileText, Plus, Trash2, Users, Edit, Save, X, Search, UserPlus, ArrowLeft, Check, Circle, ChevronRight, MoveRight, ShieldCheck, Upload, Link2, AlertCircle } from "lucide-react";
+import { Clock, History, FileText, Plus, Trash2, Users, Edit, Save, X, Search, UserPlus, ArrowLeft, Check, Circle, ChevronRight, MoveRight, ShieldCheck, Upload, Link2, AlertCircle, Eye } from "lucide-react";
+import { JustificativaDialog } from "./JustificativaDialog";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -174,17 +175,29 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
     // Check required evidences
     const missing = getMissingEvidencias(newStatus);
     if (missing.length > 0) {
-      toast.error(`Evidência obrigatória pendente na fase "${EVIDENCIA_FASE_LABELS[demanda.situacao] || demanda.situacao}": ${missing.join(', ')}`);
+      toast.warning(`Evidência obrigatória pendente na fase "${EVIDENCIA_FASE_LABELS[demanda.situacao] || demanda.situacao}": ${missing.join(', ')}`);
       return;
     }
     if (REQUIRES_JUSTIFICATIVA.includes(newStatus)) { setShowJustModal(true); return; }
     const ok = await onMoveTo(demanda, newStatus);
-    if (ok) setNewStatus('');
+    if (ok) {
+      setNewStatus('');
+      await refreshAllData();
+    }
   };
-  const confirmMove = async () => {
+  const confirmMove = async (justificativaText: string) => {
     if (!newStatus) return;
-    const ok = await onMoveTo(demanda, newStatus, justificativa);
-    if (ok) { setNewStatus(''); setJustificativa(''); setShowJustModal(false); }
+    const ok = await onMoveTo(demanda, newStatus, justificativaText);
+    if (ok) {
+      setNewStatus('');
+      setJustificativa('');
+      setShowJustModal(false);
+      await refreshAllData();
+    }
+  };
+
+  const refreshAllData = async () => {
+    await Promise.all([loadResponsaveis(), loadEvidencias()]);
   };
 
   // Handle unblock: auto-return to previous status
@@ -803,9 +816,20 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
                                     </p>
                                   </div>
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteEvidId(ev.id)}>
-                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                  {ev.tipo === 'arquivo' && ev.file_path && (
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={async () => {
+                                      const url = await evidSvc.getEvidenciaSignedUrl(ev.file_path!);
+                                      if (url) window.open(url, '_blank');
+                                      else toast.error("Não foi possível abrir o arquivo.");
+                                    }}>
+                                      <Eye className="h-3.5 w-3.5 text-info" />
+                                    </Button>
+                                  )}
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteEvidId(ev.id)}>
+                                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                  </Button>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -833,7 +857,7 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
         </div>
       </div>
 
-      <ConfirmDialog open={showJustModal} onOpenChange={setShowJustModal} title="Justificativa obrigatória" description="Informe a justificativa para esta mudança de status." confirmLabel="Confirmar" variant="default" onConfirm={confirmMove} />
+      <JustificativaDialog open={showJustModal} onClose={() => setShowJustModal(false)} onConfirm={confirmMove} />
       <ConfirmDialog open={!!deleteHourId} onOpenChange={(o) => !o && setDeleteHourId(null)} onConfirm={() => { if (deleteHourId) { removeHour(deleteHourId); setDeleteHourId(null); } }} />
       <ConfirmDialog open={!!deleteRespId} onOpenChange={(o) => !o && setDeleteRespId(null)} title="Remover responsável" description="Deseja realmente remover este responsável da demanda?" onConfirm={handleRemoveResp} />
       <ConfirmDialog open={!!deleteEvidId} onOpenChange={(o) => !o && setDeleteEvidId(null)} title="Remover evidência" description="Deseja realmente remover esta evidência?" onConfirm={handleRemoveEvidencia} />

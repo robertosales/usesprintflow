@@ -18,15 +18,23 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
   const { projetos, loading: loadingProjetos } = useProjetos();
   const [form, setForm] = useState({ rhm: '', projeto: '', tipo: 'corretiva', descricao: '', sla: 'padrao' });
   const [loading, setLoading] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const markTouched = (field: string) => setTouched(p => ({ ...p, [field]: true }));
+
+  const rhmError = touched.rhm && !form.rhm.trim();
+  const projetoError = touched.projeto && !form.projeto;
 
   const handle = async () => {
+    setTouched({ rhm: true, projeto: true });
     if (!form.rhm.trim() || !form.projeto) {
-      toast.error("Preencha os campos obrigatórios (RHM e Projeto)");
+      toast.error("Preencha os campos obrigatórios: RHM e Projeto.");
       return;
     }
     setLoading(true);
     await onSubmit(form);
     setForm({ rhm: '', projeto: '', tipo: 'corretiva', descricao: '', sla: 'padrao' });
+    setTouched({});
     setLoading(false);
     onClose();
   };
@@ -37,18 +45,26 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
         <DialogHeader><DialogTitle>Nova Demanda</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label>RHM *</Label>
-            <Input value={form.rhm} onChange={e => setForm(p => ({ ...p, rhm: e.target.value }))} placeholder="RHM-001" />
+            <Label>RHM <span className="text-destructive">*</span></Label>
+            <Input
+              value={form.rhm}
+              onChange={e => setForm(p => ({ ...p, rhm: e.target.value }))}
+              onBlur={() => markTouched('rhm')}
+              placeholder="RHM-001"
+              className={rhmError ? 'border-destructive focus-visible:ring-destructive' : ''}
+            />
+            {rhmError && <p className="text-xs text-destructive mt-1">Campo obrigatório.</p>}
           </div>
           <div>
-            <Label>Projeto *</Label>
-            <Select value={form.projeto || '_none'} onValueChange={v => setForm(p => ({ ...p, projeto: v === '_none' ? '' : v }))}>
-              <SelectTrigger><SelectValue placeholder="Selecione um projeto" /></SelectTrigger>
+            <Label>Projeto <span className="text-destructive">*</span></Label>
+            <Select value={form.projeto || '_none'} onValueChange={v => { setForm(p => ({ ...p, projeto: v === '_none' ? '' : v })); markTouched('projeto'); }}>
+              <SelectTrigger className={projetoError ? 'border-destructive focus-visible:ring-destructive' : ''}><SelectValue placeholder="Selecione um projeto" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none" disabled>Selecione um projeto</SelectItem>
                 {projetos.map(p => <SelectItem key={p.id} value={p.nome}>{p.nome}{p.sla === '24x7' ? ' (24x7)' : ''}</SelectItem>)}
               </SelectContent>
             </Select>
+            {projetoError && <p className="text-xs text-destructive mt-1">Selecione um projeto.</p>}
             {projetos.length === 0 && !loadingProjetos && (
               <p className="text-[10px] text-muted-foreground mt-1">Nenhum projeto cadastrado. Crie um projeto primeiro.</p>
             )}
