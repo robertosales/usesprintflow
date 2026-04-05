@@ -96,7 +96,7 @@ export interface SLAResult {
   analista: string | null;
 }
 
-export function calcSLA(demandas: Demanda[], transitions: DemandaTransition[]): { results: SLAResult[]; compliance: number; violados: number; emRisco: number } {
+export function calcSLA(demandas: Demanda[], transitions: DemandaTransition[]): { results: SLAResult[]; compliance: number; violados: number; emRisco: number; total: number } {
   // SLA thresholds in hours
   const SLA_HOURS: Record<string, number> = { '24x7': 4, 'padrao': 24 };
 
@@ -150,9 +150,9 @@ export function calcSLA(demandas: Demanda[], transitions: DemandaTransition[]): 
   const dentro = results.filter(r => r.statusSLA === 'dentro').length;
   const violados = results.filter(r => r.statusSLA === 'violado').length;
   const emRisco = results.filter(r => r.statusSLA === 'em_risco').length;
-  const compliance = total > 0 ? (dentro / total) * 100 : 100;
+  const compliance = total > 0 ? (dentro / total) * 100 : 0;
 
-  return { results, compliance, violados, emRisco };
+  return { results, compliance, violados, emRisco, total };
 }
 
 // ── Produtividade por Analista ──
