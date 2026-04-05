@@ -175,17 +175,29 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
     // Check required evidences
     const missing = getMissingEvidencias(newStatus);
     if (missing.length > 0) {
-      toast.error(`Evidência obrigatória pendente na fase "${EVIDENCIA_FASE_LABELS[demanda.situacao] || demanda.situacao}": ${missing.join(', ')}`);
+      toast.warning(`Evidência obrigatória pendente na fase "${EVIDENCIA_FASE_LABELS[demanda.situacao] || demanda.situacao}": ${missing.join(', ')}`);
       return;
     }
     if (REQUIRES_JUSTIFICATIVA.includes(newStatus)) { setShowJustModal(true); return; }
     const ok = await onMoveTo(demanda, newStatus);
-    if (ok) setNewStatus('');
+    if (ok) {
+      setNewStatus('');
+      await refreshAllData();
+    }
   };
-  const confirmMove = async () => {
+  const confirmMove = async (justificativaText: string) => {
     if (!newStatus) return;
-    const ok = await onMoveTo(demanda, newStatus, justificativa);
-    if (ok) { setNewStatus(''); setJustificativa(''); setShowJustModal(false); }
+    const ok = await onMoveTo(demanda, newStatus, justificativaText);
+    if (ok) {
+      setNewStatus('');
+      setJustificativa('');
+      setShowJustModal(false);
+      await refreshAllData();
+    }
+  };
+
+  const refreshAllData = async () => {
+    await Promise.all([loadResponsaveis(), loadEvidencias()]);
   };
 
   // Handle unblock: auto-return to previous status
