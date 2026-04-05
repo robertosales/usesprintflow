@@ -149,7 +149,21 @@ function SustSidebar({ active, setActive }: { active: SustNav; setActive: (k: Su
 
 export function SustentacaoPage() {
   const [active, setActive] = useState<SustNav>('dashboard');
-  const { profile, currentTeamId } = useAuth();
+  const { profile, currentTeamId, setCurrentTeamId, teams, loading } = useAuth();
+  const [showTeamModal, setShowTeamModal] = useState(false);
+
+  const moduleTeams = teams.filter(t => t.module === 'sustentacao');
+
+  useEffect(() => {
+    if (loading || moduleTeams.length === 0) return;
+    const currentIsValid = currentTeamId && moduleTeams.some(t => t.id === currentTeamId);
+    if (currentIsValid) return;
+    if (moduleTeams.length === 1) {
+      setCurrentTeamId(moduleTeams[0].id);
+    } else {
+      setShowTeamModal(true);
+    }
+  }, [loading, teams]);
 
   const allItems = NAV_SECTIONS.flatMap(s => s.items);
   const pageTitle = allItems.find(i => i.key === active)?.label || 'Sustentação';
