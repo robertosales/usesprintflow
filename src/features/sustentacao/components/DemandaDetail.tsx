@@ -279,7 +279,7 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
         user_id: user.id,
       });
       toast.success("Evidência adicionada");
-      setEvidForm({ fase: 'execucao_dev', tipo: 'arquivo', titulo: '', descricao: '', url_externa: '' });
+      setEvidForm({ fase: demanda.situacao || 'execucao_dev', tipo: 'arquivo', titulo: '', descricao: '', url_externa: '' });
       setEvidFile(null);
       await loadEvidencias();
     } catch { toast.error("Erro ao adicionar evidência"); }
