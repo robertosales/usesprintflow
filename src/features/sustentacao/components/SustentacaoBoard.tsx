@@ -42,6 +42,7 @@ export function SustentacaoBoard() {
   const [selected, setSelected] = useState<Demanda | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Demanda | null>(null);
   const [justTarget, setJustTarget] = useState<{ demanda: Demanda; status: string } | null>(null);
+  const [evidenceTarget, setEvidenceTarget] = useState<{ demanda: Demanda; status: string; missing: string[] } | null>(null);
   const [showAllColumns, setShowAllColumns] = useState(false);
 
   // Evidence cache for validation
