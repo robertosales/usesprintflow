@@ -8,6 +8,7 @@ import { calcSLA, formatHours } from "../../utils/kpiCalculations";
 import { ReportFilters } from "./ReportFilters";
 import { ReportHeader, ReportLegend } from "./ReportHeader";
 import { ExportButton } from "@/components/dashboard/ExportButton";
+import { getReportConfig } from "../../utils/reportConfig";
 import { Shield, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 const META_SLA = 95; // %
