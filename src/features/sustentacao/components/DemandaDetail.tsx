@@ -732,6 +732,27 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
               </TabsContent>
 
               <TabsContent value="evidencias" className="mt-5 space-y-5">
+                {pendingTarget && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-amber-800 font-medium text-sm">
+                      <AlertCircle className="h-4 w-4" />
+                      ⚠️ Para avançar para "{SITUACAO_LABELS[pendingTarget] || pendingTarget}", cadastre ao menos uma evidência desta etapa e tente mover novamente.
+                    </div>
+                    {(() => {
+                      const missing = getMissingEvidencias(pendingTarget);
+                      const hasEvidence = missing.length === 0;
+                      return hasEvidence ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-emerald-700 font-medium">✅ Evidência registrada. Você já pode avançar para "{SITUACAO_LABELS[pendingTarget]}".</span>
+                          <Button size="sm" className="bg-info hover:bg-info/90 text-info-foreground" onClick={async () => {
+                            const ok = await onMoveTo(demanda, pendingTarget);
+                            if (ok) { setPendingTarget(undefined); await refreshAllData(); }
+                          }}>Avançar agora</Button>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
                 <Card className="shadow-none">
                   <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Adicionar Evidência</CardTitle></CardHeader>
                   <CardContent className="space-y-3">
