@@ -30,6 +30,8 @@ interface Props {
   onBack: () => void;
   onUpdate: (id: string, updates: Partial<Demanda>) => Promise<void>;
   onMoveTo: (demanda: Demanda, newStatus: string, justificativa?: string) => Promise<boolean>;
+  initialTab?: string;
+  pendingMoveTarget?: string;
 }
 
 const STEPPER_STEPS = ['nova', 'execucao_dev', 'teste', 'aguardando_homologacao', 'producao', 'aceite_final'];
@@ -84,13 +86,15 @@ type DemandaExt = Demanda & {
   contador_rejeicoes?: number;
 };
 
-export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo }: Props) {
+export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo, initialTab, pendingMoveTarget }: Props) {
   const demanda = rawDemanda as DemandaExt | null;
   const { user, profile } = useAuth();
   const { transitions, loading: tLoading, reload: reloadTransitions } = useTransitions(demanda?.id ?? null);
   const { hours, total, add: addHour, remove: removeHour, loading: hLoading, reload: reloadHours } = useHours(demanda?.id ?? null);
   const { projetos } = useProjetos();
 
+  const [activeTab, setActiveTab] = useState(initialTab || 'detalhes');
+  const [pendingTarget, setPendingTarget] = useState<string | undefined>(pendingMoveTarget);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ projeto: '', tipo: '', descricao: '', sla: '' });
 
@@ -202,7 +206,9 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo 
     if (!newStatus) return;
     const missing = getMissingEvidencias(newStatus);
     if (missing.length > 0) {
-      toast.warning(`Evidência obrigatória pendente na fase "${EVIDENCIA_FASE_LABELS[demanda.situacao] || demanda.situacao}": ${missing.join(', ')}`);
+      setPendingTarget(newStatus);
+      setActiveTab('evidencias');
+      toast.warning(`Evidência obrigatória pendente. Cadastre a evidência antes de avançar.`);
       return;
     }
     if (newStatus === 'aceite_final') {
@@ -487,7 +493,7 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo 
           )}
 
           <div className="px-6 py-5">
-            <Tabs defaultValue="detalhes">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="bg-muted/50 p-1 h-auto flex-wrap">
                 <TabsTrigger value="detalhes" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"><FileText className="h-4 w-4" />Detalhes</TabsTrigger>
                 <TabsTrigger value="historico" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"><History className="h-4 w-4" />Histórico</TabsTrigger>
@@ -728,6 +734,27 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo 
               </TabsContent>
 
               <TabsContent value="evidencias" className="mt-5 space-y-5">
+                {pendingTarget && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-amber-800 font-medium text-sm">
+                      <AlertCircle className="h-4 w-4" />
+                      ⚠️ Para avançar para "{SITUACAO_LABELS[pendingTarget] || pendingTarget}", cadastre ao menos uma evidência desta etapa e tente mover novamente.
+                    </div>
+                    {(() => {
+                      const missing = getMissingEvidencias(pendingTarget);
+                      const hasEvidence = missing.length === 0;
+                      return hasEvidence ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-emerald-700 font-medium">✅ Evidência registrada. Você já pode avançar para "{SITUACAO_LABELS[pendingTarget]}".</span>
+                          <Button size="sm" className="bg-info hover:bg-info/90 text-info-foreground" onClick={async () => {
+                            const ok = await onMoveTo(demanda, pendingTarget);
+                            if (ok) { setPendingTarget(undefined); await refreshAllData(); }
+                          }}>Avançar agora</Button>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
                 <Card className="shadow-none">
                   <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Adicionar Evidência</CardTitle></CardHeader>
                   <CardContent className="space-y-3">

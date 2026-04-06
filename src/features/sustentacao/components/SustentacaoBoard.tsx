@@ -40,6 +40,8 @@ function isForwardMove(demanda: Demanda, targetStatus: string): boolean {
 export function SustentacaoBoard() {
   const { demandas, loading, error, moveTo, update, remove, reload } = useDemandas();
   const [selected, setSelected] = useState<Demanda | null>(null);
+  const [selectedInitialTab, setSelectedInitialTab] = useState<string | undefined>(undefined);
+  const [pendingMoveTarget, setPendingMoveTarget] = useState<string | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<Demanda | null>(null);
   const [justTarget, setJustTarget] = useState<{ demanda: Demanda; status: string } | null>(null);
   const [evidenceTarget, setEvidenceTarget] = useState<{ demanda: Demanda; status: string; missing: string[] } | null>(null);
@@ -211,7 +213,7 @@ export function SustentacaoBoard() {
                       <DemandaCard
                         key={d.id}
                         demanda={d}
-                        onOpen={setSelected}
+                        onOpen={(dem) => { setSelectedInitialTab(undefined); setPendingMoveTarget(undefined); setSelected(dem); }}
                         onDelete={setDeleteTarget}
                         draggable
                         onDragStart={(e, dem) => e.dataTransfer.setData('demanda-id', dem.id)}
@@ -231,9 +233,11 @@ export function SustentacaoBoard() {
         <div className="fixed inset-0 z-50 bg-background overflow-auto">
           <DemandaDetail
             demanda={demandas.find(d => d.id === selected.id) || selected}
-            onBack={() => setSelected(null)}
+            onBack={() => { setSelected(null); setSelectedInitialTab(undefined); setPendingMoveTarget(undefined); reload(); }}
             onUpdate={update}
             onMoveTo={moveTo}
+            initialTab={selectedInitialTab}
+            pendingMoveTarget={pendingMoveTarget}
           />
         </div>
       )}
@@ -278,6 +282,8 @@ export function SustentacaoBoard() {
             </Button>
             <Button onClick={() => {
               if (evidenceTarget) {
+                setSelectedInitialTab('evidencias');
+                setPendingMoveTarget(evidenceTarget.status);
                 setSelected(evidenceTarget.demanda);
                 setEvidenceTarget(null);
               }
