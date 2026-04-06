@@ -76,12 +76,14 @@ export function RelatorioTempoMedio() {
   }, [filtered, transitions, profiles]);
 
   const analistas = useMemo(() => {
-    const ids = [...new Set(demandas.map(d => d.responsavel_dev).filter(Boolean))] as string[];
-    return ids.map(id => {
+    const idSet = new Set<string>();
+    demandas.forEach(d => { if (d.responsavel_dev) idSet.add(d.responsavel_dev); });
+    transitions.forEach(t => { if (demandas.some(d => d.id === t.demanda_id)) idSet.add(t.user_id); });
+    return [...idSet].map(id => {
       const p = profiles.find(pr => pr.user_id === id);
       return { user_id: id, display_name: p?.display_name || id.slice(0, 8) };
     });
-  }, [demandas, profiles]);
+  }, [demandas, transitions, profiles]);
 
   // Totals row
   const totals = useMemo(() => {
