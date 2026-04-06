@@ -8,6 +8,7 @@ import { calcTempos, formatHours } from "../../utils/kpiCalculations";
 import { ReportFilters } from "./ReportFilters";
 import { ReportHeader, ReportLegend } from "./ReportHeader";
 import { ExportButton } from "@/components/dashboard/ExportButton";
+import { getReportConfig } from "../../utils/reportConfig";
 import { Clock, Timer, TrendingUp, Target } from "lucide-react";
 import type { Demanda, DemandaTransition } from "../../types/demanda";
 
