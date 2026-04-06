@@ -86,7 +86,7 @@ type DemandaExt = Demanda & {
   contador_rejeicoes?: number;
 };
 
-export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo }: Props) {
+export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo, initialTab, pendingMoveTarget }: Props) {
   const demanda = rawDemanda as DemandaExt | null;
   const { user, profile } = useAuth();
   const { transitions, loading: tLoading, reload: reloadTransitions } = useTransitions(demanda?.id ?? null);
