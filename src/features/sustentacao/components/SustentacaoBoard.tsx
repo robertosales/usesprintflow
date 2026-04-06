@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search } from "lucide-react";
+import { Search, Columns3, AlertCircle } from "lucide-react";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { useDemandas } from "../hooks/useDemandas";
 import { DemandaCard } from "./DemandaCard";
@@ -14,10 +14,11 @@ import type { Demanda } from "../types/demanda";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { EmptyState } from "@/shared/components/common/EmptyState";
-import { Columns3 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { EVIDENCIAS_OBRIGATORIAS } from "../services/evidencias.service";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 const BOARD_COLUMNS = ['nova', 'execucao_dev', 'teste', 'aguardando_homologacao'] as const;
 
