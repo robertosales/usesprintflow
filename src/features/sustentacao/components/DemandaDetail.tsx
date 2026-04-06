@@ -491,7 +491,7 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
           )}
 
           <div className="px-6 py-5">
-            <Tabs defaultValue="detalhes">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="bg-muted/50 p-1 h-auto flex-wrap">
                 <TabsTrigger value="detalhes" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"><FileText className="h-4 w-4" />Detalhes</TabsTrigger>
                 <TabsTrigger value="historico" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"><History className="h-4 w-4" />Histórico</TabsTrigger>
