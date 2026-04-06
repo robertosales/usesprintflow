@@ -254,6 +254,39 @@ export function SustentacaoBoard() {
           }
         }}
       />
+
+      {/* Evidence missing dialog */}
+      <Dialog open={!!evidenceTarget} onOpenChange={(o) => !o && setEvidenceTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              Evidência Obrigatória Pendente
+            </DialogTitle>
+            <DialogDescription>
+              Para avançar a demanda <strong>{evidenceTarget?.demanda.rhm}</strong> da fase
+              {" "}<strong>"{SITUACAO_LABELS[evidenceTarget?.demanda.situacao || '']}"</strong>,
+              é necessário anexar a(s) evidência(s) obrigatória(s):
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="list-disc pl-6 text-sm text-muted-foreground space-y-1">
+            {evidenceTarget?.missing.map((m, i) => <li key={i}>{m}</li>)}
+          </ul>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setEvidenceTarget(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => {
+              if (evidenceTarget) {
+                setSelected(evidenceTarget.demanda);
+                setEvidenceTarget(null);
+              }
+            }}>
+              Abrir Demanda
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
