@@ -811,17 +811,16 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo 
         </div>
       </div>
 
-      <JustificativaDialog open={showJustModal} onClose={() => setShowJustModal(false)} onConfirm={confirmJustificativa}
-        title={`Mover para ${SITUACAO_LABELS[newStatus] || newStatus}`} description="Esta ação requer justificativa." />
+      <JustificativaDialog open={showJustModal} onClose={() => setShowJustModal(false)} onConfirm={confirmJustificativa} />
       <SuspensaoDialog open={showSuspensaoModal} onClose={() => { setShowSuspensaoModal(false); setNewStatus(''); }} onConfirm={confirmSuspensao} />
       <EncerramentoDialog open={showEncerramentoModal} onClose={() => { setShowEncerramentoModal(false); setNewStatus(''); }}
         onConfirm={confirmEncerramento} isCorretiva={isCorretiva} />
       <ConfirmDialog open={!!deleteHourId} title="Excluir registro" description="Deseja excluir este registro de horas?"
-        onConfirm={async () => { if (deleteHourId) { await removeHour(deleteHourId); setDeleteHourId(null); } }} onCancel={() => setDeleteHourId(null)} />
+        onConfirm={async () => { if (deleteHourId) { await removeHour(deleteHourId); setDeleteHourId(null); } }} onOpenChange={() => setDeleteHourId(null)} />
       <ConfirmDialog open={!!deleteRespId} title="Remover responsável" description="Deseja remover este responsável?"
-        onConfirm={handleRemoveResp} onCancel={() => setDeleteRespId(null)} />
+        onConfirm={handleRemoveResp} onOpenChange={() => setDeleteRespId(null)} />
       <ConfirmDialog open={!!deleteEvidId} title="Remover evidência" description="Deseja remover esta evidência?"
-        onConfirm={handleRemoveEvidencia} onCancel={() => setDeleteEvidId(null)} />
+        onConfirm={handleRemoveEvidencia} onOpenChange={() => setDeleteEvidId(null)} />
     </>
   );
 }
