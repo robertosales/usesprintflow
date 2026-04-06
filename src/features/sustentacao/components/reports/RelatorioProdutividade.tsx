@@ -8,6 +8,7 @@ import { calcProdutividade, formatHours } from "../../utils/kpiCalculations";
 import { ReportFilters } from "./ReportFilters";
 import { ReportHeader, ReportLegend } from "./ReportHeader";
 import { ExportButton } from "@/components/dashboard/ExportButton";
+import { getReportConfig } from "../../utils/reportConfig";
 import { Users, Trophy, Zap, AlertTriangle } from "lucide-react";
 
 export function RelatorioProdutividade() {
