@@ -537,7 +537,7 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo 
                           <span className="text-muted-foreground">Tipo</span>
                           <span className="font-medium text-right">{getTipoLabel(demanda.tipo)}</span>
                           <span className="text-muted-foreground">Regime</span>
-                          <span className="font-medium text-right">{demanda.sla === 'continuo' ? 'Contínuo' : demanda.sla === '24x7' ? '24x7' : 'Padrão'}</span>
+                          <span className="font-medium text-right">{String(demanda.sla) === 'continuo' ? 'Contínuo' : String(demanda.sla) === '24x7' ? '24x7' : 'Padrão'}</span>
                           {demandanteProfile && (<>
                             <span className="text-muted-foreground">Demandante</span>
                             <span className="font-medium text-right">{demandanteProfile}</span>
