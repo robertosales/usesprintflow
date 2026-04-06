@@ -29,9 +29,15 @@ export function RelatorioTempoMedio() {
       cutoff.setDate(cutoff.getDate() - parseInt(periodo));
       items = items.filter(d => new Date(d.created_at) >= cutoff);
     }
-    if (analista !== 'all') items = items.filter(d => d.responsavel_dev === analista);
+    if (analista !== 'all') {
+      // Filter by responsavel_dev OR by transitions performed by the analyst
+      const demandaIdsFromTransitions = new Set(
+        transitions.filter(t => t.user_id === analista).map(t => t.demanda_id)
+      );
+      items = items.filter(d => d.responsavel_dev === analista || demandaIdsFromTransitions.has(d.id));
+    }
     return items;
-  }, [demandas, periodo, analista]);
+  }, [demandas, periodo, analista, transitions]);
 
   const tempos = useMemo(() => calcTempos(filtered, transitions), [filtered, transitions]);
 
