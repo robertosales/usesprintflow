@@ -421,7 +421,7 @@ export function MetricsDashboard() {
   }, [rawData, filtered]);
 
   const getTeamExportData = () => ({
-    title: `Métricas do Time - ${teamOverview.sprintName}`,
+    title: getReportConfig('agil_desempenho_time').tituloExportacao,
     headers: ["Métrica", "Valor"],
     rows: [
       ["Velocity (SP Concluídos)", teamOverview.completedPoints],
