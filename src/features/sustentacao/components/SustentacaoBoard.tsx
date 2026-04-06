@@ -282,6 +282,8 @@ export function SustentacaoBoard() {
             </Button>
             <Button onClick={() => {
               if (evidenceTarget) {
+                setSelectedInitialTab('evidencias');
+                setPendingMoveTarget(evidenceTarget.status);
                 setSelected(evidenceTarget.demanda);
                 setEvidenceTarget(null);
               }
