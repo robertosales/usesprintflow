@@ -87,8 +87,8 @@ type DemandaExt = Demanda & {
 export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo }: Props) {
   const demanda = rawDemanda as DemandaExt | null;
   const { user, profile } = useAuth();
-  const { transitions, loading: tLoading } = useTransitions(demanda?.id ?? null);
-  const { hours, total, add: addHour, remove: removeHour, loading: hLoading } = useHours(demanda?.id ?? null);
+  const { transitions, loading: tLoading, reload: reloadTransitions } = useTransitions(demanda?.id ?? null);
+  const { hours, total, add: addHour, remove: removeHour, loading: hLoading, reload: reloadHours } = useHours(demanda?.id ?? null);
   const { projetos } = useProjetos();
 
   const [editing, setEditing] = useState(false);
