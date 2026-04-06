@@ -196,14 +196,31 @@ export function calcProdutividade(
     return analistas.get(userId)!;
   };
 
-  // Count demandas by responsavel_dev
+  // Build a map: demanda_id -> set of user_ids who worked on it (from transitions)
+  const demandaWorkers = new Map<string, Set<string>>();
+  transitions.forEach(t => {
+    if (!demandaWorkers.has(t.demanda_id)) demandaWorkers.set(t.demanda_id, new Set());
+    demandaWorkers.get(t.demanda_id)!.add(t.user_id);
+  });
+
+  // Count demandas by responsavel_dev OR by transition workers
   demandas.forEach(d => {
+    // Determine who is responsible: prefer responsavel_dev, fallback to transition users
+    const responsaveis: string[] = [];
     if (d.responsavel_dev) {
-      const a = getOrCreate(d.responsavel_dev);
+      responsaveis.push(d.responsavel_dev);
+    } else {
+      // Use users who performed transitions on this demanda
+      const workers = demandaWorkers.get(d.id);
+      if (workers) responsaveis.push(...workers);
+    }
+
+    responsaveis.forEach(userId => {
+      const a = getOrCreate(userId);
       a.atribuidos++;
       if (d.situacao === 'aceite_final') a.resolvidos++;
       else a.emAberto++;
-    }
+    });
   });
 
   // Sum hours by user
