@@ -30,6 +30,8 @@ interface Props {
   onBack: () => void;
   onUpdate: (id: string, updates: Partial<Demanda>) => Promise<void>;
   onMoveTo: (demanda: Demanda, newStatus: string, justificativa?: string) => Promise<boolean>;
+  initialTab?: string;
+  pendingMoveTarget?: string;
 }
 
 const STEPPER_STEPS = ['nova', 'execucao_dev', 'teste', 'aguardando_homologacao', 'producao', 'aceite_final'];

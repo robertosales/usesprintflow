@@ -213,7 +213,7 @@ export function SustentacaoBoard() {
                       <DemandaCard
                         key={d.id}
                         demanda={d}
-                        onOpen={setSelected}
+                        onOpen={(dem) => { setSelectedInitialTab(undefined); setPendingMoveTarget(undefined); setSelected(dem); }}
                         onDelete={setDeleteTarget}
                         draggable
                         onDragStart={(e, dem) => e.dataTransfer.setData('demanda-id', dem.id)}
