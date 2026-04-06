@@ -40,6 +40,8 @@ function isForwardMove(demanda: Demanda, targetStatus: string): boolean {
 export function SustentacaoBoard() {
   const { demandas, loading, error, moveTo, update, remove, reload } = useDemandas();
   const [selected, setSelected] = useState<Demanda | null>(null);
+  const [selectedInitialTab, setSelectedInitialTab] = useState<string | undefined>(undefined);
+  const [pendingMoveTarget, setPendingMoveTarget] = useState<string | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<Demanda | null>(null);
   const [justTarget, setJustTarget] = useState<{ demanda: Demanda; status: string } | null>(null);
   const [evidenceTarget, setEvidenceTarget] = useState<{ demanda: Demanda; status: string; missing: string[] } | null>(null);
