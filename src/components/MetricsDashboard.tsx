@@ -249,6 +249,7 @@ export function MetricsDashboard() {
         wip,
         cycleTime,
         tasksByStatus,
+        activities: devActs,
       };
     });
   }, [filtered]);
