@@ -538,6 +538,8 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo 
                           <span className="font-medium text-right">{getTipoLabel(demanda.tipo)}</span>
                           <span className="text-muted-foreground">Regime</span>
                           <span className="font-medium text-right">{String(demanda.sla) === 'continuo' ? 'Contínuo' : String(demanda.sla) === '24x7' ? '24x7' : 'Padrão'}</span>
+                          <span className="text-muted-foreground">Data de Início</span>
+                          <span className="font-medium text-right">{new Date(demanda.created_at).toLocaleString('pt-BR')}</span>
                           {demandanteProfile && (<>
                             <span className="text-muted-foreground">Demandante</span>
                             <span className="font-medium text-right">{demandanteProfile}</span>
@@ -546,18 +548,18 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo 
                             <span className="text-muted-foreground">OS Vinculada</span>
                             <span className="font-medium text-right">{demanda.ordem_servico}</span>
                           </>)}
-                          {demanda.prazo_inicio_atendimento && (<>
-                            <span className="text-muted-foreground">Prazo Início</span>
-                            <span className="font-medium text-right">{new Date(demanda.prazo_inicio_atendimento).toLocaleString('pt-BR')}</span>
-                          </>)}
-                          {demanda.prazo_solucao && (<>
-                            <span className="text-muted-foreground">Prazo Solução</span>
-                            <span className="font-medium text-right">{new Date(demanda.prazo_solucao).toLocaleString('pt-BR')}</span>
-                          </>)}
-                          {demanda.data_previsao_encerramento && (<>
-                            <span className="text-muted-foreground">Previsão Encerramento</span>
-                            <span className="font-medium text-right">{new Date(demanda.data_previsao_encerramento).toLocaleDateString('pt-BR')}</span>
-                          </>)}
+                          <span className="text-muted-foreground">Prazo Máx. Início</span>
+                          <span className="font-medium text-right">
+                            {demanda.originada_diagnostico ? 'IMEDIATO' : demanda.prazo_inicio_atendimento ? new Date(demanda.prazo_inicio_atendimento).toLocaleString('pt-BR') : '—'}
+                          </span>
+                          <span className="text-muted-foreground">Prazo Máx. Solução</span>
+                          <span className="font-medium text-right">
+                            {demanda.prazo_solucao ? new Date(demanda.prazo_solucao).toLocaleString('pt-BR') : 'Definido na OS'}
+                          </span>
+                          <span className="text-muted-foreground">Previsão Encerramento</span>
+                          <span className="font-medium text-right">
+                            {demanda.data_previsao_encerramento ? new Date(demanda.data_previsao_encerramento).toLocaleDateString('pt-BR') : '—'}
+                          </span>
                           <span className="text-muted-foreground">Criada em</span>
                           <span className="font-medium text-right">{new Date(demanda.created_at).toLocaleDateString('pt-BR')}</span>
                           <span className="text-muted-foreground">Atualizada em</span>
