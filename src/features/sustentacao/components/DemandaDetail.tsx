@@ -206,7 +206,9 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
     if (!newStatus) return;
     const missing = getMissingEvidencias(newStatus);
     if (missing.length > 0) {
-      toast.warning(`Evidência obrigatória pendente na fase "${EVIDENCIA_FASE_LABELS[demanda.situacao] || demanda.situacao}": ${missing.join(', ')}`);
+      setPendingTarget(newStatus);
+      setActiveTab('evidencias');
+      toast.warning(`Evidência obrigatória pendente. Cadastre a evidência antes de avançar.`);
       return;
     }
     if (newStatus === 'aceite_final') {
