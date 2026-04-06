@@ -723,7 +723,15 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
                         <Select value={evidForm.fase} onValueChange={v => setEvidForm(p => ({ ...p, fase: v }))}>
                           <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            {EVIDENCIA_FASES.map(f => <SelectItem key={f} value={f}>{EVIDENCIA_FASE_LABELS[f]}</SelectItem>)}
+                            {(() => {
+                              const currentIdx = EVIDENCIA_FASES.indexOf(demanda.situacao);
+                              const allowedFases = currentIdx >= 0 ? EVIDENCIA_FASES.slice(0, currentIdx + 1) : EVIDENCIA_FASES;
+                              return allowedFases.map(f => (
+                                <SelectItem key={f} value={f}>
+                                  {EVIDENCIA_FASE_LABELS[f]}{f === demanda.situacao ? ' (atual)' : ''}
+                                </SelectItem>
+                              ));
+                            })()}
                           </SelectContent>
                         </Select>
                       </div>
