@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { ExportButton } from "./ExportButton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getReportConfig } from "@/features/sustentacao/utils/reportConfig";
 
 interface MemberMetrics {
   id: string;
