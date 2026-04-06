@@ -56,8 +56,10 @@ export function RelatorioSLA() {
     return { dentro, emRisco, violado, total };
   }, [sla]);
 
+  const reportCfg = getReportConfig('sla_compliance');
+
   const getExportData = () => ({
-    title: 'Relatorio_SLA_Compliance',
+    title: reportCfg.tituloExportacao,
     headers: ['RHM', 'Projeto', 'Prioridade', 'Abertura', 'Prazo SLA', 'Resolução', 'Status SLA', 'Atraso'],
     rows: sla.results.map(r => [
       r.rhm, r.projeto, r.prioridade,
