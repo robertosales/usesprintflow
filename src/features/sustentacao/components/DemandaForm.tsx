@@ -9,7 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, Search } from "lucide-react";
+import { CalendarIcon, Search, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -34,6 +34,7 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
   });
   const [loading, setLoading] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [dataInicio] = useState(() => new Date());
 
   // Demandante search
   const [demandanteSearch, setDemandanteSearch] = useState('');
@@ -44,6 +45,13 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
 
   const isCorretiva = form.tipo === 'manutencao_corretiva';
 
+  // Reset conditional fields when tipo changes away from corretiva
+  useEffect(() => {
+    if (!isCorretiva) {
+      setForm(p => ({ ...p, sla: 'padrao', tipo_defeito: 'impeditivo', originada_diagnostico: false }));
+    }
+  }, [isCorretiva]);
+
   // Calculate deadlines
   const prazoInfo = useMemo(() => {
     const regime = isCorretiva ? form.sla : undefined;
@@ -51,17 +59,16 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
     const regra = getPrazoRegra(form.tipo, regime, defeito);
     if (!regra) return null;
 
-    const now = new Date();
-    const prazoInicio = calcPrazoInicio(now, form.tipo, regime, defeito);
-    const prazoSolucao = calcPrazoSolucao(now, form.tipo, regime, defeito);
+    const prazoInicio = calcPrazoInicio(dataInicio, form.tipo, regime, defeito);
+    const prazoSolucao = calcPrazoSolucao(dataInicio, form.tipo, regime, defeito);
     const isOS = isSolucaoDefinidaNaOS(form.tipo, regime, defeito);
 
     return { regra, prazoInicio, prazoSolucao, isOS };
-  }, [form.tipo, form.sla, form.tipo_defeito, isCorretiva]);
+  }, [form.tipo, form.sla, form.tipo_defeito, isCorretiva, dataInicio]);
 
   // Auto-set data_previsao_encerramento when prazo changes
   useEffect(() => {
-    if (prazoInfo?.prazoSolucao && !form.data_previsao_encerramento) {
+    if (prazoInfo?.prazoSolucao) {
       setForm(p => ({ ...p, data_previsao_encerramento: prazoInfo.prazoSolucao }));
     }
   }, [prazoInfo?.prazoSolucao]);
@@ -87,7 +94,6 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
     setLoading(true);
     const regime = isCorretiva ? form.sla : 'padrao';
     const defeito = isCorretiva ? form.tipo_defeito : undefined;
-    const now = new Date();
 
     await onSubmit({
       rhm: form.rhm,
@@ -99,8 +105,8 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
       ordem_servico: form.ordem_servico || null,
       tipo_defeito: isCorretiva ? form.tipo_defeito : null,
       originada_diagnostico: isCorretiva ? form.originada_diagnostico : false,
-      prazo_inicio_atendimento: calcPrazoInicio(now, form.tipo, regime, defeito)?.toISOString() || null,
-      prazo_solucao: calcPrazoSolucao(now, form.tipo, regime, defeito)?.toISOString() || null,
+      prazo_inicio_atendimento: calcPrazoInicio(dataInicio, form.tipo, regime, defeito)?.toISOString() || null,
+      prazo_solucao: calcPrazoSolucao(dataInicio, form.tipo, regime, defeito)?.toISOString() || null,
       data_previsao_encerramento: form.data_previsao_encerramento ? format(form.data_previsao_encerramento, 'yyyy-MM-dd') : null,
     });
     setForm({ rhm: '', projeto: '', tipo: 'manutencao_corretiva', descricao: '', sla: 'padrao', demandante: '', ordem_servico: '', tipo_defeito: 'impeditivo', originada_diagnostico: false, data_previsao_encerramento: null });
@@ -112,10 +118,10 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Nova Demanda</DialogTitle></DialogHeader>
-        <div className="space-y-4">
-          {/* Row 1: RHM + Projeto */}
+        <div className="space-y-3">
+          {/* LINHA 1: RHM + Projeto */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>RHM <span className="text-destructive">*</span></Label>
@@ -136,56 +142,71 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
             </div>
           </div>
 
-          {/* Row 2: Tipo + OS */}
+          {/* LINHA 2: Data de Início (readonly) + OS */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Tipo <span className="text-destructive">*</span></Label>
-              <Select value={form.tipo} onValueChange={v => setForm(p => ({ ...p, tipo: v, data_previsao_encerramento: null }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent className="max-h-60">
-                  {TIPOS_DEMANDA_IMR.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label className="flex items-center gap-1.5">
+                Data de Início
+                <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-[#e8f2fa] text-[#1a6fa8]">automático</span>
+              </Label>
+              <div className="flex items-center gap-2 mt-1 px-3 py-2 rounded-md border bg-[#f5f8fb] text-sm">
+                <Clock className="h-3.5 w-3.5 text-[#4a6278]" />
+                <span className="font-medium text-[#0f1e2d]">{format(dataInicio, "dd/MM/yyyy HH:mm")}</span>
+              </div>
             </div>
             <div>
               <Label>Ordem de Serviço — OS</Label>
-              <Input value={form.ordem_servico} onChange={e => setForm(p => ({ ...p, ordem_servico: e.target.value }))} placeholder="Nº da OS (opcional)" />
+              <Input value={form.ordem_servico} onChange={e => setForm(p => ({ ...p, ordem_servico: e.target.value }))} placeholder="Nº da OS (opcional)" className="mt-1" />
             </div>
           </div>
 
-          {/* Regime de Atendimento (only for Corretiva) */}
+          {/* LINHA 3: Tipo (full width) */}
+          <div>
+            <Label>Tipo</Label>
+            <Select value={form.tipo} onValueChange={v => setForm(p => ({ ...p, tipo: v, data_previsao_encerramento: null }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent className="max-h-60">
+                {TIPOS_DEMANDA_IMR.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* BLOCO CONDICIONAL — Manutenção Corretiva */}
           {isCorretiva && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Regime de Atendimento</Label>
-                <Select value={form.sla} onValueChange={v => setForm(p => ({ ...p, sla: v, data_previsao_encerramento: null }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="padrao">Padrão</SelectItem>
-                    <SelectItem value="continuo">Contínuo</SelectItem>
-                  </SelectContent>
-                </Select>
+            <div className="rounded-lg border p-4 space-y-3" style={{ backgroundColor: '#e8f2fa', borderColor: '#b3d4ed' }}>
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#1a6fa8' }}>
+                Campos exclusivos — Manutenção Corretiva
+              </p>
+              {/* LINHA 4: Regime + Tipo de Defeito */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Regime de Atendimento</Label>
+                  <Select value={form.sla} onValueChange={v => setForm(p => ({ ...p, sla: v, data_previsao_encerramento: null }))}>
+                    <SelectTrigger className="mt-1 bg-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="padrao">Padrão</SelectItem>
+                      <SelectItem value="continuo">Contínuo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Tipo de Defeito</Label>
+                  <RadioGroup value={form.tipo_defeito} onValueChange={v => setForm(p => ({ ...p, tipo_defeito: v, data_previsao_encerramento: null }))} className="flex gap-4 mt-2">
+                    <div className="flex items-center gap-2"><RadioGroupItem value="impeditivo" id="imp" /><Label htmlFor="imp" className="font-normal text-sm">Impeditivo</Label></div>
+                    <div className="flex items-center gap-2"><RadioGroupItem value="nao_impeditivo" id="nimp" /><Label htmlFor="nimp" className="font-normal text-sm">Não impeditivo</Label></div>
+                  </RadioGroup>
+                </div>
               </div>
-              <div>
-                <Label>Tipo de Defeito</Label>
-                <RadioGroup value={form.tipo_defeito} onValueChange={v => setForm(p => ({ ...p, tipo_defeito: v, data_previsao_encerramento: null }))} className="flex gap-4 mt-2">
-                  <div className="flex items-center gap-2"><RadioGroupItem value="impeditivo" id="imp" /><Label htmlFor="imp" className="font-normal">Impeditivo</Label></div>
-                  <div className="flex items-center gap-2"><RadioGroupItem value="nao_impeditivo" id="nimp" /><Label htmlFor="nimp" className="font-normal">Não impeditivo</Label></div>
-                </RadioGroup>
+              {/* LINHA 5: Diagnóstico */}
+              <div className="flex items-center gap-2">
+                <Checkbox checked={form.originada_diagnostico} onCheckedChange={v => setForm(p => ({ ...p, originada_diagnostico: !!v }))} id="diag" />
+                <Label htmlFor="diag" className="font-normal text-sm">Originada de diagnóstico de incidente?</Label>
+                {form.originada_diagnostico && <span className="text-xs font-medium ml-2" style={{ color: '#1a6fa8' }}>→ Prazo de início: IMEDIATO</span>}
               </div>
             </div>
           )}
 
-          {/* Originada de diagnóstico (only corretiva) */}
-          {isCorretiva && (
-            <div className="flex items-center gap-2">
-              <Checkbox checked={form.originada_diagnostico} onCheckedChange={v => setForm(p => ({ ...p, originada_diagnostico: !!v }))} id="diag" />
-              <Label htmlFor="diag" className="font-normal text-sm">Originada de diagnóstico de incidente?</Label>
-              {form.originada_diagnostico && <span className="text-xs text-info font-medium ml-2">→ Prazo de início: IMEDIATO</span>}
-            </div>
-          )}
-
-          {/* Demandante */}
+          {/* LINHA 6: Demandante (full width) */}
           <div>
             <Label>Demandante <span className="text-destructive">*</span></Label>
             {selectedDemandante ? (
@@ -215,20 +236,20 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
             {demandanteError && <p className="text-xs text-destructive mt-1">Selecione um demandante.</p>}
           </div>
 
-          {/* Prazo Info Box */}
+          {/* LINHA 7: Prazos Calculados (full width, styled block) */}
           {prazoInfo && (
-            <div className="bg-muted/50 border rounded-lg p-3 space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground uppercase">Prazos Calculados</p>
+            <div className="rounded-lg border p-3 space-y-1" style={{ backgroundColor: '#e8f2fa', borderColor: '#b3d4ed' }}>
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#1a6fa8' }}>Prazos Calculados</p>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
-                  <span className="text-muted-foreground">Prazo máx. início:</span>
-                  <span className="ml-1 font-medium">
+                  <span style={{ color: '#4a6278' }}>Prazo máx. início:</span>
+                  <span className="ml-1 font-medium" style={{ color: '#0f1e2d' }}>
                     {form.originada_diagnostico && isCorretiva ? 'IMEDIATO' : prazoInfo.prazoInicio ? format(prazoInfo.prazoInicio, "dd/MM/yyyy HH:mm") : '—'}
                   </span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Prazo máx. solução:</span>
-                  <span className="ml-1 font-medium">
+                  <span style={{ color: '#4a6278' }}>Prazo máx. solução:</span>
+                  <span className="ml-1 font-medium" style={{ color: '#0f1e2d' }}>
                     {prazoInfo.isOS ? 'Definido na OS' : prazoInfo.prazoSolucao ? format(prazoInfo.prazoSolucao, "dd/MM/yyyy HH:mm") : '—'}
                   </span>
                 </div>
@@ -236,7 +257,7 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
             </div>
           )}
 
-          {/* Data Previsão Encerramento */}
+          {/* LINHA 8: Data Previsão Encerramento (full width) */}
           <div>
             <Label>Data de Previsão de Encerramento <span className="text-destructive">*</span></Label>
             <Popover>
@@ -257,7 +278,7 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
             {previsaoError && <p className="text-xs text-destructive mt-1">Informe a data de previsão.</p>}
           </div>
 
-          {/* Descrição */}
+          {/* LINHA 9: Descrição (full width) */}
           <div>
             <Label>Descrição</Label>
             <Textarea value={form.descricao} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))} rows={3} />
@@ -265,7 +286,7 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button className="bg-info hover:bg-info/90 text-info-foreground" onClick={handle} disabled={loading}>{loading ? 'Criando...' : 'Criar Demanda'}</Button>
+          <Button style={{ backgroundColor: '#1a6fa8' }} className="hover:opacity-90 text-white" onClick={handle} disabled={loading}>{loading ? 'Criando...' : 'Criar Demanda'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
