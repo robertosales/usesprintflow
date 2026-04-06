@@ -42,9 +42,20 @@ export function RelatorioTempoMedio() {
   const tempos = useMemo(() => calcTempos(filtered, transitions), [filtered, transitions]);
 
   const analistaStats = useMemo(() => {
-    const devIds = [...new Set(filtered.map(d => d.responsavel_dev).filter(Boolean))] as string[];
+    // Collect user IDs from responsavel_dev and transitions
+    const userIdSet = new Set<string>();
+    filtered.forEach(d => { if (d.responsavel_dev) userIdSet.add(d.responsavel_dev); });
+    transitions.forEach(t => {
+      if (filtered.some(d => d.id === t.demanda_id)) userIdSet.add(t.user_id);
+    });
+    const devIds = [...userIdSet];
+
     return devIds.map(uid => {
-      const devDemandas = filtered.filter(d => d.responsavel_dev === uid);
+      // Demandas where user is responsavel_dev OR performed transitions
+      const demandaIdsFromTransitions = new Set(
+        transitions.filter(t => t.user_id === uid).map(t => t.demanda_id)
+      );
+      const devDemandas = filtered.filter(d => d.responsavel_dev === uid || demandaIdsFromTransitions.has(d.id));
       const t = calcTempos(devDemandas, transitions);
       const p = profiles.find(pr => pr.user_id === uid);
       const acimaMeta = devDemandas.filter(d => {
