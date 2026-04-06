@@ -110,12 +110,12 @@ export function RelatorioProdutividade() {
 
   return (
     <div className="space-y-5">
-      <ReportHeader tipoRelatorio="Relatório — Produtividade da Equipe" periodo={periodo} />
+      <ReportHeader tipoRelatorio={reportCfg.titulo} periodo={periodo} modulo={reportCfg.modulo} />
 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Produtividade da Equipe</h2>
-          <p className="text-sm text-muted-foreground">Capacidade de entrega individual e coletiva</p>
+          <h2 className="text-lg font-semibold">{reportCfg.titulo.replace('Relatório — ', '')}</h2>
+          <p className="text-sm text-muted-foreground">{reportCfg.subtitulo}</p>
         </div>
         <div className="flex items-center gap-2">
           <ReportFilters periodo={periodo} setPeriodo={setPeriodo} analista={analista} setAnalista={setAnalista} analistas={analistasList} />
