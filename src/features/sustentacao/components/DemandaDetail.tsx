@@ -283,7 +283,7 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo 
   };
 
   const refreshAllData = async () => {
-    await Promise.all([loadResponsaveis(), loadEvidencias()]);
+    await Promise.all([loadResponsaveis(), loadEvidencias(), reloadTransitions(), reloadHours()]);
   };
 
   const handleUnblock = async () => {
