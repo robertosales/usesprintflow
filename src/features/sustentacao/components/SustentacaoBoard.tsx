@@ -88,31 +88,27 @@ export function SustentacaoBoard() {
 
   const columns = showAllColumns ? [...ALL_SITUACOES] : [...BOARD_COLUMNS];
 
-  const validateDrop = (demanda: Demanda, targetStatus: string): string | null => {
-    // Don't allow same status
-    if (demanda.situacao === targetStatus) return null;
+  const validateDrop = (demanda: Demanda, targetStatus: string): { error?: string; evidenceMissing?: string[] } => {
+    if (demanda.situacao === targetStatus) return {};
 
-    // Block special statuses from direct drag
     if (targetStatus === 'bloqueada' || targetStatus === 'aguardando_retorno') {
-      return null; // handled by justification dialog
+      return {};
     }
 
-    // Only forward movement allowed
     if (!isForwardMove(demanda, targetStatus)) {
-      return `Movimentação não permitida: apenas avanço sequencial é permitido.`;
+      return { error: `Movimentação não permitida: apenas avanço sequencial é permitido.` };
     }
 
-    // Check required evidences for current phase
     const required = EVIDENCIAS_OBRIGATORIAS[demanda.situacao] || [];
     if (required.length > 0) {
       const key = `${demanda.id}:${demanda.situacao}`;
       const count = evidenceCache[key] || 0;
       if (count === 0) {
-        return `Evidência obrigatória pendente na fase "${SITUACAO_LABELS[demanda.situacao]}". Adicione a evidência antes de avançar.`;
+        return { evidenceMissing: required };
       }
     }
 
-    return null; // valid
+    return {};
   };
 
   const handleDrop = async (e: React.DragEvent, status: string) => {
@@ -121,10 +117,13 @@ export function SustentacaoBoard() {
     const demanda = demandas.find(d => d.id === id);
     if (!demanda || demanda.situacao === status) return;
 
-    // Validate business rules
-    const validationError = validateDrop(demanda, status);
-    if (validationError) {
-      toast.error(validationError);
+    const validation = validateDrop(demanda, status);
+    if (validation.error) {
+      toast.error(validation.error);
+      return;
+    }
+    if (validation.evidenceMissing) {
+      setEvidenceTarget({ demanda, status, missing: validation.evidenceMissing });
       return;
     }
 
