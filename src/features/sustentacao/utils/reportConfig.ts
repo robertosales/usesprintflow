@@ -15,6 +15,7 @@ export interface ReportConfig {
 }
 
 export const REPORT_CONFIGS: Record<string, ReportConfig> = {
+  // ── Sustentação ──
   tempo_medio: {
     titulo: 'Relatório — Tempo Médio',
     tituloExportacao: 'Relatório de Tempo Médio',
@@ -32,6 +33,31 @@ export const REPORT_CONFIGS: Record<string, ReportConfig> = {
     tituloExportacao: 'Relatório de Produtividade da Equipe',
     subtitulo: 'Capacidade de entrega individual e coletiva',
     modulo: 'Sustentação',
+  },
+  // ── Sala Ágil ──
+  agil_desempenho_individual: {
+    titulo: 'Relatório — Desempenho Individual',
+    tituloExportacao: 'Relatório de Desempenho Individual',
+    subtitulo: 'Atividades, horas e eficiência por membro do time',
+    modulo: 'Sala Ágil',
+  },
+  agil_desempenho_time: {
+    titulo: 'Relatório — Desempenho do Time',
+    tituloExportacao: 'Relatório de Desempenho do Time',
+    subtitulo: 'Velocity, Story Points e métricas de sprint',
+    modulo: 'Sala Ágil',
+  },
+  agil_qualidade: {
+    titulo: 'Relatório — Qualidade',
+    tituloExportacao: 'Relatório de Qualidade',
+    subtitulo: 'Bugs, impedimentos e taxa de reabertura',
+    modulo: 'Sala Ágil',
+  },
+  agil_releases: {
+    titulo: 'Relatório — Releases',
+    tituloExportacao: 'Relatório de Releases',
+    subtitulo: 'Histórico de versões publicadas',
+    modulo: 'Sala Ágil',
   },
 };
 

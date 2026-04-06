@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { getReportConfig } from "@/features/sustentacao/utils/reportConfig";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   TrendingUp,
@@ -249,6 +250,7 @@ export function MetricsDashboard() {
         wip,
         cycleTime,
         tasksByStatus,
+        activities: devActs,
       };
     });
   }, [filtered]);
@@ -419,7 +421,7 @@ export function MetricsDashboard() {
   }, [rawData, filtered]);
 
   const getTeamExportData = () => ({
-    title: `Métricas do Time - ${teamOverview.sprintName}`,
+    title: getReportConfig('agil_desempenho_time').tituloExportacao,
     headers: ["Métrica", "Valor"],
     rows: [
       ["Velocity (SP Concluídos)", teamOverview.completedPoints],

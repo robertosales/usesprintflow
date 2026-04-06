@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { ExportButton } from "./ExportButton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getReportConfig } from "@/features/sustentacao/utils/reportConfig";
 
 interface MemberMetrics {
   id: string;
@@ -104,8 +105,10 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
     );
   }
 
+  const reportCfg = getReportConfig('agil_desempenho_individual');
+
   const getExportData = () => ({
-    title: `atividades-usuario-${new Date().toISOString().split("T")[0]}`,
+    title: reportCfg.tituloExportacao,
     headers: ["Usuário", "Título", "Descrição", "Data Início", "Data Fim", "Horas Trabalhadas"],
     rows: members.flatMap((m) =>
       (m.activities || []).map((a: any) => [m.name, a.title, a.description || "", a.start_date, a.end_date, a.hours])
@@ -113,7 +116,7 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
   });
 
   const getMemberExportData = (m: MemberMetrics) => ({
-    title: `atividades-${m.name.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}`,
+    title: `${reportCfg.tituloExportacao} - ${m.name}`,
     headers: ["Usuário", "Título", "Descrição", "Data Início", "Data Fim", "Horas Trabalhadas"],
     rows: (m.activities || []).map((a: any) => [m.name, a.title, a.description || "", a.start_date, a.end_date, a.hours]),
   });
