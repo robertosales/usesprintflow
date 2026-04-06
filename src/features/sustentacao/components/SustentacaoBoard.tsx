@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search } from "lucide-react";
+import { Search, Columns3, AlertCircle } from "lucide-react";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { useDemandas } from "../hooks/useDemandas";
 import { DemandaCard } from "./DemandaCard";
@@ -14,10 +14,11 @@ import type { Demanda } from "../types/demanda";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { EmptyState } from "@/shared/components/common/EmptyState";
-import { Columns3 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { EVIDENCIAS_OBRIGATORIAS } from "../services/evidencias.service";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 const BOARD_COLUMNS = ['nova', 'execucao_dev', 'teste', 'aguardando_homologacao'] as const;
 
@@ -41,6 +42,7 @@ export function SustentacaoBoard() {
   const [selected, setSelected] = useState<Demanda | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Demanda | null>(null);
   const [justTarget, setJustTarget] = useState<{ demanda: Demanda; status: string } | null>(null);
+  const [evidenceTarget, setEvidenceTarget] = useState<{ demanda: Demanda; status: string; missing: string[] } | null>(null);
   const [showAllColumns, setShowAllColumns] = useState(false);
 
   // Evidence cache for validation
@@ -86,31 +88,27 @@ export function SustentacaoBoard() {
 
   const columns = showAllColumns ? [...ALL_SITUACOES] : [...BOARD_COLUMNS];
 
-  const validateDrop = (demanda: Demanda, targetStatus: string): string | null => {
-    // Don't allow same status
-    if (demanda.situacao === targetStatus) return null;
+  const validateDrop = (demanda: Demanda, targetStatus: string): { error?: string; evidenceMissing?: string[] } => {
+    if (demanda.situacao === targetStatus) return {};
 
-    // Block special statuses from direct drag
     if (targetStatus === 'bloqueada' || targetStatus === 'aguardando_retorno') {
-      return null; // handled by justification dialog
+      return {};
     }
 
-    // Only forward movement allowed
     if (!isForwardMove(demanda, targetStatus)) {
-      return `Movimentação não permitida: apenas avanço sequencial é permitido.`;
+      return { error: `Movimentação não permitida: apenas avanço sequencial é permitido.` };
     }
 
-    // Check required evidences for current phase
     const required = EVIDENCIAS_OBRIGATORIAS[demanda.situacao] || [];
     if (required.length > 0) {
       const key = `${demanda.id}:${demanda.situacao}`;
       const count = evidenceCache[key] || 0;
       if (count === 0) {
-        return `Evidência obrigatória pendente na fase "${SITUACAO_LABELS[demanda.situacao]}". Adicione a evidência antes de avançar.`;
+        return { evidenceMissing: required };
       }
     }
 
-    return null; // valid
+    return {};
   };
 
   const handleDrop = async (e: React.DragEvent, status: string) => {
@@ -119,10 +117,13 @@ export function SustentacaoBoard() {
     const demanda = demandas.find(d => d.id === id);
     if (!demanda || demanda.situacao === status) return;
 
-    // Validate business rules
-    const validationError = validateDrop(demanda, status);
-    if (validationError) {
-      toast.error(validationError);
+    const validation = validateDrop(demanda, status);
+    if (validation.error) {
+      toast.error(validation.error);
+      return;
+    }
+    if (validation.evidenceMissing) {
+      setEvidenceTarget({ demanda, status, missing: validation.evidenceMissing });
       return;
     }
 
@@ -253,6 +254,39 @@ export function SustentacaoBoard() {
           }
         }}
       />
+
+      {/* Evidence missing dialog */}
+      <Dialog open={!!evidenceTarget} onOpenChange={(o) => !o && setEvidenceTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              Evidência Obrigatória Pendente
+            </DialogTitle>
+            <DialogDescription>
+              Para avançar a demanda <strong>{evidenceTarget?.demanda.rhm}</strong> da fase
+              {" "}<strong>"{SITUACAO_LABELS[evidenceTarget?.demanda.situacao || '']}"</strong>,
+              é necessário anexar a(s) evidência(s) obrigatória(s):
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="list-disc pl-6 text-sm text-muted-foreground space-y-1">
+            {evidenceTarget?.missing.map((m, i) => <li key={i}>{m}</li>)}
+          </ul>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setEvidenceTarget(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => {
+              if (evidenceTarget) {
+                setSelected(evidenceTarget.demanda);
+                setEvidenceTarget(null);
+              }
+            }}>
+              Abrir Demanda
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
