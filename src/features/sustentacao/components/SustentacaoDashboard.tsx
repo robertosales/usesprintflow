@@ -8,7 +8,9 @@ import { useAllTransitions, useProfiles } from "../hooks/useAllTransitions";
 import { SITUACAO_LABELS } from "../types/demanda";
 import { calcAtendimento, calcTempos, calcSLA, formatHours } from "../utils/kpiCalculations";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
+import { ImrDashboard } from "./ImrDashboard";
 import { AlertTriangle, Clock, CheckCircle2, FileText, BarChart3, TrendingUp, Shield, Timer, Zap, Target, Activity } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
 export function SustentacaoDashboard() {
   const { demandas, loading } = useDemandas();
@@ -44,9 +46,7 @@ export function SustentacaoDashboard() {
     return filtered
       .filter(d => d.situacao === 'bloqueada' || d.situacao === 'aguardando_retorno')
       .slice(0, 5)
-      .map(d => ({
-        id: d.id, rhm: d.rhm, projeto: d.projeto, situacao: d.situacao, updatedAt: d.updated_at,
-      }));
+      .map(d => ({ id: d.id, rhm: d.rhm, projeto: d.projeto, situacao: d.situacao, updatedAt: d.updated_at }));
   }, [filtered]);
 
   if (loading) return <SkeletonList count={4} />;
@@ -115,7 +115,6 @@ export function SustentacaoDashboard() {
 
       {/* Charts row */}
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Demandas por Situação */}
         <Card>
           <CardHeader><CardTitle className="text-sm flex items-center gap-2"><BarChart3 className="h-4 w-4 text-info" />Demandas por Situação</CardTitle></CardHeader>
           <CardContent className="space-y-2">
@@ -134,7 +133,6 @@ export function SustentacaoDashboard() {
           </CardContent>
         </Card>
 
-        {/* Alertas */}
         <Card>
           <CardHeader><CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-destructive" />Alertas</CardTitle></CardHeader>
           <CardContent className="space-y-2">
@@ -162,6 +160,10 @@ export function SustentacaoDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* IMR Grupo 2 Section */}
+      <Separator />
+      <ImrDashboard />
     </div>
   );
 }
@@ -172,9 +174,7 @@ function KPICard({ icon: Icon, label, value, sub, color }: { icon: any; label: s
     destructive: 'bg-destructive/10 text-destructive',
     muted: 'bg-muted text-muted-foreground',
   };
-  const borderMap: Record<string, string> = {
-    destructive: 'border-destructive/30',
-  };
+  const borderMap: Record<string, string> = { destructive: 'border-destructive/30' };
   return (
     <Card className={borderMap[color] || ''}>
       <CardContent className="p-4">
