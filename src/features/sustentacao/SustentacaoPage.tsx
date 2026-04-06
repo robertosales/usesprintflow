@@ -210,7 +210,7 @@ export function SustentacaoPage() {
                 </div>
               ) : (
                 <>
-                  {active === 'dashboard' && <SustentacaoDashboard />}
+                  {active === 'dashboard' && <SustentacaoDashboard key={`dash-${currentTeamId}`} />}
                   {active === 'board' && <SustentacaoBoard />}
                   {active === 'demandas' && <DemandasList />}
                   {active === 'projetos' && <ProjetosManager />}
