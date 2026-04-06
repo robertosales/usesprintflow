@@ -89,8 +89,10 @@ export function RelatorioProdutividade() {
     };
   }, [sorted]);
 
+  const reportCfg = getReportConfig('produtividade');
+
   const getExportData = () => ({
-    title: 'Relatorio_Produtividade_Equipe',
+    title: reportCfg.tituloExportacao,
     headers: ['Analista', 'Atribuídos', 'Resolvidos', 'Taxa Resolução', 'Horas Lançadas', 'Em Aberto'],
     rows: sorted.map(a => [a.nome, a.atribuidos, a.resolvidos, `${a.taxaResolucao.toFixed(1)}%`, a.horasLancadas.toFixed(1), a.emAberto]),
   });
