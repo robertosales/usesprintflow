@@ -303,6 +303,47 @@ export type Database = {
           },
         ]
       }
+      demanda_eventos: {
+        Row: {
+          created_at: string
+          demanda_id: string
+          descricao: string
+          id: string
+          incidencia: string
+          redutor: number
+          tipo_evento: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          demanda_id: string
+          descricao?: string
+          id?: string
+          incidencia?: string
+          redutor?: number
+          tipo_evento: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          demanda_id?: string
+          descricao?: string
+          id?: string
+          incidencia?: string
+          redutor?: number
+          tipo_evento?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demanda_eventos_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "demandas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       demanda_evidencias: {
         Row: {
           created_at: string
@@ -471,10 +512,22 @@ export type Database = {
         Row: {
           aceite_data: string | null
           aceite_responsavel: string | null
+          artefatos_atualizados: string | null
+          cobertura_testes: number | null
+          contador_rejeicoes: number
           created_at: string
+          data_previsao_encerramento: string | null
+          demandante: string | null
           descricao: string | null
+          hard_code_identificado: boolean | null
           id: string
+          nota_satisfacao: number | null
+          ordem_servico: string | null
+          originada_diagnostico: boolean
+          prazo_inicio_atendimento: string | null
+          prazo_solucao: string | null
           projeto: string
+          reincidencia_defeito: boolean | null
           responsavel_arquiteto: string | null
           responsavel_dev: string | null
           responsavel_requisitos: string | null
@@ -484,15 +537,28 @@ export type Database = {
           sla: string
           team_id: string
           tipo: string
+          tipo_defeito: string | null
           updated_at: string
         }
         Insert: {
           aceite_data?: string | null
           aceite_responsavel?: string | null
+          artefatos_atualizados?: string | null
+          cobertura_testes?: number | null
+          contador_rejeicoes?: number
           created_at?: string
+          data_previsao_encerramento?: string | null
+          demandante?: string | null
           descricao?: string | null
+          hard_code_identificado?: boolean | null
           id?: string
+          nota_satisfacao?: number | null
+          ordem_servico?: string | null
+          originada_diagnostico?: boolean
+          prazo_inicio_atendimento?: string | null
+          prazo_solucao?: string | null
           projeto?: string
+          reincidencia_defeito?: boolean | null
           responsavel_arquiteto?: string | null
           responsavel_dev?: string | null
           responsavel_requisitos?: string | null
@@ -502,15 +568,28 @@ export type Database = {
           sla?: string
           team_id: string
           tipo?: string
+          tipo_defeito?: string | null
           updated_at?: string
         }
         Update: {
           aceite_data?: string | null
           aceite_responsavel?: string | null
+          artefatos_atualizados?: string | null
+          cobertura_testes?: number | null
+          contador_rejeicoes?: number
           created_at?: string
+          data_previsao_encerramento?: string | null
+          demandante?: string | null
           descricao?: string | null
+          hard_code_identificado?: boolean | null
           id?: string
+          nota_satisfacao?: number | null
+          ordem_servico?: string | null
+          originada_diagnostico?: boolean
+          prazo_inicio_atendimento?: string | null
+          prazo_solucao?: string | null
           projeto?: string
+          reincidencia_defeito?: boolean | null
           responsavel_arquiteto?: string | null
           responsavel_dev?: string | null
           responsavel_requisitos?: string | null
@@ -520,12 +599,20 @@ export type Database = {
           sla?: string
           team_id?: string
           tipo?: string
+          tipo_defeito?: string | null
           updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "demandas_aceite_responsavel_fkey"
             columns: ["aceite_responsavel"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demandas_demandante_fkey"
+            columns: ["demandante"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
