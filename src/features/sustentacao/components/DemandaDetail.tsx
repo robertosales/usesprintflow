@@ -93,6 +93,8 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
   const { hours, total, add: addHour, remove: removeHour, loading: hLoading, reload: reloadHours } = useHours(demanda?.id ?? null);
   const { projetos } = useProjetos();
 
+  const [activeTab, setActiveTab] = useState(initialTab || 'detalhes');
+  const [pendingTarget, setPendingTarget] = useState<string | undefined>(pendingMoveTarget);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ projeto: '', tipo: '', descricao: '', sla: '' });
 
