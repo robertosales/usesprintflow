@@ -93,12 +93,21 @@ export function useDemandas() {
 export function useTransitions(demandaId: string | null) {
   const [transitions, setTransitions] = useState<DemandaTransition[]>([]);
   const [loading, setLoading] = useState(false);
-  useEffect(() => {
+
+  const load = useCallback(async () => {
     if (!demandaId) return;
     setLoading(true);
-    svc.fetchTransitions(demandaId).then(setTransitions).finally(() => setLoading(false));
+    try {
+      const data = await svc.fetchTransitions(demandaId);
+      setTransitions(data);
+    } finally {
+      setLoading(false);
+    }
   }, [demandaId]);
-  return { transitions, loading };
+
+  useEffect(() => { load(); }, [load]);
+
+  return { transitions, loading, reload: load };
 }
 
 export function useHours(demandaId: string | null) {
