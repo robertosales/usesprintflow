@@ -91,7 +91,7 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
   // Evidências
   const [evidencias, setEvidencias] = useState<DemandaEvidencia[]>([]);
   const [evidLoading, setEvidLoading] = useState(false);
-  const [evidForm, setEvidForm] = useState({ fase: 'execucao_dev', tipo: 'arquivo', titulo: '', descricao: '', url_externa: '' });
+  const [evidForm, setEvidForm] = useState({ fase: demanda?.situacao || 'execucao_dev', tipo: 'arquivo', titulo: '', descricao: '', url_externa: '' });
   const [evidFile, setEvidFile] = useState<File | null>(null);
   const [deleteEvidId, setDeleteEvidId] = useState<string | null>(null);
 
