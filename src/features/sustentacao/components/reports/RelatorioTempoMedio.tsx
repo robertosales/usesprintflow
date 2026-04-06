@@ -74,8 +74,10 @@ export function RelatorioTempoMedio() {
     return { total: totalDemandas, acimaMeta: totalAcima, pctAcima: totalDemandas > 0 ? ((totalAcima / totalDemandas) * 100).toFixed(1) : '0' };
   }, [analistaStats]);
 
+  const reportCfg = getReportConfig('tempo_medio');
+
   const getExportData = () => ({
-    title: 'Relatorio_Tempo_Medio',
+    title: reportCfg.tituloExportacao,
     headers: ['Analista', 'Total Chamados', 'TMR', 'MTTR', 'TMA', 'MTTA', 'Acima Meta', '% Acima'],
     rows: analistaStats.map(a => [a.nome, a.total, formatHours(a.tmr), formatHours(a.mttr), formatHours(a.tma), formatHours(a.mtta), a.acimaMeta, `${a.pctAcima}%`]),
   });
