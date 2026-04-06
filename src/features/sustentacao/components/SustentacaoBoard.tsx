@@ -233,9 +233,11 @@ export function SustentacaoBoard() {
         <div className="fixed inset-0 z-50 bg-background overflow-auto">
           <DemandaDetail
             demanda={demandas.find(d => d.id === selected.id) || selected}
-            onBack={() => setSelected(null)}
+            onBack={() => { setSelected(null); setSelectedInitialTab(undefined); setPendingMoveTarget(undefined); reload(); }}
             onUpdate={update}
             onMoveTo={moveTo}
+            initialTab={selectedInitialTab}
+            pendingMoveTarget={pendingMoveTarget}
           />
         </div>
       )}
