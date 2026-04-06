@@ -120,8 +120,9 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
       loadResponsaveis();
       loadEvidencias();
       setEditing(false);
+      setEvidForm(prev => ({ ...prev, fase: demanda.situacao || 'execucao_dev' }));
     }
-  }, [demanda?.id, loadResponsaveis, loadEvidencias]);
+  }, [demanda?.id, demanda?.situacao, loadResponsaveis, loadEvidencias]);
 
   useEffect(() => {
     if (hours.length === 0) return;
