@@ -68,7 +68,7 @@ export function RelatorioIMR() {
 
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `${cfg.nomeArquivo}.csv`; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `${cfg.tituloExportacao.replace(/\s+/g, '_')}.csv`; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -77,7 +77,7 @@ export function RelatorioIMR() {
 
   return (
     <div className="space-y-6">
-      <ReportHeader config={REPORT_CONFIGS.sustentacao_imr} />
+      <ReportHeader tipoRelatorio={REPORT_CONFIGS.sustentacao_imr.titulo} periodo={filterPeriodo} />
       <div className="flex items-center justify-between">
         <Select value={filterPeriodo} onValueChange={setFilterPeriodo}>
           <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
