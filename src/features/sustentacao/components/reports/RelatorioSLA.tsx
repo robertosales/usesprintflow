@@ -8,6 +8,7 @@ import { calcSLA, formatHours } from "../../utils/kpiCalculations";
 import { ReportFilters } from "./ReportFilters";
 import { ReportHeader, ReportLegend } from "./ReportHeader";
 import { ExportButton } from "@/components/dashboard/ExportButton";
+import { getReportConfig } from "../../utils/reportConfig";
 import { Shield, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 const META_SLA = 95; // %
@@ -55,8 +56,10 @@ export function RelatorioSLA() {
     return { dentro, emRisco, violado, total };
   }, [sla]);
 
+  const reportCfg = getReportConfig('sla_compliance');
+
   const getExportData = () => ({
-    title: 'Relatorio_SLA_Compliance',
+    title: reportCfg.tituloExportacao,
     headers: ['RHM', 'Projeto', 'Prioridade', 'Abertura', 'Prazo SLA', 'Resolução', 'Status SLA', 'Atraso'],
     rows: sla.results.map(r => [
       r.rhm, r.projeto, r.prioridade,
@@ -78,12 +81,12 @@ export function RelatorioSLA() {
 
   return (
     <div className="space-y-5">
-      <ReportHeader tipoRelatorio="Relatório — SLA Compliance" periodo={periodo} />
+      <ReportHeader tipoRelatorio={reportCfg.titulo} periodo={periodo} modulo={reportCfg.modulo} />
 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-semibold">SLA Compliance</h2>
-          <p className="text-sm text-muted-foreground">Auditoria de cumprimento de SLA · Meta: ≥ {META_SLA}%</p>
+          <h2 className="text-lg font-semibold">{reportCfg.titulo.replace('Relatório — ', '')}</h2>
+          <p className="text-sm text-muted-foreground">{reportCfg.subtitulo} · Meta: ≥ {META_SLA}%</p>
         </div>
         <div className="flex items-center gap-2">
           <ReportFilters periodo={periodo} setPeriodo={setPeriodo} analista={analista} setAnalista={setAnalista} analistas={analistas} />

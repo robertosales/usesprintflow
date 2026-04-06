@@ -91,7 +91,7 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
   // Evidências
   const [evidencias, setEvidencias] = useState<DemandaEvidencia[]>([]);
   const [evidLoading, setEvidLoading] = useState(false);
-  const [evidForm, setEvidForm] = useState({ fase: 'execucao_dev', tipo: 'arquivo', titulo: '', descricao: '', url_externa: '' });
+  const [evidForm, setEvidForm] = useState({ fase: demanda?.situacao || 'execucao_dev', tipo: 'arquivo', titulo: '', descricao: '', url_externa: '' });
   const [evidFile, setEvidFile] = useState<File | null>(null);
   const [deleteEvidId, setDeleteEvidId] = useState<string | null>(null);
 
@@ -120,8 +120,9 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
       loadResponsaveis();
       loadEvidencias();
       setEditing(false);
+      setEvidForm(prev => ({ ...prev, fase: demanda.situacao || 'execucao_dev' }));
     }
-  }, [demanda?.id, loadResponsaveis, loadEvidencias]);
+  }, [demanda?.id, demanda?.situacao, loadResponsaveis, loadEvidencias]);
 
   useEffect(() => {
     if (hours.length === 0) return;
@@ -278,7 +279,7 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
         user_id: user.id,
       });
       toast.success("Evidência adicionada");
-      setEvidForm({ fase: 'execucao_dev', tipo: 'arquivo', titulo: '', descricao: '', url_externa: '' });
+      setEvidForm({ fase: demanda.situacao || 'execucao_dev', tipo: 'arquivo', titulo: '', descricao: '', url_externa: '' });
       setEvidFile(null);
       await loadEvidencias();
     } catch { toast.error("Erro ao adicionar evidência"); }
@@ -722,7 +723,15 @@ export function DemandaDetail({ demanda, onBack, onUpdate, onMoveTo }: Props) {
                         <Select value={evidForm.fase} onValueChange={v => setEvidForm(p => ({ ...p, fase: v }))}>
                           <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            {EVIDENCIA_FASES.map(f => <SelectItem key={f} value={f}>{EVIDENCIA_FASE_LABELS[f]}</SelectItem>)}
+                            {(() => {
+                              const currentIdx = EVIDENCIA_FASES.indexOf(demanda.situacao);
+                              const allowedFases = currentIdx >= 0 ? EVIDENCIA_FASES.slice(0, currentIdx + 1) : EVIDENCIA_FASES;
+                              return allowedFases.map(f => (
+                                <SelectItem key={f} value={f}>
+                                  {EVIDENCIA_FASE_LABELS[f]}{f === demanda.situacao ? ' (atual)' : ''}
+                                </SelectItem>
+                              ));
+                            })()}
                           </SelectContent>
                         </Select>
                       </div>

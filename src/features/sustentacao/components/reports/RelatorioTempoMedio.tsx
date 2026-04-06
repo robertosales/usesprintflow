@@ -8,6 +8,7 @@ import { calcTempos, formatHours } from "../../utils/kpiCalculations";
 import { ReportFilters } from "./ReportFilters";
 import { ReportHeader, ReportLegend } from "./ReportHeader";
 import { ExportButton } from "@/components/dashboard/ExportButton";
+import { getReportConfig } from "../../utils/reportConfig";
 import { Clock, Timer, TrendingUp, Target } from "lucide-react";
 import type { Demanda, DemandaTransition } from "../../types/demanda";
 
@@ -28,16 +29,33 @@ export function RelatorioTempoMedio() {
       cutoff.setDate(cutoff.getDate() - parseInt(periodo));
       items = items.filter(d => new Date(d.created_at) >= cutoff);
     }
-    if (analista !== 'all') items = items.filter(d => d.responsavel_dev === analista);
+    if (analista !== 'all') {
+      // Filter by responsavel_dev OR by transitions performed by the analyst
+      const demandaIdsFromTransitions = new Set(
+        transitions.filter(t => t.user_id === analista).map(t => t.demanda_id)
+      );
+      items = items.filter(d => d.responsavel_dev === analista || demandaIdsFromTransitions.has(d.id));
+    }
     return items;
-  }, [demandas, periodo, analista]);
+  }, [demandas, periodo, analista, transitions]);
 
   const tempos = useMemo(() => calcTempos(filtered, transitions), [filtered, transitions]);
 
   const analistaStats = useMemo(() => {
-    const devIds = [...new Set(filtered.map(d => d.responsavel_dev).filter(Boolean))] as string[];
+    // Collect user IDs from responsavel_dev and transitions
+    const userIdSet = new Set<string>();
+    filtered.forEach(d => { if (d.responsavel_dev) userIdSet.add(d.responsavel_dev); });
+    transitions.forEach(t => {
+      if (filtered.some(d => d.id === t.demanda_id)) userIdSet.add(t.user_id);
+    });
+    const devIds = [...userIdSet];
+
     return devIds.map(uid => {
-      const devDemandas = filtered.filter(d => d.responsavel_dev === uid);
+      // Demandas where user is responsavel_dev OR performed transitions
+      const demandaIdsFromTransitions = new Set(
+        transitions.filter(t => t.user_id === uid).map(t => t.demanda_id)
+      );
+      const devDemandas = filtered.filter(d => d.responsavel_dev === uid || demandaIdsFromTransitions.has(d.id));
       const t = calcTempos(devDemandas, transitions);
       const p = profiles.find(pr => pr.user_id === uid);
       const acimaMeta = devDemandas.filter(d => {
@@ -58,12 +76,14 @@ export function RelatorioTempoMedio() {
   }, [filtered, transitions, profiles]);
 
   const analistas = useMemo(() => {
-    const ids = [...new Set(demandas.map(d => d.responsavel_dev).filter(Boolean))] as string[];
-    return ids.map(id => {
+    const idSet = new Set<string>();
+    demandas.forEach(d => { if (d.responsavel_dev) idSet.add(d.responsavel_dev); });
+    transitions.forEach(t => { if (demandas.some(d => d.id === t.demanda_id)) idSet.add(t.user_id); });
+    return [...idSet].map(id => {
       const p = profiles.find(pr => pr.user_id === id);
       return { user_id: id, display_name: p?.display_name || id.slice(0, 8) };
     });
-  }, [demandas, profiles]);
+  }, [demandas, transitions, profiles]);
 
   // Totals row
   const totals = useMemo(() => {
@@ -73,8 +93,10 @@ export function RelatorioTempoMedio() {
     return { total: totalDemandas, acimaMeta: totalAcima, pctAcima: totalDemandas > 0 ? ((totalAcima / totalDemandas) * 100).toFixed(1) : '0' };
   }, [analistaStats]);
 
+  const reportCfg = getReportConfig('tempo_medio');
+
   const getExportData = () => ({
-    title: 'Relatorio_Tempo_Medio',
+    title: reportCfg.tituloExportacao,
     headers: ['Analista', 'Total Chamados', 'TMR', 'MTTR', 'TMA', 'MTTA', 'Acima Meta', '% Acima'],
     rows: analistaStats.map(a => [a.nome, a.total, formatHours(a.tmr), formatHours(a.mttr), formatHours(a.tma), formatHours(a.mtta), a.acimaMeta, `${a.pctAcima}%`]),
   });
@@ -84,12 +106,12 @@ export function RelatorioTempoMedio() {
 
   return (
     <div className="space-y-5">
-      <ReportHeader tipoRelatorio="Relatório — Tempo Médio" periodo={periodo} />
+      <ReportHeader tipoRelatorio={reportCfg.titulo} periodo={periodo} modulo={reportCfg.modulo} />
 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Tempo Médio de Atendimento</h2>
-          <p className="text-sm text-muted-foreground">MTTR / TMA / TMR / MTTA por período e analista</p>
+          <h2 className="text-lg font-semibold">{reportCfg.titulo.replace('Relatório — ', '')}</h2>
+          <p className="text-sm text-muted-foreground">{reportCfg.subtitulo}</p>
         </div>
         <div className="flex items-center gap-2">
           <ReportFilters periodo={periodo} setPeriodo={setPeriodo} analista={analista} setAnalista={setAnalista} analistas={analistas} />

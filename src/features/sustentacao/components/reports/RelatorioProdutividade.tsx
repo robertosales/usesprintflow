@@ -8,6 +8,7 @@ import { calcProdutividade, formatHours } from "../../utils/kpiCalculations";
 import { ReportFilters } from "./ReportFilters";
 import { ReportHeader, ReportLegend } from "./ReportHeader";
 import { ExportButton } from "@/components/dashboard/ExportButton";
+import { getReportConfig } from "../../utils/reportConfig";
 import { Users, Trophy, Zap, AlertTriangle } from "lucide-react";
 
 export function RelatorioProdutividade() {
@@ -52,12 +53,15 @@ export function RelatorioProdutividade() {
   }, [stats]);
 
   const analistasList = useMemo(() => {
-    const ids = [...new Set(demandas.map(d => d.responsavel_dev).filter(Boolean))] as string[];
-    return ids.map(id => {
+    const idSet = new Set<string>();
+    demandas.forEach(d => { if (d.responsavel_dev) idSet.add(d.responsavel_dev); });
+    transitions.forEach(t => { if (demandas.some(d => d.id === t.demanda_id)) idSet.add(t.user_id); });
+    hours.forEach(h => idSet.add(h.user_id));
+    return [...idSet].map(id => {
       const p = profiles.find(pr => pr.user_id === id);
       return { user_id: id, display_name: p?.display_name || id.slice(0, 8) };
     });
-  }, [demandas, profiles]);
+  }, [demandas, transitions, hours, profiles]);
 
   const [sortKey, setSortKey] = useState<string>('resolvidos');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -88,8 +92,10 @@ export function RelatorioProdutividade() {
     };
   }, [sorted]);
 
+  const reportCfg = getReportConfig('produtividade');
+
   const getExportData = () => ({
-    title: 'Relatorio_Produtividade_Equipe',
+    title: reportCfg.tituloExportacao,
     headers: ['Analista', 'Atribuídos', 'Resolvidos', 'Taxa Resolução', 'Horas Lançadas', 'Em Aberto'],
     rows: sorted.map(a => [a.nome, a.atribuidos, a.resolvidos, `${a.taxaResolucao.toFixed(1)}%`, a.horasLancadas.toFixed(1), a.emAberto]),
   });
@@ -107,12 +113,12 @@ export function RelatorioProdutividade() {
 
   return (
     <div className="space-y-5">
-      <ReportHeader tipoRelatorio="Relatório — Produtividade da Equipe" periodo={periodo} />
+      <ReportHeader tipoRelatorio={reportCfg.titulo} periodo={periodo} modulo={reportCfg.modulo} />
 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Produtividade da Equipe</h2>
-          <p className="text-sm text-muted-foreground">Capacidade de entrega individual e coletiva</p>
+          <h2 className="text-lg font-semibold">{reportCfg.titulo.replace('Relatório — ', '')}</h2>
+          <p className="text-sm text-muted-foreground">{reportCfg.subtitulo}</p>
         </div>
         <div className="flex items-center gap-2">
           <ReportFilters periodo={periodo} setPeriodo={setPeriodo} analista={analista} setAnalista={setAnalista} analistas={analistasList} />
