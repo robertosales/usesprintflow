@@ -376,7 +376,7 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo 
     muted: 'bg-muted text-muted-foreground',
   };
 
-  const isCorretiva = demanda.tipo === 'manutencao_corretiva' || demanda.tipo === 'corretiva';
+  const isCorretiva = ['manutencao_corretiva', 'corretiva'].includes(demanda.tipo);
 
   return (
     <>
