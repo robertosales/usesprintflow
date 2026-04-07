@@ -64,6 +64,7 @@ const NAV_SECTIONS = [
   { title: "Planejamento", items: [
     { key: "backlog" as NavKey, label: "Backlog", icon: LayoutDashboard },
     { key: "epics" as NavKey, label: "Épicos", icon: Layers },
+    { key: "planning" as NavKey, label: "Planning", icon: Spade },
     { key: "team" as NavKey, label: "Equipe", icon: Users },
     { key: "activities" as NavKey, label: "Atividades", icon: ListTodo },
   ]},
@@ -71,6 +72,7 @@ const NAV_SECTIONS = [
     { key: "kanban" as NavKey, label: "Board", icon: Columns3 },
     { key: "calendar" as NavKey, label: "Calendário", icon: CalendarDays },
     { key: "impediments" as NavKey, label: "Impedimentos", icon: ShieldAlert },
+    { key: "retro" as NavKey, label: "Retrospectiva", icon: MessageSquare },
     { key: "metrics" as NavKey, label: "Métricas", icon: BarChart3 },
   ]},
   { title: "Organização", items: [
