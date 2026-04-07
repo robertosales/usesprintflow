@@ -238,6 +238,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       start_date: hu.startDate || null, end_date: hu.endDate || null,
       size_reference: (hu as any).sizeReference || null,
       estimated_hours: (hu as any).estimatedHours || null,
+      function_points: (hu as any).functionPoints || null,
     });
     if (error) { toast.error("Erro ao criar HU"); return; }
     await refreshAll();
