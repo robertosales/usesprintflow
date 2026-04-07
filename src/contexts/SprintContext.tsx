@@ -260,6 +260,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if ((hu as any).planningStatus !== undefined) updateData.planning_status = (hu as any).planningStatus;
     if ((hu as any).votedAt !== undefined) updateData.voted_at = (hu as any).votedAt;
     if ((hu as any).votedBy !== undefined) updateData.voted_by = (hu as any).votedBy;
+    if ((hu as any).functionPoints !== undefined) updateData.function_points = (hu as any).functionPoints;
     const { error } = await supabase.from("user_stories").update(updateData).eq("id", id);
     if (error) { toast.error("Erro ao atualizar HU"); return; }
     await refreshAll();
