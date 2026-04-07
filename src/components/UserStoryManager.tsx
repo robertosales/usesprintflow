@@ -102,10 +102,10 @@ export function UserStoryManager() {
     if (!validate() || !activeSprint) return;
     setSubmitting(true);
     try {
-      const sizeData = selectedSize ? (() => {
-        const s = (await import("@/lib/sizeReference")).getSizeByKey(selectedSize);
-        return s ? { sizeReference: s.key, estimatedHours: s.hours, storyPoints: s.points } : { storyPoints: 0 };
-      })() : { storyPoints: 0 };
+      const s = selectedSize ? getSizeByKey(selectedSize) : null;
+      const sizeData = s
+        ? { sizeReference: s.key, estimatedHours: s.hours, storyPoints: s.points }
+        : { storyPoints: 0 };
 
       if (editId) {
         await updateUserStory(editId, {
