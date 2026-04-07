@@ -311,11 +311,13 @@ const Index = () => {
                     </div>
                   )}
                   {active === "epics" && <EpicManager />}
+                  {active === "planning" && <PlanningPoker />}
                   {active === "team" && <DeveloperManager />}
                   {active === "activities" && <ActivityManager />}
                   {active === "kanban" && <KanbanBoard />}
                   {active === "calendar" && <CalendarView />}
                   {active === "impediments" && <ImpedimentList />}
+                  {active === "retro" && <RetroManager />}
                   {active === "metrics" && <MetricsDashboard />}
                   {active === "workflow" && <WorkflowManager />}
                   {active === "custom-fields" && <CustomFieldManager />}
