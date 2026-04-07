@@ -136,6 +136,11 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         storyPoints: h.story_points, priority: h.priority, status: h.status,
         sprintId: h.sprint_id, epicId: h.epic_id,
         startDate: h.start_date || undefined, endDate: h.end_date || undefined,
+        sizeReference: h.size_reference || null,
+        estimatedHours: h.estimated_hours != null ? Number(h.estimated_hours) : null,
+        planningStatus: h.planning_status || 'pending',
+        votedAt: h.voted_at || null,
+        votedBy: h.voted_by || null,
         impediments: impData.filter((imp: any) => imp.hu_id === h.id).map((imp: any) => ({
           id: imp.id, reason: imp.reason, type: imp.type, criticality: imp.criticality,
           hasTicket: imp.has_ticket, ticketUrl: imp.ticket_url, ticketId: imp.ticket_id,
