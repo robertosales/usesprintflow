@@ -144,7 +144,7 @@ export function UserStoryManager() {
     setEditId(hu.id);
     setTitle(hu.title);
     setDescription(hu.description);
-    setStoryPoints(String(hu.storyPoints));
+    setSelectedSize(hu.sizeReference || null);
     setPriority(hu.priority);
     setEpicId(hu.epicId || "");
     setStartDate(hu.startDate || "");
