@@ -103,8 +103,7 @@ export function UserStoryManager() {
     setSubmitting(true);
     try {
       const sizeData = selectedSize ? (() => {
-        const { getSizeByKey } = require("@/lib/sizeReference");
-        const s = getSizeByKey(selectedSize);
+        const s = (await import("@/lib/sizeReference")).getSizeByKey(selectedSize);
         return s ? { sizeReference: s.key, estimatedHours: s.hours, storyPoints: s.points } : { storyPoints: 0 };
       })() : { storyPoints: 0 };
 
