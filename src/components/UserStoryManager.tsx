@@ -205,19 +205,9 @@ export function UserStoryManager() {
                 <Label>Descrição / Critérios de Aceite</Label>
                 <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Critérios de aceite, regras de negócio..." className="mt-1" rows={3} />
               </div>
+              <SizeSelector value={selectedSize} onChange={(s) => setSelectedSize(s?.key || null)} />
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Story Points <span className="text-destructive">*</span></Label>
-                  <Select value={storyPoints} onValueChange={setStoryPoints}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {[1, 2, 3, 5, 8, 13, 21].map((p) => (
-                        <SelectItem key={p} value={String(p)}>{p} pts</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
+                <div className="col-span-2">
                   <Label>Prioridade <span className="text-destructive">*</span></Label>
                   <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)}>
                     <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
