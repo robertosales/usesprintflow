@@ -235,6 +235,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       description: hu.description, story_points: hu.storyPoints,
       priority: hu.priority, status: firstCol, custom_fields: hu.customFields || {},
       start_date: hu.startDate || null, end_date: hu.endDate || null,
+      size_reference: (hu as any).sizeReference || null,
+      estimated_hours: (hu as any).estimatedHours || null,
     });
     if (error) { toast.error("Erro ao criar HU"); return; }
     await refreshAll();
