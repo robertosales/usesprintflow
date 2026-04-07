@@ -21,7 +21,7 @@ import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";
-import type { SizeReference } from "@/lib/sizeReference";
+import { type SizeReference, getSizeByKey } from "@/lib/sizeReference";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
   baixa: { label: "Baixa", color: "bg-muted text-muted-foreground" },
