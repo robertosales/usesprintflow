@@ -2,7 +2,6 @@ import { useState, useMemo } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { FileUploader } from "@/components/FileUploader";
-import { SizeSelector } from "@/components/SizeSelector";
 import { SizeBadge } from "@/components/SizeBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { BookOpen, Plus, Trash2, Clock, Pencil, ShieldAlert, Search, X } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getTotalHoursForHU, hasActiveImpediment } from "@/types/sprint";
 import { toast } from "sonner";
@@ -21,7 +20,8 @@ import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";
-import { type SizeReference, getSizeByKey } from "@/lib/sizeReference";
+import { SIZE_REFERENCES, getSizeByKey, type SizeReference } from "@/lib/sizeReference";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
   baixa: { label: "Baixa", color: "bg-muted text-muted-foreground" },
@@ -31,7 +31,7 @@ const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
 };
 
 export function UserStoryManager() {
-  const { userStories, addUserStory, removeUserStory, updateUserStory, activities, activeSprint, epics, workflowColumns, customFields, loading } = useSprint();
+  const { userStories, addUserStory, removeUserStory, updateUserStory, activities, activeSprint, epics, workflowColumns, customFields, developers, loading } = useSprint();
   const { hasPermission, currentTeamId } = useAuth();
   const canCreate = hasPermission('create_backlog');
   const canEdit = hasPermission('edit_backlog');
@@ -39,11 +39,14 @@ export function UserStoryManager() {
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState("");
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [priority, setPriority] = useState<"baixa" | "media" | "alta" | "critica">("media");
   const [epicId, setEpicId] = useState<string>("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [functionPoints, setFunctionPoints] = useState<string>("");
+  const [assigneeId, setAssigneeId] = useState<string>("");
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string | number>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -76,8 +79,8 @@ export function UserStoryManager() {
   const { paginatedItems: sprintStories, currentPage, setCurrentPage, totalItems, pageSize } = usePagination(filteredStories, { pageSize: 10 });
 
   const resetForm = () => {
-    setTitle(""); setDescription(""); setSelectedSize(null); setPriority("media"); setEpicId("");
-    setStartDate(""); setEndDate("");
+    setTitle(""); setDescription(""); setAcceptanceCriteria(""); setSelectedSize(null); setPriority("media"); setEpicId("");
+    setStartDate(""); setEndDate(""); setFunctionPoints(""); setAssigneeId("");
     setCustomFieldValues({}); setErrors({}); setEditId(null);
   };
 
@@ -107,24 +110,31 @@ export function UserStoryManager() {
         ? { sizeReference: s.key, estimatedHours: s.hours, storyPoints: s.points }
         : { storyPoints: 0 };
 
+      const fp = functionPoints ? parseFloat(functionPoints) : null;
+      const fullDesc = acceptanceCriteria
+        ? `${description.trim()}\n\n---\n**Critérios de Aceite:**\n${acceptanceCriteria.trim()}`
+        : description.trim();
+
       if (editId) {
         await updateUserStory(editId, {
-          title: title.trim(), description: description.trim(),
+          title: title.trim(), description: fullDesc,
           ...sizeData, priority,
           epicId: epicId || undefined,
           customFields: customFieldValues,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
+          functionPoints: fp,
         } as any);
         toast.success("Alterações salvas com sucesso");
       } else {
         await addUserStory({
-          title: title.trim(), description: description.trim(),
+          title: title.trim(), description: fullDesc,
           ...sizeData, priority,
           sprintId: activeSprint.id, epicId: epicId || undefined,
           customFields: customFieldValues,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
+          functionPoints: fp,
         } as any);
         toast.success("Registro criado com sucesso");
       }
@@ -142,12 +152,16 @@ export function UserStoryManager() {
     if (!hu) return;
     setEditId(hu.id);
     setTitle(hu.title);
-    setDescription(hu.description);
+    // Split description and acceptance criteria
+    const parts = (hu.description || "").split("\n\n---\n**Critérios de Aceite:**\n");
+    setDescription(parts[0] || "");
+    setAcceptanceCriteria(parts[1] || "");
     setSelectedSize(hu.sizeReference || null);
     setPriority(hu.priority);
     setEpicId(hu.epicId || "");
     setStartDate(hu.startDate || "");
     setEndDate(hu.endDate || "");
+    setFunctionPoints(hu.functionPoints != null ? String(hu.functionPoints) : "");
     setCustomFieldValues(hu.customFields || {});
     setErrors({});
     setOpen(true);
@@ -187,121 +201,191 @@ export function UserStoryManager() {
               <Plus className="h-4 w-4" /> Nova HU
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="max-w-[960px] w-[80vw] max-h-[90vh] overflow-y-auto p-0">
+            <DialogHeader className="px-6 pt-6 pb-0">
               <DialogTitle className="flex items-center gap-2">
                 <BookOpen className="h-5 w-5 text-primary" />
                 {editId ? "Editar User Story" : "Nova User Story"}
               </DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label>Título <span className="text-destructive">*</span></Label>
-                <Input value={title} onChange={(e) => { setTitle(e.target.value); setErrors((p) => ({ ...p, title: "" })); }} placeholder="Como usuário, eu quero..." className="mt-1" />
-                {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
-              </div>
-              <div>
-                <Label>Descrição / Critérios de Aceite</Label>
-                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Critérios de aceite, regras de negócio..." className="mt-1" rows={3} />
-              </div>
-              <SizeSelector value={selectedSize} onChange={(s) => setSelectedSize(s?.key || null)} />
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <Label>Prioridade <span className="text-destructive">*</span></Label>
-                  <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(PRIORITY_MAP).map(([k, v]) => (
-                        <SelectItem key={k} value={k}>{v.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Data de Início</Label>
-                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1" />
-                </div>
-                <div>
-                  <Label>Data de Fim</Label>
-                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1" />
-                </div>
-              </div>
-              {epics.length > 0 && (
-                <div>
-                  <Label>Épico</Label>
-                  <Select value={epicId} onValueChange={setEpicId}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="Sem épico" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sem épico</SelectItem>
-                      {epics.map((ep) => (
-                        <SelectItem key={ep.id} value={ep.id}>
-                          <div className="flex items-center gap-2">
-                            <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: ep.color }} />
-                            {ep.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+            <form onSubmit={handleSubmit} className="flex flex-col h-full">
+              <div className="flex-1 px-6 py-4">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+                  {/* LEFT COLUMN ~60% */}
+                  <div className="md:col-span-3 space-y-4">
+                    <div>
+                      <Label>Título <span className="text-destructive">*</span></Label>
+                      <Input value={title} onChange={(e) => { setTitle(e.target.value); setErrors((p) => ({ ...p, title: "" })); }} placeholder="Como usuário, eu quero..." className="mt-1" />
+                      {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
+                    </div>
+                    <div>
+                      <Label>Descrição</Label>
+                      <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição detalhada da funcionalidade..." className="mt-1" rows={3} />
+                    </div>
+                    <div>
+                      <Label>Critérios de Aceite</Label>
+                      <Textarea value={acceptanceCriteria} onChange={(e) => setAcceptanceCriteria(e.target.value)} placeholder="1. Dado que... quando... então..." className="mt-1" rows={3} />
+                    </div>
 
-              {/* Custom Fields */}
-              {customFields.length > 0 && (
-                <div className="space-y-3 border-t pt-3">
-                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Campos Personalizados</Label>
-                  {customFields.map((field) => (
-                    <div key={field.id}>
-                      <Label className="text-sm">
-                        {field.name}
-                        {field.required && <span className="text-destructive"> *</span>}
-                      </Label>
-                      {field.type === "text" && (
-                        <Input
-                          value={String(customFieldValues[field.id] || "")}
-                          onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
-                          placeholder={field.name}
-                          className="mt-1"
-                        />
-                      )}
-                      {field.type === "number" && (
-                        <Input
-                          type="number"
-                          value={String(customFieldValues[field.id] || "")}
-                          onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: Number(e.target.value) }))}
-                          placeholder={field.name}
-                          className="mt-1"
-                        />
-                      )}
-                      {field.type === "select" && field.options && (
-                        <Select
-                          value={String(customFieldValues[field.id] || "")}
-                          onValueChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: v }))}
-                        >
-                          <SelectTrigger className="mt-1"><SelectValue placeholder={`Selecione ${field.name}`} /></SelectTrigger>
+                    {/* Custom Fields */}
+                    {customFields.length > 0 && (
+                      <div className="space-y-3 border-t pt-3">
+                        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Campos Personalizados</Label>
+                        {customFields.map((field) => (
+                          <div key={field.id}>
+                            <Label className="text-sm">
+                              {field.name}
+                              {field.required && <span className="text-destructive"> *</span>}
+                            </Label>
+                            {field.type === "text" && (
+                              <Input
+                                value={String(customFieldValues[field.id] || "")}
+                                onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
+                                placeholder={field.name}
+                                className="mt-1"
+                              />
+                            )}
+                            {field.type === "number" && (
+                              <Input
+                                type="number"
+                                value={String(customFieldValues[field.id] || "")}
+                                onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: Number(e.target.value) }))}
+                                placeholder={field.name}
+                                className="mt-1"
+                              />
+                            )}
+                            {field.type === "select" && field.options && (
+                              <Select
+                                value={String(customFieldValues[field.id] || "")}
+                                onValueChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: v }))}
+                              >
+                                <SelectTrigger className="mt-1"><SelectValue placeholder={`Selecione ${field.name}`} /></SelectTrigger>
+                                <SelectContent>
+                                  {field.options.map((opt) => (
+                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                            {errors[`cf_${field.id}`] && <p className="text-xs text-destructive mt-1">{errors[`cf_${field.id}`]}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* RIGHT COLUMN ~40% */}
+                  <div className="md:col-span-2 space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Linha 1: Sprint | Épico */}
+                      <div>
+                        <Label className="text-xs">Sprint</Label>
+                        <Input value={activeSprint?.name || "—"} readOnly className="mt-1 h-9 text-xs bg-muted/50" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Épico</Label>
+                        <Select value={epicId} onValueChange={setEpicId}>
+                          <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Sem épico" /></SelectTrigger>
                           <SelectContent>
-                            {field.options.map((opt) => (
-                              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                            <SelectItem value="none">Sem épico</SelectItem>
+                            {epics.map((ep) => (
+                              <SelectItem key={ep.id} value={ep.id}>
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: ep.color }} />
+                                  {ep.name}
+                                </div>
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
-                      )}
-                      {errors[`cf_${field.id}`] && <p className="text-xs text-destructive mt-1">{errors[`cf_${field.id}`]}</p>}
-                    </div>
-                  ))}
-                </div>
-              )}
+                      </div>
 
-              <Button type="submit" className="w-full gap-2" disabled={submitting}>
-                {submitting ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" />
-                ) : (
-                  <Plus className="h-4 w-4" />
-                )}
-                {editId ? "Salvar Alterações" : "Criar User Story"}
-              </Button>
+                      {/* Linha 2: Status | Prioridade */}
+                      <div>
+                        <Label className="text-xs">Status</Label>
+                        <Input value={workflowColumns[0]?.label || "Aguardando"} readOnly className="mt-1 h-9 text-xs bg-muted/50" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Prioridade <span className="text-destructive">*</span></Label>
+                        <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)}>
+                          <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(PRIORITY_MAP).map(([k, v]) => (
+                              <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Linha 3: Pontos (combobox) | Responsável */}
+                      <div>
+                        <Label className="text-xs">Pontos</Label>
+                        <Select value={selectedSize || "none"} onValueChange={(v) => setSelectedSize(v === "none" ? null : v)}>
+                          <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Não estimado" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Não estimado</SelectItem>
+                            {SIZE_REFERENCES.map((s) => (
+                              <SelectItem key={s.key} value={s.key}>
+                                {s.label} — {s.hours}h ({s.pointsLabel})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Responsável</Label>
+                        <Select value={assigneeId || "none"} onValueChange={(v) => setAssigneeId(v === "none" ? "" : v)}>
+                          <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Sem responsável" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Sem responsável</SelectItem>
+                            {developers.map((dev) => (
+                              <SelectItem key={dev.id} value={dev.id}>{dev.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Linha 4: Data início | Data entrega */}
+                      <div>
+                        <Label className="text-xs">Data de Início</Label>
+                        <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 h-9 text-xs" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Data de Entrega</Label>
+                        <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1 h-9 text-xs" />
+                      </div>
+
+                      {/* Linha 5: Ponto de Função */}
+                      <div>
+                        <Label className="text-xs">Ponto de Função</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={functionPoints}
+                          onChange={(e) => setFunctionPoints(e.target.value)}
+                          placeholder="Ex: 12,50"
+                          className="mt-1 h-9 text-xs"
+                        />
+                      </div>
+                      <div />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* FIXED FOOTER */}
+              <DialogFooter className="px-6 py-4 border-t bg-muted/30">
+                <Button type="button" variant="outline" onClick={() => { resetForm(); setOpen(false); }}>Cancelar</Button>
+                <Button type="submit" className="gap-2" disabled={submitting}>
+                  {submitting ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  {editId ? "Salvar HU" : "Salvar HU"}
+                </Button>
+              </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
