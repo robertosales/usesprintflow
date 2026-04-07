@@ -39,7 +39,7 @@ export function UserStoryManager() {
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [storyPoints, setStoryPoints] = useState("3");
+  const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [priority, setPriority] = useState<"baixa" | "media" | "alta" | "critica">("media");
   const [epicId, setEpicId] = useState<string>("");
   const [startDate, setStartDate] = useState("");
