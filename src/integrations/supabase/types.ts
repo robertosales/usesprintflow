@@ -834,6 +834,102 @@ export type Database = {
           },
         ]
       }
+      planning_sessions: {
+        Row: {
+          created_at: string
+          created_by: string
+          deck_config: Json | null
+          deck_mode: string
+          finished_at: string | null
+          id: string
+          sprint_id: string
+          status: string
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          deck_config?: Json | null
+          deck_mode?: string
+          finished_at?: string | null
+          id?: string
+          sprint_id: string
+          status?: string
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          deck_config?: Json | null
+          deck_mode?: string
+          finished_at?: string | null
+          id?: string
+          sprint_id?: string
+          status?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planning_sessions_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planning_sessions_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planning_votes: {
+        Row: {
+          created_at: string
+          hu_id: string
+          id: string
+          revealed: boolean
+          session_id: string
+          user_id: string
+          vote_value: string
+        }
+        Insert: {
+          created_at?: string
+          hu_id: string
+          id?: string
+          revealed?: boolean
+          session_id: string
+          user_id: string
+          vote_value: string
+        }
+        Update: {
+          created_at?: string
+          hu_id?: string
+          id?: string
+          revealed?: boolean
+          session_id?: string
+          user_id?: string
+          vote_value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planning_votes_hu_id_fkey"
+            columns: ["hu_id"]
+            isOneToOne: false
+            referencedRelation: "user_stories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planning_votes_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "planning_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -946,6 +1042,163 @@ export type Database = {
           version?: string
         }
         Relationships: []
+      }
+      retro_actions: {
+        Row: {
+          card_id: string | null
+          created_at: string
+          description: string
+          id: string
+          owner_id: string | null
+          session_id: string
+          status: string
+          target_sprint_id: string | null
+        }
+        Insert: {
+          card_id?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          owner_id?: string | null
+          session_id: string
+          status?: string
+          target_sprint_id?: string | null
+        }
+        Update: {
+          card_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          owner_id?: string | null
+          session_id?: string
+          status?: string
+          target_sprint_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retro_actions_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "retro_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retro_actions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "retro_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retro_actions_target_sprint_id_fkey"
+            columns: ["target_sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      retro_cards: {
+        Row: {
+          action_owner_id: string | null
+          action_target_sprint_id: string | null
+          author_id: string
+          column_key: string
+          created_at: string
+          id: string
+          is_action: boolean
+          session_id: string
+          text: string
+          votes: number
+        }
+        Insert: {
+          action_owner_id?: string | null
+          action_target_sprint_id?: string | null
+          author_id: string
+          column_key: string
+          created_at?: string
+          id?: string
+          is_action?: boolean
+          session_id: string
+          text: string
+          votes?: number
+        }
+        Update: {
+          action_owner_id?: string | null
+          action_target_sprint_id?: string | null
+          author_id?: string
+          column_key?: string
+          created_at?: string
+          id?: string
+          is_action?: boolean
+          session_id?: string
+          text?: string
+          votes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retro_cards_action_target_sprint_id_fkey"
+            columns: ["action_target_sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retro_cards_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "retro_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      retro_sessions: {
+        Row: {
+          created_at: string
+          created_by: string
+          finished_at: string | null
+          id: string
+          model: string
+          sprint_id: string
+          status: string
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          finished_at?: string | null
+          id?: string
+          model?: string
+          sprint_id: string
+          status?: string
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          finished_at?: string | null
+          id?: string
+          model?: string
+          sprint_id?: string
+          status?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retro_sessions_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retro_sessions_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sprints: {
         Row: {
@@ -1079,8 +1332,11 @@ export type Database = {
           description: string | null
           end_date: string | null
           epic_id: string | null
+          estimated_hours: number | null
           id: string
+          planning_status: string | null
           priority: string
+          size_reference: string | null
           sprint_id: string
           start_date: string | null
           status: string
@@ -1088,6 +1344,8 @@ export type Database = {
           team_id: string
           title: string
           updated_at: string
+          voted_at: string | null
+          voted_by: string | null
         }
         Insert: {
           code: string
@@ -1096,8 +1354,11 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           epic_id?: string | null
+          estimated_hours?: number | null
           id?: string
+          planning_status?: string | null
           priority?: string
+          size_reference?: string | null
           sprint_id: string
           start_date?: string | null
           status?: string
@@ -1105,6 +1366,8 @@ export type Database = {
           team_id: string
           title: string
           updated_at?: string
+          voted_at?: string | null
+          voted_by?: string | null
         }
         Update: {
           code?: string
@@ -1113,8 +1376,11 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           epic_id?: string | null
+          estimated_hours?: number | null
           id?: string
+          planning_status?: string | null
           priority?: string
+          size_reference?: string | null
           sprint_id?: string
           start_date?: string | null
           status?: string
@@ -1122,6 +1388,8 @@ export type Database = {
           team_id?: string
           title?: string
           updated_at?: string
+          voted_at?: string | null
+          voted_by?: string | null
         }
         Relationships: [
           {
