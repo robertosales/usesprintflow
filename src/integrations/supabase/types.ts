@@ -1333,6 +1333,7 @@ export type Database = {
           end_date: string | null
           epic_id: string | null
           estimated_hours: number | null
+          function_points: number | null
           id: string
           planning_status: string | null
           priority: string
@@ -1355,6 +1356,7 @@ export type Database = {
           end_date?: string | null
           epic_id?: string | null
           estimated_hours?: number | null
+          function_points?: number | null
           id?: string
           planning_status?: string | null
           priority?: string
@@ -1377,6 +1379,7 @@ export type Database = {
           end_date?: string | null
           epic_id?: string | null
           estimated_hours?: number | null
+          function_points?: number | null
           id?: string
           planning_status?: string | null
           priority?: string

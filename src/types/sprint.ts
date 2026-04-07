@@ -157,6 +157,7 @@ export interface UserStory {
   createdAt: string;
   sizeReference?: string | null;
   estimatedHours?: number | null;
+  functionPoints?: number | null;
   planningStatus?: string;
   votedAt?: string | null;
   votedBy?: string | null;

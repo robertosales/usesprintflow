@@ -1,0 +1,1 @@
+ALTER TABLE public.user_stories ADD COLUMN IF NOT EXISTS function_points NUMERIC(10,2) NULL;

@@ -9,60 +9,59 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
-  ThumbsUp, BookOpen, Frown, Zap, Play, StopCircle, ArrowRight,
-  Plus, Pencil, Trash2, GripVertical, Check, ChevronRight, Download,
-  Users, Star, Minus, AlertTriangle, Lightbulb, Smile, Angry, Heart
+  Plus, Pencil, Trash2, Check, ChevronRight, Play,
+  BookOpen, Zap, AlertTriangle, XCircle
 } from "lucide-react";
 
-// ─── Models ───
+// ─── Models (PT-BR) ───
 const RETRO_MODELS = {
   "4ls": {
     label: "4Ls",
     columns: [
-      { key: "liked", label: "Liked", icon: "👍", desc: "O que gostamos", color: "text-success", bg: "bg-success/10", border: "border-success/30" },
-      { key: "learned", label: "Learned", icon: "📚", desc: "O que aprendemos", color: "text-info", bg: "bg-info/10", border: "border-info/30" },
-      { key: "lacked", label: "Lacked", icon: "😕", desc: "O que faltou", color: "text-destructive", bg: "bg-destructive/10", border: "border-destructive/30" },
-      { key: "longed_for", label: "Longed For / Ações", icon: "⚡", desc: "O que desejamos", color: "text-warning", bg: "bg-warning/10", border: "border-warning/30" },
+      { key: "liked", label: "Gostamos", icon: "👍", desc: "O que gostamos", color: "text-success", bg: "bg-success/10", border: "border-success/30" },
+      { key: "learned", label: "Aprendemos", icon: "📚", desc: "O que aprendemos", color: "text-info", bg: "bg-info/10", border: "border-info/30" },
+      { key: "lacked", label: "Faltou", icon: "😕", desc: "O que faltou", color: "text-destructive", bg: "bg-destructive/10", border: "border-destructive/30" },
+      { key: "longed_for", label: "Ações", icon: "⚡", desc: "O que desejamos", color: "text-warning", bg: "bg-warning/10", border: "border-warning/30" },
     ],
   },
   start_stop_continue: {
-    label: "Start / Stop / Continue",
+    label: "Iniciar / Parar / Continuar",
     columns: [
-      { key: "start", label: "Start", icon: "🟢", desc: "Começar a fazer", color: "text-success", bg: "bg-success/10", border: "border-success/30" },
-      { key: "stop", label: "Stop", icon: "🔴", desc: "Parar de fazer", color: "text-destructive", bg: "bg-destructive/10", border: "border-destructive/30" },
-      { key: "continue", label: "Continue", icon: "🔵", desc: "Continuar fazendo", color: "text-info", bg: "bg-info/10", border: "border-info/30" },
+      { key: "start", label: "Iniciar", icon: "🟢", desc: "Começar a fazer", color: "text-success", bg: "bg-success/10", border: "border-success/30" },
+      { key: "stop", label: "Parar", icon: "🔴", desc: "Parar de fazer", color: "text-destructive", bg: "bg-destructive/10", border: "border-destructive/30" },
+      { key: "continue", label: "Continuar", icon: "🔵", desc: "Continuar fazendo", color: "text-info", bg: "bg-info/10", border: "border-info/30" },
     ],
   },
   mad_sad_glad: {
-    label: "Mad / Sad / Glad",
+    label: "Frustrado / Triste / Feliz",
     columns: [
-      { key: "mad", label: "Mad", icon: "😡", desc: "Nos irritou", color: "text-destructive", bg: "bg-destructive/10", border: "border-destructive/30" },
-      { key: "sad", label: "Sad", icon: "😢", desc: "Nos entristeceu", color: "text-warning", bg: "bg-warning/10", border: "border-warning/30" },
-      { key: "glad", label: "Glad", icon: "😊", desc: "Nos alegrou", color: "text-success", bg: "bg-success/10", border: "border-success/30" },
+      { key: "mad", label: "Frustrado", icon: "😡", desc: "Nos irritou", color: "text-destructive", bg: "bg-destructive/10", border: "border-destructive/30" },
+      { key: "sad", label: "Triste", icon: "😢", desc: "Nos entristeceu", color: "text-warning", bg: "bg-warning/10", border: "border-warning/30" },
+      { key: "glad", label: "Feliz", icon: "😊", desc: "Nos alegrou", color: "text-success", bg: "bg-success/10", border: "border-success/30" },
     ],
   },
   starfish: {
-    label: "Starfish",
+    label: "Estrela do Mar",
     columns: [
-      { key: "more", label: "More", icon: "➕", desc: "Fazer mais", color: "text-accent-foreground", bg: "bg-accent/10", border: "border-accent/30" },
-      { key: "less", label: "Less", icon: "➖", desc: "Fazer menos", color: "text-accent-foreground", bg: "bg-accent/10", border: "border-accent/30" },
-      { key: "start_sf", label: "Start", icon: "🟢", desc: "Começar", color: "text-success", bg: "bg-success/10", border: "border-success/30" },
-      { key: "stop_sf", label: "Stop", icon: "🔴", desc: "Parar", color: "text-destructive", bg: "bg-destructive/10", border: "border-destructive/30" },
-      { key: "keep", label: "Keep", icon: "⭐", desc: "Manter", color: "text-warning", bg: "bg-warning/10", border: "border-warning/30" },
+      { key: "more", label: "Mais", icon: "➕", desc: "Fazer mais", color: "text-accent-foreground", bg: "bg-accent/10", border: "border-accent/30" },
+      { key: "less", label: "Menos", icon: "➖", desc: "Fazer menos", color: "text-accent-foreground", bg: "bg-accent/10", border: "border-accent/30" },
+      { key: "start_sf", label: "Iniciar", icon: "🟢", desc: "Começar", color: "text-success", bg: "bg-success/10", border: "border-success/30" },
+      { key: "stop_sf", label: "Parar", icon: "🔴", desc: "Parar", color: "text-destructive", bg: "bg-destructive/10", border: "border-destructive/30" },
+      { key: "keep", label: "Manter", icon: "⭐", desc: "Manter", color: "text-warning", bg: "bg-warning/10", border: "border-warning/30" },
     ],
   },
   kpt: {
     label: "KPT",
     columns: [
-      { key: "keep_kpt", label: "Keep", icon: "✅", desc: "Manter", color: "text-success", bg: "bg-success/10", border: "border-success/30" },
-      { key: "problem", label: "Problem", icon: "⚠️", desc: "Problemas", color: "text-destructive", bg: "bg-destructive/10", border: "border-destructive/30" },
-      { key: "try", label: "Try", icon: "💡", desc: "Tentar", color: "text-info", bg: "bg-info/10", border: "border-info/30" },
+      { key: "keep_kpt", label: "Manter", icon: "✅", desc: "Manter", color: "text-success", bg: "bg-success/10", border: "border-success/30" },
+      { key: "problem", label: "Problema", icon: "⚠️", desc: "Problemas", color: "text-destructive", bg: "bg-destructive/10", border: "border-destructive/30" },
+      { key: "try", label: "Experimentar", icon: "💡", desc: "Tentar", color: "text-info", bg: "bg-info/10", border: "border-info/30" },
     ],
   },
 };
@@ -73,38 +72,23 @@ const STEPS = [
   { key: "sprint", label: "Sprint" },
   { key: "model", label: "Modelo" },
   { key: "collect", label: "Coletar Cards" },
-  { key: "vote", label: "Agrupar & Votar" },
+  { key: "vote", label: "Agrupar e Votar" },
   { key: "actions", label: "Ações" },
   { key: "report", label: "Relatório" },
 ];
 
 interface RetroCard {
-  id: string;
-  sessionId: string;
-  columnKey: string;
-  text: string;
-  authorId: string;
-  isAction: boolean;
-  votes: number;
-  actionOwnerId?: string | null;
-  actionTargetSprintId?: string | null;
+  id: string; sessionId: string; columnKey: string; text: string;
+  authorId: string; isAction: boolean; votes: number;
+  actionOwnerId?: string | null; actionTargetSprintId?: string | null;
 }
-
 interface RetroAction {
-  id: string;
-  sessionId: string;
-  cardId?: string | null;
-  description: string;
-  ownerId?: string | null;
-  targetSprintId?: string | null;
-  status: string;
+  id: string; sessionId: string; cardId?: string | null;
+  description: string; ownerId?: string | null;
+  targetSprintId?: string | null; status: string;
 }
-
 interface RetroSession {
-  id: string;
-  sprintId: string;
-  model: ModelKey;
-  status: string;
+  id: string; sprintId: string; model: ModelKey; status: string; createdBy: string;
 }
 
 export function RetroManager() {
@@ -123,38 +107,31 @@ export function RetroManager() {
   const [editText, setEditText] = useState("");
   const [newActionText, setNewActionText] = useState("");
   const [reportOpen, setReportOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
+  const isHost = session?.createdBy === userId;
   const model = RETRO_MODELS[session?.model || selectedModel];
 
-  // Load existing session
   const loadSession = useCallback(async () => {
     if (!currentTeamId || !activeSprint) return;
     const { data } = await supabase
-      .from("retro_sessions")
-      .select("*")
-      .eq("team_id", currentTeamId)
-      .eq("sprint_id", activeSprint.id)
-      .order("created_at", { ascending: false })
-      .limit(1);
+      .from("retro_sessions").select("*")
+      .eq("team_id", currentTeamId).eq("sprint_id", activeSprint.id)
+      .order("created_at", { ascending: false }).limit(1);
 
     if (data && data.length > 0) {
       const s = data[0];
-      setSession({ id: s.id, sprintId: s.sprint_id, model: s.model as ModelKey, status: s.status });
+      setSession({ id: s.id, sprintId: s.sprint_id, model: s.model as ModelKey, status: s.status, createdBy: s.created_by });
       setSelectedModel(s.model as ModelKey);
       if (s.status === "active") setStep(2);
       else setStep(5);
     }
   }, [currentTeamId, activeSprint]);
 
-  // Load cards
   const loadCards = useCallback(async () => {
     if (!session) return;
-    const { data } = await supabase
-      .from("retro_cards")
-      .select("*")
-      .eq("session_id", session.id)
-      .order("created_at");
-
+    const { data } = await supabase.from("retro_cards").select("*").eq("session_id", session.id).order("created_at");
     if (data) {
       setCards(data.map((c: any) => ({
         id: c.id, sessionId: c.session_id, columnKey: c.column_key,
@@ -165,15 +142,9 @@ export function RetroManager() {
     }
   }, [session]);
 
-  // Load actions
   const loadActions = useCallback(async () => {
     if (!session) return;
-    const { data } = await supabase
-      .from("retro_actions")
-      .select("*")
-      .eq("session_id", session.id)
-      .order("created_at");
-
+    const { data } = await supabase.from("retro_actions").select("*").eq("session_id", session.id).order("created_at");
     if (data) {
       setActions(data.map((a: any) => ({
         id: a.id, sessionId: a.session_id, cardId: a.card_id,
@@ -186,7 +157,6 @@ export function RetroManager() {
   useEffect(() => { loadSession(); }, [loadSession]);
   useEffect(() => { loadCards(); loadActions(); }, [loadCards, loadActions]);
 
-  // Realtime for cards
   useEffect(() => {
     if (!session) return;
     const channel = supabase
@@ -196,21 +166,18 @@ export function RetroManager() {
     return () => { supabase.removeChannel(channel); };
   }, [session, loadCards]);
 
-  // Start session
   const startSession = async () => {
     if (!currentTeamId || !activeSprint || !userId) return;
     const { data, error } = await supabase.from("retro_sessions").insert({
       team_id: currentTeamId, sprint_id: activeSprint.id,
       model: selectedModel, created_by: userId,
     }).select().single();
-
     if (error) { toast.error("Erro ao criar sessão"); return; }
-    setSession({ id: data.id, sprintId: data.sprint_id, model: data.model as ModelKey, status: data.status });
+    setSession({ id: data.id, sprintId: data.sprint_id, model: data.model as ModelKey, status: data.status, createdBy: data.created_by });
     setStep(2);
     toast.success("Sessão de retrospectiva iniciada!");
   };
 
-  // Add card
   const addCard = async (columnKey: string) => {
     if (!session || !userId || !newCardText.trim()) return;
     const { error } = await supabase.from("retro_cards").insert({
@@ -218,24 +185,20 @@ export function RetroManager() {
       text: newCardText.trim(), author_id: userId,
     });
     if (error) { toast.error("Erro ao adicionar card"); return; }
-    setNewCardText("");
-    setAddingTo(null);
+    setNewCardText(""); setAddingTo(null);
     await loadCards();
   };
 
-  // Update card
   const updateCard = async (id: string, updates: any) => {
     await supabase.from("retro_cards").update(updates).eq("id", id);
     await loadCards();
   };
 
-  // Delete card
   const deleteCard = async (id: string) => {
     await supabase.from("retro_cards").delete().eq("id", id);
     await loadCards();
   };
 
-  // Vote card
   const voteCard = async (id: string) => {
     const card = cards.find(c => c.id === id);
     if (!card) return;
@@ -243,35 +206,29 @@ export function RetroManager() {
     await loadCards();
   };
 
-  // Convert to action
   const convertToAction = async (card: RetroCard) => {
     await supabase.from("retro_cards").update({ is_action: true }).eq("id", card.id);
     await supabase.from("retro_actions").insert({
       session_id: session!.id, card_id: card.id,
       description: card.text, status: "pendente",
     });
-    await loadCards();
-    await loadActions();
+    await loadCards(); await loadActions();
     toast.success("Card convertido em ação");
   };
 
-  // Add new action
   const addAction = async () => {
     if (!session || !newActionText.trim()) return;
     await supabase.from("retro_actions").insert({
       session_id: session.id, description: newActionText.trim(), status: "pendente",
     });
-    setNewActionText("");
-    await loadActions();
+    setNewActionText(""); await loadActions();
   };
 
-  // Update action
   const updateAction = async (id: string, updates: any) => {
     await supabase.from("retro_actions").update(updates).eq("id", id);
     await loadActions();
   };
 
-  // Finalize
   const finalize = async () => {
     if (!session) return;
     await supabase.from("retro_sessions").update({
@@ -282,7 +239,25 @@ export function RetroManager() {
     setReportOpen(false);
   };
 
-  // Sprint info
+  const cancelSession = async () => {
+    if (!session) return;
+    setCancelling(true);
+    try {
+      await supabase.from("retro_actions").delete().eq("session_id", session.id);
+      await supabase.from("retro_cards").delete().eq("session_id", session.id);
+      await supabase.from("retro_sessions").update({
+        status: "cancelled", finished_at: new Date().toISOString(),
+      }).eq("id", session.id);
+      setSession(null); setCards([]); setActions([]); setStep(0);
+      setCancelOpen(false);
+      toast.success("Sessão cancelada. Todos os cards e ações foram descartados.");
+    } catch {
+      toast.error("Erro ao cancelar sessão");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const sprintStories = activeSprint ? userStories.filter(hu => hu.sprintId === activeSprint.id) : [];
   const completedStories = sprintStories.filter(hu => hu.status === "pronto_para_publicacao");
   const activeImpediments = impediments.filter(i => !i.resolvedAt);
@@ -306,80 +281,71 @@ export function RetroManager() {
           </h2>
           <p className="text-sm text-muted-foreground">
             {activeSprint.name} · Modelo: {model.label}
-            {session && <> · <Badge className="bg-success/15 text-success border border-success/30 gap-1 ml-1"><span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> Sessão Ativa</Badge></>}
+            {session && session.status === "active" && (
+              <Badge className="bg-success/15 text-success border border-success/30 gap-1 ml-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> Sessão Ativa
+              </Badge>
+            )}
           </p>
         </div>
-        {session && step >= 2 && (
-          <Button onClick={() => { setStep(5); setReportOpen(true); }} className="gap-1">
-            Finalizar e ver Relatório <ChevronRight className="h-4 w-4" />
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {session && session.status === "active" && step >= 2 && (
+            <Button onClick={() => { setStep(5); setReportOpen(true); }} className="gap-1">
+              Finalizar e ver Relatório <ChevronRight className="h-4 w-4" />
+            </Button>
+          )}
+          {session && session.status === "active" && isHost && (
+            <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setCancelOpen(true)}>
+              <XCircle className="h-3.5 w-3.5 mr-1" /> Cancelar Sessão
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Step bar */}
       <div className="flex items-center gap-1">
         {STEPS.map((s, i) => (
-          <button
-            key={s.key}
-            type="button"
+          <button key={s.key} type="button"
             onClick={() => { if (session || i < 2) setStep(i); }}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
               i < step ? "bg-success/15 text-success" :
               i === step ? "bg-primary/10 text-primary border border-primary/30" :
               "bg-muted text-muted-foreground"
-            )}
-          >
+            )}>
             {i < step ? <Check className="h-3 w-3" /> : <span className="h-4 w-4 flex items-center justify-center text-[10px] rounded-full border">{i + 1}</span>}
             <span className="hidden sm:inline">{s.label}</span>
           </button>
         ))}
       </div>
 
-      {/* Step content */}
+      {/* Step 0 - Sprint */}
       {step === 0 && (
         <Card>
           <CardHeader><CardTitle className="text-base">Selecionar Sprint</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-xs text-muted-foreground">Sprint</Label>
-                <p className="text-sm font-medium">{activeSprint.name}</p>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Período</Label>
-                <p className="text-sm">{new Date(activeSprint.startDate).toLocaleDateString("pt-BR")} — {new Date(activeSprint.endDate).toLocaleDateString("pt-BR")}</p>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">HUs Concluídas</Label>
-                <p className="text-sm font-medium">{completedStories.length} / {sprintStories.length}</p>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Impedimentos Ativos</Label>
-                <p className="text-sm font-medium">{activeImpediments.length}</p>
-              </div>
+              <div><Label className="text-xs text-muted-foreground">Sprint</Label><p className="text-sm font-medium">{activeSprint.name}</p></div>
+              <div><Label className="text-xs text-muted-foreground">Período</Label><p className="text-sm">{new Date(activeSprint.startDate).toLocaleDateString("pt-BR")} — {new Date(activeSprint.endDate).toLocaleDateString("pt-BR")}</p></div>
+              <div><Label className="text-xs text-muted-foreground">HUs Concluídas</Label><p className="text-sm font-medium">{completedStories.length} / {sprintStories.length}</p></div>
+              <div><Label className="text-xs text-muted-foreground">Impedimentos Ativos</Label><p className="text-sm font-medium">{activeImpediments.length}</p></div>
             </div>
-            <Button onClick={() => setStep(1)} className="gap-1">
-              Próximo <ChevronRight className="h-4 w-4" />
-            </Button>
+            <Button onClick={() => setStep(1)} className="gap-1">Próximo <ChevronRight className="h-4 w-4" /></Button>
           </CardContent>
         </Card>
       )}
 
+      {/* Step 1 - Model */}
       {step === 1 && (
         <div className="space-y-4">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase">Escolha o modelo</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {(Object.entries(RETRO_MODELS) as [ModelKey, typeof RETRO_MODELS[ModelKey]][]).map(([key, m]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setSelectedModel(key)}
+              <button key={key} type="button" onClick={() => setSelectedModel(key)}
                 className={cn(
                   "flex flex-col items-start gap-2 rounded-lg border-2 p-4 text-left transition-all",
                   selectedModel === key ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
-                )}
-              >
+                )}>
                 <span className="text-sm font-bold">{m.label}</span>
                 <div className="flex flex-wrap gap-1">
                   {m.columns.map(col => (
@@ -395,13 +361,14 @@ export function RetroManager() {
         </div>
       )}
 
+      {/* Step 2 - Collect Cards */}
       {step === 2 && session && (
-        <div className={cn("grid gap-3", model.columns.length <= 3 ? "grid-cols-3" : model.columns.length === 4 ? "grid-cols-4" : "grid-cols-5")}>
+        <div className={cn("grid gap-3", model.columns.length <= 3 ? "grid-cols-3" : model.columns.length === 4 ? "grid-cols-4" : "grid-cols-5")}
+             style={{ height: "calc(100vh - 260px)" }}>
           {model.columns.map(col => {
             const colCards = cards.filter(c => c.columnKey === col.key);
             return (
-              <div key={col.key} className="flex flex-col">
-                {/* Column header */}
+              <div key={col.key} className="flex flex-col min-w-[180px]">
                 <div className={cn("rounded-t-lg p-3 border", col.bg, col.border)}>
                   <div className="flex items-center gap-2">
                     <span className="text-base">{col.icon}</span>
@@ -412,9 +379,7 @@ export function RetroManager() {
                     <Badge variant="secondary" className="ml-auto text-[10px]">{colCards.length}</Badge>
                   </div>
                 </div>
-
-                {/* Cards */}
-                <div className={cn("rounded-b-lg border border-t-0 p-2 space-y-2 min-h-[200px]", col.bg.replace("/10", "/5"))}>
+                <div className={cn("rounded-b-lg border border-t-0 p-2 space-y-2 flex-1 overflow-y-auto", col.bg.replace("/10", "/5"))}>
                   {colCards.map(card => (
                     <div key={card.id} className={cn("rounded-lg border p-2.5 bg-card group relative", card.isAction && "border-warning/50 bg-warning/5")}>
                       {editingCard === card.id ? (
@@ -449,17 +414,10 @@ export function RetroManager() {
                     </div>
                   ))}
 
-                  {/* Add card inline */}
                   {addingTo === col.key ? (
                     <div className="space-y-2">
-                      <Textarea
-                        value={newCardText}
-                        onChange={e => setNewCardText(e.target.value)}
-                        placeholder="Escreva seu card..."
-                        rows={2}
-                        className="text-xs resize-none"
-                        autoFocus
-                      />
+                      <Textarea value={newCardText} onChange={e => setNewCardText(e.target.value)}
+                        placeholder="Escreva seu card..." rows={2} className="text-xs resize-none" autoFocus />
                       <div className="flex gap-1">
                         <Button size="sm" className="h-6 text-[10px]" onClick={() => addCard(col.key)}>Salvar</Button>
                         <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => { setAddingTo(null); setNewCardText(""); }}>Cancelar</Button>
@@ -477,9 +435,10 @@ export function RetroManager() {
         </div>
       )}
 
+      {/* Step 3 - Vote */}
       {step === 3 && session && (
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase">Agrupar & Votar</h3>
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase">Agrupar e Votar</h3>
           <p className="text-xs text-muted-foreground">Clique em 👍 para votar nos cards mais importantes</p>
           <div className={cn("grid gap-3", model.columns.length <= 3 ? "grid-cols-3" : "grid-cols-4")}>
             {model.columns.map(col => {
@@ -492,15 +451,9 @@ export function RetroManager() {
                   <div className="rounded-b-lg border border-t-0 p-2 space-y-2">
                     {colCards.map(card => (
                       <div key={card.id} className={cn("rounded-lg border p-2 flex items-start gap-2", card.votes > 0 && "border-primary/40")}>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0" onClick={() => voteCard(card.id)}>
-                          👍
-                        </Button>
-                        <div className="flex-1">
-                          <p className="text-xs">{card.text}</p>
-                        </div>
-                        {card.votes > 0 && (
-                          <Badge variant="secondary" className="text-[10px] shrink-0">{card.votes}</Badge>
-                        )}
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0" onClick={() => voteCard(card.id)}>👍</Button>
+                        <div className="flex-1"><p className="text-xs">{card.text}</p></div>
+                        {card.votes > 0 && <Badge variant="secondary" className="text-[10px] shrink-0">{card.votes}</Badge>}
                       </div>
                     ))}
                   </div>
@@ -508,12 +461,11 @@ export function RetroManager() {
               );
             })}
           </div>
-          <Button onClick={() => setStep(4)} className="gap-1">
-            Próximo <ChevronRight className="h-4 w-4" />
-          </Button>
+          <Button onClick={() => setStep(4)} className="gap-1">Próximo <ChevronRight className="h-4 w-4" /></Button>
         </div>
       )}
 
+      {/* Step 4 - Actions */}
       {step === 4 && session && (
         <div className="space-y-4">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase">Plano de Ações</h3>
@@ -522,36 +474,21 @@ export function RetroManager() {
               <Card key={action.id}>
                 <CardContent className="p-3 flex items-center gap-3">
                   <Zap className="h-4 w-4 text-warning shrink-0" />
-                  <div className="flex-1">
-                    <p className="text-sm">{action.description}</p>
-                  </div>
-                  <Select
-                    value={action.targetSprintId || ""}
-                    onValueChange={v => updateAction(action.id, { target_sprint_id: v || null })}
-                  >
-                    <SelectTrigger className="h-7 w-[140px] text-xs">
-                      <SelectValue placeholder="Sprint alvo" />
-                    </SelectTrigger>
+                  <div className="flex-1"><p className="text-sm">{action.description}</p></div>
+                  <Select value={action.targetSprintId || ""} onValueChange={v => updateAction(action.id, { target_sprint_id: v || null })}>
+                    <SelectTrigger className="h-7 w-[140px] text-xs"><SelectValue placeholder="Sprint alvo" /></SelectTrigger>
                     <SelectContent>
-                      {sprints.map(s => (
-                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                      ))}
+                      {sprints.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
                     </SelectContent>
                   </Select>
                   <Badge variant="outline" className="text-[10px]">{action.status}</Badge>
                 </CardContent>
               </Card>
             ))}
-
-            {/* Add new action */}
             <div className="flex gap-2">
-              <Input
-                value={newActionText}
-                onChange={e => setNewActionText(e.target.value)}
-                placeholder="Adicionar nova ação..."
-                className="h-8 text-xs"
-                onKeyDown={e => { if (e.key === "Enter") addAction(); }}
-              />
+              <Input value={newActionText} onChange={e => setNewActionText(e.target.value)}
+                placeholder="Adicionar nova ação..." className="h-8 text-xs"
+                onKeyDown={e => { if (e.key === "Enter") addAction(); }} />
               <Button size="sm" className="h-8" onClick={addAction} disabled={!newActionText.trim()}>
                 <Plus className="h-3 w-3" />
               </Button>
@@ -563,14 +500,12 @@ export function RetroManager() {
         </div>
       )}
 
+      {/* Step 5 - Report */}
       {step === 5 && (
         <Dialog open={reportOpen} onOpenChange={setReportOpen}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Relatório da Retrospectiva</DialogTitle>
-            </DialogHeader>
+            <DialogHeader><DialogTitle>Relatório da Retrospectiva</DialogTitle></DialogHeader>
 
-            {/* Summary */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {model.columns.map(col => {
                 const count = cards.filter(c => c.columnKey === col.key).length;
@@ -588,7 +523,6 @@ export function RetroManager() {
 
             <Separator />
 
-            {/* Action Plan */}
             <div>
               <h3 className="text-sm font-bold mb-2">Plano de Ações</h3>
               <Table>
@@ -605,12 +539,8 @@ export function RetroManager() {
                     <TableRow key={action.id}>
                       <TableCell className="text-xs">{i + 1}</TableCell>
                       <TableCell className="text-xs">{action.description}</TableCell>
-                      <TableCell className="text-xs">
-                        {sprints.find(s => s.id === action.targetSprintId)?.name || "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-[10px]">{action.status}</Badge>
-                      </TableCell>
+                      <TableCell className="text-xs">{sprints.find(s => s.id === action.targetSprintId)?.name || "—"}</TableCell>
+                      <TableCell><Badge variant="outline" className="text-[10px]">{action.status}</Badge></TableCell>
                     </TableRow>
                   ))}
                   {actions.length === 0 && (
@@ -622,7 +552,6 @@ export function RetroManager() {
 
             <Separator />
 
-            {/* All cards */}
             <div>
               <h3 className="text-sm font-bold mb-2">Todos os Cards</h3>
               <Table>
@@ -638,9 +567,7 @@ export function RetroManager() {
                     const col = model.columns.find(c => c.key === card.columnKey);
                     return (
                       <TableRow key={card.id}>
-                        <TableCell className="text-xs">
-                          <Badge variant="secondary" className="text-[10px]">{col?.icon} {col?.label}</Badge>
-                        </TableCell>
+                        <TableCell className="text-xs"><Badge variant="secondary" className="text-[10px]">{col?.icon} {col?.label}</Badge></TableCell>
                         <TableCell className="text-xs">{card.text}</TableCell>
                         <TableCell className="text-xs">{card.votes > 0 ? card.votes : "—"}</TableCell>
                       </TableRow>
@@ -660,6 +587,27 @@ export function RetroManager() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Cancel Session Dialog */}
+      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" /> Cancelar sessão de Retrospectiva?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Todos os cards e ações serão descartados. Não pode ser desfeito.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelOpen(false)}>Voltar</Button>
+            <Button variant="destructive" onClick={cancelSession} disabled={cancelling} className="gap-1">
+              {cancelling && <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-destructive-foreground" />}
+              Sim, cancelar sessão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

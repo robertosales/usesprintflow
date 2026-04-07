@@ -3,33 +3,31 @@ import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { SizeBadge } from "@/components/SizeBadge";
-import { SizeSelector } from "@/components/SizeSelector";
 import { SIZE_REFERENCES, FIBONACCI_DECK, getSizeByKey, getSizeByPoints, type SizeReference } from "@/lib/sizeReference";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   Search, Play, RotateCcw, ChevronLeft, ChevronRight, Check, Settings, Users, Copy,
-  Eye, EyeOff, Clock, Coffee, Infinity, HelpCircle
+  Eye, EyeOff, Clock, Coffee, Infinity, HelpCircle, XCircle, AlertTriangle
 } from "lucide-react";
 import type { UserStory } from "@/types/sprint";
 
 type DeckMode = "fibonacci" | "hours" | "custom";
-type VotingStatus = "pending" | "voting" | "voted";
 
 interface PlanningSession {
   id: string;
   deckMode: DeckMode;
   deckConfig: any;
   status: string;
+  createdBy: string;
 }
 
 interface Vote {
@@ -50,13 +48,15 @@ export function PlanningPoker() {
   const [myVote, setMyVote] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [deckConfigOpen, setDeckConfigOpen] = useState(false);
   const [deckMode, setDeckMode] = useState<DeckMode>("fibonacci");
   const [customCards, setCustomCards] = useState<string[]>([]);
   const [customInput, setCustomInput] = useState("");
   const [hoursConfig, setHoursConfig] = useState(SIZE_REFERENCES.map(s => ({ ...s })));
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const userId = profile?.user_id;
+  const isHost = session?.createdBy === userId;
 
   const sprintStories = useMemo(() => {
     if (!activeSprint) return [];
@@ -103,10 +103,9 @@ export function PlanningPoker() {
     if (data && data.length > 0) {
       const s = data[0];
       setSession({
-        id: s.id,
-        deckMode: s.deck_mode as DeckMode,
-        deckConfig: s.deck_config,
-        status: s.status,
+        id: s.id, deckMode: s.deck_mode as DeckMode,
+        deckConfig: s.deck_config, status: s.status,
+        createdBy: s.created_by,
       });
       setDeckMode(s.deck_mode as DeckMode);
       if (s.deck_config && Array.isArray(s.deck_config)) {
@@ -142,13 +141,10 @@ export function PlanningPoker() {
     const channel = supabase
       .channel(`planning-votes-${session.id}`)
       .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'planning_votes',
+        event: '*', schema: 'public', table: 'planning_votes',
         filter: `session_id=eq.${session.id}`,
       }, () => { loadVotes(); })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [session, loadVotes]);
 
@@ -156,37 +152,27 @@ export function PlanningPoker() {
     if (!currentTeamId || !activeSprint || !userId) return;
     const config = deckMode === "custom" ? customCards : [];
     const { data, error } = await supabase.from("planning_sessions").insert({
-      team_id: currentTeamId,
-      sprint_id: activeSprint.id,
-      deck_mode: deckMode,
-      deck_config: config,
-      created_by: userId,
+      team_id: currentTeamId, sprint_id: activeSprint.id,
+      deck_mode: deckMode, deck_config: config, created_by: userId,
     }).select().single();
 
     if (error) { toast.error("Erro ao iniciar sessão"); return; }
     setSession({
       id: data.id, deckMode: data.deck_mode as DeckMode,
-      deckConfig: data.deck_config, status: data.status,
+      deckConfig: data.deck_config, status: data.status, createdBy: data.created_by,
     });
     const firstPending = sprintStories.find(hu => hu.planningStatus !== "voted" && !hu.sizeReference);
     if (firstPending) setCurrentHuId(firstPending.id);
-    setDeckConfigOpen(false);
     toast.success("Sessão iniciada!");
   };
 
   const castVote = async (value: string) => {
     if (!session || !currentHuId || !userId) return;
     await supabase.from("planning_votes")
-      .delete()
-      .eq("session_id", session.id)
-      .eq("hu_id", currentHuId)
-      .eq("user_id", userId);
+      .delete().eq("session_id", session.id).eq("hu_id", currentHuId).eq("user_id", userId);
     await supabase.from("planning_votes").insert({
-      session_id: session.id,
-      hu_id: currentHuId,
-      user_id: userId,
-      vote_value: value,
-      revealed: false,
+      session_id: session.id, hu_id: currentHuId, user_id: userId,
+      vote_value: value, revealed: false,
     });
     setMyVote(value);
   };
@@ -194,21 +180,15 @@ export function PlanningPoker() {
   const revealVotes = async () => {
     if (!session || !currentHuId) return;
     await supabase.from("planning_votes")
-      .update({ revealed: true })
-      .eq("session_id", session.id)
-      .eq("hu_id", currentHuId);
+      .update({ revealed: true }).eq("session_id", session.id).eq("hu_id", currentHuId);
     setRevealed(true);
   };
 
   const revote = async () => {
     if (!session || !currentHuId) return;
     await supabase.from("planning_votes")
-      .delete()
-      .eq("session_id", session.id)
-      .eq("hu_id", currentHuId);
-    setVotes([]);
-    setMyVote(null);
-    setRevealed(false);
+      .delete().eq("session_id", session.id).eq("hu_id", currentHuId);
+    setVotes([]); setMyVote(null); setRevealed(false);
     toast.info("Nova rodada de votação");
   };
 
@@ -218,34 +198,55 @@ export function PlanningPoker() {
     if (!size) return;
 
     await updateUserStory(currentHuId, {
-      storyPoints: size.points,
-      sizeReference: size.key,
-      estimatedHours: size.hours,
-      planningStatus: "voted",
-      votedAt: new Date().toISOString(),
-      votedBy: userId,
+      storyPoints: size.points, sizeReference: size.key, estimatedHours: size.hours,
+      planningStatus: "voted", votedAt: new Date().toISOString(), votedBy: userId,
     } as any);
 
     toast.success(`HU confirmada: ${size.label} — ${size.hours}h`);
-
     const nextPending = sprintStories.find(hu =>
       hu.id !== currentHuId && hu.planningStatus !== "voted" && !hu.sizeReference
     );
     setCurrentHuId(nextPending?.id || null);
-    setMyVote(null);
-    setVotes([]);
-    setRevealed(false);
+    setMyVote(null); setVotes([]); setRevealed(false);
     await refreshAll();
   };
 
   const endSession = async () => {
     if (!session) return;
     await supabase.from("planning_sessions")
-      .update({ status: "finished", finished_at: new Date().toISOString() })
-      .eq("id", session.id);
-    setSession(null);
-    setCurrentHuId(null);
+      .update({ status: "finished", finished_at: new Date().toISOString() }).eq("id", session.id);
+    setSession(null); setCurrentHuId(null);
     toast.success("Sessão encerrada!");
+  };
+
+  const cancelSession = async () => {
+    if (!session) return;
+    setCancelling(true);
+    try {
+      // Revert all voted HUs in this session
+      const votedHus = sprintStories.filter(hu => hu.planningStatus === "voted" && hu.votedAt);
+      for (const hu of votedHus) {
+        await supabase.from("user_stories").update({
+          planning_status: "pending", story_points: 0,
+          size_reference: null, estimated_hours: null,
+          voted_at: null, voted_by: null,
+        }).eq("id", hu.id);
+      }
+      // Delete all votes
+      await supabase.from("planning_votes").delete().eq("session_id", session.id);
+      // Mark session cancelled
+      await supabase.from("planning_sessions")
+        .update({ status: "cancelled", finished_at: new Date().toISOString() }).eq("id", session.id);
+
+      setSession(null); setCurrentHuId(null); setMyVote(null); setVotes([]);
+      setCancelOpen(false);
+      await refreshAll();
+      toast.success("Sessão cancelada. Todas as votações foram descartadas.");
+    } catch {
+      toast.error("Erro ao cancelar sessão");
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const getDeckCards = (): string[] => {
@@ -257,30 +258,21 @@ export function PlanningPoker() {
   const getConsensus = (): { size: SizeReference | null; counts: Record<string, number> } => {
     const counts: Record<string, number> = {};
     const numericVotes: number[] = [];
-
     votes.forEach(v => {
       counts[v.voteValue] = (counts[v.voteValue] || 0) + 1;
       const num = parseFloat(v.voteValue === "½" ? "0.5" : v.voteValue);
       if (!isNaN(num)) numericVotes.push(num);
     });
-
     if (numericVotes.length === 0) return { size: null, counts };
-
     const uniqueValues = [...new Set(votes.map(v => v.voteValue))];
     if (uniqueValues.length === 1) {
-      if (deckMode === "hours") {
-        return { size: getSizeByKey(uniqueValues[0]) || null, counts };
-      }
-      const avg = numericVotes[0];
-      return { size: getSizeByPoints(avg) || null, counts };
+      if (deckMode === "hours") return { size: getSizeByKey(uniqueValues[0]) || null, counts };
+      return { size: getSizeByPoints(numericVotes[0]) || null, counts };
     }
-
     numericVotes.sort((a, b) => a - b);
     const mid = Math.floor(numericVotes.length / 2);
     const median = numericVotes.length % 2 !== 0
-      ? numericVotes[mid]
-      : (numericVotes[mid - 1] + numericVotes[mid]) / 2;
-
+      ? numericVotes[mid] : (numericVotes[mid - 1] + numericVotes[mid]) / 2;
     return { size: getSizeByPoints(median) || null, counts };
   };
 
@@ -306,6 +298,7 @@ export function PlanningPoker() {
     );
   }
 
+  // ── Pre-session: deck config ──
   if (!session) {
     return (
       <div className="space-y-6">
@@ -319,9 +312,7 @@ export function PlanningPoker() {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Configurar Baralho</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base">Configurar Baralho</CardTitle></CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-3 gap-3">
               {([
@@ -329,17 +320,11 @@ export function PlanningPoker() {
                 { mode: "hours" as DeckMode, label: "Referência em Horas", desc: "P→4h, M→6h, G→12h, GG→16h, XG→24h" },
                 { mode: "custom" as DeckMode, label: "Customizado", desc: "Crie seu próprio baralho" },
               ]).map(({ mode, label, desc }) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setDeckMode(mode)}
+                <button key={mode} type="button" onClick={() => setDeckMode(mode)}
                   className={cn(
                     "flex flex-col items-start gap-1 rounded-lg border-2 p-4 text-left transition-all",
-                    deckMode === mode
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/40"
-                  )}
-                >
+                    deckMode === mode ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                  )}>
                   <span className="text-sm font-semibold">{label}</span>
                   <span className="text-[11px] text-muted-foreground">{desc}</span>
                 </button>
@@ -365,15 +350,9 @@ export function PlanningPoker() {
                   <div key={s.key} className="grid grid-cols-5 gap-2 items-center">
                     <Input value={s.key} readOnly className="h-8 text-xs text-center font-bold" />
                     <Input value={s.pointsLabel} readOnly className="h-8 text-xs text-center" />
-                    <Input
-                      type="number" value={s.hours}
-                      onChange={e => {
-                        const c = [...hoursConfig];
-                        c[i] = { ...c[i], hours: Number(e.target.value) };
-                        setHoursConfig(c);
-                      }}
-                      className="h-8 text-xs text-center"
-                    />
+                    <Input type="number" value={s.hours}
+                      onChange={e => { const c = [...hoursConfig]; c[i] = { ...c[i], hours: Number(e.target.value) }; setHoursConfig(c); }}
+                      className="h-8 text-xs text-center" />
                     <span className="text-xs text-muted-foreground text-center">{s.label}</span>
                     <span></span>
                   </div>
@@ -384,18 +363,9 @@ export function PlanningPoker() {
             {deckMode === "custom" && (
               <div className="space-y-3">
                 <div className="flex gap-2">
-                  <Input
-                    value={customInput}
-                    onChange={e => setCustomInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === "Enter" && customInput.trim()) {
-                        setCustomCards([...customCards, customInput.trim()]);
-                        setCustomInput("");
-                      }
-                    }}
-                    placeholder="Adicione um valor e pressione Enter"
-                    className="h-8 text-sm"
-                  />
+                  <Input value={customInput} onChange={e => setCustomInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && customInput.trim()) { setCustomCards([...customCards, customInput.trim()]); setCustomInput(""); } }}
+                    placeholder="Adicione um valor e pressione Enter" className="h-8 text-sm" />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {customCards.map((card, i) => (
@@ -404,20 +374,13 @@ export function PlanningPoker() {
                     </Badge>
                   ))}
                 </div>
-                {customCards.length < 2 && (
-                  <p className="text-xs text-muted-foreground">Mínimo 2 cartas necessárias</p>
-                )}
+                {customCards.length < 2 && <p className="text-xs text-muted-foreground">Mínimo 2 cartas necessárias</p>}
               </div>
             )}
 
             <Separator />
-
             <div className="flex justify-end gap-3">
-              <Button
-                onClick={startSession}
-                disabled={deckMode === "custom" && customCards.length < 2}
-                className="gap-2"
-              >
+              <Button onClick={startSession} disabled={deckMode === "custom" && customCards.length < 2} className="gap-2">
                 <Play className="h-4 w-4" /> Salvar e Iniciar Sessão
               </Button>
             </div>
@@ -427,70 +390,72 @@ export function PlanningPoker() {
     );
   }
 
+  // ── Active session ──
   return (
     <div className="space-y-4">
+      {/* Topbar */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2">
             <Play className="h-5 w-5 text-primary" /> Planning Poker
           </h2>
-          <p className="text-sm text-muted-foreground">
-            {activeSprint.name} · {sprintStories.length} HUs
-          </p>
+          <p className="text-sm text-muted-foreground">{activeSprint.name} · {sprintStories.length} HUs</p>
         </div>
         <div className="flex items-center gap-2">
           <Badge className="bg-success/15 text-success border border-success/30 gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-            Sessão Ativa
+            <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> Sessão Ativa
           </Badge>
           <Button variant="outline" size="sm" onClick={endSession}>Encerrar Sessão</Button>
+          {isHost && (
+            <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setCancelOpen(true)}>
+              <XCircle className="h-3.5 w-3.5 mr-1" /> Cancelar Sessão
+            </Button>
+          )}
         </div>
       </div>
 
+      {/* Main grid */}
       <div className="grid grid-cols-12 gap-4">
+        {/* Left panel */}
         <div className="col-span-4 space-y-3">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Buscar HU..."
-              className="pl-8 h-8 text-xs"
-            />
+            <Input value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Buscar por ID ou título..." className="pl-8 h-8 text-xs" />
           </div>
 
           <ScrollArea className="h-[calc(100vh-320px)]">
             <div className="space-y-2 pr-2">
+              {/* Voting */}
               {categorizedStories.voting.map(hu => (
                 <Card key={hu.id} className="border-warning/50 bg-warning/5 cursor-pointer" onClick={() => setCurrentHuId(hu.id)}>
                   <CardContent className="p-3">
                     <div className="flex items-center gap-2 mb-1">
                       <Badge variant="outline" className="font-mono text-[10px]">{hu.code}</Badge>
                       <Badge className="bg-warning/15 text-warning border border-warning/30 text-[10px] gap-1">
-                        <Clock className="h-2.5 w-2.5" /> Votando
+                        <Clock className="h-2.5 w-2.5" /> ⏳ Votando
                       </Badge>
                     </div>
                     <p className="text-xs font-medium line-clamp-2">{hu.title}</p>
                   </CardContent>
                 </Card>
               ))}
-
+              {/* Pending */}
               {filteredPending.map(hu => (
-                <Card
-                  key={hu.id}
+                <Card key={hu.id}
                   className={cn("cursor-pointer hover:shadow-sm transition-shadow", currentHuId === hu.id && "ring-2 ring-primary")}
-                  onClick={() => { setCurrentHuId(hu.id); setMyVote(null); setVotes([]); setRevealed(false); }}
-                >
+                  onClick={() => { setCurrentHuId(hu.id); setMyVote(null); setVotes([]); setRevealed(false); }}>
                   <CardContent className="p-3">
                     <div className="flex items-center gap-2 mb-1">
                       <Badge variant="outline" className="font-mono text-[10px]">{hu.code}</Badge>
+                      <span className="text-muted-foreground text-[10px]">—</span>
                       <Badge variant="secondary" className="text-[10px]">Pendente</Badge>
                     </div>
                     <p className="text-xs font-medium line-clamp-2">{hu.title}</p>
                   </CardContent>
                 </Card>
               ))}
-
+              {/* Voted */}
               {categorizedStories.voted.map(hu => (
                 <Card key={hu.id} className="border-success/50 bg-success/5 opacity-75">
                   <CardContent className="p-3">
@@ -498,7 +463,7 @@ export function PlanningPoker() {
                       <Badge variant="outline" className="font-mono text-[10px]">{hu.code}</Badge>
                       <SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} />
                       <Badge className="bg-success/15 text-success border border-success/30 text-[10px] gap-1">
-                        <Check className="h-2.5 w-2.5" /> Votado
+                        <Check className="h-2.5 w-2.5" /> ✓ Votado
                       </Badge>
                     </div>
                     <p className="text-xs font-medium line-clamp-2">{hu.title}</p>
@@ -509,6 +474,7 @@ export function PlanningPoker() {
           </ScrollArea>
         </div>
 
+        {/* Right panel */}
         <div className="col-span-8 space-y-4">
           {currentHu ? (
             <>
@@ -516,7 +482,7 @@ export function PlanningPoker() {
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Clock className="h-4 w-4 text-warning" />
-                    <span className="text-xs font-semibold text-warning uppercase">Em votação agora</span>
+                    <span className="text-xs font-semibold text-warning uppercase">⏳ Em votação agora</span>
                   </div>
                   <div className="flex items-center gap-2 mb-1">
                     <Badge variant="outline" className="font-mono text-xs">{currentHu.code}</Badge>
@@ -528,14 +494,15 @@ export function PlanningPoker() {
                 </CardContent>
               </Card>
 
+              {/* Votes */}
               {votes.length > 0 && (
                 <Card>
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-semibold text-muted-foreground uppercase">Votos ({votes.length})</span>
+                      <span className="text-xs font-semibold text-muted-foreground uppercase">Participantes ({votes.length})</span>
                       {!revealed && (
                         <Button size="sm" variant="outline" onClick={revealVotes} className="gap-1 text-xs">
-                          <Eye className="h-3 w-3" /> Revelar todos
+                          <Eye className="h-3 w-3" /> Revelar todos ▶
                         </Button>
                       )}
                     </div>
@@ -544,9 +511,7 @@ export function PlanningPoker() {
                         <div key={v.id} className="flex flex-col items-center gap-1">
                           <div className={cn(
                             "h-14 w-10 rounded-lg border-2 flex items-center justify-center text-sm font-bold transition-all",
-                            revealed
-                              ? "border-primary bg-primary/10 text-primary"
-                              : "border-muted bg-muted text-muted-foreground"
+                            revealed ? "border-primary bg-primary/10 text-primary" : "border-muted bg-muted text-muted-foreground"
                           )}>
                             {revealed ? cardDisplayValue(v.voteValue) : <EyeOff className="h-4 w-4" />}
                           </div>
@@ -564,9 +529,7 @@ export function PlanningPoker() {
                         </p>
                         <div className="flex gap-2 mt-1">
                           {Object.entries(consensus.counts).map(([val, count]) => (
-                            <Badge key={val} variant="outline" className="text-[10px]">
-                              {val} × {count}
-                            </Badge>
+                            <Badge key={val} variant="outline" className="text-[10px]">{val} × {count}</Badge>
                           ))}
                         </div>
                       </div>
@@ -575,22 +538,19 @@ export function PlanningPoker() {
                 </Card>
               )}
 
+              {/* Deck */}
               <Card>
                 <CardContent className="p-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase mb-3">Escolha sua carta</p>
                   <div className="flex flex-wrap gap-2">
                     {getDeckCards().map(card => (
-                      <button
-                        key={card}
-                        type="button"
-                        onClick={() => castVote(card)}
+                      <button key={card} type="button" onClick={() => castVote(card)}
                         className={cn(
                           "h-16 w-12 rounded-lg border-2 flex items-center justify-center text-sm font-bold transition-all cursor-pointer",
                           myVote === card
                             ? "border-primary bg-primary text-primary-foreground shadow-md scale-105"
                             : "border-border bg-card hover:border-primary/50 hover:shadow-sm"
-                        )}
-                      >
+                        )}>
                         {cardDisplayValue(card)}
                       </button>
                     ))}
@@ -607,18 +567,13 @@ export function PlanningPoker() {
         </div>
       </div>
 
+      {/* Footer */}
       <div className="sticky bottom-0 bg-background/95 backdrop-blur-sm border-t p-3 -mx-4 md:-mx-6 px-4 md:px-6">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Check className="h-3 w-3 text-success" /> {votedCount} votadas
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3 text-warning" /> {votingCount} em andamento
-            </span>
-            <span className="flex items-center gap-1">
-              ○ {pendingCount} pendentes
-            </span>
+            <span className="flex items-center gap-1"><Check className="h-3 w-3 text-success" /> {votedCount} votadas</span>
+            <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-warning" /> {votingCount} em andamento</span>
+            <span className="flex items-center gap-1">○ {pendingCount} pendentes</span>
           </div>
           <div className="flex items-center gap-2">
             {currentHuId && revealed && (
@@ -637,6 +592,27 @@ export function PlanningPoker() {
           </div>
         </div>
       </div>
+
+      {/* Cancel Session Dialog */}
+      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" /> Cancelar sessão de Planning Poker?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Todas as votações serão descartadas. As HUs voltarão ao status anterior (não estimadas).
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelOpen(false)}>Voltar</Button>
+            <Button variant="destructive" onClick={cancelSession} disabled={cancelling} className="gap-1">
+              {cancelling && <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-destructive-foreground" />}
+              Sim, cancelar sessão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
