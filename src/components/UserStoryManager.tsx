@@ -102,25 +102,31 @@ export function UserStoryManager() {
     if (!validate() || !activeSprint) return;
     setSubmitting(true);
     try {
+      const sizeData = selectedSize ? (() => {
+        const { getSizeByKey } = require("@/lib/sizeReference");
+        const s = getSizeByKey(selectedSize);
+        return s ? { sizeReference: s.key, estimatedHours: s.hours, storyPoints: s.points } : { storyPoints: 0 };
+      })() : { storyPoints: 0 };
+
       if (editId) {
         await updateUserStory(editId, {
           title: title.trim(), description: description.trim(),
-          storyPoints: Number(storyPoints), priority,
+          ...sizeData, priority,
           epicId: epicId || undefined,
           customFields: customFieldValues,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
-        });
+        } as any);
         toast.success("Alterações salvas com sucesso");
       } else {
         await addUserStory({
           title: title.trim(), description: description.trim(),
-          storyPoints: Number(storyPoints), priority,
+          ...sizeData, priority,
           sprintId: activeSprint.id, epicId: epicId || undefined,
           customFields: customFieldValues,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
-        });
+        } as any);
         toast.success("Registro criado com sucesso");
       }
       resetForm();
