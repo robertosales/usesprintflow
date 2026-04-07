@@ -76,7 +76,7 @@ export function UserStoryManager() {
   const { paginatedItems: sprintStories, currentPage, setCurrentPage, totalItems, pageSize } = usePagination(filteredStories, { pageSize: 10 });
 
   const resetForm = () => {
-    setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setEpicId("");
+    setTitle(""); setDescription(""); setSelectedSize(null); setPriority("media"); setEpicId("");
     setStartDate(""); setEndDate("");
     setCustomFieldValues({}); setErrors({}); setEditId(null);
   };
