@@ -141,6 +141,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         planningStatus: h.planning_status || 'pending',
         votedAt: h.voted_at || null,
         votedBy: h.voted_by || null,
+        functionPoints: h.function_points != null ? Number(h.function_points) : null,
         impediments: impData.filter((imp: any) => imp.hu_id === h.id).map((imp: any) => ({
           id: imp.id, reason: imp.reason, type: imp.type, criticality: imp.criticality,
           hasTicket: imp.has_ticket, ticketUrl: imp.ticket_url, ticketId: imp.ticket_id,
