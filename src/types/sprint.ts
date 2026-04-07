@@ -155,6 +155,11 @@ export interface UserStory {
   impediments: Impediment[];
   customFields?: Record<string, string | number>;
   createdAt: string;
+  sizeReference?: string | null;
+  estimatedHours?: number | null;
+  planningStatus?: string;
+  votedAt?: string | null;
+  votedBy?: string | null;
 }
 
 export function isHUOverdue(hu: UserStory, activities: Activity[]): boolean {

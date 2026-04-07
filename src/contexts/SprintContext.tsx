@@ -136,6 +136,11 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         storyPoints: h.story_points, priority: h.priority, status: h.status,
         sprintId: h.sprint_id, epicId: h.epic_id,
         startDate: h.start_date || undefined, endDate: h.end_date || undefined,
+        sizeReference: h.size_reference || null,
+        estimatedHours: h.estimated_hours != null ? Number(h.estimated_hours) : null,
+        planningStatus: h.planning_status || 'pending',
+        votedAt: h.voted_at || null,
+        votedBy: h.voted_by || null,
         impediments: impData.filter((imp: any) => imp.hu_id === h.id).map((imp: any) => ({
           id: imp.id, reason: imp.reason, type: imp.type, criticality: imp.criticality,
           hasTicket: imp.has_ticket, ticketUrl: imp.ticket_url, ticketId: imp.ticket_id,
@@ -230,6 +235,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       description: hu.description, story_points: hu.storyPoints,
       priority: hu.priority, status: firstCol, custom_fields: hu.customFields || {},
       start_date: hu.startDate || null, end_date: hu.endDate || null,
+      size_reference: (hu as any).sizeReference || null,
+      estimated_hours: (hu as any).estimatedHours || null,
     });
     if (error) { toast.error("Erro ao criar HU"); return; }
     await refreshAll();
@@ -246,6 +253,11 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (hu.customFields !== undefined) updateData.custom_fields = hu.customFields;
     if (hu.startDate !== undefined) updateData.start_date = hu.startDate || null;
     if (hu.endDate !== undefined) updateData.end_date = hu.endDate || null;
+    if ((hu as any).sizeReference !== undefined) updateData.size_reference = (hu as any).sizeReference;
+    if ((hu as any).estimatedHours !== undefined) updateData.estimated_hours = (hu as any).estimatedHours;
+    if ((hu as any).planningStatus !== undefined) updateData.planning_status = (hu as any).planningStatus;
+    if ((hu as any).votedAt !== undefined) updateData.voted_at = (hu as any).votedAt;
+    if ((hu as any).votedBy !== undefined) updateData.voted_by = (hu as any).votedBy;
     const { error } = await supabase.from("user_stories").update(updateData).eq("id", id);
     if (error) { toast.error("Erro ao atualizar HU"); return; }
     await refreshAll();

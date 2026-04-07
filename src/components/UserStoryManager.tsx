@@ -2,6 +2,8 @@ import { useState, useMemo } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { FileUploader } from "@/components/FileUploader";
+import { SizeSelector } from "@/components/SizeSelector";
+import { SizeBadge } from "@/components/SizeBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +21,7 @@ import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";
+import { type SizeReference, getSizeByKey } from "@/lib/sizeReference";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
   baixa: { label: "Baixa", color: "bg-muted text-muted-foreground" },
@@ -36,7 +39,7 @@ export function UserStoryManager() {
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [storyPoints, setStoryPoints] = useState("3");
+  const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [priority, setPriority] = useState<"baixa" | "media" | "alta" | "critica">("media");
   const [epicId, setEpicId] = useState<string>("");
   const [startDate, setStartDate] = useState("");
@@ -73,7 +76,7 @@ export function UserStoryManager() {
   const { paginatedItems: sprintStories, currentPage, setCurrentPage, totalItems, pageSize } = usePagination(filteredStories, { pageSize: 10 });
 
   const resetForm = () => {
-    setTitle(""); setDescription(""); setStoryPoints("3"); setPriority("media"); setEpicId("");
+    setTitle(""); setDescription(""); setSelectedSize(null); setPriority("media"); setEpicId("");
     setStartDate(""); setEndDate("");
     setCustomFieldValues({}); setErrors({}); setEditId(null);
   };
@@ -99,25 +102,30 @@ export function UserStoryManager() {
     if (!validate() || !activeSprint) return;
     setSubmitting(true);
     try {
+      const s = selectedSize ? getSizeByKey(selectedSize) : null;
+      const sizeData = s
+        ? { sizeReference: s.key, estimatedHours: s.hours, storyPoints: s.points }
+        : { storyPoints: 0 };
+
       if (editId) {
         await updateUserStory(editId, {
           title: title.trim(), description: description.trim(),
-          storyPoints: Number(storyPoints), priority,
+          ...sizeData, priority,
           epicId: epicId || undefined,
           customFields: customFieldValues,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
-        });
+        } as any);
         toast.success("Alterações salvas com sucesso");
       } else {
         await addUserStory({
           title: title.trim(), description: description.trim(),
-          storyPoints: Number(storyPoints), priority,
+          ...sizeData, priority,
           sprintId: activeSprint.id, epicId: epicId || undefined,
           customFields: customFieldValues,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
-        });
+        } as any);
         toast.success("Registro criado com sucesso");
       }
       resetForm();
@@ -135,7 +143,7 @@ export function UserStoryManager() {
     setEditId(hu.id);
     setTitle(hu.title);
     setDescription(hu.description);
-    setStoryPoints(String(hu.storyPoints));
+    setSelectedSize(hu.sizeReference || null);
     setPriority(hu.priority);
     setEpicId(hu.epicId || "");
     setStartDate(hu.startDate || "");
@@ -196,19 +204,9 @@ export function UserStoryManager() {
                 <Label>Descrição / Critérios de Aceite</Label>
                 <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Critérios de aceite, regras de negócio..." className="mt-1" rows={3} />
               </div>
+              <SizeSelector value={selectedSize} onChange={(s) => setSelectedSize(s?.key || null)} />
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Story Points <span className="text-destructive">*</span></Label>
-                  <Select value={storyPoints} onValueChange={setStoryPoints}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {[1, 2, 3, 5, 8, 13, 21].map((p) => (
-                        <SelectItem key={p} value={String(p)}>{p} pts</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
+                <div className="col-span-2">
                   <Label>Prioridade <span className="text-destructive">*</span></Label>
                   <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)}>
                     <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
@@ -402,7 +400,7 @@ export function UserStoryManager() {
                         </Badge>
                       )}
                       <Badge className={`${pInfo.color} text-xs`}>{pInfo.label}</Badge>
-                      <Badge variant="secondary" className="text-xs">{hu.storyPoints} pts</Badge>
+                      <SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} />
                       {statusCol && (
                         <Badge variant="secondary" className="text-[10px] gap-1">
                           <div className={`h-1.5 w-1.5 rounded-full ${statusCol.dotColor}`} />

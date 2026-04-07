@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { SizeBadge } from "@/components/SizeBadge";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { KanbanStatus, isHUOverdue, hasActiveImpediment, IMPEDIMENT_CRITICALITY_LABELS, UserStory } from "@/types/sprint";
@@ -358,7 +359,7 @@ function HUCard({
             </Badge>
           )}
           <Badge className={`text-[10px] px-1.5 ${PRIORITY_COLORS[hu.priority]}`}>{PRIORITY_LABELS[hu.priority]}</Badge>
-          <Badge variant="secondary" className="text-[10px] px-1.5">{hu.storyPoints} pts</Badge>
+          <SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} />
           {overdue && (
             <Badge variant="destructive" className="text-[10px] px-1.5 gap-0.5">
               <AlertTriangle className="h-2.5 w-2.5" /> Atrasada

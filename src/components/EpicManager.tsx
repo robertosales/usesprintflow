@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { SizeBadge } from "@/components/SizeBadge";
 import { useSprint } from "@/contexts/SprintContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -194,7 +195,7 @@ export function EpicManager() {
                                 {col.label}
                               </Badge>
                             )}
-                            <span className="text-muted-foreground">{hu.storyPoints} pts</span>
+                            <SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} />
                           </div>
                         );
                       })}
