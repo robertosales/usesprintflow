@@ -253,6 +253,11 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (hu.customFields !== undefined) updateData.custom_fields = hu.customFields;
     if (hu.startDate !== undefined) updateData.start_date = hu.startDate || null;
     if (hu.endDate !== undefined) updateData.end_date = hu.endDate || null;
+    if ((hu as any).sizeReference !== undefined) updateData.size_reference = (hu as any).sizeReference;
+    if ((hu as any).estimatedHours !== undefined) updateData.estimated_hours = (hu as any).estimatedHours;
+    if ((hu as any).planningStatus !== undefined) updateData.planning_status = (hu as any).planningStatus;
+    if ((hu as any).votedAt !== undefined) updateData.voted_at = (hu as any).votedAt;
+    if ((hu as any).votedBy !== undefined) updateData.voted_by = (hu as any).votedBy;
     const { error } = await supabase.from("user_stories").update(updateData).eq("id", id);
     if (error) { toast.error("Erro ao atualizar HU"); return; }
     await refreshAll();
