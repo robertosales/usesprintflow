@@ -16,6 +16,8 @@ import { TeamMembersManager } from "@/components/TeamMembersManager";
 import { UserRolesManager } from "@/components/UserRolesManager";
 import { DashboardHome } from "@/components/DashboardHome";
 import { CalendarView } from "@/components/CalendarView";
+import { PlanningPoker } from "@/components/PlanningPoker";
+import { RetroManager } from "@/components/RetroManager";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +27,8 @@ import { APP_NAME } from "@/lib/constants";
 import {
   LayoutDashboard, Users, ListTodo, Columns3, BarChart3, Zap, ShieldAlert,
   Layers, GitBranch, SlidersHorizontal, Wand2,
-  LogOut, Building2, UserCircle, UsersRound, ShieldCheck, CalendarDays, Home, Hexagon
+  LogOut, Building2, UserCircle, UsersRound, ShieldCheck, CalendarDays, Home, Hexagon,
+  Spade, MessageSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasActiveImpediment } from "@/types/sprint";
@@ -38,7 +41,7 @@ import {
   SidebarHeader, SidebarFooter, SidebarSeparator, useSidebar,
 } from "@/components/ui/sidebar";
 
-type NavKey = "dashboard" | "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "team" | "activities" | "kanban" | "impediments" | "metrics" | "workflow" | "custom-fields" | "automations" | "calendar";
+type NavKey = "dashboard" | "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "planning" | "team" | "activities" | "kanban" | "impediments" | "retro" | "metrics" | "workflow" | "custom-fields" | "automations" | "calendar";
 
 const NAV_PERMISSIONS: Partial<Record<NavKey, Permission>> = {
   teams: 'manage_teams',
