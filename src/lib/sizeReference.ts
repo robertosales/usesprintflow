@@ -8,7 +8,15 @@ export interface SizeReference {
   hours: number;
   pointsLabel: string;
 }
+export const SIZE_REFERENCES: SizeReference[] = [
+  { key: "P", label: "P", hours: 4 },
+  { key: "M", label: "M", hours: 6 },
+  { key: "G", label: "G", hours: 12 },
+  { key: "GG", label: "GG", hours: 16 },
+  { key: "XG", label: "XG", hours: 24 },
+];
 
+/*
 export const SIZE_REFERENCES: SizeReference[] = [
   { key: "P",  label: "P",  points: 1,  hours: 4,  pointsLabel: "1–2 pts" },
   { key: "M",  label: "M",  points: 3,  hours: 6,  pointsLabel: "3 pts" },
@@ -16,6 +24,7 @@ export const SIZE_REFERENCES: SizeReference[] = [
   { key: "GG", label: "GG", points: 13, hours: 16, pointsLabel: "13 pts" },
   { key: "XG", label: "XG", points: 21, hours: 24, pointsLabel: "21+ pts" },
 ];
+*/
 
 export function getSizeByKey(key: string | null | undefined): SizeReference | undefined {
   if (!key) return undefined;
