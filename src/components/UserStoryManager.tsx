@@ -401,7 +401,7 @@ export function UserStoryManager() {
                         </Badge>
                       )}
                       <Badge className={`${pInfo.color} text-xs`}>{pInfo.label}</Badge>
-                      <Badge variant="secondary" className="text-xs">{hu.storyPoints} pts</Badge>
+                      <SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} />
                       {statusCol && (
                         <Badge variant="secondary" className="text-[10px] gap-1">
                           <div className={`h-1.5 w-1.5 rounded-full ${statusCol.dotColor}`} />

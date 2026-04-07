@@ -194,7 +194,7 @@ export function EpicManager() {
                                 {col.label}
                               </Badge>
                             )}
-                            <span className="text-muted-foreground">{hu.storyPoints} pts</span>
+                            <SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} />
                           </div>
                         );
                       })}
