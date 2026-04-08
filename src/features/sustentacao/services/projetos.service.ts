@@ -37,3 +37,16 @@ export async function deleteProjeto(id: string) {
   const { error } = await supabase.from("projetos" as any).delete().eq("id", id);
   if (error) throw error;
 }
+
+export async function upsertProjetos(teamId: string, rows: Array<{ nome: string; descricao?: string; equipe?: string; sla?: string }>) {
+  for (const row of rows) {
+    const { error } = await supabase.from("projetos" as any).insert({
+      team_id: teamId,
+      nome: row.nome,
+      descricao: row.descricao || '',
+      equipe: row.equipe || '',
+      sla: row.sla || 'padrao',
+    } as any);
+    if (error) throw error;
+  }
+}
