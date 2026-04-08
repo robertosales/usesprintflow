@@ -522,7 +522,6 @@ export type Database = {
           hard_code_identificado: boolean | null
           id: string
           nota_satisfacao: number | null
-          ordem_servico: string | null
           originada_diagnostico: boolean
           prazo_inicio_atendimento: string | null
           prazo_solucao: string | null
@@ -553,7 +552,6 @@ export type Database = {
           hard_code_identificado?: boolean | null
           id?: string
           nota_satisfacao?: number | null
-          ordem_servico?: string | null
           originada_diagnostico?: boolean
           prazo_inicio_atendimento?: string | null
           prazo_solucao?: string | null
@@ -584,7 +582,6 @@ export type Database = {
           hard_code_identificado?: boolean | null
           id?: string
           nota_satisfacao?: number | null
-          ordem_servico?: string | null
           originada_diagnostico?: boolean
           prazo_inicio_atendimento?: string | null
           prazo_solucao?: string | null
@@ -1237,6 +1234,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "sprints_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sustentacao_workflow_steps: {
+        Row: {
+          ativo: boolean
+          cor: string
+          created_at: string
+          id: string
+          nome: string
+          ordem: number
+          team_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          cor?: string
+          created_at?: string
+          id?: string
+          nome: string
+          ordem?: number
+          team_id: string
+        }
+        Update: {
+          ativo?: boolean
+          cor?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          ordem?: number
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sustentacao_workflow_steps_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
