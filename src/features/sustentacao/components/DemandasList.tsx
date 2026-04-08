@@ -39,9 +39,7 @@ export function DemandasList() {
 
   const { paginatedItems, currentPage, setCurrentPage, totalPages, totalItems } = usePagination(filtered, { pageSize: 20 });
 
-  // If a demanda is selected, show the full-page detail view
   if (selected) {
-    // Find the latest version from the list after updates
     const current = demandas.find(d => d.id === selected.id) || selected;
     return (
       <DemandaDetail
@@ -93,7 +91,7 @@ export function DemandasList() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>RHM</TableHead>
+                  <TableHead>#</TableHead>
                   <TableHead>Projeto</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Situação</TableHead>
@@ -108,7 +106,7 @@ export function DemandasList() {
                     <TableCell>{d.projeto}</TableCell>
                     <TableCell><Badge variant="outline" className="capitalize text-[10px]">{d.tipo}</Badge></TableCell>
                     <TableCell><Badge className={`text-[10px] ${SITUACAO_COLORS[d.situacao] || ''}`}>{SITUACAO_LABELS[d.situacao] || d.situacao}</Badge></TableCell>
-                    <TableCell>{d.sla === '24x7' ? <Badge variant="destructive" className="text-[10px]">24x7</Badge> : <span className="text-xs text-muted-foreground">Padrão</span>}</TableCell>
+                    <TableCell>{d.sla === 'continuo' ? <Badge variant="destructive" className="text-[10px]">Contínuo</Badge> : <span className="text-xs text-muted-foreground">Padrão</span>}</TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>

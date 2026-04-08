@@ -1,5 +1,5 @@
 export type DemandaTipo = 'corretiva' | 'evolutiva';
-export type DemandaSLA = '24x7' | 'padrao';
+export type DemandaSLA = '24x7' | 'padrao' | 'continuo';
 
 export const SITUACOES_CORRETIVA = [
   'nova', 'execucao_dev', 'bloqueada', 'aguardando_retorno', 'teste',

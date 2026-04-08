@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -28,8 +27,8 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
   const { projetos, loading: loadingProjetos } = useProjetos();
   const [form, setForm] = useState({
     rhm: '', projeto: '', tipo: 'manutencao_corretiva', descricao: '',
-    sla: 'padrao', demandante: '', ordem_servico: '',
-    tipo_defeito: 'impeditivo', originada_diagnostico: false,
+    sla: 'padrao', demandante: '',
+    tipo_defeito: 'nao_impeditivo', originada_diagnostico: false,
     data_previsao_encerramento: null as Date | null,
   });
   const [loading, setLoading] = useState(false);
@@ -48,7 +47,7 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
   // Reset conditional fields when tipo changes away from corretiva
   useEffect(() => {
     if (!isCorretiva) {
-      setForm(p => ({ ...p, sla: 'padrao', tipo_defeito: 'impeditivo', originada_diagnostico: false }));
+      setForm(p => ({ ...p, sla: 'padrao', tipo_defeito: 'nao_impeditivo', originada_diagnostico: false }));
     }
   }, [isCorretiva]);
 
@@ -80,15 +79,15 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
     setDemandanteResults((data || []) as any[]);
   };
 
-  const rhmError = touched.rhm && !form.rhm.trim();
+  const rhmError = touched.rhm && (!form.rhm.trim() || !/^\d+$/.test(form.rhm.trim()));
   const projetoError = touched.projeto && !form.projeto;
   const demandanteError = touched.demandante && !selectedDemandante;
   const previsaoError = touched.data_previsao_encerramento && !form.data_previsao_encerramento;
 
   const handle = async () => {
     setTouched({ rhm: true, projeto: true, demandante: true, data_previsao_encerramento: true });
-    if (!form.rhm.trim() || !form.projeto || !selectedDemandante || !form.data_previsao_encerramento) {
-      toast.error("Preencha os campos obrigatórios: RHM, Projeto, Demandante e Data de Previsão.");
+    if (!form.rhm.trim() || !/^\d+$/.test(form.rhm.trim()) || !form.projeto || !selectedDemandante || !form.data_previsao_encerramento) {
+      toast.error("Preencha os campos obrigatórios: #, Projeto, Autor e Data de Previsão.");
       return;
     }
     setLoading(true);
@@ -102,14 +101,13 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
       descricao: form.descricao,
       sla: regime,
       demandante: selectedDemandante.id,
-      ordem_servico: form.ordem_servico || null,
       tipo_defeito: isCorretiva ? form.tipo_defeito : null,
       originada_diagnostico: isCorretiva ? form.originada_diagnostico : false,
       prazo_inicio_atendimento: calcPrazoInicio(dataInicio, form.tipo, regime, defeito)?.toISOString() || null,
       prazo_solucao: calcPrazoSolucao(dataInicio, form.tipo, regime, defeito)?.toISOString() || null,
       data_previsao_encerramento: form.data_previsao_encerramento ? format(form.data_previsao_encerramento, 'yyyy-MM-dd') : null,
     });
-    setForm({ rhm: '', projeto: '', tipo: 'manutencao_corretiva', descricao: '', sla: 'padrao', demandante: '', ordem_servico: '', tipo_defeito: 'impeditivo', originada_diagnostico: false, data_previsao_encerramento: null });
+    setForm({ rhm: '', projeto: '', tipo: 'manutencao_corretiva', descricao: '', sla: 'padrao', demandante: '', tipo_defeito: 'nao_impeditivo', originada_diagnostico: false, data_previsao_encerramento: null });
     setSelectedDemandante(null);
     setTouched({});
     setLoading(false);
@@ -121,12 +119,22 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
       <DialogContent className="max-w-2xl">
         <DialogHeader><DialogTitle className="text-base">Nova Demanda</DialogTitle></DialogHeader>
         <div className="space-y-2">
-          {/* LINHA 1: RHM + Projeto */}
+          {/* LINHA 1: # + Projeto */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-xs">RHM <span className="text-destructive">*</span></Label>
-              <Input value={form.rhm} onChange={e => setForm(p => ({ ...p, rhm: e.target.value }))} onBlur={() => markTouched('rhm')} placeholder="RHM-001" className={cn("h-8 text-sm", rhmError && 'border-destructive focus-visible:ring-destructive')} />
-              {rhmError && <p className="text-[11px] text-destructive mt-0.5">Campo obrigatório.</p>}
+              <Label className="text-xs"># <span className="text-destructive">*</span></Label>
+              <Input
+                value={form.rhm}
+                onChange={e => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  setForm(p => ({ ...p, rhm: val }));
+                }}
+                onBlur={() => markTouched('rhm')}
+                placeholder="81"
+                inputMode="numeric"
+                className={cn("h-8 text-sm", rhmError && 'border-destructive focus-visible:ring-destructive')}
+              />
+              {rhmError && <p className="text-[11px] text-destructive mt-0.5">Informe um número válido.</p>}
             </div>
             <div>
               <Label className="text-xs">Projeto <span className="text-destructive">*</span></Label>
@@ -141,11 +149,11 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
             </div>
           </div>
 
-          {/* LINHA 2: Data de Início + OS */}
+          {/* LINHA 2: Criado em */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-xs flex items-center gap-1">
-                Data de Início
+                Criado em
                 <span className="text-[9px] font-normal px-1 py-0.5 rounded bg-[#e8f2fa] text-[#1a6fa8]">automático</span>
               </Label>
               <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border bg-[#f5f8fb] text-xs">
@@ -153,14 +161,6 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
                 <span className="font-medium text-[#0f1e2d]">{format(dataInicio, "dd/MM/yyyy HH:mm")}</span>
               </div>
             </div>
-            <div>
-              <Label className="text-xs">Ordem de Serviço — OS</Label>
-              <Input value={form.ordem_servico} onChange={e => setForm(p => ({ ...p, ordem_servico: e.target.value }))} placeholder="Nº da OS (opcional)" className="h-8 text-sm" />
-            </div>
-          </div>
-
-          {/* LINHA 3: Tipo + Demandante */}
-          <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-xs">Tipo</Label>
               <Select value={form.tipo} onValueChange={v => setForm(p => ({ ...p, tipo: v, data_previsao_encerramento: null }))}>
@@ -170,8 +170,12 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* LINHA 3: Autor */}
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-xs">Demandante <span className="text-destructive">*</span></Label>
+              <Label className="text-xs">Autor <span className="text-destructive">*</span></Label>
               {selectedDemandante ? (
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-medium bg-muted px-2 py-1 rounded">{selectedDemandante.display_name}</span>
@@ -196,8 +200,9 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
                   )}
                 </div>
               )}
-              {demandanteError && <p className="text-[11px] text-destructive mt-0.5">Selecione um demandante.</p>}
+              {demandanteError && <p className="text-[11px] text-destructive mt-0.5">Selecione um autor.</p>}
             </div>
+            <div /> {/* Empty space where OS was */}
           </div>
 
           {/* BLOCO CONDICIONAL — Manutenção Corretiva */}
@@ -218,11 +223,27 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">Tipo de Defeito</Label>
-                  <RadioGroup value={form.tipo_defeito} onValueChange={v => setForm(p => ({ ...p, tipo_defeito: v, data_previsao_encerramento: null }))} className="flex gap-3 mt-1.5">
-                    <div className="flex items-center gap-1"><RadioGroupItem value="impeditivo" id="imp" /><Label htmlFor="imp" className="font-normal text-xs">Impeditivo</Label></div>
-                    <div className="flex items-center gap-1"><RadioGroupItem value="nao_impeditivo" id="nimp" /><Label htmlFor="nimp" className="font-normal text-xs">Não impeditivo</Label></div>
-                  </RadioGroup>
+                  <Label className="text-xs">Defeito Impeditivo</Label>
+                  <div className="flex gap-1 mt-1.5">
+                    <Button
+                      type="button"
+                      variant={form.tipo_defeito === 'impeditivo' ? 'default' : 'outline'}
+                      size="sm"
+                      className={cn("h-7 text-xs flex-1", form.tipo_defeito === 'impeditivo' && 'bg-info hover:bg-info/90 text-info-foreground')}
+                      onClick={() => setForm(p => ({ ...p, tipo_defeito: 'impeditivo', data_previsao_encerramento: null }))}
+                    >
+                      Sim
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={form.tipo_defeito === 'nao_impeditivo' ? 'default' : 'outline'}
+                      size="sm"
+                      className={cn("h-7 text-xs flex-1", form.tipo_defeito === 'nao_impeditivo' && 'bg-info hover:bg-info/90 text-info-foreground')}
+                      onClick={() => setForm(p => ({ ...p, tipo_defeito: 'nao_impeditivo', data_previsao_encerramento: null }))}
+                    >
+                      Não
+                    </Button>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
@@ -275,9 +296,9 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
             </div>
           </div>
 
-          {/* Descrição */}
+          {/* Título (ex-Descrição) */}
           <div>
-            <Label className="text-xs">Descrição</Label>
+            <Label className="text-xs">Título</Label>
             <Textarea value={form.descricao} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))} rows={2} className="text-sm resize-none" />
           </div>
         </div>

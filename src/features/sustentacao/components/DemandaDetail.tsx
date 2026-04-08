@@ -517,7 +517,7 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Descrição</Label>
+                         <Label className="text-sm font-medium">Título</Label>
                         <Textarea value={editForm.descricao} onChange={e => setEditForm(p => ({ ...p, descricao: e.target.value }))} rows={6} className="mt-1" />
                       </div>
                     </div>
@@ -526,7 +526,7 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
                   <div className="grid md:grid-cols-2 gap-5">
                     <Card className="shadow-none">
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Descrição</CardTitle>
+                        <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Título</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-sm leading-relaxed">{demanda.descricao || 'Sem descrição informada.'}</p>
@@ -543,16 +543,12 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
                           <span className="text-muted-foreground">Tipo</span>
                           <span className="font-medium text-right">{getTipoLabel(demanda.tipo)}</span>
                           <span className="text-muted-foreground">Regime</span>
-                          <span className="font-medium text-right">{String(demanda.sla) === 'continuo' ? 'Contínuo' : String(demanda.sla) === '24x7' ? '24x7' : 'Padrão'}</span>
-                          <span className="text-muted-foreground">Data de Início</span>
+                          <span className="font-medium text-right">{String(demanda.sla) === 'continuo' ? 'Contínuo' : String(demanda.sla) === '24x7' ? 'Contínuo' : 'Padrão'}</span>
+                          <span className="text-muted-foreground">Criado em</span>
                           <span className="font-medium text-right">{new Date(demanda.created_at).toLocaleString('pt-BR')}</span>
                           {demandanteProfile && (<>
-                            <span className="text-muted-foreground">Demandante</span>
+                            <span className="text-muted-foreground">Autor</span>
                             <span className="font-medium text-right">{demandanteProfile}</span>
-                          </>)}
-                          {demanda.ordem_servico && (<>
-                            <span className="text-muted-foreground">OS Vinculada</span>
-                            <span className="font-medium text-right">{demanda.ordem_servico}</span>
                           </>)}
                           <span className="text-muted-foreground">Prazo Máx. Início</span>
                           <span className="font-medium text-right">
