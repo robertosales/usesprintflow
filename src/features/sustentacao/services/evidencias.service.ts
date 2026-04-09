@@ -85,7 +85,7 @@ export const EVIDENCIAS_OBRIGATORIAS: Record<string, string[]> = {
 // Evidências condicionais por tipo de demanda
 export const EVIDENCIAS_CONDICIONAIS: Record<string, Record<string, string[]>> = {
   evolutiva: {
-    //execucao_dev: ['Script de banco de dados (se aplicável)'],
+    execucao_dev: ['Script de banco de dados (se aplicável)'],
     producao: ['Log de deploy / evidência de publicação'],
   },
 };
