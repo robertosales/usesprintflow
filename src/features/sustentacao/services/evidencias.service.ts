@@ -74,18 +74,24 @@ export async function getEvidenciaSignedUrl(filePath: string): Promise<string | 
   return data.signedUrl;
 }
 
-// Evidências obrigatórias por fase
+// Evolution 8: Single evidence rule
+// Evidence is required ONLY when advancing TO "planejamento" (PLANEJAMENTO: EM ELABORAÇÃO)
+// The check is: current status must have at least 1 evidence before moving to "planejamento"
 export const EVIDENCIAS_OBRIGATORIAS: Record<string, string[]> = {
-  nova: ['Evidência do erro / solicitação'],
-  teste: ['Registro de testes realizados'],
-  aguardando_homologacao: ['Validação em homologação'],
-  aceite_final: ['Aceite final do cliente'],
+  nova: ['Evidência da solicitação / erro'],
 };
 
-// Evidências condicionais por tipo de demanda
-export const EVIDENCIAS_CONDICIONAIS: Record<string, Record<string, string[]>> = {
-  evolutiva: {
-    execucao_dev: ['Script de banco de dados (se aplicável)'],
-    producao: ['Log de deploy / evidência de publicação'],
-  },
-};
+// No conditional evidence rules
+export const EVIDENCIAS_CONDICIONAIS: Record<string, Record<string, string[]>> = {};
+
+/**
+ * Check if moving FROM currentStatus TO targetStatus requires evidence.
+ * Returns true if evidence is needed and missing.
+ */
+export function requiresEvidenceForTransition(
+  _currentStatus: string,
+  targetStatus: string
+): boolean {
+  // Only require evidence when moving TO "planejamento"
+  return targetStatus === 'planejamento';
+}
