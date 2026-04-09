@@ -968,6 +968,7 @@ export type Database = {
           id: string
           nome: string
           sla: string
+          sla_id: string | null
           team_id: string
           updated_at: string
         }
@@ -978,6 +979,7 @@ export type Database = {
           id?: string
           nome: string
           sla?: string
+          sla_id?: string | null
           team_id: string
           updated_at?: string
         }
@@ -988,10 +990,18 @@ export type Database = {
           id?: string
           nome?: string
           sla?: string
+          sla_id?: string | null
           team_id?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "projetos_sla_id_fkey"
+            columns: ["sla_id"]
+            isOneToOne: false
+            referencedRelation: "slas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "projetos_team_id_fkey"
             columns: ["team_id"]
@@ -1196,6 +1206,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      slas: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string
+          regime_base: string
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome: string
+          regime_base?: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string
+          regime_base?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       sprints: {
         Row: {
