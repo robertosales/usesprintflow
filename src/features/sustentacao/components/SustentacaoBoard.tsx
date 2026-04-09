@@ -101,12 +101,12 @@ export function SustentacaoBoard() {
       return { error: `Movimentação não permitida: apenas avanço sequencial é permitido.` };
     }
 
-    const required = EVIDENCIAS_OBRIGATORIAS[demanda.situacao] || [];
-    if (required.length > 0) {
+    // Evolution 8: Evidence required ONLY when moving TO "planejamento"
+    if (targetStatus === 'planejamento') {
       const key = `${demanda.id}:${demanda.situacao}`;
       const count = evidenceCache[key] || 0;
       if (count === 0) {
-        return { evidenceMissing: required };
+        return { evidenceMissing: ['É obrigatório anexar ao menos uma evidência antes de avançar para Planejamento: Em Elaboração. Abra a demanda e acesse a aba \'Evidências\'.'] };
       }
     }
 

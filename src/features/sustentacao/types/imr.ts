@@ -54,10 +54,12 @@ export interface PrazoRegra {
 
 // Key format: tipo or tipo_regime_defeito for corretivas
 export const PRAZOS_IMR: Record<string, PrazoRegra> = {
-  'manutencao_corretiva_padrao_impeditivo': { inicio: 4, unidadeInicio: 'hu', solucao: 72, unidadeSolucao: 'hu' },
-  'manutencao_corretiva_padrao_nao_impeditivo': { inicio: 8, unidadeInicio: 'hu', solucao: 96, unidadeSolucao: 'hu' },
-  'manutencao_corretiva_continuo_impeditivo': { inicio: 0.5, unidadeInicio: 'h', solucao: 9, unidadeSolucao: 'h' },
-  'manutencao_corretiva_continuo_nao_impeditivo': { inicio: 2, unidadeInicio: 'h', solucao: 24, unidadeSolucao: 'h' },
+  // Manutenção Corretiva (values from IMR contract)
+  'manutencao_corretiva_padrao_impeditivo': { inicio: 4, unidadeInicio: 'hu', solucao: 76, unidadeSolucao: 'hu' },
+  'manutencao_corretiva_padrao_nao_impeditivo': { inicio: 8, unidadeInicio: 'hu', solucao: 104, unidadeSolucao: 'hu' },
+  'manutencao_corretiva_continuo_impeditivo': { inicio: 0.5, unidadeInicio: 'h', solucao: 9.5, unidadeSolucao: 'h' },
+  'manutencao_corretiva_continuo_nao_impeditivo': { inicio: 2, unidadeInicio: 'h', solucao: 26, unidadeSolucao: 'h' },
+  // Demais tipos (inicio em du, solução em du ou N/D)
   'analise_viabilidade': { inicio: 2, unidadeInicio: 'du', solucao: 3, unidadeSolucao: 'du' },
   'apuracao_registro_simples': { inicio: 1, unidadeInicio: 'du', solucao: 1, unidadeSolucao: 'du' },
   'apuracao_relatorio_bd': { inicio: 2, unidadeInicio: 'du', solucao: 3, unidadeSolucao: 'du' },
@@ -68,17 +70,19 @@ export const PRAZOS_IMR: Record<string, PrazoRegra> = {
   'evolutiva_pequeno_porte_emergencial': { inicio: 2, unidadeInicio: 'du', solucao: 'os', unidadeSolucao: 'os' },
   'evolutiva_pequeno_porte': { inicio: 5, unidadeInicio: 'du', solucao: 'os', unidadeSolucao: 'os' },
   'manutencao_preventiva': { inicio: 5, unidadeInicio: 'du', solucao: 'os', unidadeSolucao: 'os' },
-  'testes_nao_funcionais': { inicio: 3, unidadeInicio: 'du', solucao: 'os', unidadeSolucao: 'os' },
   'homologacao_assistida': { inicio: 3, unidadeInicio: 'du', solucao: 'os', unidadeSolucao: 'os' },
-  'documentacao_legado': { inicio: 5, unidadeInicio: 'du', solucao: 'os', unidadeSolucao: 'os' },
-  'suporte_especialista': { inicio: 5, unidadeInicio: 'du', solucao: 'os', unidadeSolucao: 'os' },
-  'atualizacao_arquitetura': { inicio: 5, unidadeInicio: 'du', solucao: 'os', unidadeSolucao: 'os' },
-  'apoio_operacional': { inicio: 10, unidadeInicio: 'du', solucao: 'os', unidadeSolucao: 'os' },
-  'assessoria_ux_ui': { inicio: 10, unidadeInicio: 'du', solucao: 'os', unidadeSolucao: 'os' },
+  'documentacao_legado': { inicio: 5, unidadeInicio: 'du', solucao: 60, unidadeSolucao: 'du' },
+  'suporte_especialista': { inicio: 5, unidadeInicio: 'du', solucao: 30, unidadeSolucao: 'du' },
+  'suporte_especialista_consultor': { inicio: 5, unidadeInicio: 'du', solucao: 30, unidadeSolucao: 'du' },
+  'atualizacao_arquitetura': { inicio: 5, unidadeInicio: 'du', solucao: 20, unidadeSolucao: 'du' },
+  'testes_nao_funcionais': { inicio: 3, unidadeInicio: 'du', solucao: 30, unidadeSolucao: 'du' },
+  'apoio_operacional': { inicio: 10, unidadeInicio: 'du', solucao: 30, unidadeSolucao: 'du' },
+  'assessoria_ux_ui': { inicio: 10, unidadeInicio: 'du', solucao: 30, unidadeSolucao: 'du' },
   'mapeamento_design_thinking': { inicio: 10, unidadeInicio: 'du', solucao: 'os', unidadeSolucao: 'os' },
-  'modelagem_processos': { inicio: 10, unidadeInicio: 'du', solucao: 'os', unidadeSolucao: 'os' },
-  'treinamento_usuarios': { inicio: 10, unidadeInicio: 'du', solucao: 'os', unidadeSolucao: 'os' },
-  'planejamento_produto': { inicio: 15, unidadeInicio: 'du', solucao: 'os', unidadeSolucao: 'os' },
+  'modelagem_processos': { inicio: 10, unidadeInicio: 'du', solucao: 30, unidadeSolucao: 'du' },
+  'treinamento_usuarios': { inicio: 10, unidadeInicio: 'du', solucao: 30, unidadeSolucao: 'du' },
+  'planejamento_produto': { inicio: 15, unidadeInicio: 'du', solucao: 30, unidadeSolucao: 'du' },
+  'migracao_dados': { inicio: 0, unidadeInicio: 'du', solucao: 30, unidadeSolucao: 'du' },
 };
 
 export function getPrazoKey(tipo: string, regime?: string, tipoDefeito?: string): string {

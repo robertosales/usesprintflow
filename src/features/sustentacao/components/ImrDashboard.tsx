@@ -9,8 +9,9 @@ import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { calcIAP, calcIQS, calcICT, calcISS, calcGlosasSummary, detectE8Alerts } from "../utils/imrCalculations";
 import type { DemandaIMR, DemandaEvento } from "../utils/imrCalculations";
 import { INDICADORES_GRUPO2, getIndicadorFaixa, EVENTOS_CONFIG } from "../types/imr";
+import { getCurrentIAPPeriod, getIAPPeriodOptions, getIAPGlosa, countAtraso60Dias } from "../utils/slaEngine";
 import * as eventosSvc from "../services/eventos.service";
-import { Target, Shield, TestTube, Star, AlertTriangle, TrendingUp, DollarSign } from "lucide-react";
+import { Target, Shield, TestTube, Star, AlertTriangle, TrendingUp, DollarSign, Clock } from "lucide-react";
 
 const INDICATOR_ICONS: Record<string, any> = {
   IAP: Target, IQS: Shield, ICT: TestTube, ISS: Star,
@@ -39,7 +40,23 @@ export function ImrDashboard() {
   const { projetos } = useProjetos();
   const { currentTeamId } = useAuth();
   const [eventos, setEventos] = useState<DemandaEvento[]>([]);
-  const [filterPeriodo, setFilterPeriodo] = useState('30');
+
+  // IAP period selection
+  const periodOptions = useMemo(() => getIAPPeriodOptions(6), []);
+  const currentPeriod = useMemo(() => getCurrentIAPPeriod(), []);
+  const [selectedPeriod, setSelectedPeriod] = useState(() => {
+    const now = new Date();
+    const day = now.getDate();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+    if (day >= 11) return `${year}-${String(month).padStart(2, '0')}`;
+    if (month === 1) return `${year - 1}-12`;
+    return `${year}-${String(month - 1).padStart(2, '0')}`;
+  });
+
+  const activePeriod = useMemo(() => {
+    return periodOptions.find(p => p.value === selectedPeriod) || periodOptions[0];
+  }, [selectedPeriod, periodOptions]);
 
   const loadEventos = useCallback(async () => {
     if (!currentTeamId) return;
@@ -51,23 +68,39 @@ export function ImrDashboard() {
 
   useEffect(() => { loadEventos(); }, [loadEventos]);
 
+  // Filter demandas by IAP period (concluded within period)
   const filtered = useMemo(() => {
-    let items = demandas as unknown as DemandaIMR[];
-    if (filterPeriodo !== 'all') {
-      const days = parseInt(filterPeriodo);
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - days);
-      items = items.filter(d => new Date(d.created_at) >= cutoff);
-    }
-    return items;
-  }, [demandas, filterPeriodo]);
+    const items = demandas as unknown as DemandaIMR[];
+    if (!activePeriod) return items;
+    return items.filter(d => {
+      const created = new Date(d.created_at);
+      return created >= activePeriod.start && created <= activePeriod.end;
+    });
+  }, [demandas, activePeriod]);
 
-  const iap = useMemo(() => calcIAP(filtered), [filtered]);
+  // IAP: only concluded demandas within the period
+  const iapFiltered = useMemo(() => {
+    const items = demandas as unknown as DemandaIMR[];
+    if (!activePeriod) return items;
+    return items.filter(d => {
+      if (d.situacao !== 'aceite_final') return false;
+      const aceite = d.aceite_data ? new Date(d.aceite_data) : new Date(d.updated_at);
+      return aceite >= activePeriod.start && aceite <= activePeriod.end;
+    });
+  }, [demandas, activePeriod]);
+
+  const iap = useMemo(() => calcIAP(iapFiltered), [iapFiltered]);
   const iqs = useMemo(() => calcIQS(filtered), [filtered]);
   const ict = useMemo(() => calcICT(filtered), [filtered]);
   const iss = useMemo(() => calcISS(filtered), [filtered]);
   const glosas = useMemo(() => calcGlosasSummary(eventos), [eventos]);
-  const e8Alerts = useMemo(() => detectE8Alerts(filtered), [filtered]);
+  const e8Alerts = useMemo(() => detectE8Alerts(demandas as unknown as DemandaIMR[]), [demandas]);
+
+  // Evolution 7: >60 days count
+  const atraso60 = useMemo(() => countAtraso60Dias(demandas as any), [demandas]);
+  const glosa60 = atraso60.count * 0.2;
+  const iapGlosa = getIAPGlosa(iap.valor);
+  const glosaTotalCalc = iapGlosa + glosa60;
 
   if (loading) return <SkeletonList count={4} />;
 
@@ -85,6 +118,8 @@ export function ImrDashboard() {
     ISS: `${iss.total} demandas avaliadas`,
   };
 
+  const e8GlosaCount = e8Alerts.filter(a => a.tipo === 'glosa').length;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -93,15 +128,22 @@ export function ImrDashboard() {
           <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Indicadores Grupo 2 — IMR</h3>
           <p className="text-xs text-muted-foreground">Instrumento de Medição de Resultados</p>
         </div>
-        <Select value={filterPeriodo} onValueChange={setFilterPeriodo}>
-          <SelectTrigger className="w-[150px] h-9"><SelectValue /></SelectTrigger>
+        <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+          <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="30">Últimos 30 dias</SelectItem>
-            <SelectItem value="90">Últimos 90 dias</SelectItem>
-            <SelectItem value="all">Todos</SelectItem>
+            {periodOptions.map(p => (
+              <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
+
+      {/* Period info */}
+      {activePeriod && (
+        <div className="text-xs text-muted-foreground px-1">
+          Período de apuração: {activePeriod.start.toLocaleDateString('pt-BR')} — {activePeriod.end.toLocaleDateString('pt-BR')}
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -125,6 +167,11 @@ export function ImrDashboard() {
                       {!hasData ? 'N/A' : ind.sigla === 'ISS' ? valor.toFixed(1) : `${valor.toFixed(1)}%`}
                     </p>
                     <p className="text-[10px] text-muted-foreground">Meta: ≥ {ind.meta}{ind.unidade}</p>
+                    {ind.sigla === 'IAP' && activePeriod && (
+                      <p className="text-[10px] text-muted-foreground italic">
+                        Período: {activePeriod.label}
+                      </p>
+                    )}
                     {hasData && faixa.glosa > 0 && (
                       <Badge variant="destructive" className="text-[10px]">Glosa: {faixa.glosa}%</Badge>
                     )}
@@ -140,7 +187,26 @@ export function ImrDashboard() {
         })}
       </div>
 
-      {/* Alertas E8 & Eventos */}
+      {/* SLA Section with >60 days card */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* >60 days card (Evolution 7) */}
+        <Card className={atraso60.count > 0 ? 'border-destructive/30' : ''}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Atraso &gt; 60 dias</p>
+                <p className={`text-2xl font-bold mt-1 ${atraso60.count > 0 ? 'text-destructive' : ''}`}>{atraso60.count}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">demandas em atraso crítico</p>
+              </div>
+              <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${atraso60.count > 0 ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>
+                <Clock className="h-5 w-5" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Alertas E8 & Glosa Summary */}
       <div className="grid md:grid-cols-2 gap-6">
         {/* Alertas */}
         <Card>
@@ -162,10 +228,15 @@ export function ImrDashboard() {
                 </div>
               </div>
             ))}
+            {e8GlosaCount > 0 && (
+              <div className="mt-2 p-2 rounded-lg bg-destructive/5 border border-destructive/20 text-xs text-destructive font-medium">
+                ⚠ {e8GlosaCount} demanda(s) ultrapassaram 60 dias.
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Glosa Summary */}
+        {/* Glosa Summary (Evolution 7 — updated layout) */}
         <Card>
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
@@ -173,16 +244,21 @@ export function ImrDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className={`p-3 rounded-lg border ${glosas.totalIntegral > 0 ? 'border-destructive/30 bg-destructive/5' : 'border-border'}`}>
-                <p className="text-[10px] text-muted-foreground uppercase font-semibold">Glosa Integral</p>
-                <p className={`text-xl font-bold ${glosas.totalIntegral > 0 ? 'text-destructive' : ''}`}>{glosas.totalIntegral.toFixed(2)}%</p>
-                <p className="text-[10px] text-muted-foreground">Sobre toda a fatura</p>
+            {/* IAP + >60 + Total row */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className={`p-3 rounded-lg border ${iapGlosa > 0 ? 'border-destructive/30 bg-destructive/5' : 'border-border'}`}>
+                <p className="text-[10px] text-muted-foreground uppercase font-semibold">Glosa IAP</p>
+                <p className={`text-xl font-bold ${iapGlosa > 0 ? 'text-destructive' : ''}`}>{iapGlosa.toFixed(2)}%</p>
+                <p className="text-[10px] text-muted-foreground">IAP: {iap.qdtot > 0 ? `${iap.valor.toFixed(1)}%` : 'N/A'}</p>
               </div>
-              <div className={`p-3 rounded-lg border ${glosas.totalLimitada > 0 ? 'border-orange-400/30 bg-orange-50' : 'border-border'}`}>
-                <p className="text-[10px] text-muted-foreground uppercase font-semibold">Glosa Limitada</p>
-                <p className={`text-xl font-bold ${glosas.totalLimitada > 0 ? 'text-orange-600' : ''}`}>{glosas.totalLimitada.toFixed(2)}%</p>
-                <p className="text-[10px] text-muted-foreground">Sobre fatura do Grupo 2</p>
+              <div className={`p-3 rounded-lg border ${glosa60 > 0 ? 'border-destructive/30 bg-destructive/5' : 'border-border'}`}>
+                <p className="text-[10px] text-muted-foreground uppercase font-semibold">Glosa +60</p>
+                <p className={`text-xl font-bold ${glosa60 > 0 ? 'text-destructive' : ''}`}>{glosa60.toFixed(2)}%</p>
+                <p className="text-[10px] text-muted-foreground">{atraso60.count} demandas</p>
+              </div>
+              <div className={`p-3 rounded-lg border ${glosaTotalCalc > 0 ? 'border-destructive/30 bg-destructive/5' : 'border-border'}`}>
+                <p className="text-[10px] text-muted-foreground uppercase font-semibold">Glosa Total</p>
+                <p className={`text-xl font-bold ${glosaTotalCalc > 0 ? 'text-destructive' : ''}`}>{glosaTotalCalc.toFixed(2)}%</p>
               </div>
             </div>
 
