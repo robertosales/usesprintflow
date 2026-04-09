@@ -36,7 +36,7 @@ interface Props {
 
 const STEPPER_STEPS = ['nova', 'execucao_dev', 'teste', 'aguardando_homologacao', 'producao', 'aceite_final'];
 const STEPPER_LABELS: Record<string, string> = {
-  nova: 'Nova', execucao_dev: 'Execução / Dev', teste: 'Teste',
+  nova: 'Nova', execucao_dev: 'Execução', teste: 'Teste',
   aguardando_homologacao: 'Homologação', producao: 'Produção', aceite_final: 'Aceite Final',
 };
 

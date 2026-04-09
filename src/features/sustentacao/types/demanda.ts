@@ -23,7 +23,7 @@ export const SITUACAO_LABELS: Record<string, string> = {
   planejamento: 'Planejamento',
   envio_aprovacao: 'Envio Aprovação',
   planejamento_aprovado: 'Planejamento Aprovado',
-  execucao_dev: 'Execução Dev',
+  execucao_dev: 'Execução',
   bloqueada: 'Bloqueada',
   aguardando_retorno: 'Aguardando Retorno',
   teste: 'Teste',
