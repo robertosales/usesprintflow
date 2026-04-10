@@ -37,9 +37,9 @@ export function ProjetosManager() {
   const [form, setForm] = useState({ nome: '', descricao: '', equipe: '', sla: 'padrao', sla_id: '' });
 
   useEffect(() => {
-    if (!selectedTeam) return;
-    ensureDefaultSLAs(selectedTeam.id).then(setSlas).catch(() => {});
-  }, [selectedTeam]);
+    if (!currentTeamId) return;
+    ensureDefaultSLAs(currentTeamId).then(setSlas).catch(() => {});
+  }, [currentTeamId]);
 
   const slaMap = useMemo(() => {
     const m: Record<string, SLA> = {};
