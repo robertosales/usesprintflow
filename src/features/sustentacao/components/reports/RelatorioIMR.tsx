@@ -83,6 +83,7 @@ export function RelatorioIMR() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ReportFilters periodo={filterPeriodo} setPeriodo={setFilterPeriodo} showAnalista={false} teamId={teamId} setTeamId={setTeamId} />
+        </div>
         <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5"><Download className="h-4 w-4" />Exportar CSV</Button>
       </div>
 
