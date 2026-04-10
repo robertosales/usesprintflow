@@ -11,6 +11,7 @@ import { INDICADORES_GRUPO2, getIndicadorFaixa, EVENTOS_CONFIG } from "../../typ
 import * as eventosSvc from "../../services/eventos.service";
 import { REPORT_CONFIGS } from "../../utils/reportConfig";
 import { ReportHeader } from "./ReportHeader";
+import { ReportFilters } from "./ReportFilters";
 import { Download } from "lucide-react";
 
 export function RelatorioIMR() {
