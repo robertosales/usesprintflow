@@ -96,7 +96,12 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
   const [activeTab, setActiveTab] = useState(initialTab || 'detalhes');
   const [pendingTarget, setPendingTarget] = useState<string | undefined>(pendingMoveTarget);
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ projeto: '', tipo: '', descricao: '', sla: '' });
+  const [editForm, setEditForm] = useState({
+    projeto: '', tipo: '', descricao: '', sla: '', rhm: '',
+    tipo_defeito: '' as string | null, originada_diagnostico: false,
+    data_previsao_encerramento: '' as string | null,
+    demandante: '' as string | null,
+  });
 
   const [newStatus, setNewStatus] = useState('');
   const [justificativa, setJustificativa] = useState('');
