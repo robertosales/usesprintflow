@@ -182,12 +182,12 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
   const currentFaseIdx = EVIDENCIA_FASES.indexOf(demanda.situacao);
   const allowedEvidFases = currentFaseIdx >= 0 ? EVIDENCIA_FASES.slice(0, currentFaseIdx + 1) : EVIDENCIA_FASES;
 
+  // Ev. 8: Evidência obrigatória apenas ao avançar para "planejamento"
   const getMissingEvidencias = (targetStatus: string): string[] => {
-    const required = evidSvc.EVIDENCIAS_OBRIGATORIAS[demanda.situacao] || [];
-    if (required.length === 0) return [];
+    if (targetStatus !== 'planejamento') return [];
     const faseEvidencias = evidencias.filter(e => e.fase === demanda.situacao);
-    if (faseEvidencias.length >= required.length) return [];
-    return required;
+    if (faseEvidencias.length > 0) return [];
+    return ['É obrigatório anexar ao menos uma evidência antes de avançar para Planejamento: Em Elaboração.'];
   };
 
   const startEdit = () => {

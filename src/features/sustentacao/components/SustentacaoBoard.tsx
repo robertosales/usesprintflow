@@ -103,9 +103,13 @@ export function SustentacaoBoard() {
 
     // Evolution 8: Evidence required ONLY when moving TO "planejamento"
     if (targetStatus === 'planejamento') {
+      // Check if demanda has ANY evidence for its current phase
       const key = `${demanda.id}:${demanda.situacao}`;
       const count = evidenceCache[key] || 0;
-      if (count === 0) {
+      // Also check if demanda has any evidence at all (fallback)
+      const totalKey = Object.keys(evidenceCache).filter(k => k.startsWith(`${demanda.id}:`));
+      const totalCount = totalKey.reduce((sum, k) => sum + (evidenceCache[k] || 0), 0);
+      if (count === 0 && totalCount === 0) {
         return { evidenceMissing: ['É obrigatório anexar ao menos uma evidência antes de avançar para Planejamento: Em Elaboração. Abra a demanda e acesse a aba \'Evidências\'.'] };
       }
     }
