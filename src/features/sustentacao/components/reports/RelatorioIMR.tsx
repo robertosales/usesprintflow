@@ -18,6 +18,7 @@ export function RelatorioIMR() {
   const { currentTeamId, profile } = useAuth();
   const [eventos, setEventos] = useState<DemandaEvento[]>([]);
   const [filterPeriodo, setFilterPeriodo] = useState('30');
+  const [teamId, setTeamId] = useState('all');
 
   const loadEventos = useCallback(async () => {
     if (!currentTeamId) return;
@@ -28,13 +29,14 @@ export function RelatorioIMR() {
 
   const filtered = useMemo(() => {
     let items = demandas as unknown as DemandaIMR[];
+    if (teamId !== 'all') items = items.filter(d => d.team_id === teamId);
     if (filterPeriodo !== 'all') {
       const days = parseInt(filterPeriodo);
       const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
       items = items.filter(d => new Date(d.created_at) >= cutoff);
     }
     return items;
-  }, [demandas, filterPeriodo]);
+  }, [demandas, filterPeriodo, teamId]);
 
   const iap = useMemo(() => calcIAP(filtered), [filtered]);
   const iqs = useMemo(() => calcIQS(filtered), [filtered]);

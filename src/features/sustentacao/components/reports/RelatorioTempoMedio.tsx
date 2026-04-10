@@ -21,23 +21,26 @@ export function RelatorioTempoMedio() {
   const profiles = useProfiles();
   const [periodo, setPeriodo] = useState('30');
   const [analista, setAnalista] = useState('all');
+  const [teamId, setTeamId] = useState('all');
 
   const filtered = useMemo(() => {
     let items = demandas;
+    if (teamId !== 'all') {
+      items = items.filter(d => d.team_id === teamId);
+    }
     if (periodo !== 'all') {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - parseInt(periodo));
       items = items.filter(d => new Date(d.created_at) >= cutoff);
     }
     if (analista !== 'all') {
-      // Filter by responsavel_dev OR by transitions performed by the analyst
       const demandaIdsFromTransitions = new Set(
         transitions.filter(t => t.user_id === analista).map(t => t.demanda_id)
       );
       items = items.filter(d => d.responsavel_dev === analista || demandaIdsFromTransitions.has(d.id));
     }
     return items;
-  }, [demandas, periodo, analista, transitions]);
+  }, [demandas, periodo, analista, transitions, teamId]);
 
   const tempos = useMemo(() => calcTempos(filtered, transitions), [filtered, transitions]);
 
@@ -114,7 +117,7 @@ export function RelatorioTempoMedio() {
           <p className="text-sm text-muted-foreground">{reportCfg.subtitulo}</p>
         </div>
         <div className="flex items-center gap-2">
-          <ReportFilters periodo={periodo} setPeriodo={setPeriodo} analista={analista} setAnalista={setAnalista} analistas={analistas} />
+          <ReportFilters periodo={periodo} setPeriodo={setPeriodo} analista={analista} setAnalista={setAnalista} analistas={analistas} teamId={teamId} setTeamId={setTeamId} />
           <ExportButton getData={getExportData} />
         </div>
       </div>

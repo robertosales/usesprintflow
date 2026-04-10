@@ -18,16 +18,18 @@ export function RelatorioProdutividade() {
   const profiles = useProfiles();
   const [periodo, setPeriodo] = useState('30');
   const [analista, setAnalista] = useState('all');
+  const [teamId, setTeamId] = useState('all');
 
   const filtered = useMemo(() => {
     let items = demandas;
+    if (teamId !== 'all') items = items.filter(d => d.team_id === teamId);
     if (periodo !== 'all') {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - parseInt(periodo));
       items = items.filter(d => new Date(d.created_at) >= cutoff);
     }
     return items;
-  }, [demandas, periodo]);
+  }, [demandas, periodo, teamId]);
 
   const filteredHours = useMemo(() => {
     if (periodo === 'all') return hours;

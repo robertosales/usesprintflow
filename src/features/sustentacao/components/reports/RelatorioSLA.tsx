@@ -19,9 +19,11 @@ export function RelatorioSLA() {
   const profiles = useProfiles();
   const [periodo, setPeriodo] = useState('30');
   const [analista, setAnalista] = useState('all');
+  const [teamId, setTeamId] = useState('all');
 
   const filtered = useMemo(() => {
     let items = demandas;
+    if (teamId !== 'all') items = items.filter(d => d.team_id === teamId);
     if (periodo !== 'all') {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - parseInt(periodo));
@@ -29,7 +31,7 @@ export function RelatorioSLA() {
     }
     if (analista !== 'all') items = items.filter(d => d.responsavel_dev === analista);
     return items;
-  }, [demandas, periodo, analista]);
+  }, [demandas, periodo, analista, teamId]);
 
   const sla = useMemo(() => calcSLA(filtered, transitions), [filtered, transitions]);
 
