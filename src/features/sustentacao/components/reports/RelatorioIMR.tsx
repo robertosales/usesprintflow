@@ -81,14 +81,8 @@ export function RelatorioIMR() {
     <div className="space-y-6">
       <ReportHeader tipoRelatorio={REPORT_CONFIGS.sustentacao_imr.titulo} periodo={filterPeriodo} />
       <div className="flex items-center justify-between">
-        <Select value={filterPeriodo} onValueChange={setFilterPeriodo}>
-          <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="30">Últimos 30 dias</SelectItem>
-            <SelectItem value="90">Últimos 90 dias</SelectItem>
-            <SelectItem value="all">Todos</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <ReportFilters periodo={filterPeriodo} setPeriodo={setFilterPeriodo} showAnalista={false} teamId={teamId} setTeamId={setTeamId} />
         <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5"><Download className="h-4 w-4" />Exportar CSV</Button>
       </div>
 
