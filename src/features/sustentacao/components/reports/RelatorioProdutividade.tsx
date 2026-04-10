@@ -123,7 +123,7 @@ export function RelatorioProdutividade() {
           <p className="text-sm text-muted-foreground">{reportCfg.subtitulo}</p>
         </div>
         <div className="flex items-center gap-2">
-          <ReportFilters periodo={periodo} setPeriodo={setPeriodo} analista={analista} setAnalista={setAnalista} analistas={analistasList} />
+          <ReportFilters periodo={periodo} setPeriodo={setPeriodo} analista={analista} setAnalista={setAnalista} analistas={analistasList} teamId={teamId} setTeamId={setTeamId} />
           <ExportButton getData={getExportData} />
         </div>
       </div>

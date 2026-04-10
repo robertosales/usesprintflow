@@ -91,7 +91,7 @@ export function RelatorioSLA() {
           <p className="text-sm text-muted-foreground">{reportCfg.subtitulo} · Meta: ≥ {META_SLA}%</p>
         </div>
         <div className="flex items-center gap-2">
-          <ReportFilters periodo={periodo} setPeriodo={setPeriodo} analista={analista} setAnalista={setAnalista} analistas={analistas} />
+          <ReportFilters periodo={periodo} setPeriodo={setPeriodo} analista={analista} setAnalista={setAnalista} analistas={analistas} teamId={teamId} setTeamId={setTeamId} />
           <ExportButton getData={getExportData} />
         </div>
       </div>
