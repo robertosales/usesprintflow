@@ -196,13 +196,33 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
   };
 
   const startEdit = () => {
-    setEditForm({ projeto: demanda.projeto, tipo: demanda.tipo, descricao: demanda.descricao || '', sla: demanda.sla });
+    setEditForm({
+      projeto: demanda.projeto,
+      tipo: demanda.tipo,
+      descricao: demanda.descricao || '',
+      sla: demanda.sla,
+      rhm: demanda.rhm,
+      tipo_defeito: demanda.tipo_defeito || null,
+      originada_diagnostico: !!demanda.originada_diagnostico,
+      data_previsao_encerramento: demanda.data_previsao_encerramento || null,
+      demandante: demanda.demandante || null,
+    });
     setEditing(true);
   };
   const cancelEdit = () => setEditing(false);
   const saveEdit = async () => {
     try {
-      await onUpdate(demanda.id, { projeto: editForm.projeto, tipo: editForm.tipo as any, descricao: editForm.descricao, sla: editForm.sla as any });
+      await onUpdate(demanda.id, {
+        projeto: editForm.projeto,
+        tipo: editForm.tipo as any,
+        descricao: editForm.descricao,
+        sla: editForm.sla as any,
+        rhm: editForm.rhm,
+        tipo_defeito: editForm.tipo_defeito,
+        originada_diagnostico: editForm.originada_diagnostico,
+        data_previsao_encerramento: editForm.data_previsao_encerramento,
+        demandante: editForm.demandante,
+      } as any);
       setEditing(false);
     } catch { toast.error("Erro ao salvar alterações"); }
   };
