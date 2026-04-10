@@ -7,6 +7,7 @@ export interface Projeto {
   descricao: string;
   equipe: string;
   sla: string;
+  sla_id: string | null;
   created_at: string;
   updated_at: string;
 }

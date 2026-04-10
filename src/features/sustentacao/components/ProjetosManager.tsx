@@ -25,7 +25,7 @@ import { toast } from "sonner";
 export function ProjetosManager() {
   const { projetos, loading, error, create, update, remove, reload } = useProjetos();
   const { demandas } = useDemandas();
-  const { teams, selectedTeam } = useAuth();
+  const { teams, currentTeamId } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Projeto | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Projeto | null>(null);
