@@ -74,18 +74,9 @@ export async function getEvidenciaSignedUrl(filePath: string): Promise<string | 
   return data.signedUrl;
 }
 
-// Evidências obrigatórias por fase
-export const EVIDENCIAS_OBRIGATORIAS: Record<string, string[]> = {
-  nova: ['Evidência do erro / solicitação'],
-  teste: ['Registro de testes realizados'],
-  aguardando_homologacao: ['Validação em homologação'],
-  aceite_final: ['Aceite final do cliente'],
-};
+// Evolução 8: Evidência obrigatória APENAS para avançar para "planejamento"
+// As demais fases permitem anexo para rastreabilidade, mas sem bloqueio.
+export const EVIDENCIAS_OBRIGATORIAS: Record<string, string[]> = {};
 
-// Evidências condicionais por tipo de demanda
-export const EVIDENCIAS_CONDICIONAIS: Record<string, Record<string, string[]>> = {
-  evolutiva: {
-    execucao_dev: ['Script de banco de dados (se aplicável)'],
-    producao: ['Log de deploy / evidência de publicação'],
-  },
-};
+// Evidências condicionais por tipo de demanda (informativas, sem bloqueio)
+export const EVIDENCIAS_CONDICIONAIS: Record<string, Record<string, string[]>> = {};
