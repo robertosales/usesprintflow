@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Columns3, AlertCircle } from "lucide-react";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { useDemandas } from "../hooks/useDemandas";
+import { useWorkflowSteps } from "../hooks/useWorkflowSteps";
 import { DemandaCard } from "./DemandaCard";
 import { DemandaDetail } from "./DemandaDetail";
 import { JustificativaDialog } from "./JustificativaDialog";
@@ -15,12 +16,9 @@ import { useDebounce } from "@/shared/hooks/useDebounce";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { EmptyState } from "@/shared/components/common/EmptyState";
 import { supabase } from "@/integrations/supabase/client";
-import { EVIDENCIAS_OBRIGATORIAS } from "../services/evidencias.service";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-
-const BOARD_COLUMNS = ['nova', 'execucao_dev', 'teste', 'aguardando_homologacao'] as const;
 
 function getFlowOrder(demanda: Demanda): string[] {
   if (demanda.tipo === 'evolutiva') {
@@ -39,6 +37,7 @@ function isForwardMove(demanda: Demanda, targetStatus: string): boolean {
 
 export function SustentacaoBoard() {
   const { demandas, loading, error, moveTo, update, remove, reload } = useDemandas();
+  const { steps: workflowSteps, loading: wfLoading } = useWorkflowSteps();
   const [selected, setSelected] = useState<Demanda | null>(null);
   const [selectedInitialTab, setSelectedInitialTab] = useState<string | undefined>(undefined);
   const [pendingMoveTarget, setPendingMoveTarget] = useState<string | undefined>(undefined);
@@ -47,7 +46,6 @@ export function SustentacaoBoard() {
   const [evidenceTarget, setEvidenceTarget] = useState<{ demanda: Demanda; status: string; missing: string[] } | null>(null);
   const [showAllColumns, setShowAllColumns] = useState(false);
 
-  // Evidence cache for validation
   const [evidenceCache, setEvidenceCache] = useState<Record<string, number>>({});
 
   // Filters
@@ -55,10 +53,8 @@ export function SustentacaoBoard() {
   const [filterTipo, setFilterTipo] = useState('all');
   const [filterSla, setFilterSla] = useState('all');
   const [filterProjeto, setFilterProjeto] = useState('all');
-  const [filterResponsavel, setFilterResponsavel] = useState('all');
   const debouncedSearch = useDebounce(search, 300);
 
-  // Pre-load evidence counts for all demandas
   useEffect(() => {
     if (demandas.length === 0) return;
     const ids = demandas.map(d => d.id);
@@ -88,32 +84,35 @@ export function SustentacaoBoard() {
     });
   }, [demandas, debouncedSearch, filterTipo, filterSla, filterProjeto]);
 
-  const columns = showAllColumns ? [...ALL_SITUACOES] : [...BOARD_COLUMNS];
+  // Build columns from global workflow steps
+  const defaultColumns = ['nova', 'execucao_dev', 'teste', 'aguardando_homologacao'];
+  const allColumns = useMemo(() => {
+    if (workflowSteps.length > 0) return workflowSteps.map(s => s.key);
+    return [...ALL_SITUACOES];
+  }, [workflowSteps]);
+
+  const columns = showAllColumns ? allColumns : defaultColumns;
+
+  const getColumnLabel = (status: string) => {
+    const step = workflowSteps.find(s => s.key === status);
+    return step?.label || SITUACAO_LABELS[status] || status;
+  };
 
   const validateDrop = (demanda: Demanda, targetStatus: string): { error?: string; evidenceMissing?: string[] } => {
     if (demanda.situacao === targetStatus) return {};
-
-    if (targetStatus === 'bloqueada' || targetStatus === 'aguardando_retorno') {
-      return {};
-    }
-
+    if (targetStatus === 'bloqueada' || targetStatus === 'aguardando_retorno') return {};
     if (!isForwardMove(demanda, targetStatus)) {
       return { error: `Movimentação não permitida: apenas avanço sequencial é permitido.` };
     }
-
-    // Evolution 8: Evidence required ONLY when moving TO "planejamento"
     if (targetStatus === 'planejamento') {
-      // Check if demanda has ANY evidence for its current phase
       const key = `${demanda.id}:${demanda.situacao}`;
       const count = evidenceCache[key] || 0;
-      // Also check if demanda has any evidence at all (fallback)
       const totalKey = Object.keys(evidenceCache).filter(k => k.startsWith(`${demanda.id}:`));
       const totalCount = totalKey.reduce((sum, k) => sum + (evidenceCache[k] || 0), 0);
       if (count === 0 && totalCount === 0) {
-        return { evidenceMissing: ['É obrigatório anexar ao menos uma evidência antes de avançar para Planejamento: Em Elaboração. Abra a demanda e acesse a aba \'Evidências\'.'] };
+        return { evidenceMissing: ['É obrigatório anexar ao menos uma evidência antes de avançar para Planejamento: Em Elaboração.'] };
       }
     }
-
     return {};
   };
 
@@ -124,15 +123,11 @@ export function SustentacaoBoard() {
     if (!demanda || demanda.situacao === status) return;
 
     const validation = validateDrop(demanda, status);
-    if (validation.error) {
-      toast.error(validation.error);
-      return;
-    }
+    if (validation.error) { toast.error(validation.error); return; }
     if (validation.evidenceMissing) {
       setEvidenceTarget({ demanda, status, missing: validation.evidenceMissing });
       return;
     }
-
     if (REQUIRES_JUSTIFICATIVA.includes(status)) {
       setJustTarget({ demanda, status });
       return;
@@ -140,7 +135,7 @@ export function SustentacaoBoard() {
     await moveTo(demanda, status);
   };
 
-  if (loading) return <SkeletonList count={6} />;
+  if (loading || wfLoading) return <SkeletonList count={6} />;
   if (error) return <div className="text-center py-10 text-destructive">{error} <button onClick={reload} className="underline ml-2">Tentar novamente</button></div>;
 
   return (
@@ -148,7 +143,7 @@ export function SustentacaoBoard() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-lg font-semibold">Board Kanban</h2>
-          <p className="text-sm text-muted-foreground">Acompanhe e gerencie as demandas por situação</p>
+          <p className="text-sm text-muted-foreground">Board único — exibe demandas de todos os times</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -160,7 +155,6 @@ export function SustentacaoBoard() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-2">
         <Select value={filterProjeto} onValueChange={setFilterProjeto}>
           <SelectTrigger className="w-[150px] h-9 text-xs"><SelectValue placeholder="Projeto" /></SelectTrigger>
@@ -195,7 +189,6 @@ export function SustentacaoBoard() {
         <EmptyState icon={Columns3} title="Nenhuma demanda encontrada" description="Crie uma nova demanda ou ajuste os filtros." />
       )}
 
-      {/* Board columns */}
       <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: 400 }}>
         {columns.map(status => {
           const items = filtered.filter(d => d.situacao === status);
@@ -208,7 +201,7 @@ export function SustentacaoBoard() {
             >
               <div className="rounded-lg bg-muted/40 border p-2 h-full">
                 <div className="flex items-center justify-between mb-2 px-1">
-                  <span className="text-xs font-semibold truncate">{SITUACAO_LABELS[status]}</span>
+                  <span className="text-xs font-semibold truncate">{getColumnLabel(status)}</span>
                   <Badge className="text-[10px] h-5 min-w-5 flex items-center justify-center bg-info/10 text-info border-info/20">{items.length}</Badge>
                 </div>
                 <ScrollArea className="max-h-[calc(100vh-280px)]">
@@ -246,24 +239,16 @@ export function SustentacaoBoard() {
         </div>
       )}
 
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
-        onConfirm={() => { if (deleteTarget) { remove(deleteTarget.id); setDeleteTarget(null); } }}
-      />
+      <ConfirmDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)} onConfirm={() => { if (deleteTarget) { remove(deleteTarget.id); setDeleteTarget(null); } }} />
 
       <JustificativaDialog
         open={!!justTarget}
         onClose={() => setJustTarget(null)}
         onConfirm={async (j) => {
-          if (justTarget) {
-            await moveTo(justTarget.demanda, justTarget.status, j);
-            setJustTarget(null);
-          }
+          if (justTarget) { await moveTo(justTarget.demanda, justTarget.status, j); setJustTarget(null); }
         }}
       />
 
-      {/* Evidence missing dialog */}
       <Dialog open={!!evidenceTarget} onOpenChange={(o) => !o && setEvidenceTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -272,18 +257,14 @@ export function SustentacaoBoard() {
               Evidência Obrigatória Pendente
             </DialogTitle>
             <DialogDescription>
-              Para avançar a demanda <strong>{evidenceTarget?.demanda.rhm}</strong> da fase
-              {" "}<strong>"{SITUACAO_LABELS[evidenceTarget?.demanda.situacao || '']}"</strong>,
-              é necessário anexar a(s) evidência(s) obrigatória(s):
+              Para avançar a demanda <strong>{evidenceTarget?.demanda.rhm}</strong>, é necessário anexar a(s) evidência(s) obrigatória(s):
             </DialogDescription>
           </DialogHeader>
           <ul className="list-disc pl-6 text-sm text-muted-foreground space-y-1">
             {evidenceTarget?.missing.map((m, i) => <li key={i}>{m}</li>)}
           </ul>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setEvidenceTarget(null)}>
-              Cancelar
-            </Button>
+            <Button variant="outline" onClick={() => setEvidenceTarget(null)}>Cancelar</Button>
             <Button onClick={() => {
               if (evidenceTarget) {
                 setSelectedInitialTab('evidencias');
@@ -291,9 +272,7 @@ export function SustentacaoBoard() {
                 setSelected(evidenceTarget.demanda);
                 setEvidenceTarget(null);
               }
-            }}>
-              Abrir Demanda
-            </Button>
+            }}>Abrir Demanda</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

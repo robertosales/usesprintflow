@@ -56,19 +56,26 @@ export function SustentacaoWorkflow() {
   const [saving, setSaving] = useState(false);
   const [loadingDb, setLoadingDb] = useState(true);
 
+  // Load workflow globally (no team filter)
   const loadFromDb = useCallback(async () => {
-    if (!currentTeamId) return;
     setLoadingDb(true);
     try {
       const { data, error } = await supabase
         .from("sustentacao_workflow_steps" as any)
         .select("*")
-        .eq("team_id", currentTeamId)
         .eq("ativo", true)
         .order("ordem");
       if (error) throw error;
       if (data && (data as any[]).length > 0) {
-        setDraft((data as any[]).map((d: any) => ({
+        // Deduplicate by nome
+        const seen = new Set<string>();
+        const unique = (data as any[]).filter((d: any) => {
+          const key = d.nome;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        setDraft(unique.map((d: any) => ({
           id: d.id, key: d.nome.toLowerCase().replace(/\s+/g, '_'), label: d.nome, hex: d.cor,
         })));
       } else {
@@ -79,7 +86,7 @@ export function SustentacaoWorkflow() {
       setDraft(buildDefaultSteps());
     }
     setLoadingDb(false);
-  }, [currentTeamId]);
+  }, []);
 
   useEffect(() => { loadFromDb(); }, [loadFromDb]);
 
@@ -127,9 +134,9 @@ export function SustentacaoWorkflow() {
     if (!currentTeamId) return;
     setSaving(true);
     try {
-      // Delete existing steps for this team
-      await supabase.from("sustentacao_workflow_steps" as any).delete().eq("team_id", currentTeamId);
-      // Insert new steps
+      // Delete ALL workflow steps (global cleanup)
+      await supabase.from("sustentacao_workflow_steps" as any).delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      // Insert new steps with current team_id (required by schema)
       const rows = draft.map((s, idx) => ({
         team_id: currentTeamId,
         nome: s.label,
@@ -152,7 +159,7 @@ export function SustentacaoWorkflow() {
     if (!currentTeamId) return;
     setSaving(true);
     try {
-      await supabase.from("sustentacao_workflow_steps" as any).delete().eq("team_id", currentTeamId);
+      await supabase.from("sustentacao_workflow_steps" as any).delete().neq("id", "00000000-0000-0000-0000-000000000000");
       const defaults = buildDefaultSteps();
       const rows = defaults.map((s, idx) => ({
         team_id: currentTeamId, nome: s.label, cor: s.hex, ordem: idx, ativo: true,
@@ -180,7 +187,7 @@ export function SustentacaoWorkflow() {
             <GitBranch className="h-5 w-5 text-primary" />
             <h2 className="text-lg font-bold tracking-tight">Fluxo de Trabalho — Sustentação</h2>
           </div>
-          <p className="text-sm text-muted-foreground mt-1">Defina a ordem e nomenclatura das etapas.</p>
+          <p className="text-sm text-muted-foreground mt-1">Fluxo único e global, compartilhado por todos os times.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={restore} disabled={saving}>

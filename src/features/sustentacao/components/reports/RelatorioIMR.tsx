@@ -11,6 +11,7 @@ import { INDICADORES_GRUPO2, getIndicadorFaixa, EVENTOS_CONFIG } from "../../typ
 import * as eventosSvc from "../../services/eventos.service";
 import { REPORT_CONFIGS } from "../../utils/reportConfig";
 import { ReportHeader } from "./ReportHeader";
+import { ReportFilters } from "./ReportFilters";
 import { Download } from "lucide-react";
 
 export function RelatorioIMR() {
@@ -18,6 +19,7 @@ export function RelatorioIMR() {
   const { currentTeamId, profile } = useAuth();
   const [eventos, setEventos] = useState<DemandaEvento[]>([]);
   const [filterPeriodo, setFilterPeriodo] = useState('30');
+  const [teamId, setTeamId] = useState('all');
 
   const loadEventos = useCallback(async () => {
     if (!currentTeamId) return;
@@ -28,13 +30,14 @@ export function RelatorioIMR() {
 
   const filtered = useMemo(() => {
     let items = demandas as unknown as DemandaIMR[];
+    if (teamId !== 'all') items = items.filter(d => d.team_id === teamId);
     if (filterPeriodo !== 'all') {
       const days = parseInt(filterPeriodo);
       const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
       items = items.filter(d => new Date(d.created_at) >= cutoff);
     }
     return items;
-  }, [demandas, filterPeriodo]);
+  }, [demandas, filterPeriodo, teamId]);
 
   const iap = useMemo(() => calcIAP(filtered), [filtered]);
   const iqs = useMemo(() => calcIQS(filtered), [filtered]);
@@ -79,14 +82,9 @@ export function RelatorioIMR() {
     <div className="space-y-6">
       <ReportHeader tipoRelatorio={REPORT_CONFIGS.sustentacao_imr.titulo} periodo={filterPeriodo} />
       <div className="flex items-center justify-between">
-        <Select value={filterPeriodo} onValueChange={setFilterPeriodo}>
-          <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="30">Últimos 30 dias</SelectItem>
-            <SelectItem value="90">Últimos 90 dias</SelectItem>
-            <SelectItem value="all">Todos</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <ReportFilters periodo={filterPeriodo} setPeriodo={setFilterPeriodo} showAnalista={false} teamId={teamId} setTeamId={setTeamId} />
+        </div>
         <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5"><Download className="h-4 w-4" />Exportar CSV</Button>
       </div>
 

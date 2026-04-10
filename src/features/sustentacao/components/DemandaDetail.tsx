@@ -96,7 +96,12 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
   const [activeTab, setActiveTab] = useState(initialTab || 'detalhes');
   const [pendingTarget, setPendingTarget] = useState<string | undefined>(pendingMoveTarget);
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ projeto: '', tipo: '', descricao: '', sla: '' });
+  const [editForm, setEditForm] = useState({
+    projeto: '', tipo: '', descricao: '', sla: '', rhm: '',
+    tipo_defeito: '' as string | null, originada_diagnostico: false,
+    data_previsao_encerramento: '' as string | null,
+    demandante: '' as string | null,
+  });
 
   const [newStatus, setNewStatus] = useState('');
   const [justificativa, setJustificativa] = useState('');
@@ -191,13 +196,33 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
   };
 
   const startEdit = () => {
-    setEditForm({ projeto: demanda.projeto, tipo: demanda.tipo, descricao: demanda.descricao || '', sla: demanda.sla });
+    setEditForm({
+      projeto: demanda.projeto,
+      tipo: demanda.tipo,
+      descricao: demanda.descricao || '',
+      sla: demanda.sla,
+      rhm: demanda.rhm,
+      tipo_defeito: demanda.tipo_defeito || null,
+      originada_diagnostico: !!demanda.originada_diagnostico,
+      data_previsao_encerramento: demanda.data_previsao_encerramento || null,
+      demandante: demanda.demandante || null,
+    });
     setEditing(true);
   };
   const cancelEdit = () => setEditing(false);
   const saveEdit = async () => {
     try {
-      await onUpdate(demanda.id, { projeto: editForm.projeto, tipo: editForm.tipo as any, descricao: editForm.descricao, sla: editForm.sla as any });
+      await onUpdate(demanda.id, {
+        projeto: editForm.projeto,
+        tipo: editForm.tipo as any,
+        descricao: editForm.descricao,
+        sla: editForm.sla as any,
+        rhm: editForm.rhm,
+        tipo_defeito: editForm.tipo_defeito,
+        originada_diagnostico: editForm.originada_diagnostico,
+        data_previsao_encerramento: editForm.data_previsao_encerramento,
+        demandante: editForm.demandante,
+      } as any);
       setEditing(false);
     } catch { toast.error("Erro ao salvar alterações"); }
   };
@@ -507,6 +532,10 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
                   <div className="grid md:grid-cols-2 gap-5">
                     <div className="space-y-4">
                       <div>
+                        <Label className="text-sm font-medium">#</Label>
+                        <Input value={editForm.rhm} onChange={e => setEditForm(p => ({ ...p, rhm: e.target.value.replace(/\D/g, '') }))} className="mt-1" inputMode="numeric" />
+                      </div>
+                      <div>
                         <Label className="text-sm font-medium">Projeto</Label>
                         <Select value={editForm.projeto || '_none'} onValueChange={v => setEditForm(p => ({ ...p, projeto: v === '_none' ? '' : v }))}>
                           <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
@@ -516,6 +545,41 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
                           </SelectContent>
                         </Select>
                       </div>
+                      <div>
+                        <Label className="text-sm font-medium">Tipo</Label>
+                        <Select value={editForm.tipo} onValueChange={v => setEditForm(p => ({ ...p, tipo: v }))}>
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent className="max-h-60">
+                            {(() => { const { TIPOS_DEMANDA_IMR } = require('../types/imr'); return TIPOS_DEMANDA_IMR.map((t: any) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>); })()}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Regime (SLA)</Label>
+                        <Select value={editForm.sla} onValueChange={v => setEditForm(p => ({ ...p, sla: v }))}>
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="padrao">Padrão</SelectItem>
+                            <SelectItem value="continuo">Contínuo</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Defeito Impeditivo</Label>
+                        <Select value={editForm.tipo_defeito || 'nao_impeditivo'} onValueChange={v => setEditForm(p => ({ ...p, tipo_defeito: v }))}>
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="impeditivo">Sim</SelectItem>
+                            <SelectItem value="nao_impeditivo">Não</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Previsão de Encerramento</Label>
+                        <Input type="date" value={editForm.data_previsao_encerramento || ''} onChange={e => setEditForm(p => ({ ...p, data_previsao_encerramento: e.target.value || null }))} className="mt-1" />
+                      </div>
+                    </div>
+                    <div className="space-y-4">
                       <div>
                          <Label className="text-sm font-medium">Título</Label>
                         <Textarea value={editForm.descricao} onChange={e => setEditForm(p => ({ ...p, descricao: e.target.value }))} rows={6} className="mt-1" />
