@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import * as svc from "../services/projetos.service";
 import type { Projeto } from "../services/projetos.service";
 
@@ -27,12 +28,25 @@ export function useProjetos() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Realtime subscription
+  useEffect(() => {
+    if (!currentTeamId) return;
+    const channel = supabase
+      .channel(`projetos-rt-${currentTeamId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'projetos', filter: `team_id=eq.${currentTeamId}` },
+        () => { load(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [currentTeamId, load]);
+
   const create = async (p: { nome: string; descricao?: string; equipe?: string; sla?: string }) => {
     if (!currentTeamId) return;
     try {
       await svc.createProjeto({ ...p, team_id: currentTeamId });
       toast.success("Projeto criado com sucesso");
-      await load();
     } catch {
       toast.error("Erro ao criar projeto");
     }
@@ -42,7 +56,6 @@ export function useProjetos() {
     try {
       await svc.updateProjeto(id, updates);
       toast.success("Projeto atualizado com sucesso");
-      await load();
     } catch {
       toast.error("Erro ao atualizar projeto");
     }
@@ -52,7 +65,6 @@ export function useProjetos() {
     try {
       await svc.deleteProjeto(id);
       toast.success("Projeto excluído com sucesso");
-      await load();
     } catch {
       toast.error("Erro ao excluir projeto");
     }

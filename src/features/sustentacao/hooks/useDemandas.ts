@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import * as svc from "../services/demandas.service";
 import type { Demanda, DemandaTransition, DemandaHour } from "../types/demanda";
 import { REQUIRES_JUSTIFICATIVA } from "../types/demanda";
@@ -28,6 +29,20 @@ export function useDemandas() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Realtime subscription
+  useEffect(() => {
+    if (!currentTeamId) return;
+    const channel = supabase
+      .channel(`demandas-rt-${currentTeamId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'demandas', filter: `team_id=eq.${currentTeamId}` },
+        () => { load(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [currentTeamId, load]);
+
   const create = async (d: Partial<Demanda>) => {
     if (!currentTeamId) return;
     try {
@@ -36,7 +51,7 @@ export function useDemandas() {
         await svc.addTransition({ demanda_id: created.id, from_status: null, to_status: 'nova', user_id: user.id, justificativa: null });
       }
       toast.success("Demanda criada com sucesso");
-      await load();
+      // Realtime will trigger reload
     } catch (err: any) {
       toast.error("Erro ao criar demanda");
     }
@@ -46,7 +61,6 @@ export function useDemandas() {
     try {
       await svc.updateDemanda(id, updates);
       toast.success("Demanda atualizada com sucesso");
-      await load();
     } catch (err: any) {
       toast.error("Erro ao atualizar demanda");
     }
@@ -69,7 +83,6 @@ export function useDemandas() {
         });
       }
       toast.success("Status atualizado com sucesso");
-      await load();
       return true;
     } catch {
       toast.error("Erro ao atualizar status");
@@ -81,7 +94,6 @@ export function useDemandas() {
     try {
       await svc.deleteDemanda(id);
       toast.success("Demanda excluída com sucesso");
-      await load();
     } catch {
       toast.error("Erro ao excluir demanda");
     }
