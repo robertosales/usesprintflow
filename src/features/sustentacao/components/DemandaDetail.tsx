@@ -567,7 +567,7 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
                         <Select value={editForm.tipo} onValueChange={v => setEditForm(p => ({ ...p, tipo: v }))}>
                           <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                           <SelectContent className="max-h-60">
-                            {(() => { const { TIPOS_DEMANDA_IMR } = require('../types/imr'); return TIPOS_DEMANDA_IMR.map((t: any) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>); })()}
+                            {TIPOS_DEMANDA_IMR.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>

@@ -15,7 +15,7 @@ import { useDebounce } from "@/shared/hooks/useDebounce";
 import { useDemandas } from "../hooks/useDemandas";
 import { DemandaForm } from "./DemandaForm";
 import { DemandaDetail } from "./DemandaDetail";
-import { SITUACAO_LABELS, SITUACAO_COLORS } from "../types/demanda";
+import { SITUACAO_LABELS, SITUACAO_COLORS, isDemandaIniciada } from "../types/demanda";
 import type { Demanda } from "../types/demanda";
 
 export function DemandasList() {
@@ -114,7 +114,7 @@ export function DemandasList() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={e => { e.stopPropagation(); setSelected(d); }}>Detalhes</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive" onClick={e => { e.stopPropagation(); setDeleteTarget(d); }}>Excluir</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive" onClick={e => { e.stopPropagation(); if (isDemandaIniciada(d)) { toast.error("Demanda já iniciada. Use 'Cancelar Demanda' ou 'Bloquear' na tela de detalhes."); } else { setDeleteTarget(d); } }}>Excluir</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
