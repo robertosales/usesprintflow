@@ -15,8 +15,8 @@ import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Demanda } from "../types/demanda";
-import { SITUACAO_LABELS, SITUACAO_COLORS, FASES, FASE_LABELS, ALL_SITUACOES, REQUIRES_JUSTIFICATIVA, SITUACOES_CORRETIVA, SITUACOES_EVOLUTIVA_PREFIX } from "../types/demanda";
-import { getTipoLabel, getSLAStatusDemanda } from "../types/imr";
+import { SITUACAO_LABELS, SITUACAO_COLORS, FASES, FASE_LABELS, ALL_SITUACOES, REQUIRES_JUSTIFICATIVA, SITUACOES_CORRETIVA, SITUACOES_EVOLUTIVA_PREFIX, TERMINAL_STATUSES, isDemandaIniciada } from "../types/demanda";
+import { getTipoLabel, getSLAStatusDemanda, TIPOS_DEMANDA_IMR } from "../types/imr";
 import { useTransitions, useHours } from "../hooks/useDemandas";
 import { useProjetos } from "../hooks/useProjetos";
 import * as respSvc from "../services/responsaveis.service";
@@ -178,9 +178,12 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
 
   if (!demanda) return null;
 
+  const isCancelada = demanda.situacao === 'cancelada';
+  const isTerminal = (TERMINAL_STATUSES as readonly string[]).includes(demanda.situacao);
   const currentStepIdx = STEPPER_STEPS.indexOf(demanda.situacao);
-  const allowedNextStatuses = getNextStatuses(demanda);
-  const canBlock = demanda.situacao !== 'bloqueada' && demanda.situacao !== 'aceite_final';
+  const allowedNextStatuses = isTerminal ? [] : getNextStatuses(demanda);
+  const canBlock = !isTerminal && demanda.situacao !== 'bloqueada' && demanda.situacao !== 'aceite_final';
+  const canCancel = !isTerminal && demanda.situacao !== 'aceite_final';
 
   const slaStatus = getSLAStatusDemanda(demanda.created_at, demanda.prazo_solucao || null, demanda.situacao);
 
@@ -438,7 +441,9 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {editing ? (
+                {isTerminal ? (
+                  <Badge className="bg-gray-200 text-gray-700 border-gray-300 text-xs">Somente leitura</Badge>
+                ) : editing ? (
                   <>
                     <Button variant="outline" size="sm" className="gap-1.5" onClick={cancelEdit}><X className="h-4 w-4" />Cancelar</Button>
                     <Button size="sm" className="gap-1.5 bg-info hover:bg-info/90 text-info-foreground" onClick={saveEdit}><Save className="h-4 w-4" />Salvar</Button>
@@ -483,7 +488,7 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
             </div>
           </div>
 
-          {!editing && (
+          {!editing && !isTerminal && (
             <div className="px-6 py-3 border-b bg-info/5">
               {demanda.situacao === 'bloqueada' ? (
                 <div className="flex items-center gap-3">
@@ -512,8 +517,20 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
                     <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10"
                       onClick={() => { setNewStatus('bloqueada'); setShowSuspensaoModal(true); }}>Bloquear</Button>
                   )}
+                  {canCancel && (
+                    <Button variant="outline" size="sm" className="text-gray-600 border-gray-300 hover:bg-gray-100"
+                      onClick={() => { setNewStatus('cancelada'); setShowJustModal(true); }}>Cancelar Demanda</Button>
+                  )}
                 </div>
               )}
+            </div>
+          )}
+          {isTerminal && (
+            <div className="px-6 py-3 border-b bg-gray-100">
+              <div className="flex items-center gap-2 text-gray-600 text-sm">
+                <AlertCircle className="h-4 w-4" />
+                <span>Esta demanda foi cancelada e não pode ser editada ou movida.</span>
+              </div>
             </div>
           )}
 
