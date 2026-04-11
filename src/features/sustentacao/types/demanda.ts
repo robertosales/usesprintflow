@@ -14,6 +14,7 @@ export const ALL_SITUACOES = [
   'nova', 'planejamento', 'envio_aprovacao', 'planejamento_aprovado',
   'execucao_dev', 'bloqueada', 'aguardando_retorno', 'teste',
   'aguardando_homologacao', 'homologada', 'fila_producao', 'producao', 'aceite_final',
+  'cancelada',
 ] as const;
 
 export type DemandaSituacao = typeof ALL_SITUACOES[number];
@@ -32,6 +33,7 @@ export const SITUACAO_LABELS: Record<string, string> = {
   fila_producao: 'Fila Produção',
   producao: 'Produção',
   aceite_final: 'Aceite Final',
+  cancelada: 'Cancelada',
 };
 
 export const SITUACAO_COLORS: Record<string, string> = {
@@ -48,6 +50,7 @@ export const SITUACAO_COLORS: Record<string, string> = {
   fila_producao: 'bg-teal-100 text-teal-800 border-teal-200',
   producao: 'bg-green-100 text-green-800 border-green-200',
   aceite_final: 'bg-lime-100 text-lime-800 border-lime-200',
+  cancelada: 'bg-gray-200 text-gray-700 border-gray-300',
 };
 
 export const BOARD_COLUMNS_CORRETIVA = SITUACOES_CORRETIVA;
@@ -59,7 +62,15 @@ export const FASE_LABELS: Record<string, string> = {
   teste: 'Teste', homologacao: 'Homologação', producao: 'Produção',
 };
 
-export const REQUIRES_JUSTIFICATIVA = ['bloqueada', 'aguardando_retorno'];
+export const REQUIRES_JUSTIFICATIVA = ['bloqueada', 'aguardando_retorno', 'cancelada'];
+
+/** Statuses that are terminal — demand cannot be edited or moved from these */
+export const TERMINAL_STATUSES = ['cancelada'] as const;
+
+/** Check if a demand has been started (moved beyond 'nova') */
+export function isDemandaIniciada(demanda: { situacao: string }): boolean {
+  return demanda.situacao !== 'nova';
+}
 
 export interface Demanda {
   id: string;

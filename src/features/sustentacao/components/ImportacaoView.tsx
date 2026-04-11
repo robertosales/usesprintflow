@@ -44,15 +44,18 @@ function parseDataInicio(raw: any): Date | null {
   return isValid(d) ? d : null;
 }
 
-function normalizeTipo(raw: string): string | null {
+function normalizeTipo(raw: string): { value: string; autoCreated: boolean } | null {
   const lower = raw.toLowerCase().trim();
-  if (VALID_TIPOS_MAP[lower]) return VALID_TIPOS_MAP[lower];
+  if (!lower) return null;
+  if (VALID_TIPOS_MAP[lower]) return { value: VALID_TIPOS_MAP[lower], autoCreated: false };
   for (const [key, val] of Object.entries(VALID_TIPOS_MAP)) {
-    if (key.includes(lower) || lower.includes(key)) return val;
+    if (key.includes(lower) || lower.includes(key)) return { value: val, autoCreated: false };
   }
-  if (lower === 'corretiva') return 'manutencao_corretiva';
-  if (lower === 'evolutiva') return 'evolutiva_pequeno_porte';
-  return null;
+  if (lower === 'corretiva') return { value: 'manutencao_corretiva', autoCreated: false };
+  if (lower === 'evolutiva') return { value: 'evolutiva_pequeno_porte', autoCreated: false };
+  // Auto-create: normalize the raw value as a key
+  const autoKey = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  return { value: autoKey || lower.replace(/\s+/g, '_'), autoCreated: true };
 }
 
 interface ValidationError {
@@ -83,8 +86,9 @@ export function ImportacaoView() {
   const { projetos, reload: reloadProjetos } = useProjetos();
   const [mode, setMode] = useState<ImportMode>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ importados: number; atualizados: number; erros: number } | null>(null);
+  const [result, setResult] = useState<{ importados: number; atualizados: number; erros: number; tiposCriados?: string[] } | null>(null);
   const [validRows, setValidRows] = useState<ParsedRow[]>([]);
+  const [autoCreatedTypes, setAutoCreatedTypes] = useState<string[]>([]);
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [projetoResult, setProjetoResult] = useState<{ importados: number; existentes: number; erros: number } | null>(null);
@@ -109,6 +113,7 @@ export function ImportacaoView() {
 
       const parsed: ParsedRow[] = [];
       const errs: ValidationError[] = [];
+      const newTypes: string[] = [];
 
       rows.forEach((r, idx) => {
         const linha = idx + 2;
@@ -126,8 +131,12 @@ export function ImportacaoView() {
         }
 
         if (!tipoRaw) { errs.push({ linha, mensagem: 'Tipo não informado.' }); return; }
-        const tipoNorm = normalizeTipo(tipoRaw);
-        if (!tipoNorm) { errs.push({ linha, mensagem: `Tipo '${tipoRaw}' não reconhecido.` }); return; }
+        const tipoResult = normalizeTipo(tipoRaw);
+        if (!tipoResult) { errs.push({ linha, mensagem: `Tipo '${tipoRaw}' não reconhecido.` }); return; }
+        if (tipoResult.autoCreated && !newTypes.includes(tipoRaw)) {
+          newTypes.push(tipoRaw);
+        }
+        const tipoNorm = tipoResult.value;
 
         if (!dataInicioRaw) { errs.push({ linha, mensagem: 'Criado em inválido ou ausente.' }); return; }
         const dataInicio = parseDataInicio(dataInicioRaw);
@@ -180,6 +189,7 @@ export function ImportacaoView() {
 
       setValidRows(parsed);
       setErrors(errs);
+      setAutoCreatedTypes(newTypes);
       setShowPreview(true);
 
       if (parsed.length === 0 && errs.length === 0) {
@@ -260,9 +270,10 @@ export function ImportacaoView() {
       }
     }
 
-    setResult(results);
+    setResult({ ...results, tiposCriados: autoCreatedTypes });
     setShowPreview(false);
-    toast.success(`Importação concluída: ${results.importados} novos, ${results.atualizados} atualizados`);
+    const tipoMsg = autoCreatedTypes.length > 0 ? ` | ${autoCreatedTypes.length} tipo(s) criado(s) automaticamente` : '';
+    toast.success(`Importação concluída: ${results.importados} novos, ${results.atualizados} atualizados${tipoMsg}`);
     setLoading(false);
   };
 
@@ -348,6 +359,15 @@ export function ImportacaoView() {
                 )}
               </div>
 
+              {autoCreatedTypes.length > 0 && (
+                <div className="border border-amber-300 rounded-lg p-3 space-y-1.5 bg-amber-50">
+                  <p className="text-xs font-semibold text-amber-800 uppercase">Tipos não encontrados (serão criados automaticamente):</p>
+                  <ul className="list-disc pl-5 text-xs text-amber-700">
+                    {autoCreatedTypes.map((t, i) => <li key={i}>{t}</li>)}
+                  </ul>
+                </div>
+              )}
+
               {errors.length > 0 && (
                 <div className="border border-destructive/30 rounded-lg p-3 space-y-1.5 max-h-48 overflow-y-auto bg-destructive/5">
                   <p className="text-xs font-semibold text-destructive uppercase">Erros encontrados:</p>
@@ -364,7 +384,7 @@ export function ImportacaoView() {
                 <Button style={{ backgroundColor: '#1a6fa8' }} className="hover:opacity-90 text-white" onClick={handleImport} disabled={loading || validRows.length === 0}>
                   {loading ? 'Importando...' : `Importar somente as válidas (${validRows.length})`}
                 </Button>
-                <Button variant="outline" onClick={() => { setShowPreview(false); setValidRows([]); setErrors([]); }}>Cancelar</Button>
+                <Button variant="outline" onClick={() => { setShowPreview(false); setValidRows([]); setErrors([]); setAutoCreatedTypes([]); }}>Cancelar</Button>
               </div>
             </div>
           )}
@@ -378,6 +398,14 @@ export function ImportacaoView() {
                 <div className="text-center p-2 rounded" style={{ backgroundColor: '#e8f2fa' }}><p className="text-lg font-bold" style={{ color: '#1a6fa8' }}>{result.atualizados}</p><p className="text-xs text-muted-foreground">Atualizados</p></div>
                 <div className="text-center p-2 bg-red-50 rounded"><p className="text-lg font-bold text-destructive">{result.erros}</p><p className="text-xs text-muted-foreground">Erros</p></div>
               </div>
+              {result.tiposCriados && result.tiposCriados.length > 0 && (
+                <div className="border border-amber-300 rounded-lg p-3 bg-amber-50 mt-2">
+                  <p className="text-xs font-semibold text-amber-800">Tipos criados automaticamente ({result.tiposCriados.length}):</p>
+                  <ul className="list-disc pl-5 text-xs text-amber-700 mt-1">
+                    {result.tiposCriados.map((t, i) => <li key={i}>{t}</li>)}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 

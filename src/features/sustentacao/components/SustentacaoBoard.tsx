@@ -10,7 +10,7 @@ import { useWorkflowSteps } from "../hooks/useWorkflowSteps";
 import { DemandaCard } from "./DemandaCard";
 import { DemandaDetail } from "./DemandaDetail";
 import { JustificativaDialog } from "./JustificativaDialog";
-import { ALL_SITUACOES, SITUACAO_LABELS, REQUIRES_JUSTIFICATIVA, SITUACOES_CORRETIVA, SITUACOES_EVOLUTIVA_PREFIX } from "../types/demanda";
+import { ALL_SITUACOES, SITUACAO_LABELS, REQUIRES_JUSTIFICATIVA, SITUACOES_CORRETIVA, SITUACOES_EVOLUTIVA_PREFIX, isDemandaIniciada } from "../types/demanda";
 import type { Demanda } from "../types/demanda";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
@@ -239,7 +239,16 @@ export function SustentacaoBoard() {
         </div>
       )}
 
-      <ConfirmDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)} onConfirm={() => { if (deleteTarget) { remove(deleteTarget.id); setDeleteTarget(null); } }} />
+      <ConfirmDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)} onConfirm={() => {
+        if (deleteTarget) {
+          if (isDemandaIniciada(deleteTarget)) {
+            toast.error("Demanda já iniciada. Use 'Cancelar Demanda' ou 'Bloquear' na tela de detalhes.");
+            setDeleteTarget(null);
+            return;
+          }
+          remove(deleteTarget.id); setDeleteTarget(null);
+        }
+      }} />
 
       <JustificativaDialog
         open={!!justTarget}
