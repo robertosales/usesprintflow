@@ -359,6 +359,15 @@ export function ImportacaoView() {
                 )}
               </div>
 
+              {autoCreatedTypes.length > 0 && (
+                <div className="border border-amber-300 rounded-lg p-3 space-y-1.5 bg-amber-50">
+                  <p className="text-xs font-semibold text-amber-800 uppercase">Tipos não encontrados (serão criados automaticamente):</p>
+                  <ul className="list-disc pl-5 text-xs text-amber-700">
+                    {autoCreatedTypes.map((t, i) => <li key={i}>{t}</li>)}
+                  </ul>
+                </div>
+              )}
+
               {errors.length > 0 && (
                 <div className="border border-destructive/30 rounded-lg p-3 space-y-1.5 max-h-48 overflow-y-auto bg-destructive/5">
                   <p className="text-xs font-semibold text-destructive uppercase">Erros encontrados:</p>
@@ -375,7 +384,7 @@ export function ImportacaoView() {
                 <Button style={{ backgroundColor: '#1a6fa8' }} className="hover:opacity-90 text-white" onClick={handleImport} disabled={loading || validRows.length === 0}>
                   {loading ? 'Importando...' : `Importar somente as válidas (${validRows.length})`}
                 </Button>
-                <Button variant="outline" onClick={() => { setShowPreview(false); setValidRows([]); setErrors([]); }}>Cancelar</Button>
+                <Button variant="outline" onClick={() => { setShowPreview(false); setValidRows([]); setErrors([]); setAutoCreatedTypes([]); }}>Cancelar</Button>
               </div>
             </div>
           )}
@@ -389,6 +398,14 @@ export function ImportacaoView() {
                 <div className="text-center p-2 rounded" style={{ backgroundColor: '#e8f2fa' }}><p className="text-lg font-bold" style={{ color: '#1a6fa8' }}>{result.atualizados}</p><p className="text-xs text-muted-foreground">Atualizados</p></div>
                 <div className="text-center p-2 bg-red-50 rounded"><p className="text-lg font-bold text-destructive">{result.erros}</p><p className="text-xs text-muted-foreground">Erros</p></div>
               </div>
+              {result.tiposCriados && result.tiposCriados.length > 0 && (
+                <div className="border border-amber-300 rounded-lg p-3 bg-amber-50 mt-2">
+                  <p className="text-xs font-semibold text-amber-800">Tipos criados automaticamente ({result.tiposCriados.length}):</p>
+                  <ul className="list-disc pl-5 text-xs text-amber-700 mt-1">
+                    {result.tiposCriados.map((t, i) => <li key={i}>{t}</li>)}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 
