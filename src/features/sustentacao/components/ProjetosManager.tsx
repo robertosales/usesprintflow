@@ -231,7 +231,18 @@ export function ProjetosManager() {
         </DialogContent>
       </Dialog>
 
-      <ConfirmDialog open={!!deleteTarget} onOpenChange={o => !o && setDeleteTarget(null)} onConfirm={() => { if (deleteTarget) { remove(deleteTarget.id); setDeleteTarget(null); } }} />
+      <ConfirmDialog open={!!deleteTarget} onOpenChange={o => !o && setDeleteTarget(null)} onConfirm={() => {
+        if (deleteTarget) {
+          const count = demandasPorProjeto[deleteTarget.nome] || 0;
+          if (count > 0) {
+            toast.error(`Não é possível excluir: existem ${count} demanda(s) vinculada(s) a este projeto.`);
+            setDeleteTarget(null);
+            return;
+          }
+          remove(deleteTarget.id);
+          setDeleteTarget(null);
+        }
+      }} />
     </div>
   );
 }
