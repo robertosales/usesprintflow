@@ -7,28 +7,44 @@ export async function fetchDemandas(teamId: string): Promise<Demanda[]> {
     .select("*")
     .eq("team_id", teamId)
     .order("updated_at", { ascending: false });
+
+  console.log("DATA:", data);
+  console.log("ERROR:", error);
+
   if (error) throw error;
   return (data || []) as unknown as Demanda[];
 }
 
 export async function createDemanda(demanda: Partial<Demanda> & { team_id: string; rhm: string }) {
-  const { data, error } = await supabase.from("demandas" as any).insert(demanda as any).select().single();
+  const { data, error } = await supabase
+    .from("demandas" as any)
+    .insert(demanda as any)
+    .select()
+    .single();
   if (error) throw error;
   return data as unknown as Demanda;
 }
 
 export async function updateDemanda(id: string, updates: Partial<Demanda>) {
-  const { data, error } = await supabase.from("demandas" as any).update(updates as any).eq("id", id).select().single();
+  const { data, error } = await supabase
+    .from("demandas" as any)
+    .update(updates as any)
+    .eq("id", id)
+    .select()
+    .single();
   if (error) throw error;
   return data as unknown as Demanda;
 }
 
 export async function deleteDemanda(id: string) {
-  const { error } = await supabase.from("demandas" as any).delete().eq("id", id);
+  const { error } = await supabase
+    .from("demandas" as any)
+    .delete()
+    .eq("id", id);
   if (error) throw error;
 }
 
-export async function addTransition(t: Omit<DemandaTransition, 'id' | 'created_at'>) {
+export async function addTransition(t: Omit<DemandaTransition, "id" | "created_at">) {
   const { error } = await supabase.from("demanda_transitions" as any).insert(t as any);
   if (error) throw error;
 }
@@ -43,7 +59,7 @@ export async function fetchTransitions(demandaId: string): Promise<DemandaTransi
   return (data || []) as unknown as DemandaTransition[];
 }
 
-export async function addHours(h: Omit<DemandaHour, 'id' | 'created_at'>) {
+export async function addHours(h: Omit<DemandaHour, "id" | "created_at">) {
   const { error } = await supabase.from("demanda_hours" as any).insert(h as any);
   if (error) throw error;
 }
@@ -59,11 +75,17 @@ export async function fetchHours(demandaId: string): Promise<DemandaHour[]> {
 }
 
 export async function deleteHour(id: string) {
-  const { error } = await supabase.from("demanda_hours" as any).delete().eq("id", id);
+  const { error } = await supabase
+    .from("demanda_hours" as any)
+    .delete()
+    .eq("id", id);
   if (error) throw error;
 }
 
-export async function upsertDemandas(teamId: string, rows: Array<{ rhm: string; projeto: string; situacao: string; tipo: string }>) {
+export async function upsertDemandas(
+  teamId: string,
+  rows: Array<{ rhm: string; projeto: string; situacao: string; tipo: string }>,
+) {
   const results = { importados: 0, atualizados: 0, erros: 0 };
   for (const row of rows) {
     try {
@@ -74,10 +96,19 @@ export async function upsertDemandas(teamId: string, rows: Array<{ rhm: string; 
         .eq("rhm", row.rhm)
         .maybeSingle();
       if ((existing as any)?.id) {
-        await supabase.from("demandas" as any).update({ projeto: row.projeto, situacao: row.situacao, tipo: row.tipo } as any).eq("id", (existing as any).id);
+        await supabase
+          .from("demandas" as any)
+          .update({ projeto: row.projeto, situacao: row.situacao, tipo: row.tipo } as any)
+          .eq("id", (existing as any).id);
         results.atualizados++;
       } else {
-        await supabase.from("demandas" as any).insert({ team_id: teamId, rhm: row.rhm, projeto: row.projeto, situacao: row.situacao, tipo: row.tipo } as any);
+        await supabase.from("demandas" as any).insert({
+          team_id: teamId,
+          rhm: row.rhm,
+          projeto: row.projeto,
+          situacao: row.situacao,
+          tipo: row.tipo,
+        } as any);
         results.importados++;
       }
     } catch {

@@ -18,35 +18,60 @@ export async function fetchProjetos(teamId: string): Promise<Projeto[]> {
     .select("*")
     .eq("team_id", teamId)
     .order("nome");
+
+  console.log("DATA:", data);
+  console.log("ERROR:", error);
+
   if (error) throw error;
   return (data || []) as unknown as Projeto[];
 }
 
-export async function createProjeto(p: { team_id: string; nome: string; descricao?: string; equipe?: string; sla?: string }) {
-  const { data, error } = await supabase.from("projetos" as any).insert(p as any).select().single();
+export async function createProjeto(p: {
+  team_id: string;
+  nome: string;
+  descricao?: string;
+  equipe?: string;
+  sla?: string;
+}) {
+  const { data, error } = await supabase
+    .from("projetos" as any)
+    .insert(p as any)
+    .select()
+    .single();
   if (error) throw error;
   return data as unknown as Projeto;
 }
 
 export async function updateProjeto(id: string, updates: Partial<Projeto>) {
-  const { data, error } = await supabase.from("projetos" as any).update(updates as any).eq("id", id).select().single();
+  const { data, error } = await supabase
+    .from("projetos" as any)
+    .update(updates as any)
+    .eq("id", id)
+    .select()
+    .single();
   if (error) throw error;
   return data as unknown as Projeto;
 }
 
 export async function deleteProjeto(id: string) {
-  const { error } = await supabase.from("projetos" as any).delete().eq("id", id);
+  const { error } = await supabase
+    .from("projetos" as any)
+    .delete()
+    .eq("id", id);
   if (error) throw error;
 }
 
-export async function upsertProjetos(teamId: string, rows: Array<{ nome: string; descricao?: string; equipe?: string; sla?: string }>) {
+export async function upsertProjetos(
+  teamId: string,
+  rows: Array<{ nome: string; descricao?: string; equipe?: string; sla?: string }>,
+) {
   for (const row of rows) {
     const { error } = await supabase.from("projetos" as any).insert({
       team_id: teamId,
       nome: row.nome,
-      descricao: row.descricao || '',
-      equipe: row.equipe || '',
-      sla: row.sla || 'padrao',
+      descricao: row.descricao || "",
+      equipe: row.equipe || "",
+      sla: row.sla || "padrao",
     } as any);
     if (error) throw error;
   }
