@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -117,7 +117,10 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl">
-        <DialogHeader><DialogTitle className="text-base">Nova Demanda</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle className="text-base">Nova Demanda</DialogTitle>
+          <DialogDescription>Preencha os dados para cadastrar uma nova demanda de sustentação.</DialogDescription>
+        </DialogHeader>
         <div className="space-y-2">
           {/* LINHA 1: # + Projeto */}
           <div className="grid grid-cols-2 gap-2">
