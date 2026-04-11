@@ -189,6 +189,7 @@ export function ImportacaoView() {
 
       setValidRows(parsed);
       setErrors(errs);
+      setAutoCreatedTypes(newTypes);
       setShowPreview(true);
 
       if (parsed.length === 0 && errs.length === 0) {
