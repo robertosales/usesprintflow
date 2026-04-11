@@ -268,6 +268,7 @@ export function getIndicadorFaixa(indicador: IndicadorMeta, valor: number) {
 
 export function getSLAStatusDemanda(createdAt: string, prazoSolucao: string | null, situacao: string) {
   if (situacao === 'aceite_final') return { status: 'concluida' as const, cor: 'green' as const, label: 'Concluída' };
+  if (situacao === 'cancelada') return { status: 'cancelada' as const, cor: 'muted' as const, label: 'Cancelada' };
   if (!prazoSolucao) return { status: 'sem_prazo' as const, cor: 'muted' as const, label: 'Sem prazo definido' };
 
   const now = new Date();
