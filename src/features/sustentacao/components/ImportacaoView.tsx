@@ -270,9 +270,10 @@ export function ImportacaoView() {
       }
     }
 
-    setResult(results);
+    setResult({ ...results, tiposCriados: autoCreatedTypes });
     setShowPreview(false);
-    toast.success(`Importação concluída: ${results.importados} novos, ${results.atualizados} atualizados`);
+    const tipoMsg = autoCreatedTypes.length > 0 ? ` | ${autoCreatedTypes.length} tipo(s) criado(s) automaticamente` : '';
+    toast.success(`Importação concluída: ${results.importados} novos, ${results.atualizados} atualizados${tipoMsg}`);
     setLoading(false);
   };
 
