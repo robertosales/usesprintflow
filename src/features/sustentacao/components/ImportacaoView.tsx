@@ -44,15 +44,18 @@ function parseDataInicio(raw: any): Date | null {
   return isValid(d) ? d : null;
 }
 
-function normalizeTipo(raw: string): string | null {
+function normalizeTipo(raw: string): { value: string; autoCreated: boolean } | null {
   const lower = raw.toLowerCase().trim();
-  if (VALID_TIPOS_MAP[lower]) return VALID_TIPOS_MAP[lower];
+  if (!lower) return null;
+  if (VALID_TIPOS_MAP[lower]) return { value: VALID_TIPOS_MAP[lower], autoCreated: false };
   for (const [key, val] of Object.entries(VALID_TIPOS_MAP)) {
-    if (key.includes(lower) || lower.includes(key)) return val;
+    if (key.includes(lower) || lower.includes(key)) return { value: val, autoCreated: false };
   }
-  if (lower === 'corretiva') return 'manutencao_corretiva';
-  if (lower === 'evolutiva') return 'evolutiva_pequeno_porte';
-  return null;
+  if (lower === 'corretiva') return { value: 'manutencao_corretiva', autoCreated: false };
+  if (lower === 'evolutiva') return { value: 'evolutiva_pequeno_porte', autoCreated: false };
+  // Auto-create: normalize the raw value as a key
+  const autoKey = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  return { value: autoKey || lower.replace(/\s+/g, '_'), autoCreated: true };
 }
 
 interface ValidationError {
