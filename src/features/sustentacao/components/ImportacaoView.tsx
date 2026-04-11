@@ -86,8 +86,9 @@ export function ImportacaoView() {
   const { projetos, reload: reloadProjetos } = useProjetos();
   const [mode, setMode] = useState<ImportMode>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ importados: number; atualizados: number; erros: number } | null>(null);
+  const [result, setResult] = useState<{ importados: number; atualizados: number; erros: number; tiposCriados?: string[] } | null>(null);
   const [validRows, setValidRows] = useState<ParsedRow[]>([]);
+  const [autoCreatedTypes, setAutoCreatedTypes] = useState<string[]>([]);
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [projetoResult, setProjetoResult] = useState<{ importados: number; existentes: number; erros: number } | null>(null);
@@ -112,6 +113,7 @@ export function ImportacaoView() {
 
       const parsed: ParsedRow[] = [];
       const errs: ValidationError[] = [];
+      const newTypes: string[] = [];
 
       rows.forEach((r, idx) => {
         const linha = idx + 2;
@@ -129,8 +131,12 @@ export function ImportacaoView() {
         }
 
         if (!tipoRaw) { errs.push({ linha, mensagem: 'Tipo não informado.' }); return; }
-        const tipoNorm = normalizeTipo(tipoRaw);
-        if (!tipoNorm) { errs.push({ linha, mensagem: `Tipo '${tipoRaw}' não reconhecido.` }); return; }
+        const tipoResult = normalizeTipo(tipoRaw);
+        if (!tipoResult) { errs.push({ linha, mensagem: `Tipo '${tipoRaw}' não reconhecido.` }); return; }
+        if (tipoResult.autoCreated && !newTypes.includes(tipoRaw)) {
+          newTypes.push(tipoRaw);
+        }
+        const tipoNorm = tipoResult.value;
 
         if (!dataInicioRaw) { errs.push({ linha, mensagem: 'Criado em inválido ou ausente.' }); return; }
         const dataInicio = parseDataInicio(dataInicioRaw);
