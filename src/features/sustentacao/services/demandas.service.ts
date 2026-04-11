@@ -8,9 +8,6 @@ export async function fetchDemandas(teamId: string): Promise<Demanda[]> {
     .eq("team_id", teamId)
     .order("updated_at", { ascending: false });
 
-  console.log("DATA:", data);
-  console.log("ERROR:", error);
-
   if (error) throw error;
   return (data || []) as unknown as Demanda[];
 }
