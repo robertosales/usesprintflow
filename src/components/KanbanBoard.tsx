@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, ShieldAlert, CheckCircle2, Clock, Link2, ChevronDown, ChevronRight, Search, Filter, X } from "lucide-react";
+import { AlertTriangle, ShieldAlert, CheckCircle2, Clock, Link2, ChevronDown, ChevronRight, ChevronLeft, Search, Filter, X } from "lucide-react";
 import { toast } from "sonner";
 import { ImpedimentDialog } from "@/components/ImpedimentManager";
 import {
@@ -138,6 +138,15 @@ export function KanbanBoard() {
   const [impedimentDialog, setImpedimentDialog] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [expandedHU, setExpandedHU] = useState<string | null>(null);
+  const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
+
+  const toggleColumn = (key: string) => {
+    setCollapsedColumns(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
   // Filters
   const [search, setSearch] = useState("");
@@ -245,38 +254,68 @@ export function KanbanBoard() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin">
+          <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-thin">
             {workflowColumns.map((col) => {
               const colHUs = sprintStories.filter((hu) => (hu.status || workflowColumns[0]?.key) === col.key);
+              const isCollapsed = collapsedColumns.has(col.key);
               return (
-                <div key={col.key} className="min-w-[300px] w-[300px] flex-shrink-0">
-                  <div className={`rounded-t-lg px-3 py-2.5 ${col.colorClass} border border-b-0`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`h-2.5 w-2.5 rounded-full ${col.dotColor}`} />
-                        <span className="text-xs font-semibold uppercase tracking-wider">{col.label}</span>
-                      </div>
+                <div key={col.key} className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-[48px]' : 'min-w-[300px] w-[300px]'}`}>
+                  {isCollapsed ? (
+                    <div
+                      className={`rounded-lg border h-full cursor-pointer ${col.colorClass} flex flex-col items-center gap-2 pt-3 pb-2 px-1`}
+                      onClick={() => toggleColumn(col.key)}
+                      title={`Expandir: ${col.label}`}
+                    >
+                      <ChevronRight className="h-4 w-4 shrink-0" />
+                      <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${col.dotColor}`} />
                       <span className="text-xs font-bold bg-background/80 rounded-full h-5 min-w-5 flex items-center justify-center px-1.5">
                         {colHUs.length}
                       </span>
+                      <span
+                        className="text-[11px] font-semibold uppercase tracking-wider mt-1"
+                        style={{ writingMode: 'vertical-lr', textOrientation: 'mixed', whiteSpace: 'nowrap' }}
+                      >
+                        {col.label}
+                      </span>
                     </div>
-                  </div>
-                  <DroppableColumn id={col.key}>
-                    {colHUs.map((hu) => (
-                      <DraggableCard key={hu.id} id={hu.id}>
-                        <HUCard
-                          hu={hu}
-                          expanded={expandedHU === hu.id}
-                          onToggleExpand={() => setExpandedHU(expandedHU === hu.id ? null : hu.id)}
-                          onImpediment={() => setImpedimentDialog(hu.id)}
-                          onResolveImpediment={(impId) => {
-                            resolveImpediment(hu.id, impId);
-                            toast.success("Impedimento resolvido!");
-                          }}
-                        />
-                      </DraggableCard>
-                    ))}
-                  </DroppableColumn>
+                  ) : (
+                    <>
+                      <div className={`rounded-t-lg px-3 py-2.5 ${col.colorClass} border border-b-0`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => toggleColumn(col.key)}
+                              className="p-0.5 rounded hover:bg-background/30 transition-colors shrink-0"
+                              title="Retrair coluna"
+                            >
+                              <ChevronLeft className="h-3.5 w-3.5" />
+                            </button>
+                            <div className={`h-2.5 w-2.5 rounded-full ${col.dotColor}`} />
+                            <span className="text-xs font-semibold uppercase tracking-wider">{col.label}</span>
+                          </div>
+                          <span className="text-xs font-bold bg-background/80 rounded-full h-5 min-w-5 flex items-center justify-center px-1.5">
+                            {colHUs.length}
+                          </span>
+                        </div>
+                      </div>
+                      <DroppableColumn id={col.key}>
+                        {colHUs.map((hu) => (
+                          <DraggableCard key={hu.id} id={hu.id}>
+                            <HUCard
+                              hu={hu}
+                              expanded={expandedHU === hu.id}
+                              onToggleExpand={() => setExpandedHU(expandedHU === hu.id ? null : hu.id)}
+                              onImpediment={() => setImpedimentDialog(hu.id)}
+                              onResolveImpediment={(impId) => {
+                                resolveImpediment(hu.id, impId);
+                                toast.success("Impedimento resolvido!");
+                              }}
+                            />
+                          </DraggableCard>
+                        ))}
+                      </DroppableColumn>
+                    </>
+                  )}
                 </div>
               );
             })}
