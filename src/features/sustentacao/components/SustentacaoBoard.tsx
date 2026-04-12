@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Columns3, AlertCircle } from "lucide-react";
+import { Search, Columns3, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { useDemandas } from "../hooks/useDemandas";
 import { useWorkflowSteps } from "../hooks/useWorkflowSteps";
@@ -44,7 +44,7 @@ export function SustentacaoBoard() {
   const [deleteTarget, setDeleteTarget] = useState<Demanda | null>(null);
   const [justTarget, setJustTarget] = useState<{ demanda: Demanda; status: string } | null>(null);
   const [evidenceTarget, setEvidenceTarget] = useState<{ demanda: Demanda; status: string; missing: string[] } | null>(null);
-  const [showAllColumns, setShowAllColumns] = useState(false);
+  const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
 
   const [evidenceCache, setEvidenceCache] = useState<Record<string, number>>({});
 
@@ -84,14 +84,19 @@ export function SustentacaoBoard() {
     });
   }, [demandas, debouncedSearch, filterTipo, filterSla, filterProjeto]);
 
-  // Build columns from global workflow steps
-  const defaultColumns = ['nova', 'execucao_dev', 'teste', 'aguardando_homologacao'];
-  const allColumns = useMemo(() => {
+  // Build columns from global workflow steps — always show all
+  const columns = useMemo(() => {
     if (workflowSteps.length > 0) return workflowSteps.map(s => s.key);
     return [...ALL_SITUACOES];
   }, [workflowSteps]);
 
-  const columns = showAllColumns ? allColumns : defaultColumns;
+  const toggleColumn = (status: string) => {
+    setCollapsedColumns(prev => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status); else next.add(status);
+      return next;
+    });
+  };
 
   const getColumnLabel = (status: string) => {
     const step = workflowSteps.find(s => s.key === status);
@@ -143,15 +148,7 @@ export function SustentacaoBoard() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-lg font-semibold">Board Kanban</h2>
-          <p className="text-sm text-muted-foreground">Board único — exibe demandas de todos os times</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            className={`text-xs px-2.5 py-1 rounded-md border transition-colors ${showAllColumns ? 'bg-info/10 text-info border-info/30' : 'text-muted-foreground'}`}
-            onClick={() => setShowAllColumns(!showAllColumns)}
-          >
-            {showAllColumns ? 'Colunas: Expandida' : 'Colunas: Resumida'}
-          </button>
+          <p className="text-sm text-muted-foreground">Board único — exibe demandas de todos os times. Clique no ícone do cabeçalho para retrair/expandir colunas.</p>
         </div>
       </div>
 
@@ -189,35 +186,64 @@ export function SustentacaoBoard() {
         <EmptyState icon={Columns3} title="Nenhuma demanda encontrada" description="Crie uma nova demanda ou ajuste os filtros." />
       )}
 
-      <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: 400 }}>
+      <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-thin" style={{ minHeight: 400 }}>
         {columns.map(status => {
           const items = filtered.filter(d => d.situacao === status);
+          const isCollapsed = collapsedColumns.has(status);
           return (
             <div
               key={status}
-              className="flex-shrink-0 w-[260px]"
+              className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-[44px]' : 'w-[260px]'}`}
               onDragOver={e => e.preventDefault()}
               onDrop={e => handleDrop(e, status)}
             >
-              <div className="rounded-lg bg-muted/40 border p-2 h-full">
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <span className="text-xs font-semibold truncate">{getColumnLabel(status)}</span>
-                  <Badge className="text-[10px] h-5 min-w-5 flex items-center justify-center bg-info/10 text-info border-info/20">{items.length}</Badge>
-                </div>
-                <ScrollArea className="max-h-[calc(100vh-280px)]">
-                  <div className="space-y-2">
-                    {items.map(d => (
-                      <DemandaCard
-                        key={d.id}
-                        demanda={d}
-                        onOpen={(dem) => { setSelectedInitialTab(undefined); setPendingMoveTarget(undefined); setSelected(dem); }}
-                        onDelete={setDeleteTarget}
-                        draggable
-                        onDragStart={(e, dem) => e.dataTransfer.setData('demanda-id', dem.id)}
-                      />
-                    ))}
+              <div className={`rounded-lg bg-muted/40 border h-full transition-all duration-300 ${isCollapsed ? 'p-1' : 'p-2'}`}>
+                {isCollapsed ? (
+                  <div
+                    className="flex flex-col items-center gap-2 cursor-pointer h-full pt-2"
+                    onClick={() => toggleColumn(status)}
+                    title={`Expandir: ${getColumnLabel(status)}`}
+                  >
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <Badge className="text-[10px] h-5 min-w-5 flex items-center justify-center bg-info/10 text-info border-info/20">{items.length}</Badge>
+                    <span
+                      className="text-[11px] font-semibold text-muted-foreground"
+                      style={{ writingMode: 'vertical-lr', textOrientation: 'mixed', whiteSpace: 'nowrap' }}
+                    >
+                      {getColumnLabel(status)}
+                    </span>
                   </div>
-                </ScrollArea>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-2 px-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <button
+                          onClick={() => toggleColumn(status)}
+                          className="p-0.5 rounded hover:bg-muted transition-colors shrink-0"
+                          title="Retrair coluna"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                        <span className="text-xs font-semibold truncate">{getColumnLabel(status)}</span>
+                      </div>
+                      <Badge className="text-[10px] h-5 min-w-5 flex items-center justify-center bg-info/10 text-info border-info/20">{items.length}</Badge>
+                    </div>
+                    <ScrollArea className="max-h-[calc(100vh-280px)]">
+                      <div className="space-y-2">
+                        {items.map(d => (
+                          <DemandaCard
+                            key={d.id}
+                            demanda={d}
+                            onOpen={(dem) => { setSelectedInitialTab(undefined); setPendingMoveTarget(undefined); setSelected(dem); }}
+                            onDelete={setDeleteTarget}
+                            draggable
+                            onDragStart={(e, dem) => e.dataTransfer.setData('demanda-id', dem.id)}
+                          />
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </>
+                )}
               </div>
             </div>
           );
