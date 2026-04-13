@@ -118,7 +118,6 @@ export function UserStoryManager() {
   const validate = () => {
     const e: Record<string, string> = {};
     if (!title.trim()) e.title = "Título é obrigatório";
-    if (!activeSprint) e.sprint = "Selecione uma sprint ativa";
     customFields.forEach((f) => {
       if (f.required) {
         const val = customFieldValues[f.id];
@@ -131,9 +130,11 @@ export function UserStoryManager() {
     return Object.keys(e).length === 0;
   };
 
+  const [sprintId, setSprintId] = useState<string>("");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate() || !activeSprint) return;
+    if (!validate()) return;
     setSubmitting(true);
     try {
       const s = selectedSize ? getSizeByKey(selectedSize) : null;
@@ -146,12 +147,15 @@ export function UserStoryManager() {
         ? `${description.trim()}\n\n---\n**Critérios de Aceite:**\n${acceptanceCriteria.trim()}`
         : description.trim();
 
+      const selectedSprintId = sprintId || (activeSprint?.id) || null;
+
       if (editId) {
         await updateUserStory(editId, {
           title: title.trim(),
           description: fullDesc,
           ...sizeData,
           priority,
+          sprintId: selectedSprintId || undefined,
           epicId: epicId || undefined,
           customFields: customFieldValues,
           startDate: startDate || undefined,
@@ -165,7 +169,7 @@ export function UserStoryManager() {
           description: fullDesc,
           ...sizeData,
           priority,
-          sprintId: activeSprint.id,
+          sprintId: selectedSprintId,
           epicId: epicId || undefined,
           customFields: customFieldValues,
           startDate: startDate || undefined,
