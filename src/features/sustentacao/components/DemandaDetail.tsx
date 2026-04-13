@@ -7,7 +7,29 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, History, FileText, Plus, Trash2, Users, Edit, Save, X, Search, UserPlus, ArrowLeft, Check, Circle, ChevronRight, MoveRight, ShieldCheck, Upload, Link2, AlertCircle, Eye } from "lucide-react";
+import {
+  Clock,
+  History,
+  FileText,
+  Plus,
+  Trash2,
+  Users,
+  Edit,
+  Save,
+  X,
+  Search,
+  UserPlus,
+  ArrowLeft,
+  Check,
+  Circle,
+  ChevronRight,
+  MoveRight,
+  ShieldCheck,
+  Upload,
+  Link2,
+  AlertCircle,
+  Eye,
+} from "lucide-react";
 import { JustificativaDialog } from "./JustificativaDialog";
 import { EncerramentoDialog } from "./EncerramentoDialog";
 import { SuspensaoDialog } from "./SuspensaoDialog";
@@ -15,7 +37,16 @@ import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Demanda } from "../types/demanda";
-import { SITUACAO_LABELS, SITUACAO_COLORS, FASES, FASE_LABELS, ALL_SITUACOES, REQUIRES_JUSTIFICATIVA, SITUACOES_CORRETIVA, SITUACOES_EVOLUTIVA_PREFIX, TERMINAL_STATUSES, isDemandaIniciada } from "../types/demanda";
+import {
+  SITUACAO_LABELS,
+  SITUACAO_COLORS,
+  FASES,
+  FASE_LABELS,
+  ALL_SITUACOES,
+  REQUIRES_JUSTIFICATIVA,
+  TERMINAL_STATUSES,
+  isDemandaIniciada,
+} from "../types/demanda";
 import { getTipoLabel, getSLAStatusDemanda, TIPOS_DEMANDA_IMR } from "../types/imr";
 import { useTransitions, useHours } from "../hooks/useDemandas";
 import { useProjetos } from "../hooks/useProjetos";
@@ -34,40 +65,157 @@ interface Props {
   pendingMoveTarget?: string;
 }
 
-const STEPPER_STEPS = ['nova', 'execucao_dev', 'teste', 'aguardando_homologacao', 'producao', 'aceite_final'];
-const STEPPER_LABELS: Record<string, string> = {
-  nova: 'Nova', execucao_dev: 'Execução', teste: 'Teste',
-  aguardando_homologacao: 'Homologação', producao: 'Produção', aceite_final: 'Aceite Final',
+// ─────────────────────────────────────────────────────────────────────────────
+// NOVO FLUXO DE TRABALHO — 11 etapas
+// ─────────────────────────────────────────────────────────────────────────────
+export const WORKFLOW_STEPS = [
+  "fila_atendimento",
+  "planejamento_elaboracao",
+  "planejamento_ag_aprovacao",
+  "planejamento_aprovada",
+  "em_execucao",
+  "bloqueada",
+  "hom_ag_homologacao",
+  "hom_homologada",
+  "rejeitada",
+  "fila_producao",
+  "ag_aceite_final",
+] as const;
+
+export type WorkflowStep = (typeof WORKFLOW_STEPS)[number];
+
+export const WORKFLOW_LABELS: Record<string, string> = {
+  fila_atendimento: "Fila de Atendimento",
+  planejamento_elaboracao: "Planejamento: Em Elaboração",
+  planejamento_ag_aprovacao: "Planejamento: Ag. Aprovação",
+  planejamento_aprovada: "Planejamento: Aprovada p/ Exec",
+  em_execucao: "Em Execução",
+  bloqueada: "Bloqueada",
+  hom_ag_homologacao: "Hom: Ag. Homologação",
+  hom_homologada: "Hom: Homologada",
+  rejeitada: "Rejeitada",
+  fila_producao: "Fila para Produção (Infra)",
+  ag_aceite_final: "Ag. Aceite Final",
 };
 
-const PAPEIS_OPTIONS = [
-  { value: 'analista', label: 'Analista' },
-  { value: 'arquiteto', label: 'Arquiteto' },
-  { value: 'desenvolvedor', label: 'Desenvolvedor' },
-  { value: 'testador', label: 'Testador' },
-  { value: 'gestor', label: 'Gestor' },
+export const WORKFLOW_COLORS: Record<string, string> = {
+  fila_atendimento: "bg-slate-100 text-slate-700 border-slate-300",
+  planejamento_elaboracao: "bg-blue-100 text-blue-700 border-blue-300",
+  planejamento_ag_aprovacao: "bg-indigo-100 text-indigo-700 border-indigo-300",
+  planejamento_aprovada: "bg-violet-100 text-violet-700 border-violet-300",
+  em_execucao: "bg-amber-100 text-amber-700 border-amber-300",
+  bloqueada: "bg-red-100 text-red-700 border-red-300",
+  hom_ag_homologacao: "bg-cyan-100 text-cyan-700 border-cyan-300",
+  hom_homologada: "bg-teal-100 text-teal-700 border-teal-300",
+  rejeitada: "bg-rose-100 text-rose-800 border-rose-300",
+  fila_producao: "bg-orange-100 text-orange-700 border-orange-300",
+  ag_aceite_final: "bg-emerald-100 text-emerald-700 border-emerald-300",
+};
+
+// Etapas exibidas no stepper visual (excluindo as de desvio: bloqueada/rejeitada)
+const STEPPER_STEPS = [
+  "fila_atendimento",
+  "planejamento_elaboracao",
+  "planejamento_ag_aprovacao",
+  "planejamento_aprovada",
+  "em_execucao",
+  "hom_ag_homologacao",
+  "hom_homologada",
+  "fila_producao",
+  "ag_aceite_final",
 ];
 
-const EVIDENCIA_FASES = ['nova', 'execucao_dev', 'teste', 'aguardando_homologacao', 'producao', 'aceite_final'];
-const EVIDENCIA_FASE_LABELS: Record<string, string> = {
-  nova: 'Abertura', execucao_dev: 'Desenvolvimento', teste: 'Testes',
-  aguardando_homologacao: 'Homologação', producao: 'Produção', aceite_final: 'Aceite Final',
+const STEPPER_LABELS: Record<string, string> = {
+  fila_atendimento: "Fila Atend.",
+  planejamento_elaboracao: "Elaboração",
+  planejamento_ag_aprovacao: "Ag. Aprov.",
+  planejamento_aprovada: "Aprovada",
+  em_execucao: "Execução",
+  hom_ag_homologacao: "Ag. Homol.",
+  hom_homologada: "Homologada",
+  fila_producao: "Fila Prod.",
+  ag_aceite_final: "Aceite Final",
 };
 
-const SUSPENSAO_STATUSES = ['bloqueada', 'aguardando_retorno'];
+// Fluxo principal de avanço (sem desvios)
+const FLOW_PRINCIPAL = [
+  "fila_atendimento",
+  "planejamento_elaboracao",
+  "planejamento_ag_aprovacao",
+  "planejamento_aprovada",
+  "em_execucao",
+  "hom_ag_homologacao",
+  "hom_homologada",
+  "fila_producao",
+  "ag_aceite_final",
+];
 
-function getFlowOrder(demanda: Demanda): string[] {
-  if (demanda.tipo === 'evolutiva') {
-    return [...SITUACOES_EVOLUTIVA_PREFIX, ...Array.from(SITUACOES_CORRETIVA).slice(1)];
+// Status considerados terminais (não permitem mais movimentação)
+const TERMINAL_WORKFLOW = ["ag_aceite_final", "rejeitada", "cancelada"];
+
+// Status que ativam modal de suspensão/bloqueio
+const SUSPENSAO_STATUSES = ["bloqueada"];
+
+// Status que exigem justificativa obrigatória
+const REQUIRES_JUSTIFICATIVA_WORKFLOW = ["rejeitada", "cancelada", "planejamento_ag_aprovacao"];
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PAPEIS_OPTIONS = [
+  { value: "analista", label: "Analista" },
+  { value: "arquiteto", label: "Arquiteto" },
+  { value: "desenvolvedor", label: "Desenvolvedor" },
+  { value: "testador", label: "Testador" },
+  { value: "gestor", label: "Gestor" },
+];
+
+const EVIDENCIA_FASES = [
+  "fila_atendimento",
+  "planejamento_elaboracao",
+  "planejamento_ag_aprovacao",
+  "planejamento_aprovada",
+  "em_execucao",
+  "hom_ag_homologacao",
+  "hom_homologada",
+  "fila_producao",
+  "ag_aceite_final",
+];
+
+const EVIDENCIA_FASE_LABELS: Record<string, string> = {
+  fila_atendimento: "Fila de Atendimento",
+  planejamento_elaboracao: "Elaboração",
+  planejamento_ag_aprovacao: "Ag. Aprovação",
+  planejamento_aprovada: "Aprovada p/ Exec",
+  em_execucao: "Em Execução",
+  hom_ag_homologacao: "Ag. Homologação",
+  hom_homologada: "Homologada",
+  fila_producao: "Fila Produção",
+  ag_aceite_final: "Aceite Final",
+};
+
+function getNextStatuses(situacao: string): string[] {
+  // Desvios especiais disponíveis em qualquer etapa (exceto terminais)
+  if (TERMINAL_WORKFLOW.includes(situacao)) return [];
+
+  const idx = FLOW_PRINCIPAL.indexOf(situacao);
+
+  // Se bloqueada: única opção é retornar (tratado separadamente via handleUnblock)
+  if (situacao === "bloqueada") return [];
+
+  // Se rejeitada mas não terminal: voltar para execução
+  if (situacao === "rejeitada") return ["em_execucao"];
+
+  if (idx < 0) return [];
+
+  // Próxima etapa do fluxo principal
+  const next = FLOW_PRINCIPAL.slice(idx + 1);
+
+  // Em homologada, pode rejeitar (volta ao fluxo via rejeitada)
+  if (situacao === "hom_homologada") {
+    return [...next, "rejeitada"];
   }
-  return [...SITUACOES_CORRETIVA];
-}
 
-function getNextStatuses(demanda: Demanda): string[] {
-  const flow = getFlowOrder(demanda);
-  const currentIdx = flow.indexOf(demanda.situacao);
-  if (currentIdx < 0) return [];
-  return flow.slice(currentIdx + 1).filter(s => s !== 'bloqueada' && s !== 'aguardando_retorno');
+  return next;
 }
 
 type DemandaExt = Demanda & {
@@ -86,37 +234,56 @@ type DemandaExt = Demanda & {
   contador_rejeicoes?: number;
 };
 
-export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo, initialTab, pendingMoveTarget }: Props) {
+export function DemandaDetail({
+  demanda: rawDemanda,
+  onBack,
+  onUpdate,
+  onMoveTo,
+  initialTab,
+  pendingMoveTarget,
+}: Props) {
   const demanda = rawDemanda as DemandaExt | null;
   const { user, profile } = useAuth();
   const { transitions, loading: tLoading, reload: reloadTransitions } = useTransitions(demanda?.id ?? null);
-  const { hours, total, add: addHour, remove: removeHour, loading: hLoading, reload: reloadHours } = useHours(demanda?.id ?? null);
+  const {
+    hours,
+    total,
+    add: addHour,
+    remove: removeHour,
+    loading: hLoading,
+    reload: reloadHours,
+  } = useHours(demanda?.id ?? null);
   const { projetos } = useProjetos();
 
-  const [activeTab, setActiveTab] = useState(initialTab || 'detalhes');
+  const [activeTab, setActiveTab] = useState(initialTab || "detalhes");
   const [pendingTarget, setPendingTarget] = useState<string | undefined>(pendingMoveTarget);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({
-    projeto: '', tipo: '', descricao: '', sla: '', rhm: '',
-    tipo_defeito: '' as string | null, originada_diagnostico: false,
-    data_previsao_encerramento: '' as string | null,
-    demandante: '' as string | null,
+    projeto: "",
+    tipo: "",
+    descricao: "",
+    sla: "",
+    rhm: "",
+    tipo_defeito: "" as string | null,
+    originada_diagnostico: false,
+    data_previsao_encerramento: "" as string | null,
+    demandante: "" as string | null,
   });
 
-  const [newStatus, setNewStatus] = useState('');
-  const [justificativa, setJustificativa] = useState('');
+  const [newStatus, setNewStatus] = useState("");
+  const [justificativa, setJustificativa] = useState("");
   const [showJustModal, setShowJustModal] = useState(false);
   const [showSuspensaoModal, setShowSuspensaoModal] = useState(false);
   const [showEncerramentoModal, setShowEncerramentoModal] = useState(false);
 
-  const [hourForm, setHourForm] = useState({ horas: '', fase: 'execucao', descricao: '' });
+  const [hourForm, setHourForm] = useState({ horas: "", fase: "em_execucao", descricao: "" });
   const [deleteHourId, setDeleteHourId] = useState<string | null>(null);
 
   const [responsaveis, setResponsaveis] = useState<DemandaResponsavel[]>([]);
   const [respLoading, setRespLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{ user_id: string; display_name: string; email: string }[]>([]);
-  const [addPapel, setAddPapel] = useState('desenvolvedor');
+  const [addPapel, setAddPapel] = useState("desenvolvedor");
   const [deleteRespId, setDeleteRespId] = useState<string | null>(null);
 
   const [profilesMap, setProfilesMap] = useState<Map<string, string>>(new Map());
@@ -124,21 +291,31 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
 
   const [evidencias, setEvidencias] = useState<DemandaEvidencia[]>([]);
   const [evidLoading, setEvidLoading] = useState(false);
-  const [evidForm, setEvidForm] = useState({ fase: demanda?.situacao || 'execucao_dev', tipo: 'arquivo', titulo: '', descricao: '', url_externa: '' });
+  const [evidForm, setEvidForm] = useState({
+    fase: demanda?.situacao || "em_execucao",
+    tipo: "arquivo",
+    titulo: "",
+    descricao: "",
+    url_externa: "",
+  });
   const [evidFile, setEvidFile] = useState<File | null>(null);
   const [deleteEvidId, setDeleteEvidId] = useState<string | null>(null);
 
   const loadEvidencias = useCallback(async () => {
     if (!demanda?.id) return;
     setEvidLoading(true);
-    try { setEvidencias(await evidSvc.fetchEvidencias(demanda.id)); } catch { }
+    try {
+      setEvidencias(await evidSvc.fetchEvidencias(demanda.id));
+    } catch {}
     setEvidLoading(false);
   }, [demanda?.id]);
 
   const loadResponsaveis = useCallback(async () => {
     if (!demanda?.id) return;
     setRespLoading(true);
-    try { setResponsaveis(await respSvc.fetchResponsaveis(demanda.id)); } catch { }
+    try {
+      setResponsaveis(await respSvc.fetchResponsaveis(demanda.id));
+    } catch {}
     setRespLoading(false);
   }, [demanda?.id]);
 
@@ -147,62 +324,78 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
       loadResponsaveis();
       loadEvidencias();
       setEditing(false);
-      setEvidForm(prev => ({ ...prev, fase: demanda.situacao || 'execucao_dev' }));
+      setEvidForm((prev) => ({ ...prev, fase: demanda.situacao || "em_execucao" }));
     }
   }, [demanda?.id, demanda?.situacao, loadResponsaveis, loadEvidencias]);
 
   useEffect(() => {
-    if (!demanda?.demandante) { setDemandanteProfile(null); return; }
+    if (!demanda?.demandante) {
+      setDemandanteProfile(null);
+      return;
+    }
     import("@/integrations/supabase/client").then(({ supabase }) => {
-      supabase.from("profiles").select("display_name").eq("id", demanda.demandante!).single()
+      supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", demanda.demandante!)
+        .single()
         .then(({ data }) => setDemandanteProfile((data as any)?.display_name || null));
     });
   }, [demanda?.demandante]);
 
   useEffect(() => {
     if (hours.length === 0) return;
-    const ids = [...new Set(hours.map(h => h.user_id))];
-    const missing = ids.filter(id => !profilesMap.has(id));
+    const ids = [...new Set(hours.map((h) => h.user_id))];
+    const missing = ids.filter((id) => !profilesMap.has(id));
     if (missing.length === 0) return;
     import("@/integrations/supabase/client").then(({ supabase }) => {
-      supabase.from("profiles").select("user_id, display_name").in("user_id", missing)
+      supabase
+        .from("profiles")
+        .select("user_id, display_name")
+        .in("user_id", missing)
         .then(({ data }) => {
-          if (data) setProfilesMap(prev => {
-            const next = new Map(prev);
-            data.forEach(p => next.set(p.user_id, p.display_name));
-            return next;
-          });
+          if (data)
+            setProfilesMap((prev) => {
+              const next = new Map(prev);
+              data.forEach((p) => next.set(p.user_id, p.display_name));
+              return next;
+            });
         });
     });
   }, [hours]);
 
   if (!demanda) return null;
 
-  const isCancelada = demanda.situacao === 'cancelada';
-  const isTerminal = (TERMINAL_STATUSES as readonly string[]).includes(demanda.situacao);
+  const isCancelada = demanda.situacao === "cancelada";
+  const isRejeitada = demanda.situacao === "rejeitada";
+  const isTerminal = TERMINAL_WORKFLOW.includes(demanda.situacao);
+  const isBloqueada = demanda.situacao === "bloqueada";
+
   const currentStepIdx = STEPPER_STEPS.indexOf(demanda.situacao);
-  const allowedNextStatuses = isTerminal ? [] : getNextStatuses(demanda);
-  const canBlock = !isTerminal && demanda.situacao !== 'bloqueada' && demanda.situacao !== 'aceite_final';
-  const canCancel = !isTerminal && demanda.situacao !== 'aceite_final';
+  const allowedNextStatuses = isTerminal ? [] : getNextStatuses(demanda.situacao);
+
+  const canBlock = !isTerminal && !isBloqueada && demanda.situacao !== "ag_aceite_final";
+  const canCancel = !isTerminal && demanda.situacao !== "ag_aceite_final";
+  const canReject = demanda.situacao === "hom_homologada";
 
   const slaStatus = getSLAStatusDemanda(demanda.created_at, demanda.prazo_solucao || null, demanda.situacao);
 
   const currentFaseIdx = EVIDENCIA_FASES.indexOf(demanda.situacao);
   const allowedEvidFases = currentFaseIdx >= 0 ? EVIDENCIA_FASES.slice(0, currentFaseIdx + 1) : EVIDENCIA_FASES;
 
-  // Ev. 8: Evidência obrigatória apenas ao avançar para "planejamento"
+  // Evidência obrigatória ao avançar para "planejamento_ag_aprovacao"
   const getMissingEvidencias = (targetStatus: string): string[] => {
-    if (targetStatus !== 'planejamento') return [];
-    const faseEvidencias = evidencias.filter(e => e.fase === demanda.situacao);
+    if (targetStatus !== "planejamento_ag_aprovacao") return [];
+    const faseEvidencias = evidencias.filter((e) => e.fase === demanda.situacao);
     if (faseEvidencias.length > 0) return [];
-    return ['É obrigatório anexar ao menos uma evidência antes de avançar para Planejamento: Em Elaboração.'];
+    return ["É obrigatório anexar ao menos uma evidência antes de avançar para Ag. Aprovação."];
   };
 
   const startEdit = () => {
     setEditForm({
       projeto: demanda.projeto,
       tipo: demanda.tipo,
-      descricao: demanda.descricao || '',
+      descricao: demanda.descricao || "",
       sla: demanda.sla,
       rhm: demanda.rhm,
       tipo_defeito: demanda.tipo_defeito || null,
@@ -227,57 +420,81 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
         demandante: editForm.demandante,
       } as any);
       setEditing(false);
-    } catch { toast.error("Erro ao salvar alterações"); }
+    } catch {
+      toast.error("Erro ao salvar alterações");
+    }
   };
 
   const handleMove = async () => {
     if (!newStatus) return;
+
     const missing = getMissingEvidencias(newStatus);
     if (missing.length > 0) {
       setPendingTarget(newStatus);
-      setActiveTab('evidencias');
+      setActiveTab("evidencias");
       toast.warning(`Evidência obrigatória pendente. Cadastre a evidência antes de avançar.`);
       return;
     }
-    if (newStatus === 'aceite_final') {
+
+    if (newStatus === "ag_aceite_final") {
       setShowEncerramentoModal(true);
       return;
     }
+
     if (SUSPENSAO_STATUSES.includes(newStatus)) {
       setShowSuspensaoModal(true);
       return;
     }
-    if (REQUIRES_JUSTIFICATIVA.includes(newStatus)) {
+
+    if (REQUIRES_JUSTIFICATIVA_WORKFLOW.includes(newStatus)) {
       setShowJustModal(true);
       return;
     }
+
     const ok = await onMoveTo(demanda, newStatus);
-    if (ok) { setNewStatus(''); await refreshAllData(); }
+    if (ok) {
+      setNewStatus("");
+      await refreshAllData();
+    }
   };
 
   const confirmJustificativa = async (justificativaText: string) => {
     if (!newStatus) return;
     const ok = await onMoveTo(demanda, newStatus, justificativaText);
-    if (ok) { setNewStatus(''); setShowJustModal(false); await refreshAllData(); }
+    if (ok) {
+      setNewStatus("");
+      setShowJustModal(false);
+      await refreshAllData();
+    }
   };
 
   const confirmSuspensao = async (just: string, novaPrevisao: string) => {
     if (!newStatus || !user) return;
     try {
       await eventosSvc.addEvento({
-        demanda_id: demanda.id, tipo_evento: 'E6',
-        descricao: `Suspensão: ${just}. Nova previsão: ${novaPrevisao}`,
-        redutor: 0.1, incidencia: 'limitada', user_id: user.id,
+        demanda_id: demanda.id,
+        tipo_evento: "E6",
+        descricao: `Bloqueio: ${just}. Nova previsão: ${novaPrevisao}`,
+        redutor: 0.1,
+        incidencia: "limitada",
+        user_id: user.id,
       });
-    } catch { }
+    } catch {}
     await onUpdate(demanda.id, { data_previsao_encerramento: novaPrevisao } as any);
     const ok = await onMoveTo(demanda, newStatus, just);
-    if (ok) { setNewStatus(''); setShowSuspensaoModal(false); await refreshAllData(); toast.info("Evento E6 registrado no log da demanda."); }
+    if (ok) {
+      setNewStatus("");
+      setShowSuspensaoModal(false);
+      await refreshAllData();
+      toast.info("Evento E6 registrado no log da demanda.");
+    }
   };
 
   const confirmEncerramento = async (data: {
-    nota_satisfacao: number; cobertura_testes: number;
-    artefatos_atualizados: string; hard_code_identificado: boolean;
+    nota_satisfacao: number;
+    cobertura_testes: number;
+    artefatos_atualizados: string;
+    hard_code_identificado: boolean;
     reincidencia_defeito: boolean | null;
   }) => {
     if (!user) return;
@@ -292,25 +509,42 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
     } as any);
 
     const events: Array<{ tipo: string; redutor: number; incidencia: string; desc: string }> = [];
-    if (data.artefatos_atualizados === 'nao') events.push({ tipo: 'E5', redutor: 0.1, incidencia: 'limitada', desc: 'Artefatos não atualizados após manutenção' });
-    if (data.hard_code_identificado) events.push({ tipo: 'E4', redutor: 0.1, incidencia: 'integral', desc: 'Hard code de parâmetros importantes' });
+    if (data.artefatos_atualizados === "nao")
+      events.push({
+        tipo: "E5",
+        redutor: 0.1,
+        incidencia: "limitada",
+        desc: "Artefatos não atualizados após manutenção",
+      });
+    if (data.hard_code_identificado)
+      events.push({ tipo: "E4", redutor: 0.1, incidencia: "integral", desc: "Hard code de parâmetros importantes" });
     if (data.reincidencia_defeito) {
-      events.push({ tipo: 'E7', redutor: 0.2, incidencia: 'limitada', desc: 'Reincidência de defeito impeditivo' });
-      events.push({ tipo: 'E14', redutor: 0.2, incidencia: 'limitada', desc: 'Reincidência de defeito impeditivo de sprint anterior' });
+      events.push({ tipo: "E7", redutor: 0.2, incidencia: "limitada", desc: "Reincidência de defeito impeditivo" });
+      events.push({
+        tipo: "E14",
+        redutor: 0.2,
+        incidencia: "limitada",
+        desc: "Reincidência de defeito impeditivo de sprint anterior",
+      });
     }
 
     for (const ev of events) {
       try {
         await eventosSvc.addEvento({
-          demanda_id: demanda.id, tipo_evento: ev.tipo,
-          descricao: ev.desc, redutor: ev.redutor, incidencia: ev.incidencia, user_id: user.id,
+          demanda_id: demanda.id,
+          tipo_evento: ev.tipo,
+          descricao: ev.desc,
+          redutor: ev.redutor,
+          incidencia: ev.incidencia,
+          user_id: user.id,
         });
-      } catch { }
+      } catch {}
     }
 
-    const ok = await onMoveTo(demanda, 'aceite_final');
+    const ok = await onMoveTo(demanda, "ag_aceite_final");
     if (ok) {
-      setNewStatus(''); setShowEncerramentoModal(false);
+      setNewStatus("");
+      setShowEncerramentoModal(false);
       await refreshAllData();
       if (events.length > 0) toast.info(`${events.length} evento(s) de glosa registrado(s).`);
     }
@@ -321,29 +555,32 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
   };
 
   const handleUnblock = async () => {
-    if (demanda.situacao !== 'bloqueada') return;
+    if (demanda.situacao !== "bloqueada") return;
     const sorted = [...transitions].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    const blockTransition = sorted.find(t => t.to_status === 'bloqueada');
-    const previousStatus = blockTransition?.from_status || 'nova';
-    const ok = await onMoveTo(demanda, previousStatus, 'Desbloqueio automático — retorno à etapa anterior');
-    if (ok) toast.success(`Demanda desbloqueada → ${SITUACAO_LABELS[previousStatus]}`);
+    const blockTransition = sorted.find((t) => t.to_status === "bloqueada");
+    const previousStatus = blockTransition?.from_status || "fila_atendimento";
+    const ok = await onMoveTo(demanda, previousStatus, "Desbloqueio — retorno à etapa anterior");
+    if (ok) toast.success(`Demanda desbloqueada → ${WORKFLOW_LABELS[previousStatus] || previousStatus}`);
   };
 
   const handleAddHour = async () => {
     const h = parseFloat(hourForm.horas);
     if (!h || h <= 0) return;
     await addHour({ horas: h, fase: hourForm.fase, descricao: hourForm.descricao });
-    setHourForm({ horas: '', fase: 'execucao', descricao: '' });
+    setHourForm({ horas: "", fase: "em_execucao", descricao: "" });
   };
 
   const handleSearch = async (q: string) => {
     setSearchQuery(q);
-    if (q.length < 2) { setSearchResults([]); return; }
+    if (q.length < 2) {
+      setSearchResults([]);
+      return;
+    }
     try {
       const results = await respSvc.searchProfiles(q);
-      const existing = new Set(responsaveis.map(r => r.user_id));
-      setSearchResults(results.filter(r => !existing.has(r.user_id)));
-    } catch { }
+      const existing = new Set(responsaveis.map((r) => r.user_id));
+      setSearchResults(results.filter((r) => !existing.has(r.user_id)));
+    } catch {}
   };
 
   const handleAddResp = async (userId: string) => {
@@ -351,9 +588,12 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
     try {
       await respSvc.addResponsavel(demanda.id, userId, addPapel);
       toast.success("Responsável adicionado");
-      setSearchQuery(''); setSearchResults([]);
+      setSearchQuery("");
+      setSearchResults([]);
       await loadResponsaveis();
-    } catch { toast.error("Erro ao adicionar responsável"); }
+    } catch {
+      toast.error("Erro ao adicionar responsável");
+    }
   };
 
   const handleRemoveResp = async () => {
@@ -363,28 +603,50 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
       toast.success("Responsável removido");
       setDeleteRespId(null);
       await loadResponsaveis();
-    } catch { toast.error("Erro ao remover responsável"); }
+    } catch {
+      toast.error("Erro ao remover responsável");
+    }
   };
 
   const handleAddEvidencia = async () => {
     if (!demanda?.id || !user?.id) return;
-    if (!evidForm.titulo.trim()) { toast.error("Informe o título da evidência"); return; }
+    if (!evidForm.titulo.trim()) {
+      toast.error("Informe o título da evidência");
+      return;
+    }
     try {
       let filePath: string | undefined, fileName: string | undefined, mimeType: string | undefined;
-      if (evidForm.tipo === 'arquivo' && evidFile) {
+      if (evidForm.tipo === "arquivo" && evidFile) {
         const result = await evidSvc.uploadEvidenciaFile(evidFile, demanda.id);
-        filePath = result.path; fileName = evidFile.name; mimeType = evidFile.type;
+        filePath = result.path;
+        fileName = evidFile.name;
+        mimeType = evidFile.type;
       }
       await evidSvc.addEvidencia({
-        demanda_id: demanda.id, fase: evidForm.fase, tipo: evidForm.tipo, titulo: evidForm.titulo,
-        descricao: evidForm.descricao || undefined, file_path: filePath, file_name: fileName, mime_type: mimeType,
-        url_externa: evidForm.tipo === 'link' ? evidForm.url_externa : undefined, user_id: user.id,
+        demanda_id: demanda.id,
+        fase: evidForm.fase,
+        tipo: evidForm.tipo,
+        titulo: evidForm.titulo,
+        descricao: evidForm.descricao || undefined,
+        file_path: filePath,
+        file_name: fileName,
+        mime_type: mimeType,
+        url_externa: evidForm.tipo === "link" ? evidForm.url_externa : undefined,
+        user_id: user.id,
       });
       toast.success("Evidência adicionada");
-      setEvidForm({ fase: demanda.situacao || 'execucao_dev', tipo: 'arquivo', titulo: '', descricao: '', url_externa: '' });
+      setEvidForm({
+        fase: demanda.situacao || "em_execucao",
+        tipo: "arquivo",
+        titulo: "",
+        descricao: "",
+        url_externa: "",
+      });
       setEvidFile(null);
       await loadEvidencias();
-    } catch { toast.error("Erro ao adicionar evidência"); }
+    } catch {
+      toast.error("Erro ao adicionar evidência");
+    }
   };
 
   const handleRemoveEvidencia = async () => {
@@ -394,50 +656,81 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
       toast.success("Evidência removida");
       setDeleteEvidId(null);
       await loadEvidencias();
-    } catch { toast.error("Erro ao remover evidência"); }
+    } catch {
+      toast.error("Erro ao remover evidência");
+    }
   };
 
-  const evidenciasByFase = EVIDENCIA_FASES.reduce((acc, fase) => {
-    acc[fase] = evidencias.filter(e => e.fase === fase);
-    return acc;
-  }, {} as Record<string, DemandaEvidencia[]>);
+  const evidenciasByFase = EVIDENCIA_FASES.reduce(
+    (acc, fase) => {
+      acc[fase] = evidencias.filter((e) => e.fase === fase);
+      return acc;
+    },
+    {} as Record<string, DemandaEvidencia[]>,
+  );
 
   const SLA_COR_CLASS: Record<string, string> = {
-    green: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    yellow: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    orange: 'bg-orange-100 text-orange-800 border-orange-200',
-    red: 'bg-destructive/10 text-destructive border-destructive/30',
-    muted: 'bg-muted text-muted-foreground',
+    green: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    yellow: "bg-yellow-100 text-yellow-800 border-yellow-200",
+    orange: "bg-orange-100 text-orange-800 border-orange-200",
+    red: "bg-destructive/10 text-destructive border-destructive/30",
+    muted: "bg-muted text-muted-foreground",
   };
 
-  const isCorretiva = ['manutencao_corretiva', 'corretiva'].includes(demanda.tipo);
+  const isCorretiva = ["manutencao_corretiva", "corretiva"].includes(demanda.tipo);
+
+  // Label resolvido: usa WORKFLOW_LABELS primeiro, fallback para SITUACAO_LABELS importado
+  const resolveLabel = (s: string) => WORKFLOW_LABELS[s] || SITUACAO_LABELS[s] || s;
+  const resolveColor = (s: string) => WORKFLOW_COLORS[s] || SITUACAO_COLORS[s] || "";
 
   return (
     <>
       <div className="w-full max-w-[1100px] mx-auto py-6 px-4 md:px-0 space-y-6 animate-in fade-in duration-300">
+        {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm">
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground -ml-2" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4" />Demandas
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-muted-foreground hover:text-foreground -ml-2"
+            onClick={onBack}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Demandas
           </Button>
           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="font-mono font-semibold text-info">{demanda.rhm}</span>
         </div>
 
         <div className="bg-card rounded-xl border shadow-sm">
+          {/* Header */}
           <div className="px-6 py-5 border-b">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1.5">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h1 className="text-xl font-bold tracking-tight font-mono text-foreground">{demanda.rhm}</h1>
-                  <Badge className={`text-xs ${SITUACAO_COLORS[demanda.situacao] || ''}`}>
-                    {SITUACAO_LABELS[demanda.situacao] || demanda.situacao}
+                  <Badge className={`text-xs ${resolveColor(demanda.situacao)}`}>
+                    {resolveLabel(demanda.situacao)}
                   </Badge>
                   <Badge className={`text-xs ${SLA_COR_CLASS[slaStatus.cor]}`}>
-                    {slaStatus.cor === 'green' ? '🟢' : slaStatus.cor === 'yellow' ? '🟡' : slaStatus.cor === 'orange' ? '🟠' : '🔴'} {slaStatus.label}
+                    {slaStatus.cor === "green"
+                      ? "🟢"
+                      : slaStatus.cor === "yellow"
+                        ? "🟡"
+                        : slaStatus.cor === "orange"
+                          ? "🟠"
+                          : "🔴"}{" "}
+                    {slaStatus.label}
                   </Badge>
+                  {isBloqueada && (
+                    <Badge className="text-xs bg-red-100 text-red-700 border-red-300">🔒 Bloqueada</Badge>
+                  )}
+                  {isRejeitada && (
+                    <Badge className="text-xs bg-rose-100 text-rose-800 border-rose-300">❌ Rejeitada</Badge>
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {demanda.projeto} · <span>{getTipoLabel(demanda.tipo)}</span> · Criada em {new Date(demanda.created_at).toLocaleDateString('pt-BR')}
+                  {demanda.projeto} · <span>{getTipoLabel(demanda.tipo)}</span> · Criada em{" "}
+                  {new Date(demanda.created_at).toLocaleDateString("pt-BR")}
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -445,57 +738,120 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
                   <Badge className="bg-gray-200 text-gray-700 border-gray-300 text-xs">Somente leitura</Badge>
                 ) : editing ? (
                   <>
-                    <Button variant="outline" size="sm" className="gap-1.5" onClick={cancelEdit}><X className="h-4 w-4" />Cancelar</Button>
-                    <Button size="sm" className="gap-1.5 bg-info hover:bg-info/90 text-info-foreground" onClick={saveEdit}><Save className="h-4 w-4" />Salvar</Button>
+                    <Button variant="outline" size="sm" className="gap-1.5" onClick={cancelEdit}>
+                      <X className="h-4 w-4" />
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="gap-1.5 bg-info hover:bg-info/90 text-info-foreground"
+                      onClick={saveEdit}
+                    >
+                      <Save className="h-4 w-4" />
+                      Salvar
+                    </Button>
                   </>
                 ) : (
-                  <Button variant="outline" size="sm" className="gap-1.5" onClick={startEdit}><Edit className="h-4 w-4" />Editar</Button>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={startEdit}>
+                    <Edit className="h-4 w-4" />
+                    Editar
+                  </Button>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="px-6 py-4 border-b bg-muted/30">
-            <div className="flex items-center">
+          {/* Stepper do fluxo */}
+          <div className="px-6 py-4 border-b bg-muted/30 overflow-x-auto">
+            <div className="flex items-center min-w-max">
               {STEPPER_STEPS.map((step, idx) => {
                 const isActive = demanda.situacao === step;
+                // Se bloqueada ou rejeitada, o passo pai ainda aparece como ativo
+                const effectiveStep = isBloqueada || isRejeitada ? demanda.situacao : demanda.situacao;
                 const isPast = currentStepIdx >= 0 && idx < currentStepIdx;
                 const isLast = idx === STEPPER_STEPS.length - 1;
                 return (
                   <div key={step} className="flex items-center flex-1 last:flex-none">
                     <div className="flex flex-col items-center gap-1.5">
-                      <div className={`flex items-center justify-center h-8 w-8 rounded-full border-2 transition-all ${
-                        isPast ? 'bg-emerald-500 border-emerald-500 text-white' :
-                        isActive ? 'bg-info border-info text-info-foreground shadow-md shadow-info/25' :
-                        'bg-muted border-border text-muted-foreground'
-                      }`}>
-                        {isPast ? <Check className="h-4 w-4" /> :
-                         isActive ? <Circle className="h-3 w-3 fill-current" /> :
-                         <span className="text-xs font-medium">{idx + 1}</span>}
+                      <div
+                        className={`flex items-center justify-center h-7 w-7 rounded-full border-2 transition-all ${
+                          isPast
+                            ? "bg-emerald-500 border-emerald-500 text-white"
+                            : isActive
+                              ? "bg-info border-info text-info-foreground shadow-md shadow-info/25"
+                              : "bg-muted border-border text-muted-foreground"
+                        }`}
+                      >
+                        {isPast ? (
+                          <Check className="h-3.5 w-3.5" />
+                        ) : isActive ? (
+                          <Circle className="h-2.5 w-2.5 fill-current" />
+                        ) : (
+                          <span className="text-[10px] font-medium">{idx + 1}</span>
+                        )}
                       </div>
-                      <span className={`text-[11px] font-medium text-center leading-tight max-w-[80px] ${
-                        isActive ? 'text-info font-semibold' : isPast ? 'text-emerald-600' : 'text-muted-foreground'
-                      }`}>{STEPPER_LABELS[step]}</span>
+                      <span
+                        className={`text-[10px] font-medium text-center leading-tight max-w-[72px] ${
+                          isActive ? "text-info font-semibold" : isPast ? "text-emerald-600" : "text-muted-foreground"
+                        }`}
+                      >
+                        {STEPPER_LABELS[step]}
+                      </span>
                     </div>
                     {!isLast && (
-                      <div className={`flex-1 h-0.5 mx-2 mt-[-18px] rounded-full transition-colors ${
-                        isPast ? 'bg-emerald-500' : isActive ? 'bg-gradient-to-r from-info to-border' : 'bg-border'
-                      }`} />
+                      <div
+                        className={`flex-1 h-0.5 mx-1.5 mt-[-18px] rounded-full transition-colors ${
+                          isPast ? "bg-emerald-500" : isActive ? "bg-gradient-to-r from-info to-border" : "bg-border"
+                        }`}
+                      />
                     )}
                   </div>
                 );
               })}
             </div>
+            {/* Indicador visual para estados de desvio */}
+            {(isBloqueada || isRejeitada) && (
+              <div
+                className={`mt-2 flex items-center gap-2 text-xs font-medium px-1 ${
+                  isBloqueada ? "text-red-600" : "text-rose-700"
+                }`}
+              >
+                <AlertCircle className="h-3.5 w-3.5" />
+                {isBloqueada
+                  ? "Demanda pausada — aguardando desbloqueio para retomar o fluxo"
+                  : "Demanda rejeitada — necessário corrigir e retornar para Execução"}
+              </div>
+            )}
           </div>
 
+          {/* Painel de movimentação */}
           {!editing && !isTerminal && (
             <div className="px-6 py-3 border-b bg-info/5">
-              {demanda.situacao === 'bloqueada' ? (
-                <div className="flex items-center gap-3">
+              {isBloqueada ? (
+                <div className="flex items-center gap-3 flex-wrap">
                   <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
                   <span className="text-sm font-medium text-destructive shrink-0">Demanda bloqueada</span>
-                  <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleUnblock}>
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-sm"
+                    onClick={handleUnblock}
+                  >
                     Desbloquear (retornar à etapa anterior)
+                  </Button>
+                </div>
+              ) : isRejeitada ? (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                  <span className="text-sm font-medium text-rose-700 shrink-0">
+                    Demanda rejeitada — reencaminhar para execução
+                  </span>
+                  <Button
+                    className="bg-amber-600 hover:bg-amber-700 text-white h-8 text-sm"
+                    onClick={async () => {
+                      const ok = await onMoveTo(demanda, "em_execucao", "Reencaminhado após rejeição");
+                      if (ok) await refreshAllData();
+                    }}
+                  >
+                    Retornar para Em Execução
                   </Button>
                 </div>
               ) : (
@@ -507,74 +863,184 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
                       <SelectValue placeholder="Selecione a próxima etapa..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {allowedNextStatuses.map(s => (
-                        <SelectItem key={s} value={s}>{SITUACAO_LABELS[s]}</SelectItem>
-                      ))}
+                      {allowedNextStatuses
+                        .filter((s) => s !== "rejeitada") // rejeitada tem botão próprio
+                        .map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {resolveLabel(s)}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
-                  <Button className="bg-info hover:bg-info/90 text-info-foreground" onClick={handleMove} disabled={!newStatus}>Avançar</Button>
+                  <Button
+                    className="bg-info hover:bg-info/90 text-info-foreground h-9 text-sm"
+                    onClick={handleMove}
+                    disabled={!newStatus}
+                  >
+                    Avançar
+                  </Button>
                   {canBlock && (
-                    <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                      onClick={() => { setNewStatus('bloqueada'); setShowSuspensaoModal(true); }}>Bloquear</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                      onClick={() => {
+                        setNewStatus("bloqueada");
+                        setShowSuspensaoModal(true);
+                      }}
+                    >
+                      Bloquear
+                    </Button>
+                  )}
+                  {canReject && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-rose-700 border-rose-300 hover:bg-rose-50"
+                      onClick={() => {
+                        setNewStatus("rejeitada");
+                        setShowJustModal(true);
+                      }}
+                    >
+                      Rejeitar
+                    </Button>
                   )}
                   {canCancel && (
-                    <Button variant="outline" size="sm" className="text-gray-600 border-gray-300 hover:bg-gray-100"
-                      onClick={() => { setNewStatus('cancelada'); setShowJustModal(true); }}>Cancelar Demanda</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-gray-600 border-gray-300 hover:bg-gray-100"
+                      onClick={() => {
+                        setNewStatus("cancelada");
+                        setShowJustModal(true);
+                      }}
+                    >
+                      Cancelar Demanda
+                    </Button>
                   )}
                 </div>
               )}
             </div>
           )}
+
           {isTerminal && (
             <div className="px-6 py-3 border-b bg-gray-100">
               <div className="flex items-center gap-2 text-gray-600 text-sm">
                 <AlertCircle className="h-4 w-4" />
-                <span>Esta demanda foi cancelada e não pode ser editada ou movida.</span>
+                <span>
+                  {isCancelada
+                    ? "Esta demanda foi cancelada e não pode ser editada ou movida."
+                    : "Esta demanda foi concluída com aceite final."}
+                </span>
               </div>
             </div>
           )}
 
+          {/* Tabs de conteúdo */}
           <div className="px-6 py-5">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="bg-muted/50 p-1 h-auto flex-wrap">
-                <TabsTrigger value="detalhes" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"><FileText className="h-4 w-4" />Detalhes</TabsTrigger>
-                <TabsTrigger value="historico" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"><History className="h-4 w-4" />Histórico</TabsTrigger>
-                <TabsTrigger value="horas" disabled={isCancelada} className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"><Clock className="h-4 w-4" />Atividades <Badge variant="secondary" className="ml-1 text-[10px] h-5">{total}h</Badge></TabsTrigger>
-                <TabsTrigger value="responsaveis" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"><Users className="h-4 w-4" />Responsáveis <Badge variant="secondary" className="ml-1 text-[10px] h-5">{responsaveis.length}</Badge></TabsTrigger>
-                <TabsTrigger value="evidencias" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"><ShieldCheck className="h-4 w-4" />Evidências <Badge variant="secondary" className="ml-1 text-[10px] h-5">{evidencias.length}</Badge></TabsTrigger>
+                <TabsTrigger
+                  value="detalhes"
+                  className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"
+                >
+                  <FileText className="h-4 w-4" />
+                  Detalhes
+                </TabsTrigger>
+                <TabsTrigger
+                  value="historico"
+                  className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"
+                >
+                  <History className="h-4 w-4" />
+                  Histórico
+                </TabsTrigger>
+                <TabsTrigger
+                  value="horas"
+                  disabled={isCancelada}
+                  className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Clock className="h-4 w-4" />
+                  Atividades{" "}
+                  <Badge variant="secondary" className="ml-1 text-[10px] h-5">
+                    {total}h
+                  </Badge>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="responsaveis"
+                  className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"
+                >
+                  <Users className="h-4 w-4" />
+                  Responsáveis{" "}
+                  <Badge variant="secondary" className="ml-1 text-[10px] h-5">
+                    {responsaveis.length}
+                  </Badge>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="evidencias"
+                  className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  Evidências{" "}
+                  <Badge variant="secondary" className="ml-1 text-[10px] h-5">
+                    {evidencias.length}
+                  </Badge>
+                </TabsTrigger>
               </TabsList>
 
+              {/* ─── ABA DETALHES ─── */}
               <TabsContent value="detalhes" className="mt-5">
                 {editing ? (
                   <div className="grid md:grid-cols-2 gap-5">
                     <div className="space-y-4">
                       <div>
                         <Label className="text-sm font-medium">#</Label>
-                        <Input value={editForm.rhm} onChange={e => setEditForm(p => ({ ...p, rhm: e.target.value.replace(/\D/g, '') }))} className="mt-1" inputMode="numeric" />
+                        <Input
+                          value={editForm.rhm}
+                          onChange={(e) => setEditForm((p) => ({ ...p, rhm: e.target.value.replace(/\D/g, "") }))}
+                          className="mt-1"
+                          inputMode="numeric"
+                        />
                       </div>
                       <div>
                         <Label className="text-sm font-medium">Projeto</Label>
-                        <Select value={editForm.projeto || '_none'} onValueChange={v => setEditForm(p => ({ ...p, projeto: v === '_none' ? '' : v }))}>
-                          <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <Select
+                          value={editForm.projeto || "_none"}
+                          onValueChange={(v) => setEditForm((p) => ({ ...p, projeto: v === "_none" ? "" : v }))}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="_none" disabled>Selecione</SelectItem>
-                            {projetos.map(p => <SelectItem key={p.id} value={p.nome}>{p.nome}</SelectItem>)}
+                            <SelectItem value="_none">Selecione</SelectItem>
+                            {projetos.map((p) => (
+                              <SelectItem key={p.id} value={p.nome}>
+                                {p.nome}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
                         <Label className="text-sm font-medium">Tipo</Label>
-                        <Select value={editForm.tipo} onValueChange={v => setEditForm(p => ({ ...p, tipo: v }))}>
-                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                          <SelectContent className="max-h-60">
-                            {TIPOS_DEMANDA_IMR.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                        <Select value={editForm.tipo} onValueChange={(v) => setEditForm((p) => ({ ...p, tipo: v }))}>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TIPOS_DEMANDA_IMR.map((t) => (
+                              <SelectItem key={t.value} value={t.value}>
+                                {t.label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
                         <Label className="text-sm font-medium">Regime (SLA)</Label>
-                        <Select value={editForm.sla} onValueChange={v => setEditForm(p => ({ ...p, sla: v }))}>
-                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                        <Select value={editForm.sla} onValueChange={(v) => setEditForm((p) => ({ ...p, sla: v }))}>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="padrao">Padrão</SelectItem>
                             <SelectItem value="continuo">Contínuo</SelectItem>
@@ -583,134 +1049,210 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
                       </div>
                       <div>
                         <Label className="text-sm font-medium">Defeito Impeditivo</Label>
-                        <Select value={editForm.tipo_defeito || 'nao_impeditivo'} onValueChange={v => setEditForm(p => ({ ...p, tipo_defeito: v }))}>
-                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                        <Select
+                          value={editForm.tipo_defeito || ""}
+                          onValueChange={(v) => setEditForm((p) => ({ ...p, tipo_defeito: v }))}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="impeditivo">Sim</SelectItem>
-                            <SelectItem value="nao_impeditivo">Não</SelectItem>
+                            <SelectItem value="sim">Sim</SelectItem>
+                            <SelectItem value="nao">Não</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
                         <Label className="text-sm font-medium">Previsão de Encerramento</Label>
-                        <Input type="date" value={editForm.data_previsao_encerramento || ''} onChange={e => setEditForm(p => ({ ...p, data_previsao_encerramento: e.target.value || null }))} className="mt-1" />
+                        <Input
+                          type="date"
+                          value={editForm.data_previsao_encerramento || ""}
+                          onChange={(e) =>
+                            setEditForm((p) => ({ ...p, data_previsao_encerramento: e.target.value || null }))
+                          }
+                          className="mt-1"
+                        />
                       </div>
                     </div>
-                    <div className="space-y-4">
-                      <div>
-                         <Label className="text-sm font-medium">Título</Label>
-                        <Textarea value={editForm.descricao} onChange={e => setEditForm(p => ({ ...p, descricao: e.target.value }))} rows={6} className="mt-1" />
-                      </div>
+                    <div>
+                      <Label className="text-sm font-medium">Título</Label>
+                      <Textarea
+                        value={editForm.descricao}
+                        onChange={(e) => setEditForm((p) => ({ ...p, descricao: e.target.value }))}
+                        rows={6}
+                        className="mt-1"
+                      />
                     </div>
                   </div>
                 ) : (
-                  <div className="grid md:grid-cols-2 gap-5">
-                    <Card className="shadow-none">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Título</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm leading-relaxed">{demanda.descricao || 'Sem descrição informada.'}</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="shadow-none">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Informações</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div className="grid grid-cols-2 gap-y-3 text-sm">
-                          <span className="text-muted-foreground">Projeto</span>
-                          <span className="font-medium text-right">{demanda.projeto}</span>
-                          <span className="text-muted-foreground">Tipo</span>
-                          <span className="font-medium text-right">{getTipoLabel(demanda.tipo)}</span>
-                          <span className="text-muted-foreground">Regime</span>
-                          <span className="font-medium text-right">{String(demanda.sla) === 'continuo' ? 'Contínuo' : String(demanda.sla) === '24x7' ? 'Contínuo' : 'Padrão'}</span>
-                          <span className="text-muted-foreground">Criado em</span>
-                          <span className="font-medium text-right">{new Date(demanda.created_at).toLocaleString('pt-BR')}</span>
-                          {demandanteProfile && (<>
-                            <span className="text-muted-foreground">Autor</span>
-                            <span className="font-medium text-right">{demandanteProfile}</span>
-                          </>)}
-                          <span className="text-muted-foreground">Prazo Máx. Início</span>
-                          <span className="font-medium text-right">
-                            {demanda.originada_diagnostico ? 'IMEDIATO' : demanda.prazo_inicio_atendimento ? new Date(demanda.prazo_inicio_atendimento).toLocaleString('pt-BR') : '—'}
-                          </span>
-                          <span className="text-muted-foreground">Prazo Máx. Solução</span>
-                          <span className="font-medium text-right">
-                            {demanda.prazo_solucao ? new Date(demanda.prazo_solucao).toLocaleString('pt-BR') : 'Definido na OS'}
-                          </span>
-                          <span className="text-muted-foreground">Previsão Encerramento</span>
-                          <span className="font-medium text-right">
-                            {demanda.data_previsao_encerramento ? new Date(demanda.data_previsao_encerramento).toLocaleDateString('pt-BR') : '—'}
-                          </span>
-                          <span className="text-muted-foreground">Criada em</span>
-                          <span className="font-medium text-right">{new Date(demanda.created_at).toLocaleDateString('pt-BR')}</span>
-                          <span className="text-muted-foreground">Atualizada em</span>
-                          <span className="font-medium text-right">{new Date(demanda.updated_at).toLocaleDateString('pt-BR')}</span>
-                        </div>
-
-                        {slaStatus.status !== 'concluida' && slaStatus.status !== 'sem_prazo' && (
-                          <div className={`mt-3 p-3 rounded-lg border ${SLA_COR_CLASS[slaStatus.cor]}`}>
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="font-medium">{slaStatus.label}</span>
-                              {'percentConsumed' in slaStatus && <span>{(slaStatus.percentConsumed as number).toFixed(0)}% consumido</span>}
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground mb-1">Título</p>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {demanda.descricao || "Sem descrição informada."}
+                        </p>
+                      </div>
+                      <Card className="border-dashed">
+                        <CardHeader className="pb-2 pt-4 px-4">
+                          <CardTitle className="text-sm font-semibold text-foreground">Informações</CardTitle>
+                        </CardHeader>
+                        <CardContent className="px-4 pb-4">
+                          <dl className="space-y-2 text-sm">
+                            <div className="flex justify-between gap-2">
+                              <dt className="text-muted-foreground shrink-0">Projeto</dt>
+                              <dd className="font-medium text-right">{demanda.projeto}</dd>
                             </div>
-                            {'percentConsumed' in slaStatus && (
-                              <div className="h-1.5 rounded-full bg-background/50 mt-2 overflow-hidden">
-                                <div className="h-full rounded-full bg-current transition-all" style={{ width: `${Math.min(100, slaStatus.percentConsumed as number)}%` }} />
+                            <div className="flex justify-between gap-2">
+                              <dt className="text-muted-foreground shrink-0">Tipo</dt>
+                              <dd className="font-medium text-right">{getTipoLabel(demanda.tipo)}</dd>
+                            </div>
+                            <div className="flex justify-between gap-2">
+                              <dt className="text-muted-foreground shrink-0">Regime</dt>
+                              <dd className="font-medium text-right">
+                                {String(demanda.sla) === "continuo"
+                                  ? "Contínuo"
+                                  : String(demanda.sla) === "24x7"
+                                    ? "Contínuo"
+                                    : "Padrão"}
+                              </dd>
+                            </div>
+                            <div className="flex justify-between gap-2">
+                              <dt className="text-muted-foreground shrink-0">Criado em</dt>
+                              <dd className="font-medium text-right">
+                                {new Date(demanda.created_at).toLocaleString("pt-BR")}
+                              </dd>
+                            </div>
+                            {demandanteProfile && (
+                              <div className="flex justify-between gap-2">
+                                <dt className="text-muted-foreground shrink-0">Autor</dt>
+                                <dd className="font-medium text-right">{demandanteProfile}</dd>
                               </div>
                             )}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    {responsaveis.length > 0 && (
-                      <Card className="md:col-span-2 shadow-none">
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Equipe Vinculada</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="flex flex-wrap gap-2">
-                            {responsaveis.map(r => (
-                              <div key={r.id} className="flex items-center gap-2 bg-muted/50 rounded-full pl-1 pr-3 py-1">
-                                <div className="h-6 w-6 rounded-full bg-info/10 text-info flex items-center justify-center font-bold text-[10px]">
-                                  {(r.profile?.display_name || '?')[0].toUpperCase()}
-                                </div>
-                                <span className="text-xs font-medium">{r.profile?.display_name}</span>
-                                <Badge variant="secondary" className="text-[10px] capitalize">{r.papel}</Badge>
+                            <div className="flex justify-between gap-2">
+                              <dt className="text-muted-foreground shrink-0">Prazo Máx. Início</dt>
+                              <dd className="font-medium text-right">
+                                {demanda.originada_diagnostico
+                                  ? "IMEDIATO"
+                                  : demanda.prazo_inicio_atendimento
+                                    ? new Date(demanda.prazo_inicio_atendimento).toLocaleString("pt-BR")
+                                    : "—"}
+                              </dd>
+                            </div>
+                            <div className="flex justify-between gap-2">
+                              <dt className="text-muted-foreground shrink-0">Prazo Máx. Solução</dt>
+                              <dd className="font-medium text-right">
+                                {demanda.prazo_solucao
+                                  ? new Date(demanda.prazo_solucao).toLocaleString("pt-BR")
+                                  : "Definido na OS"}
+                              </dd>
+                            </div>
+                            <div className="flex justify-between gap-2">
+                              <dt className="text-muted-foreground shrink-0">Previsão Encerramento</dt>
+                              <dd className="font-medium text-right">
+                                {demanda.data_previsao_encerramento
+                                  ? new Date(demanda.data_previsao_encerramento).toLocaleDateString("pt-BR")
+                                  : "—"}
+                              </dd>
+                            </div>
+                            <div className="flex justify-between gap-2">
+                              <dt className="text-muted-foreground shrink-0">Atualizada em</dt>
+                              <dd className="font-medium text-right">
+                                {new Date(demanda.updated_at).toLocaleDateString("pt-BR")}
+                              </dd>
+                            </div>
+                            {(demanda.contador_rejeicoes ?? 0) > 0 && (
+                              <div className="flex justify-between gap-2">
+                                <dt className="text-muted-foreground shrink-0">Rejeições</dt>
+                                <dd className="font-medium text-right text-rose-600">{demanda.contador_rejeicoes}x</dd>
                               </div>
-                            ))}
-                          </div>
+                            )}
+                          </dl>
                         </CardContent>
                       </Card>
-                    )}
+                    </div>
+                    <div className="space-y-4">
+                      {slaStatus.status !== "concluida" && slaStatus.status !== "sem_prazo" && (
+                        <Card className={`border ${SLA_COR_CLASS[slaStatus.cor]}`}>
+                          <CardContent className="px-4 py-3 space-y-2">
+                            <p className="text-sm font-semibold">{slaStatus.label}</p>
+                            {"percentConsumed" in slaStatus && (
+                              <p className="text-xs">{(slaStatus.percentConsumed as number).toFixed(0)}% consumido</p>
+                            )}
+                            {"percentConsumed" in slaStatus && (
+                              <div className="h-1.5 rounded-full bg-current/20">
+                                <div
+                                  className="h-1.5 rounded-full bg-current transition-all"
+                                  style={{ width: `${Math.min(slaStatus.percentConsumed as number, 100)}%` }}
+                                />
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+                      {responsaveis.length > 0 && (
+                        <Card>
+                          <CardHeader className="pb-2 pt-4 px-4">
+                            <CardTitle className="text-sm font-semibold">Equipe Vinculada</CardTitle>
+                          </CardHeader>
+                          <CardContent className="px-4 pb-4 space-y-2">
+                            {responsaveis.map((r) => (
+                              <div key={r.id} className="flex items-center gap-2">
+                                <div className="h-7 w-7 rounded-full bg-info/20 flex items-center justify-center text-xs font-semibold text-info">
+                                  {(r.profile?.display_name || "?")[0].toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{r.profile?.display_name}</p>
+                                  <p className="text-xs text-muted-foreground capitalize">{r.papel}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
                   </div>
                 )}
               </TabsContent>
 
+              {/* ─── ABA HISTÓRICO ─── */}
               <TabsContent value="historico" className="mt-5">
-                {tLoading && <p className="text-sm text-muted-foreground py-4">Carregando...</p>}
-                {!tLoading && transitions.length === 0 && <p className="text-sm text-muted-foreground py-4">Nenhuma transição registrada.</p>}
+                {tLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
+                {!tLoading && transitions.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Nenhuma transição registrada.</p>
+                )}
                 {transitions.length > 0 && (
-                  <div className="relative pl-8 space-y-0">
-                    <div className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-border" />
+                  <div className="space-y-3">
                     {transitions.map((t, idx) => {
                       const isFirst = idx === 0;
                       return (
-                        <div key={t.id} className="relative pb-6 last:pb-0">
-                          <div className={`absolute -left-8 top-0.5 flex items-center justify-center h-[14px] w-[14px] rounded-full border-2 ${isFirst ? 'bg-info border-info' : 'bg-card border-muted-foreground/30'}`}>
-                            {isFirst && <div className="h-1.5 w-1.5 rounded-full bg-info-foreground" />}
+                        <div key={t.id} className="flex gap-3 text-sm">
+                          <div className="flex flex-col items-center">
+                            <div
+                              className={`h-2 w-2 rounded-full mt-1.5 ${isFirst ? "bg-info" : "bg-muted-foreground/40"}`}
+                            />
+                            {idx < transitions.length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
                           </div>
-                          <div className={`rounded-lg border p-3 transition-colors ${isFirst ? 'bg-info/5 border-info/20' : 'bg-card'}`}>
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {t.from_status && (<><Badge variant="outline" className="text-[10px]">{SITUACAO_LABELS[t.from_status]}</Badge><ChevronRight className="h-3 w-3 text-muted-foreground" /></>)}
-                                <Badge className={`text-[10px] ${SITUACAO_COLORS[t.to_status] || 'bg-info/10 text-info border-info/20'}`}>{SITUACAO_LABELS[t.to_status] || t.to_status}</Badge>
-                              </div>
-                              <time className="text-xs text-muted-foreground shrink-0">{new Date(t.created_at).toLocaleString('pt-BR')}</time>
+                          <div className="pb-3 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {t.from_status && (
+                                <>
+                                  <Badge variant="outline" className="text-[10px] h-5">
+                                    {resolveLabel(t.from_status)}
+                                  </Badge>
+                                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                </>
+                              )}
+                              <Badge className={`text-[10px] h-5 ${resolveColor(t.to_status)}`}>
+                                {resolveLabel(t.to_status)}
+                              </Badge>
                             </div>
-                            {t.justificativa && <p className="text-sm text-muted-foreground mt-2 italic border-l-2 border-info/30 pl-3">"{t.justificativa}"</p>}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {new Date(t.created_at).toLocaleString("pt-BR")}
+                            </p>
+                            {t.justificativa && (
+                              <p className="text-xs italic text-muted-foreground mt-0.5">"{t.justificativa}"</p>
+                            )}
                           </div>
                         </div>
                       );
@@ -719,45 +1261,94 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
                 )}
               </TabsContent>
 
+              {/* ─── ABA HORAS ─── */}
               <TabsContent value="horas" className="mt-5 space-y-5">
                 <div className="flex items-center justify-between">
-                  <Badge className="bg-info/10 text-info border-info/20 text-sm px-3 py-1">Total Acumulado: {total}h</Badge>
+                  <p className="text-sm font-semibold text-foreground">
+                    Total Acumulado: <span className="text-info">{total}h</span>
+                  </p>
                 </div>
-                <Card className="shadow-none">
-                  <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Lançar Horas</CardTitle></CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex gap-3 flex-wrap">
-                      <Input type="number" placeholder="Horas" value={hourForm.horas} onChange={e => setHourForm(p => ({ ...p, horas: e.target.value }))} className="w-24" />
-                      <Select value={hourForm.fase} onValueChange={v => setHourForm(p => ({ ...p, fase: v }))}>
-                        <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-                        <SelectContent>{FASES.map(f => <SelectItem key={f} value={f}>{FASE_LABELS[f]}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <Input placeholder="Descrição da atividade" value={hourForm.descricao} onChange={e => setHourForm(p => ({ ...p, descricao: e.target.value }))} className="flex-1 min-w-[200px]" />
-                      <Button className="bg-info hover:bg-info/90 text-info-foreground" onClick={handleAddHour}><Plus className="h-4 w-4 mr-1" />Lançar</Button>
+                <Card>
+                  <CardHeader className="pb-2 pt-4 px-4">
+                    <CardTitle className="text-sm">Lançar Horas</CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4">
+                    <div className="flex flex-wrap gap-3 items-end">
+                      <div>
+                        <Label className="text-xs">Horas</Label>
+                        <Input
+                          type="number"
+                          min="0.5"
+                          step="0.5"
+                          value={hourForm.horas}
+                          onChange={(e) => setHourForm((p) => ({ ...p, horas: e.target.value }))}
+                          className="w-24 mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Fase</Label>
+                        <Select value={hourForm.fase} onValueChange={(v) => setHourForm((p) => ({ ...p, fase: v }))}>
+                          <SelectTrigger className="mt-1 w-44">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {FASES.map((f) => (
+                              <SelectItem key={f} value={f}>
+                                {FASE_LABELS[f]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex-1 min-w-[200px]">
+                        <Label className="text-xs">Descrição</Label>
+                        <Input
+                          value={hourForm.descricao}
+                          onChange={(e) => setHourForm((p) => ({ ...p, descricao: e.target.value }))}
+                          className="mt-1"
+                        />
+                      </div>
+                      <Button size="sm" onClick={handleAddHour} className="gap-1.5">
+                        <Plus className="h-4 w-4" />
+                        Lançar
+                      </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground">Lançado por: <strong>{profile?.display_name || user?.email || 'Usuário'}</strong></p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Lançado por: {profile?.display_name || user?.email || "Usuário"}
+                    </p>
                   </CardContent>
                 </Card>
                 {hours.length > 0 && (
-                  <div className="border rounded-lg overflow-hidden">
+                  <div className="rounded-lg border overflow-x-auto">
                     <table className="w-full text-sm">
-                      <thead><tr className="border-b bg-muted/50">
-                        <th className="text-left p-3 font-medium text-muted-foreground">Data</th>
-                        <th className="text-left p-3 font-medium text-muted-foreground">Fase</th>
-                        <th className="text-left p-3 font-medium text-muted-foreground">Descrição</th>
-                        <th className="text-left p-3 font-medium text-muted-foreground">Lançado por</th>
-                        <th className="text-right p-3 font-medium text-muted-foreground">Horas</th>
-                        <th className="w-10"></th>
-                      </tr></thead>
-                      <tbody>
-                        {hours.map(h => (
-                          <tr key={h.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                            <td className="p-3">{new Date(h.created_at).toLocaleDateString('pt-BR')}</td>
-                            <td className="p-3"><Badge variant="secondary" className="text-[11px] capitalize">{FASE_LABELS[h.fase] || h.fase}</Badge></td>
-                            <td className="p-3 text-muted-foreground">{h.descricao || '-'}</td>
-                            <td className="p-3 font-medium">{profilesMap.get(h.user_id) || '...'}</td>
-                            <td className="p-3 text-right font-semibold">{h.horas}h</td>
-                            <td className="p-3"><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteHourId(h.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button></td>
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Data</th>
+                          <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Fase</th>
+                          <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Descrição</th>
+                          <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Lançado por</th>
+                          <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Horas</th>
+                          <th className="px-3 py-2" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {hours.map((h) => (
+                          <tr key={h.id} className="hover:bg-muted/30 transition-colors">
+                            <td className="px-3 py-2 text-xs">{new Date(h.created_at).toLocaleDateString("pt-BR")}</td>
+                            <td className="px-3 py-2 text-xs">{FASE_LABELS[h.fase] || h.fase}</td>
+                            <td className="px-3 py-2 text-xs max-w-[200px] truncate">{h.descricao || "-"}</td>
+                            <td className="px-3 py-2 text-xs">{profilesMap.get(h.user_id) || "..."}</td>
+                            <td className="px-3 py-2 text-xs text-right font-mono font-medium">{h.horas}h</td>
+                            <td className="px-3 py-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                                onClick={() => setDeleteHourId(h.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -766,143 +1357,254 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
                 )}
               </TabsContent>
 
+              {/* ─── ABA RESPONSÁVEIS ─── */}
               <TabsContent value="responsaveis" className="mt-5 space-y-5">
                 <p className="text-sm text-muted-foreground">Vincule um ou mais responsáveis à demanda.</p>
-                <Card className="shadow-none">
-                  <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Adicionar Responsável</CardTitle></CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex gap-3">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Buscar por nome..." value={searchQuery} onChange={e => handleSearch(e.target.value)} className="pl-9" />
-                      </div>
-                      <Select value={addPapel} onValueChange={setAddPapel}>
-                        <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-                        <SelectContent>{PAPEIS_OPTIONS.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
-                      </Select>
+                <div className="flex gap-3 items-end flex-wrap">
+                  <div className="flex-1 min-w-[200px] relative">
+                    <Label className="text-xs">Buscar usuário</Label>
+                    <div className="relative mt-1">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Adicionar Responsável..."
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        className="pl-9"
+                      />
                     </div>
-                    {searchResults.length > 0 && (
-                      <div className="border rounded-lg divide-y max-h-40 overflow-y-auto">
-                        {searchResults.map(r => (
-                          <button key={r.user_id} className="w-full flex items-center justify-between p-3 text-sm hover:bg-muted/50 transition-colors" onClick={() => handleAddResp(r.user_id)}>
-                            <div><span className="font-medium">{r.display_name}</span><span className="text-muted-foreground ml-2">{r.email}</span></div>
-                            <UserPlus className="h-4 w-4 text-info" />
-                          </button>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Papel</Label>
+                    <Select value={addPapel} onValueChange={setAddPapel}>
+                      <SelectTrigger className="mt-1 w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAPEIS_OPTIONS.map((p) => (
+                          <SelectItem key={p.value} value={p.value}>
+                            {p.label}
+                          </SelectItem>
                         ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {searchResults.length > 0 && (
+                  <div className="border rounded-lg divide-y overflow-hidden">
+                    {searchResults.map((r) => (
+                      <button
+                        key={r.user_id}
+                        className="w-full text-left px-4 py-2.5 hover:bg-muted/50 transition-colors flex items-center gap-3"
+                        onClick={() => handleAddResp(r.user_id)}
+                      >
+                        <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="font-medium text-sm">{r.display_name}</span>
+                        <span className="text-xs text-muted-foreground">{r.email}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {respLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
-                {!respLoading && responsaveis.length === 0 && <p className="text-sm text-muted-foreground">Nenhum responsável vinculado.</p>}
+                {!respLoading && responsaveis.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Nenhum responsável vinculado.</p>
+                )}
                 {responsaveis.length > 0 && (
-                  <div className="border rounded-lg divide-y">
-                    {responsaveis.map(r => (
-                      <div key={r.id} className="flex items-center justify-between p-3 hover:bg-muted/30">
-                        <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-full bg-info/10 text-info flex items-center justify-center font-bold text-xs">{(r.profile?.display_name || '?')[0].toUpperCase()}</div>
-                          <div><p className="text-sm font-medium">{r.profile?.display_name || r.user_id}</p><p className="text-xs text-muted-foreground capitalize">{r.papel}</p></div>
+                  <div className="space-y-2">
+                    {responsaveis.map((r) => (
+                      <div key={r.id} className="flex items-center gap-3 rounded-lg border px-4 py-3 bg-card">
+                        <div className="h-8 w-8 rounded-full bg-info/20 flex items-center justify-center text-sm font-semibold text-info shrink-0">
+                          {(r.profile?.display_name || "?")[0].toUpperCase()}
                         </div>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteRespId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{r.profile?.display_name || r.user_id}</p>
+                          <p className="text-xs text-muted-foreground capitalize">{r.papel}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => setDeleteRespId(r.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     ))}
                   </div>
                 )}
               </TabsContent>
 
+              {/* ─── ABA EVIDÊNCIAS ─── */}
               <TabsContent value="evidencias" className="mt-5 space-y-5">
                 {pendingTarget && (
-                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-2">
-                    <div className="flex items-center gap-2 text-amber-800 font-medium text-sm">
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm">
+                    <p className="font-medium text-amber-800 flex items-center gap-2">
                       <AlertCircle className="h-4 w-4" />
-                      ⚠️ Para avançar para "{SITUACAO_LABELS[pendingTarget] || pendingTarget}", cadastre ao menos uma evidência desta etapa e tente mover novamente.
-                    </div>
+                      Para avançar para "{resolveLabel(pendingTarget)}", cadastre ao menos uma evidência desta etapa e
+                      tente mover novamente.
+                    </p>
                     {(() => {
                       const missing = getMissingEvidencias(pendingTarget);
                       const hasEvidence = missing.length === 0;
                       return hasEvidence ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-emerald-700 font-medium">✅ Evidência registrada. Você já pode avançar para "{SITUACAO_LABELS[pendingTarget]}".</span>
-                          <Button size="sm" className="bg-info hover:bg-info/90 text-info-foreground" onClick={async () => {
-                            const ok = await onMoveTo(demanda, pendingTarget);
-                            if (ok) { setPendingTarget(undefined); await refreshAllData(); }
-                          }}>Avançar agora</Button>
+                        <div className="mt-2 flex items-center gap-3">
+                          <p className="text-emerald-700 text-xs">✅ Evidência registrada. Você já pode avançar.</p>
+                          <Button
+                            size="sm"
+                            className="bg-info hover:bg-info/90 text-info-foreground h-7 text-xs"
+                            onClick={async () => {
+                              const ok = await onMoveTo(demanda, pendingTarget);
+                              if (ok) {
+                                setPendingTarget(undefined);
+                                await refreshAllData();
+                              }
+                            }}
+                          >
+                            Avançar agora
+                          </Button>
                         </div>
                       ) : null;
                     })()}
                   </div>
                 )}
-                <Card className="shadow-none">
-                  <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Adicionar Evidência</CardTitle></CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+
+                <Card>
+                  <CardHeader className="pb-2 pt-4 px-4">
+                    <CardTitle className="text-sm">Adicionar Evidência</CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4 space-y-3">
+                    <div className="grid sm:grid-cols-2 gap-3">
                       <div>
                         <Label className="text-xs">Fase</Label>
-                        <Select value={evidForm.fase} onValueChange={v => setEvidForm(p => ({ ...p, fase: v }))}>
-                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>{allowedEvidFases.map(f => <SelectItem key={f} value={f}>{EVIDENCIA_FASE_LABELS[f]}</SelectItem>)}</SelectContent>
+                        <Select value={evidForm.fase} onValueChange={(v) => setEvidForm((p) => ({ ...p, fase: v }))}>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {allowedEvidFases.map((f) => (
+                              <SelectItem key={f} value={f}>
+                                {EVIDENCIA_FASE_LABELS[f]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
                         </Select>
                       </div>
                       <div>
                         <Label className="text-xs">Tipo</Label>
-                        <Select value={evidForm.tipo} onValueChange={v => setEvidForm(p => ({ ...p, tipo: v }))}>
-                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                        <Select value={evidForm.tipo} onValueChange={(v) => setEvidForm((p) => ({ ...p, tipo: v }))}>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="arquivo">Arquivo</SelectItem>
                             <SelectItem value="link">Link externo</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="col-span-2 md:col-span-1">
-                        <Label className="text-xs">Título</Label>
-                        <Input value={evidForm.titulo} onChange={e => setEvidForm(p => ({ ...p, titulo: e.target.value }))} placeholder="Título da evidência" className="mt-1" />
-                      </div>
                     </div>
-                    {evidForm.tipo === 'arquivo' ? (
+                    <div>
+                      <Label className="text-xs">Título</Label>
+                      <Input
+                        value={evidForm.titulo}
+                        onChange={(e) => setEvidForm((p) => ({ ...p, titulo: e.target.value }))}
+                        placeholder="Título da evidência"
+                        className="mt-1"
+                      />
+                    </div>
+                    {evidForm.tipo === "arquivo" ? (
                       <div>
                         <Label className="text-xs">Arquivo</Label>
-                        <Input type="file" onChange={e => setEvidFile(e.target.files?.[0] || null)} className="mt-1" />
+                        <Input
+                          type="file"
+                          onChange={(e) => setEvidFile(e.target.files?.[0] || null)}
+                          className="mt-1"
+                        />
                       </div>
                     ) : (
                       <div>
                         <Label className="text-xs">URL Externa</Label>
-                        <Input value={evidForm.url_externa} onChange={e => setEvidForm(p => ({ ...p, url_externa: e.target.value }))} placeholder="https://..." className="mt-1" />
+                        <Input
+                          value={evidForm.url_externa}
+                          onChange={(e) => setEvidForm((p) => ({ ...p, url_externa: e.target.value }))}
+                          placeholder="https://..."
+                          className="mt-1"
+                        />
                       </div>
                     )}
                     <div>
                       <Label className="text-xs">Descrição (opcional)</Label>
-                      <Textarea value={evidForm.descricao} onChange={e => setEvidForm(p => ({ ...p, descricao: e.target.value }))} rows={2} className="mt-1" />
+                      <Textarea
+                        value={evidForm.descricao}
+                        onChange={(e) => setEvidForm((p) => ({ ...p, descricao: e.target.value }))}
+                        rows={2}
+                        className="mt-1"
+                      />
                     </div>
-                    <Button className="bg-info hover:bg-info/90 text-info-foreground" onClick={handleAddEvidencia}><Plus className="h-4 w-4 mr-1" />Adicionar</Button>
+                    <Button size="sm" className="gap-1.5" onClick={handleAddEvidencia}>
+                      <Plus className="h-4 w-4" />
+                      Adicionar
+                    </Button>
                   </CardContent>
                 </Card>
 
-                {EVIDENCIA_FASES.map(fase => {
+                {EVIDENCIA_FASES.map((fase) => {
                   const items = evidenciasByFase[fase] || [];
                   if (items.length === 0) return null;
                   return (
                     <div key={fase}>
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{EVIDENCIA_FASE_LABELS[fase]}</h4>
-                      <div className="border rounded-lg divide-y">
-                        {items.map(e => (
-                          <div key={e.id} className="flex items-center justify-between p-3 hover:bg-muted/30">
-                            <div className="flex items-center gap-3 min-w-0">
-                              {e.tipo === 'link' ? <Link2 className="h-4 w-4 text-info shrink-0" /> : <Upload className="h-4 w-4 text-muted-foreground shrink-0" />}
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium truncate">{e.titulo}</p>
-                                <p className="text-[10px] text-muted-foreground">{new Date(e.created_at).toLocaleString('pt-BR')}{e.descricao ? ` — ${e.descricao}` : ''}</p>
-                              </div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                        {EVIDENCIA_FASE_LABELS[fase]}
+                      </p>
+                      <div className="space-y-2">
+                        {items.map((e) => (
+                          <div key={e.id} className="flex items-center gap-3 rounded-lg border px-4 py-3 bg-card">
+                            {e.tipo === "link" ? (
+                              <Link2 className="h-4 w-4 text-info shrink-0" />
+                            ) : (
+                              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{e.titulo}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(e.created_at).toLocaleString("pt-BR")}
+                                {e.descricao ? ` — ${e.descricao}` : ""}
+                              </p>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
-                              {e.tipo === 'link' && e.url_externa && (
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => window.open(e.url_externa!, '_blank')}><Eye className="h-3.5 w-3.5 text-info" /></Button>
+                              {e.tipo === "link" && e.url_externa && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-info hover:text-info/80"
+                                  onClick={() => window.open(e.url_externa!, "_blank")}
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Button>
                               )}
-                              {e.tipo === 'arquivo' && e.file_path && (
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={async () => {
-                                  try { const url = await evidSvc.getEvidenciaSignedUrl(e.file_path!); window.open(url, '_blank'); } catch { toast.error("Erro ao abrir arquivo"); }
-                                }}><Eye className="h-3.5 w-3.5 text-info" /></Button>
+                              {e.tipo === "arquivo" && e.file_path && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-info hover:text-info/80"
+                                  onClick={async () => {
+                                    try {
+                                      const url = await evidSvc.getEvidenciaSignedUrl(e.file_path!);
+                                      window.open(url, "_blank");
+                                    } catch {
+                                      toast.error("Erro ao abrir arquivo");
+                                    }
+                                  }}
+                                >
+                                  <Upload className="h-3.5 w-3.5" />
+                                </Button>
                               )}
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteEvidId(e.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                onClick={() => setDeleteEvidId(e.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
                             </div>
                           </div>
                         ))}
@@ -910,23 +1612,64 @@ export function DemandaDetail({ demanda: rawDemanda, onBack, onUpdate, onMoveTo,
                     </div>
                   );
                 })}
-                {evidencias.length === 0 && !evidLoading && <p className="text-sm text-muted-foreground">Nenhuma evidência registrada.</p>}
+                {evidencias.length === 0 && !evidLoading && (
+                  <p className="text-sm text-muted-foreground">Nenhuma evidência registrada.</p>
+                )}
               </TabsContent>
             </Tabs>
           </div>
         </div>
       </div>
 
-      <JustificativaDialog open={showJustModal} onClose={() => setShowJustModal(false)} onConfirm={confirmJustificativa} />
-      <SuspensaoDialog open={showSuspensaoModal} onClose={() => { setShowSuspensaoModal(false); setNewStatus(''); }} onConfirm={confirmSuspensao} />
-      <EncerramentoDialog open={showEncerramentoModal} onClose={() => { setShowEncerramentoModal(false); setNewStatus(''); }}
-        onConfirm={confirmEncerramento} isCorretiva={isCorretiva} />
-      <ConfirmDialog open={!!deleteHourId} title="Excluir registro" description="Deseja excluir este registro de horas?"
-        onConfirm={async () => { if (deleteHourId) { await removeHour(deleteHourId); setDeleteHourId(null); } }} onOpenChange={() => setDeleteHourId(null)} />
-      <ConfirmDialog open={!!deleteRespId} title="Remover responsável" description="Deseja remover este responsável?"
-        onConfirm={handleRemoveResp} onOpenChange={() => setDeleteRespId(null)} />
-      <ConfirmDialog open={!!deleteEvidId} title="Remover evidência" description="Deseja remover esta evidência?"
-        onConfirm={handleRemoveEvidencia} onOpenChange={() => setDeleteEvidId(null)} />
+      {/* Modais */}
+      <JustificativaDialog
+        open={showJustModal}
+        onClose={() => setShowJustModal(false)}
+        onConfirm={confirmJustificativa}
+      />
+      <SuspensaoDialog
+        open={showSuspensaoModal}
+        onClose={() => {
+          setShowSuspensaoModal(false);
+          setNewStatus("");
+        }}
+        onConfirm={confirmSuspensao}
+      />
+      <EncerramentoDialog
+        open={showEncerramentoModal}
+        onClose={() => {
+          setShowEncerramentoModal(false);
+          setNewStatus("");
+        }}
+        onConfirm={confirmEncerramento}
+        isCorretiva={isCorretiva}
+      />
+      <ConfirmDialog
+        open={!!deleteHourId}
+        title="Remover lançamento?"
+        description="Esta ação não pode ser desfeita."
+        onConfirm={async () => {
+          if (deleteHourId) {
+            await removeHour(deleteHourId);
+            setDeleteHourId(null);
+          }
+        }}
+        onOpenChange={() => setDeleteHourId(null)}
+      />
+      <ConfirmDialog
+        open={!!deleteRespId}
+        title="Remover responsável?"
+        description="O responsável será desvinculado desta demanda."
+        onConfirm={handleRemoveResp}
+        onOpenChange={() => setDeleteRespId(null)}
+      />
+      <ConfirmDialog
+        open={!!deleteEvidId}
+        title="Remover evidência?"
+        description="Esta ação não pode ser desfeita."
+        onConfirm={handleRemoveEvidencia}
+        onOpenChange={() => setDeleteEvidId(null)}
+      />
     </>
   );
 }
