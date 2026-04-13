@@ -38,6 +38,7 @@ export function UserStoryManager() {
     updateUserStory,
     activities,
     activeSprint,
+    sprints,
     epics,
     workflowColumns,
     customFields,
