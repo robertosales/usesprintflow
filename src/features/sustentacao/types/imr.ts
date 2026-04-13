@@ -3,12 +3,7 @@
 export const TIPOS_DEMANDA_IMR = [
   { value: "analise_viabilidade", label: "Análise de Viabilidade" },
   { value: "apoio_operacional", label: "Apoio Operacional Sustentação" },
-  {
-    value: "apuracao_registro_simples",
-    label: "Apuração especial: criação, alteração ou exclusão de registro simples",
-  },
-  { value: "apuracao_relatorio_bd", label: "Apuração especial: relatório manual extraído de base de dados" },
-  { value: "apuracao_outras", label: "Apuração especial: outras" },
+  { value: "apuracao_especial", label: "Apuração especial" },
   { value: "atendimento", label: "Atendimento" },
   { value: "atualizacao_arquitetura", label: "Atualização Arquitetura Deploy" },
   { value: "diagnostico", label: "Diagnóstico de Incidente" },
@@ -29,7 +24,6 @@ export const TIPOS_DEMANDA_IMR = [
   { value: "design_thinking", label: "Design Thinking" },
   { value: "modelagem_processos", label: "Modelagem Processos de Negócio" },
 ] as const;
-
 export type TipoDemandaIMR = (typeof TIPOS_DEMANDA_IMR)[number]["value"];
 
 export const TIPO_LABEL_MAP: Record<string, string> = Object.fromEntries(
