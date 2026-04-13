@@ -831,6 +831,101 @@ export type Database = {
           },
         ]
       }
+      planning_participants: {
+        Row: {
+          id: string
+          is_facilitator: boolean
+          is_online: boolean
+          joined_at: string
+          last_seen_at: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          is_facilitator?: boolean
+          is_online?: boolean
+          joined_at?: string
+          last_seen_at?: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          is_facilitator?: boolean
+          is_online?: boolean
+          joined_at?: string
+          last_seen_at?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planning_participants_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "planning_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planning_rounds: {
+        Row: {
+          created_at: string
+          facilitator_id: string | null
+          hu_id: string
+          id: string
+          result_hours: number | null
+          result_value: string | null
+          revealed_at: string | null
+          round_number: number
+          saved_at: string | null
+          session_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          facilitator_id?: string | null
+          hu_id: string
+          id?: string
+          result_hours?: number | null
+          result_value?: string | null
+          revealed_at?: string | null
+          round_number?: number
+          saved_at?: string | null
+          session_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          facilitator_id?: string | null
+          hu_id?: string
+          id?: string
+          result_hours?: number | null
+          result_value?: string | null
+          revealed_at?: string | null
+          round_number?: number
+          saved_at?: string | null
+          session_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planning_rounds_hu_id_fkey"
+            columns: ["hu_id"]
+            isOneToOne: false
+            referencedRelation: "user_stories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planning_rounds_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "planning_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planning_sessions: {
         Row: {
           created_at: string
@@ -1159,6 +1254,44 @@ export type Database = {
           },
         ]
       }
+      retro_participants: {
+        Row: {
+          id: string
+          is_facilitator: boolean
+          is_online: boolean
+          joined_at: string
+          last_seen_at: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          is_facilitator?: boolean
+          is_online?: boolean
+          joined_at?: string
+          last_seen_at?: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          is_facilitator?: boolean
+          is_online?: boolean
+          joined_at?: string
+          last_seen_at?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retro_participants_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "retro_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       retro_sessions: {
         Row: {
           created_at: string
@@ -1203,6 +1336,45 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      retro_votes: {
+        Row: {
+          card_id: string
+          created_at: string
+          id: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          id?: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          id?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retro_votes_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "retro_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retro_votes_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "retro_sessions"
             referencedColumns: ["id"]
           },
         ]
@@ -1398,6 +1570,8 @@ export type Database = {
       }
       user_stories: {
         Row: {
+          added_to_sprint_at: string | null
+          backlog_order: number | null
           code: string
           created_at: string
           custom_fields: Json | null
@@ -1410,7 +1584,7 @@ export type Database = {
           planning_status: string | null
           priority: string
           size_reference: string | null
-          sprint_id: string
+          sprint_id: string | null
           start_date: string | null
           status: string
           story_points: number
@@ -1421,6 +1595,8 @@ export type Database = {
           voted_by: string | null
         }
         Insert: {
+          added_to_sprint_at?: string | null
+          backlog_order?: number | null
           code: string
           created_at?: string
           custom_fields?: Json | null
@@ -1433,7 +1609,7 @@ export type Database = {
           planning_status?: string | null
           priority?: string
           size_reference?: string | null
-          sprint_id: string
+          sprint_id?: string | null
           start_date?: string | null
           status?: string
           story_points?: number
@@ -1444,6 +1620,8 @@ export type Database = {
           voted_by?: string | null
         }
         Update: {
+          added_to_sprint_at?: string | null
+          backlog_order?: number | null
           code?: string
           created_at?: string
           custom_fields?: Json | null
@@ -1456,7 +1634,7 @@ export type Database = {
           planning_status?: string | null
           priority?: string
           size_reference?: string | null
-          sprint_id?: string
+          sprint_id?: string | null
           start_date?: string | null
           status?: string
           story_points?: number

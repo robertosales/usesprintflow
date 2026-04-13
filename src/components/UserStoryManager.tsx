@@ -38,6 +38,7 @@ export function UserStoryManager() {
     updateUserStory,
     activities,
     activeSprint,
+    sprints,
     epics,
     workflowColumns,
     customFields,
@@ -70,16 +71,28 @@ export function UserStoryManager() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [epicFilter, setEpicFilter] = useState("all");
-  const hasFilters = searchFilter !== "" || priorityFilter !== "all" || statusFilter !== "all" || epicFilter !== "all";
+  const [sprintFilter, setSprintFilter] = useState("all"); // "all" | "backlog" | sprintId
+  const hasFilters = searchFilter !== "" || priorityFilter !== "all" || statusFilter !== "all" || epicFilter !== "all" || sprintFilter !== "all";
   const clearFilters = () => {
     setSearchFilter("");
     setPriorityFilter("all");
     setStatusFilter("all");
     setEpicFilter("all");
+    setSprintFilter("all");
   };
 
   const filteredStories = useMemo(() => {
-    let stories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : userStories;
+    let stories = [...userStories];
+
+    // Sprint/Backlog filter
+    if (sprintFilter === "backlog") {
+      stories = stories.filter((hu) => !hu.sprintId);
+    } else if (sprintFilter !== "all") {
+      stories = stories.filter((hu) => hu.sprintId === sprintFilter);
+    } else if (activeSprint) {
+      // Default: show active sprint + backlog
+      stories = stories.filter((hu) => hu.sprintId === activeSprint.id || !hu.sprintId);
+    }
 
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
@@ -89,7 +102,7 @@ export function UserStoryManager() {
     if (statusFilter !== "all") stories = stories.filter((hu) => hu.status === statusFilter);
     if (epicFilter !== "all") stories = stories.filter((hu) => hu.epicId === epicFilter);
     return stories;
-  }, [activeSprint, userStories, debouncedSearch, priorityFilter, statusFilter, epicFilter]);
+  }, [activeSprint, userStories, debouncedSearch, priorityFilter, statusFilter, epicFilter, sprintFilter]);
 
   const {
     paginatedItems: sprintStories,
@@ -106,6 +119,7 @@ export function UserStoryManager() {
     setSelectedSize(null);
     setPriority("media");
     setEpicId("");
+    setSprintId(activeSprint?.id || "");
     setStartDate("");
     setEndDate("");
     setFunctionPoints("");
@@ -118,7 +132,6 @@ export function UserStoryManager() {
   const validate = () => {
     const e: Record<string, string> = {};
     if (!title.trim()) e.title = "Título é obrigatório";
-    if (!activeSprint) e.sprint = "Selecione uma sprint ativa";
     customFields.forEach((f) => {
       if (f.required) {
         const val = customFieldValues[f.id];
@@ -131,9 +144,11 @@ export function UserStoryManager() {
     return Object.keys(e).length === 0;
   };
 
+  const [sprintId, setSprintId] = useState<string>("");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate() || !activeSprint) return;
+    if (!validate()) return;
     setSubmitting(true);
     try {
       const s = selectedSize ? getSizeByKey(selectedSize) : null;
@@ -146,12 +161,15 @@ export function UserStoryManager() {
         ? `${description.trim()}\n\n---\n**Critérios de Aceite:**\n${acceptanceCriteria.trim()}`
         : description.trim();
 
+      const selectedSprintId = sprintId || (activeSprint?.id) || null;
+
       if (editId) {
         await updateUserStory(editId, {
           title: title.trim(),
           description: fullDesc,
           ...sizeData,
           priority,
+          sprintId: selectedSprintId || undefined,
           epicId: epicId || undefined,
           customFields: customFieldValues,
           startDate: startDate || undefined,
@@ -165,7 +183,7 @@ export function UserStoryManager() {
           description: fullDesc,
           ...sizeData,
           priority,
-          sprintId: activeSprint.id,
+          sprintId: selectedSprintId,
           epicId: epicId || undefined,
           customFields: customFieldValues,
           startDate: startDate || undefined,
@@ -197,6 +215,7 @@ export function UserStoryManager() {
     setEpicId(hu.epicId || "");
     setStartDate(hu.startDate || "");
     setEndDate(hu.endDate || "");
+    setSprintId(hu.sprintId || "");
     setFunctionPoints(hu.functionPoints != null ? String(hu.functionPoints) : "");
     setCustomFieldValues(hu.customFields || {});
     setErrors({});
@@ -241,7 +260,7 @@ export function UserStoryManager() {
             }}
           >
             <DialogTrigger asChild>
-              <Button size="sm" className="gap-1.5" disabled={!activeSprint}>
+              <Button size="sm" className="gap-1.5">
                 <Plus className="h-4 w-4" /> Nova HU
               </Button>
             </DialogTrigger>
@@ -358,7 +377,19 @@ export function UserStoryManager() {
                         {/* Linha 1: Sprint | Épico */}
                         <div>
                           <Label className="text-xs">Sprint</Label>
-                          <Input value={activeSprint?.name || "—"} readOnly className="mt-1 h-9 text-xs bg-muted/50" />
+                          <Select value={sprintId || "backlog"} onValueChange={(v) => setSprintId(v === "backlog" ? "" : v)}>
+                            <SelectTrigger className="mt-1 h-9 text-xs">
+                              <SelectValue placeholder="Backlog" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="backlog">📋 Backlog (sem sprint)</SelectItem>
+                              {sprints.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.name} {s.isActive ? "✦" : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div>
                           <Label className="text-xs">Épico</Label>
@@ -517,103 +548,72 @@ export function UserStoryManager() {
       </div>
 
       {/* Filters */}
-      {activeSprint && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[180px] max-w-[280px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              value={searchFilter}
-              onChange={(e) => {
-                setSearchFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Buscar HU..."
-              className="pl-8 h-8 text-xs"
-            />
-          </div>
-          <Select
-            value={priorityFilter}
-            onValueChange={(v) => {
-              setPriorityFilter(v);
-              setCurrentPage(1);
-            }}
-          >
-            <SelectTrigger className="h-8 w-[130px] text-xs">
-              <SelectValue placeholder="Prioridade" />
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[180px] max-w-[280px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={searchFilter}
+            onChange={(e) => { setSearchFilter(e.target.value); setCurrentPage(1); }}
+            placeholder="Buscar HU..."
+            className="pl-8 h-8 text-xs"
+          />
+        </div>
+        <Select value={sprintFilter} onValueChange={(v) => { setSprintFilter(v); setCurrentPage(1); }}>
+          <SelectTrigger className="h-8 w-[160px] text-xs">
+            <SelectValue placeholder="Sprint" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="backlog">📋 Backlog</SelectItem>
+            {sprints.map((s) => (
+              <SelectItem key={s.id} value={s.id}>{s.name} {s.isActive ? "✦" : ""}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={priorityFilter} onValueChange={(v) => { setPriorityFilter(v); setCurrentPage(1); }}>
+          <SelectTrigger className="h-8 w-[130px] text-xs">
+            <SelectValue placeholder="Prioridade" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            <SelectItem value="critica">Crítica</SelectItem>
+            <SelectItem value="alta">Alta</SelectItem>
+            <SelectItem value="media">Média</SelectItem>
+            <SelectItem value="baixa">Baixa</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
+          <SelectTrigger className="h-8 w-[160px] text-xs">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos status</SelectItem>
+            {workflowColumns.map((col) => (
+              <SelectItem key={col.key} value={col.key}>{col.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {epics.length > 0 && (
+          <Select value={epicFilter} onValueChange={(v) => { setEpicFilter(v); setCurrentPage(1); }}>
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue placeholder="Épico" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              <SelectItem value="critica">Crítica</SelectItem>
-              <SelectItem value="alta">Alta</SelectItem>
-              <SelectItem value="media">Média</SelectItem>
-              <SelectItem value="baixa">Baixa</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={statusFilter}
-            onValueChange={(v) => {
-              setStatusFilter(v);
-              setCurrentPage(1);
-            }}
-          >
-            <SelectTrigger className="h-8 w-[160px] text-xs">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos status</SelectItem>
-              {workflowColumns.map((col) => (
-                <SelectItem key={col.key} value={col.key}>
-                  {col.label}
-                </SelectItem>
+              <SelectItem value="all">Todos épicos</SelectItem>
+              {epics.map((ep) => (
+                <SelectItem key={ep.id} value={ep.id}>{ep.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {epics.length > 0 && (
-            <Select
-              value={epicFilter}
-              onValueChange={(v) => {
-                setEpicFilter(v);
-                setCurrentPage(1);
-              }}
-            >
-              <SelectTrigger className="h-8 w-[140px] text-xs">
-                <SelectValue placeholder="Épico" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos épicos</SelectItem>
-                {epics.map((ep) => (
-                  <SelectItem key={ep.id} value={ep.id}>
-                    {ep.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {hasFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs gap-1 text-muted-foreground"
-              onClick={() => {
-                clearFilters();
-                setCurrentPage(1);
-              }}
-            >
-              <X className="h-3 w-3" /> Limpar
-            </Button>
-          )}
-        </div>
-      )}
+        )}
+        {hasFilters && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-muted-foreground" onClick={() => { clearFilters(); setCurrentPage(1); }}>
+            <X className="h-3 w-3" /> Limpar
+          </Button>
+        )}
+      </div>
 
-      {!activeSprint && (
-        <EmptyState
-          icon={BookOpen}
-          title="Crie uma Sprint primeiro"
-          description="As User Stories são vinculadas a uma Sprint ativa"
-        />
-      )}
-
-      {activeSprint && totalItems === 0 && (
+      {totalItems === 0 && (
         <EmptyState
           icon={BookOpen}
           title="Nenhum item encontrado"
