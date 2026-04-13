@@ -118,6 +118,7 @@ export function UserStoryManager() {
     setSelectedSize(null);
     setPriority("media");
     setEpicId("");
+    setSprintId(activeSprint?.id || "");
     setStartDate("");
     setEndDate("");
     setFunctionPoints("");
@@ -213,6 +214,7 @@ export function UserStoryManager() {
     setEpicId(hu.epicId || "");
     setStartDate(hu.startDate || "");
     setEndDate(hu.endDate || "");
+    setSprintId(hu.sprintId || "");
     setFunctionPoints(hu.functionPoints != null ? String(hu.functionPoints) : "");
     setCustomFieldValues(hu.customFields || {});
     setErrors({});
@@ -257,7 +259,7 @@ export function UserStoryManager() {
             }}
           >
             <DialogTrigger asChild>
-              <Button size="sm" className="gap-1.5" disabled={!activeSprint}>
+              <Button size="sm" className="gap-1.5">
                 <Plus className="h-4 w-4" /> Nova HU
               </Button>
             </DialogTrigger>
