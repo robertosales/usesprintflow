@@ -72,7 +72,12 @@ export function UserStoryManager() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [epicFilter, setEpicFilter] = useState("all");
   const [sprintFilter, setSprintFilter] = useState("all"); // "all" | "backlog" | sprintId
-  const hasFilters = searchFilter !== "" || priorityFilter !== "all" || statusFilter !== "all" || epicFilter !== "all" || sprintFilter !== "all";
+  const hasFilters =
+    searchFilter !== "" ||
+    priorityFilter !== "all" ||
+    statusFilter !== "all" ||
+    epicFilter !== "all" ||
+    sprintFilter !== "all";
   const clearFilters = () => {
     setSearchFilter("");
     setPriorityFilter("all");
@@ -161,7 +166,7 @@ export function UserStoryManager() {
         ? `${description.trim()}\n\n---\n**Critérios de Aceite:**\n${acceptanceCriteria.trim()}`
         : description.trim();
 
-      const selectedSprintId = sprintId || (activeSprint?.id) || null;
+      const selectedSprintId = sprintId || activeSprint?.id || null;
 
       if (editId) {
         await updateUserStory(editId, {
@@ -377,7 +382,10 @@ export function UserStoryManager() {
                         {/* Linha 1: Sprint | Épico */}
                         <div>
                           <Label className="text-xs">Sprint</Label>
-                          <Select value={sprintId || "backlog"} onValueChange={(v) => setSprintId(v === "backlog" ? "" : v)}>
+                          <Select
+                            value={sprintId || "backlog"}
+                            onValueChange={(v) => setSprintId(v === "backlog" ? "" : v)}
+                          >
                             <SelectTrigger className="mt-1 h-9 text-xs">
                               <SelectValue placeholder="Backlog" />
                             </SelectTrigger>
@@ -553,12 +561,21 @@ export function UserStoryManager() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             value={searchFilter}
-            onChange={(e) => { setSearchFilter(e.target.value); setCurrentPage(1); }}
+            onChange={(e) => {
+              setSearchFilter(e.target.value);
+              setCurrentPage(1);
+            }}
             placeholder="Buscar HU..."
             className="pl-8 h-8 text-xs"
           />
         </div>
-        <Select value={sprintFilter} onValueChange={(v) => { setSprintFilter(v); setCurrentPage(1); }}>
+        <Select
+          value={sprintFilter}
+          onValueChange={(v) => {
+            setSprintFilter(v);
+            setCurrentPage(1);
+          }}
+        >
           <SelectTrigger className="h-8 w-[160px] text-xs">
             <SelectValue placeholder="Sprint" />
           </SelectTrigger>
@@ -566,11 +583,19 @@ export function UserStoryManager() {
             <SelectItem value="all">Todos</SelectItem>
             <SelectItem value="backlog">📋 Backlog</SelectItem>
             {sprints.map((s) => (
-              <SelectItem key={s.id} value={s.id}>{s.name} {s.isActive ? "✦" : ""}</SelectItem>
+              <SelectItem key={s.id} value={s.id}>
+                {s.name} {s.isActive ? "✦" : ""}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Select value={priorityFilter} onValueChange={(v) => { setPriorityFilter(v); setCurrentPage(1); }}>
+        <Select
+          value={priorityFilter}
+          onValueChange={(v) => {
+            setPriorityFilter(v);
+            setCurrentPage(1);
+          }}
+        >
           <SelectTrigger className="h-8 w-[130px] text-xs">
             <SelectValue placeholder="Prioridade" />
           </SelectTrigger>
@@ -582,32 +607,56 @@ export function UserStoryManager() {
             <SelectItem value="baixa">Baixa</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => {
+            setStatusFilter(v);
+            setCurrentPage(1);
+          }}
+        >
           <SelectTrigger className="h-8 w-[160px] text-xs">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos status</SelectItem>
             {workflowColumns.map((col) => (
-              <SelectItem key={col.key} value={col.key}>{col.label}</SelectItem>
+              <SelectItem key={col.key} value={col.key}>
+                {col.label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
         {epics.length > 0 && (
-          <Select value={epicFilter} onValueChange={(v) => { setEpicFilter(v); setCurrentPage(1); }}>
+          <Select
+            value={epicFilter}
+            onValueChange={(v) => {
+              setEpicFilter(v);
+              setCurrentPage(1);
+            }}
+          >
             <SelectTrigger className="h-8 w-[140px] text-xs">
               <SelectValue placeholder="Épico" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos épicos</SelectItem>
               {epics.map((ep) => (
-                <SelectItem key={ep.id} value={ep.id}>{ep.name}</SelectItem>
+                <SelectItem key={ep.id} value={ep.id}>
+                  {ep.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         )}
         {hasFilters && (
-          <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-muted-foreground" onClick={() => { clearFilters(); setCurrentPage(1); }}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs gap-1 text-muted-foreground"
+            onClick={() => {
+              clearFilters();
+              setCurrentPage(1);
+            }}
+          >
             <X className="h-3 w-3" /> Limpar
           </Button>
         )}
@@ -618,8 +667,8 @@ export function UserStoryManager() {
           icon={BookOpen}
           title="Nenhum item encontrado"
           description={hasFilters ? "Tente ajustar os filtros" : "Adicione as User Stories desta Sprint"}
-          actionLabel={!hasFilters && canCreate ? "Criar novo" : undefined}
-          onAction={!hasFilters && canCreate ? () => setOpen(true) : undefined}
+          //actionLabel={!hasFilters && canCreate ? "Criar novo" : undefined}
+          //onAction={!hasFilters && canCreate ? () => setOpen(true) : undefined}
         />
       )}
 
