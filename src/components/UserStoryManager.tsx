@@ -70,16 +70,28 @@ export function UserStoryManager() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [epicFilter, setEpicFilter] = useState("all");
-  const hasFilters = searchFilter !== "" || priorityFilter !== "all" || statusFilter !== "all" || epicFilter !== "all";
+  const [sprintFilter, setSprintFilter] = useState("all"); // "all" | "backlog" | sprintId
+  const hasFilters = searchFilter !== "" || priorityFilter !== "all" || statusFilter !== "all" || epicFilter !== "all" || sprintFilter !== "all";
   const clearFilters = () => {
     setSearchFilter("");
     setPriorityFilter("all");
     setStatusFilter("all");
     setEpicFilter("all");
+    setSprintFilter("all");
   };
 
   const filteredStories = useMemo(() => {
-    let stories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : userStories;
+    let stories = [...userStories];
+
+    // Sprint/Backlog filter
+    if (sprintFilter === "backlog") {
+      stories = stories.filter((hu) => !hu.sprintId);
+    } else if (sprintFilter !== "all") {
+      stories = stories.filter((hu) => hu.sprintId === sprintFilter);
+    } else if (activeSprint) {
+      // Default: show active sprint + backlog
+      stories = stories.filter((hu) => hu.sprintId === activeSprint.id || !hu.sprintId);
+    }
 
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
@@ -89,7 +101,7 @@ export function UserStoryManager() {
     if (statusFilter !== "all") stories = stories.filter((hu) => hu.status === statusFilter);
     if (epicFilter !== "all") stories = stories.filter((hu) => hu.epicId === epicFilter);
     return stories;
-  }, [activeSprint, userStories, debouncedSearch, priorityFilter, statusFilter, epicFilter]);
+  }, [activeSprint, userStories, debouncedSearch, priorityFilter, statusFilter, epicFilter, sprintFilter]);
 
   const {
     paginatedItems: sprintStories,
