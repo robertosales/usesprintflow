@@ -97,19 +97,6 @@ export function DemandasList() {
             className="pl-9 h-9"
           />
         </div>
-        <Select value={filterSituacao} onValueChange={setFilterSituacao}>
-          <SelectTrigger className="w-[160px] h-9">
-            <SelectValue placeholder="Situação" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas</SelectItem>
-            {Object.entries(SITUACAO_LABELS).map(([k, v]) => (
-              <SelectItem key={k} value={k}>
-                {v}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       {filtered.length === 0 ? (
