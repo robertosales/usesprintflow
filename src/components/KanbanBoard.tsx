@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -21,6 +21,7 @@ import {
 } from "@/types/sprint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -33,14 +34,12 @@ import {
   ChevronRight,
   ChevronLeft,
   Search,
-  Filter,
   X,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ImpedimentDialog } from "@/components/ImpedimentManager";
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getInitials(name: string): string {
   return name
@@ -182,11 +181,15 @@ function HUCard({
   isDragging = false,
 }: HUCardProps) {
   const [expanded, setExpanded] = useState(false);
+
   const epic = epics.find((e) => e.id === hu.epicId);
   const assignee = developers.find((d) => d.id === hu.assigneeId);
   const overdue = isHUOverdue(hu);
   const blocked = hasActiveImpediment(hu);
-  const activeImpediments = (hu.impediments || []).filter((i) => !i.resolved);
+
+  // Usa resolvedAt (campo correto do tipo Impediment)
+  const activeImpediments = (hu.impediments || []).filter((i) => !i.resolvedAt);
+
   const huActivities = activities.filter((a) => a.huId === hu.id);
   const totalHours = huActivities.reduce((s, a) => s + (a.hours || 0), 0);
 
@@ -222,12 +225,18 @@ function HUCard({
               Atrasada
             </Badge>
           )}
+          {blocked && (
+            <Badge className="text-[8px] px-1 bg-warning/10 text-warning border-warning/30 gap-0.5">
+              <ShieldAlert className="h-2.5 w-2.5" />
+              Impedida
+            </Badge>
+          )}
         </div>
 
         {/* Title */}
         <p className="text-xs font-medium leading-snug line-clamp-2">{hu.title}</p>
 
-        {/* Assignee */}
+        {/* Assignee direto da HU */}
         {assignee && (
           <div className="flex items-center gap-1.5">
             <div
@@ -240,43 +249,55 @@ function HUCard({
           </div>
         )}
 
-        {/* Active impediments */}
+        {/* Impedimentos ativos */}
         {activeImpediments.length > 0 && (
           <div className="space-y-1">
-            {activeImpediments.slice(0, 2).map((imp) => (
-              <div
-                key={imp.id}
-                className="flex items-start gap-1 text-[10px] bg-warning/10 rounded p-1.5 border border-warning/20"
-              >
-                <ShieldAlert className="h-3 w-3 text-warning shrink-0 mt-0.5" />
-                <div className="flex-1 space-y-0.5">
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <span className="font-semibold text-warning">
-                      {IMPEDIMENT_CRITICALITY_LABELS[imp.criticality] || imp.criticality}
-                    </span>
-                    {imp.hasTicket && imp.ticketId && (
-                      <Badge variant="outline" className="text-[8px] px-1 gap-0.5">
-                        <Link2 className="h-2 w-2" />
-                        {imp.ticketId}
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-muted-foreground line-clamp-1">{imp.description}</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5 text-success hover:bg-success/10 shrink-0"
-                  title="Resolver impedimento"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onResolveImpediment(imp.id);
-                  }}
+            {activeImpediments.slice(0, 2).map((imp) => {
+              // IMPEDIMENT_CRITICALITY_LABELS pode ser Record<string, string> ou Record<string, {label,color}>
+              // Normalizamos para sempre exibir uma string segura
+              const critLabel = (() => {
+                const val = IMPEDIMENT_CRITICALITY_LABELS[imp.criticality];
+                if (!val) return String(imp.criticality);
+                if (typeof val === "string") return val;
+                return (val as { label: string; color: string }).label;
+              })();
+
+              // imp.reason é o campo correto; fallback para imp.description se existir
+              const impText = (imp as any).reason ?? (imp as any).description ?? "";
+
+              return (
+                <div
+                  key={imp.id}
+                  className="flex items-start gap-1 text-[10px] bg-warning/10 rounded p-1.5 border border-warning/20"
                 >
-                  <CheckCircle2 className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
+                  <ShieldAlert className="h-3 w-3 text-warning shrink-0 mt-0.5" />
+                  <div className="flex-1 space-y-0.5">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="font-semibold text-warning">{critLabel}</span>
+                      {imp.hasTicket && imp.ticketId && (
+                        <Badge variant="outline" className="text-[8px] px-1 gap-0.5">
+                          <Link2 className="h-2 w-2" />
+                          {imp.ticketId}
+                        </Badge>
+                      )}
+                    </div>
+                    {impText && <p className="text-muted-foreground line-clamp-1">{impText}</p>}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 text-success hover:bg-success/10 shrink-0"
+                    title="Resolver impedimento"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onResolveImpediment(imp.id);
+                    }}
+                  >
+                    <CheckCircle2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -304,7 +325,6 @@ function HUCard({
           </div>
 
           <div className="flex items-center gap-1">
-            {/* Dev avatars (from activities) */}
             {[...new Set(huActivities.map((a) => a.assigneeId).filter(Boolean))].slice(0, 3).map((devId) => {
               const dev = developers.find((d) => d.id === devId);
               if (!dev) return null;
@@ -318,7 +338,6 @@ function HUCard({
                 </div>
               );
             })}
-
             <Button
               variant="ghost"
               size="icon"
@@ -358,14 +377,13 @@ function HUCard({
   );
 }
 
-// ─── Draggable Card wrapper ───────────────────────────────────────────────────
+// ─── Draggable wrapper ────────────────────────────────────────────────────────
 
 function DraggableHUCard(props: HUCardProps & { id: string; canMove: boolean }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: props.id,
     disabled: !props.canMove,
   });
-
   return (
     <div ref={setNodeRef} {...listeners} {...attributes}>
       <HUCard {...props} isDragging={isDragging} />
@@ -380,7 +398,7 @@ function DroppableColumn({ id, children, className }: { id: string; children: Re
   return (
     <div
       ref={setNodeRef}
-      className={`${className} ${isOver ? "ring-2 ring-primary/30 ring-inset" : ""} transition-all`}
+      className={`${className ?? ""} ${isOver ? "ring-2 ring-primary/30 ring-inset" : ""} transition-all`}
     >
       {children}
     </div>
@@ -407,7 +425,6 @@ export function KanbanBoard() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
 
-  // Filters
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [epicFilter, setEpicFilter] = useState("all");
@@ -436,7 +453,6 @@ export function KanbanBoard() {
   const sprintStories = useMemo(() => {
     if (!activeSprint) return [];
     let stories = userStories.filter((hu) => hu.sprintId === activeSprint.id);
-
     if (search) {
       const q = search.toLowerCase();
       stories = stories.filter((hu) => hu.title.toLowerCase().includes(q) || hu.code?.toLowerCase().includes(q));
@@ -461,11 +477,9 @@ export function KanbanBoard() {
     const { active, over } = event;
     setActiveId(null);
     if (!over || active.id === over.id) return;
-
     const hu = userStories.find((h) => h.id === active.id);
     const targetStatus = over.id as KanbanStatus;
     if (!hu || hu.status === targetStatus) return;
-
     updateUserStoryStatus(hu.id, targetStatus).catch(() => {
       toast.error("Não foi possível mover a HU.");
     });
