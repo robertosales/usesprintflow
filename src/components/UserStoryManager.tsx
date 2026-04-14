@@ -414,7 +414,7 @@ export function UserStoryManager() {
                               <SelectValue placeholder="Backlog" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="backlog">📋 Backlog (sem sprint)</SelectItem>
+                              <SelectItem value="backlog">Backlog Geral</SelectItem>
                               {sprints.map((s) => (
                                 <SelectItem key={s.id} value={s.id}>
                                   {s.name} {s.isActive ? "✦" : ""}

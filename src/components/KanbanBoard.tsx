@@ -225,6 +225,12 @@ export function KanbanBoard() {
           <Badge variant="outline" className="text-xs font-mono">
             {activeSprint.name} • {sprintStories.length} HUs
           </Badge>
+      // 2. Renderiza o badge com o nome (dentro do map dos cards):
+{assignee && (
+  <Badge variant="outline" className="text-[10px] gap-1">
+    👤 {assignee.name}
+  </Badge>
+)}
         )}
       </div>
 
