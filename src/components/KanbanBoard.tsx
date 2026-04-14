@@ -24,7 +24,6 @@ import {
   ChevronRight,
   ChevronLeft,
   Search,
-  Filter,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -219,10 +218,8 @@ export function KanbanBoard() {
       stories = stories.filter((hu) => hu.epicId === epicFilter);
     }
     if (assigneeFilter !== "all") {
-      stories = stories.filter((hu) => {
-        const huActs = activities.filter((a) => a.huId === hu.id);
-        return huActs.some((a) => a.assigneeId === assigneeFilter);
-      });
+      // Filtra por hu.assigneeId (responsável direto da HU)
+      stories = stories.filter((hu) => hu.assigneeId === assigneeFilter);
     }
     return stories;
   }, [activeSprint, userStories, search, priorityFilter, epicFilter, assigneeFilter, activities]);
@@ -430,8 +427,11 @@ function HUCard({
   const totalHours = huActivities.reduce((s, a) => s + a.hours, 0);
   const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
 
-  // Get unique assignees for this HU
-  const assignees = huActivities
+  // Responsável direto da HU (hu.assigneeId)
+  const assignee = hu.assigneeId ? developers.find((d) => d.id === hu.assigneeId) : null;
+
+  // Avatares de quem tem atividades na HU (para o footer)
+  const activityAssignees = huActivities
     .map((a) => developers.find((d) => d.id === a.assigneeId))
     .filter((d, i, arr) => d && arr.findIndex((x) => x?.id === d.id) === i);
 
@@ -471,6 +471,24 @@ function HUCard({
 
         <p className="text-sm font-medium leading-tight">{hu.title}</p>
 
+        {/* ✅ RESPONSÁVEL DA HU — exibido abaixo do título */}
+        {assignee && (
+          <div className="flex items-center gap-1.5">
+            <div
+              className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[9px] font-bold flex items-center justify-center shrink-0"
+              title={assignee.name}
+            >
+              {assignee.name
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .slice(0, 2)
+                .toUpperCase()}
+            </div>
+            <span className="text-[10px] text-muted-foreground truncate">{assignee.name}</span>
+          </div>
+        )}
+
         {activeImpediments.length > 0 && (
           <div className="space-y-1">
             {activeImpediments.slice(0, 2).map((imp) => (
@@ -509,7 +527,7 @@ function HUCard({
           </div>
         )}
 
-        {/* Footer: tasks + assignees */}
+        {/* Footer: tasks + assignees de atividades */}
         <div className="flex items-center justify-between pt-1 border-t border-border/50">
           <div className="flex items-center gap-2">
             <button
@@ -528,9 +546,9 @@ function HUCard({
             </span>
           </div>
           <div className="flex items-center gap-1">
-            {/* Assignee avatars */}
+            {/* Avatares dos responsáveis pelas atividades */}
             <div className="flex -space-x-1.5">
-              {assignees.slice(0, 3).map((dev) => (
+              {activityAssignees.slice(0, 3).map((dev) => (
                 <div
                   key={dev!.id}
                   className="h-5 w-5 rounded-full bg-primary/10 border-2 border-card flex items-center justify-center text-[7px] font-bold text-primary"
@@ -544,9 +562,9 @@ function HUCard({
                     .toUpperCase()}
                 </div>
               ))}
-              {assignees.length > 3 && (
+              {activityAssignees.length > 3 && (
                 <div className="h-5 w-5 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[7px] font-bold text-muted-foreground">
-                  +{assignees.length - 3}
+                  +{activityAssignees.length - 3}
                 </div>
               )}
             </div>
