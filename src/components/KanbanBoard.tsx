@@ -2,13 +2,7 @@ import { useState, useMemo } from "react";
 import { SizeBadge } from "@/components/SizeBadge";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  KanbanStatus,
-  isHUOverdue,
-  hasActiveImpediment,
-  IMPEDIMENT_CRITICALITY_LABELS,
-  UserStory,
-} from "@/types/sprint";
+import { isHUOverdue, hasActiveImpediment, IMPEDIMENT_CRITICALITY_LABELS, UserStory } from "@/types/sprint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +36,15 @@ import {
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 function DroppableColumn({ id, children }: { id: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
@@ -70,7 +73,7 @@ function DraggableCard({ id, children }: { id: string; children: React.ReactNode
   );
 }
 
-// --- Filters Bar ---
+// --- Filters Bar (sem responsável) ---
 function BoardFilters({
   search,
   setSearch,
@@ -78,10 +81,7 @@ function BoardFilters({
   setPriorityFilter,
   epicFilter,
   setEpicFilter,
-  assigneeFilter,
-  setAssigneeFilter,
   epics,
-  developers,
   hasFilters,
   clearFilters,
 }: {
@@ -91,10 +91,7 @@ function BoardFilters({
   setPriorityFilter: (v: string) => void;
   epicFilter: string;
   setEpicFilter: (v: string) => void;
-  assigneeFilter: string;
-  setAssigneeFilter: (v: string) => void;
   epics: { id: string; name: string; color: string }[];
-  developers: { id: string; name: string }[];
   hasFilters: boolean;
   clearFilters: () => void;
 }) {
@@ -136,25 +133,54 @@ function BoardFilters({
           </SelectContent>
         </Select>
       )}
-      {developers.length > 0 && (
-        <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
-          <SelectTrigger className="h-8 w-[150px] text-xs">
-            <SelectValue placeholder="Responsável" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            {developers.map((dev) => (
-              <SelectItem key={dev.id} value={dev.id}>
-                {dev.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
       {hasFilters && (
         <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-muted-foreground" onClick={clearFilters}>
           <X className="h-3 w-3" /> Limpar
         </Button>
+      )}
+    </div>
+  );
+}
+
+// --- Team Avatar Filter Bar ---
+function TeamAvatarFilter({
+  developers,
+  activeFilter,
+  onToggle,
+}: {
+  developers: { id: string; name: string }[];
+  activeFilter: string;
+  onToggle: (id: string) => void;
+}) {
+  if (developers.length === 0) return null;
+  return (
+    <div className="flex items-center gap-1.5">
+      {developers.map((dev) => {
+        const isActive = activeFilter === dev.id;
+        return (
+          <button
+            key={dev.id}
+            onClick={() => onToggle(dev.id)}
+            title={dev.name}
+            className={`h-8 w-8 rounded-full text-[11px] font-bold transition-all border-2 flex items-center justify-center
+              ${
+                isActive
+                  ? "bg-primary text-primary-foreground border-primary shadow-md scale-110"
+                  : "bg-muted text-muted-foreground border-transparent hover:border-primary/40 hover:scale-105"
+              }`}
+          >
+            {getInitials(dev.name)}
+          </button>
+        );
+      })}
+      {activeFilter !== "all" && (
+        <button
+          onClick={() => onToggle("all")}
+          className="h-6 w-6 rounded-full bg-muted/80 text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
+          title="Limpar filtro de responsável"
+        >
+          <X className="h-3 w-3" />
+        </button>
       )}
     </div>
   );
@@ -193,12 +219,15 @@ export function KanbanBoard() {
   const [epicFilter, setEpicFilter] = useState("all");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
 
-  const hasFilters = search !== "" || priorityFilter !== "all" || epicFilter !== "all" || assigneeFilter !== "all";
+  const hasFilters = search !== "" || priorityFilter !== "all" || epicFilter !== "all";
   const clearFilters = () => {
     setSearch("");
     setPriorityFilter("all");
     setEpicFilter("all");
-    setAssigneeFilter("all");
+  };
+
+  const handleAvatarToggle = (id: string) => {
+    setAssigneeFilter((prev) => (prev === id ? "all" : id));
   };
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -218,11 +247,10 @@ export function KanbanBoard() {
       stories = stories.filter((hu) => hu.epicId === epicFilter);
     }
     if (assigneeFilter !== "all") {
-      // Filtra por hu.assigneeId (responsável direto da HU)
       stories = stories.filter((hu) => hu.assigneeId === assigneeFilter);
     }
     return stories;
-  }, [activeSprint, userStories, search, priorityFilter, epicFilter, assigneeFilter, activities]);
+  }, [activeSprint, userStories, search, priorityFilter, epicFilter, assigneeFilter]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -261,16 +289,22 @@ export function KanbanBoard() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold tracking-tight">Board — User Stories</h2>
+      {/* Header com avatares do time */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-bold tracking-tight">Board — User Stories</h2>
+          {activeSprint && (
+            <Badge variant="outline" className="text-xs font-mono">
+              {activeSprint.name} • {sprintStories.length} HUs
+            </Badge>
+          )}
+        </div>
         {activeSprint && (
-          <Badge variant="outline" className="text-xs font-mono">
-            {activeSprint.name} • {sprintStories.length} HUs
-          </Badge>
+          <TeamAvatarFilter developers={developers} activeFilter={assigneeFilter} onToggle={handleAvatarToggle} />
         )}
       </div>
 
-      {/* Filters */}
+      {/* Filtros (sem responsável) */}
       {activeSprint && (
         <BoardFilters
           search={search}
@@ -279,10 +313,7 @@ export function KanbanBoard() {
           setPriorityFilter={setPriorityFilter}
           epicFilter={epicFilter}
           setEpicFilter={setEpicFilter}
-          assigneeFilter={assigneeFilter}
-          setAssigneeFilter={setAssigneeFilter}
           epics={epics}
-          developers={developers}
           hasFilters={hasFilters}
           clearFilters={clearFilters}
         />
@@ -302,14 +333,20 @@ export function KanbanBoard() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-thin">
+          {/* Grid com colunas de tamanho igual */}
+          <div
+            className="grid gap-2 overflow-x-auto pb-4 scrollbar-thin items-start"
+            style={{
+              gridTemplateColumns: `repeat(${workflowColumns.length}, minmax(280px, 1fr))`,
+            }}
+          >
             {workflowColumns.map((col) => {
               const colHUs = sprintStories.filter((hu) => (hu.status || workflowColumns[0]?.key) === col.key);
               const isCollapsed = collapsedColumns.has(col.key);
               return (
                 <div
                   key={col.key}
-                  className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? "w-[48px]" : "min-w-[300px] w-[300px]"}`}
+                  className={`transition-all duration-300 ease-in-out ${isCollapsed ? "w-[48px]" : "w-full"}`}
                 >
                   {isCollapsed ? (
                     <div
@@ -427,10 +464,10 @@ function HUCard({
   const totalHours = huActivities.reduce((s, a) => s + a.hours, 0);
   const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
 
-  // Responsável direto da HU (hu.assigneeId)
+  // Responsável direto da HU
   const assignee = hu.assigneeId ? developers.find((d) => d.id === hu.assigneeId) : null;
 
-  // Avatares de quem tem atividades na HU (para o footer)
+  // Avatares dos devs com atividades na HU
   const activityAssignees = huActivities
     .map((a) => developers.find((d) => d.id === a.assigneeId))
     .filter((d, i, arr) => d && arr.findIndex((x) => x?.id === d.id) === i);
@@ -442,6 +479,7 @@ function HUCard({
       } ${blocked ? "ring-2 ring-warning" : ""}`}
     >
       <CardContent className="p-3 space-y-2">
+        {/* Badges */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <Badge variant="outline" className="font-mono text-[10px] px-1.5 font-bold">
             {hu.code}
@@ -469,26 +507,23 @@ function HUCard({
           )}
         </div>
 
+        {/* Título */}
         <p className="text-sm font-medium leading-tight">{hu.title}</p>
 
-        {/* ✅ RESPONSÁVEL DA HU — exibido abaixo do título */}
+        {/* Responsável da HU */}
         {assignee && (
           <div className="flex items-center gap-1.5">
             <div
               className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[9px] font-bold flex items-center justify-center shrink-0"
               title={assignee.name}
             >
-              {assignee.name
-                .split(" ")
-                .map((n) => n[0])
-                .join("")
-                .slice(0, 2)
-                .toUpperCase()}
+              {getInitials(assignee.name)}
             </div>
             <span className="text-[10px] text-muted-foreground truncate">{assignee.name}</span>
           </div>
         )}
 
+        {/* Impedimentos ativos */}
         {activeImpediments.length > 0 && (
           <div className="space-y-1">
             {activeImpediments.slice(0, 2).map((imp) => (
@@ -527,7 +562,7 @@ function HUCard({
           </div>
         )}
 
-        {/* Footer: tasks + assignees de atividades */}
+        {/* Footer: tarefas + avatares de atividades + botão impedimento */}
         <div className="flex items-center justify-between pt-1 border-t border-border/50">
           <div className="flex items-center gap-2">
             <button
@@ -546,7 +581,6 @@ function HUCard({
             </span>
           </div>
           <div className="flex items-center gap-1">
-            {/* Avatares dos responsáveis pelas atividades */}
             <div className="flex -space-x-1.5">
               {activityAssignees.slice(0, 3).map((dev) => (
                 <div
@@ -554,12 +588,7 @@ function HUCard({
                   className="h-5 w-5 rounded-full bg-primary/10 border-2 border-card flex items-center justify-center text-[7px] font-bold text-primary"
                   title={dev!.name}
                 >
-                  {dev!.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase()}
+                  {getInitials(dev!.name)}
                 </div>
               ))}
               {activityAssignees.length > 3 && (
@@ -583,7 +612,7 @@ function HUCard({
           </div>
         </div>
 
-        {/* Expanded tasks list */}
+        {/* Lista expandida de atividades */}
         {expanded && huActivities.length > 0 && (
           <div className="space-y-1 pt-1">
             {huActivities.map((act) => {
@@ -595,12 +624,7 @@ function HUCard({
                   </Badge>
                   <span className="flex-1 truncate">{act.title}</span>
                   <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary text-[7px] font-bold shrink-0">
-                    {dev?.name
-                      ?.split(" ")
-                      .map((n) => n[0])
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase() || "?"}
+                    {dev?.name ? getInitials(dev.name) : "?"}
                   </div>
                   <span className="text-muted-foreground shrink-0">{act.hours}h</span>
                 </div>
