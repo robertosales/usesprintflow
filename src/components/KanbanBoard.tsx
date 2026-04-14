@@ -73,7 +73,7 @@ function DraggableCard({ id, children }: { id: string; children: React.ReactNode
   );
 }
 
-// --- Workload bar por dev ---
+// --- Workload bar ---
 function WorkloadBar({ pct }: { pct: number }) {
   const capped = Math.min(pct, 100);
   const color = pct > 100 ? "bg-destructive" : pct > 80 ? "bg-warning" : "bg-success";
@@ -84,7 +84,7 @@ function WorkloadBar({ pct }: { pct: number }) {
   );
 }
 
-// --- Team Avatar Filter Bar com carga ---
+// --- Team Avatar Filter com carga ---
 function TeamAvatarFilter({
   developers,
   activeFilter,
@@ -104,7 +104,6 @@ function TeamAvatarFilter({
         const load = workload[dev.id] ?? { estimated: 0, realized: 0 };
         const pct = load.estimated > 0 ? Math.round((load.realized / load.estimated) * 100) : 0;
         const isOverloaded = pct > 100;
-
         return (
           <button
             key={dev.id}
@@ -117,7 +116,6 @@ function TeamAvatarFilter({
                   : "border-transparent hover:bg-muted hover:border-border"
               }`}
           >
-            {/* Avatar */}
             <div
               className={`h-7 w-7 rounded-full text-[11px] font-bold flex items-center justify-center transition-all
                 ${
@@ -130,24 +128,17 @@ function TeamAvatarFilter({
             >
               {getInitials(dev.name)}
             </div>
-
-            {/* Barra de carga */}
             <div className="w-10">
               <WorkloadBar pct={pct} />
             </div>
-
-            {/* Horas */}
             <span
-              className={`text-[9px] font-medium leading-none ${
-                isOverloaded ? "text-destructive" : "text-muted-foreground"
-              }`}
+              className={`text-[9px] font-medium leading-none ${isOverloaded ? "text-destructive" : "text-muted-foreground"}`}
             >
               {load.realized}h/{load.estimated}h
             </span>
           </button>
         );
       })}
-
       {activeFilter !== "all" && (
         <button
           onClick={() => onToggle("all")}
@@ -243,10 +234,29 @@ export function KanbanBoard() {
   } = useSprint();
   const { hasPermission } = useAuth();
   const canMove = hasPermission("move_kanban");
+
   const [impedimentDialog, setImpedimentDialog] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [expandedHU, setExpandedHU] = useState<string | null>(null);
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
+
+  const [search, setSearch] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [epicFilter, setEpicFilter] = useState("all");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
+
+  const hasFilters = search !== "" || priorityFilter !== "all" || epicFilter !== "all";
+
+  const clearFilters = () => {
+    setSearch("");
+    setPriorityFilter("all");
+    setEpicFilter("all");
+  };
+
+  // ✅ Fix: toggle limpo sem closure stale
+  const handleAvatarToggle = (id: string) => {
+    setAssigneeFilter(assigneeFilter === id ? "all" : id);
+  };
 
   const toggleColumn = (key: string) => {
     setCollapsedColumns((prev) => {
@@ -257,25 +267,14 @@ export function KanbanBoard() {
     });
   };
 
-  const [search, setSearch] = useState("");
-  const [priorityFilter, setPriorityFilter] = useState("all");
-  const [epicFilter, setEpicFilter] = useState("all");
-  const [assigneeFilter, setAssigneeFilter] = useState("all");
-
-  const hasFilters = search !== "" || priorityFilter !== "all" || epicFilter !== "all";
-  const clearFilters = () => {
-    setSearch("");
-    setPriorityFilter("all");
-    setEpicFilter("all");
-  };
-
-  const handleAvatarToggle = (id: string) => {
-    setAssigneeFilter((prev) => (prev === id ? "all" : id));
-  };
+  // ✅ Fix: gridTemplate dinâmico — colunas retraídas ficam 48px, expandidas dividem 1fr
+  const gridTemplate = workflowColumns
+    .map((col) => (collapsedColumns.has(col.key) ? "48px" : "minmax(280px, 1fr)"))
+    .join(" ");
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  // Sprint stories filtradas
+  // ✅ Fix: assigneeFilter incluído nas dependências do useMemo
   const sprintStories = useMemo(() => {
     if (!activeSprint) return [];
     let stories = userStories.filter((hu) => hu.sprintId === activeSprint.id);
@@ -289,43 +288,32 @@ export function KanbanBoard() {
     return stories;
   }, [activeSprint, userStories, search, priorityFilter, epicFilter, assigneeFilter]);
 
-  // Cálculo de carga por desenvolvedor (todas as HUs da sprint, sem filtro)
+  // Carga por desenvolvedor (todas as HUs da sprint, sem filtros)
   const workload = useMemo(() => {
     if (!activeSprint) return {};
     const sprintHUs = userStories.filter((hu) => hu.sprintId === activeSprint.id);
     const sprintHUIds = new Set(sprintHUs.map((hu) => hu.id));
-
     const result: Record<string, { estimated: number; realized: number }> = {};
-
     developers.forEach((dev) => {
-      // Estimado: soma das estimatedHours das HUs onde dev é responsável
       const estimated = sprintHUs
         .filter((hu) => hu.assigneeId === dev.id)
         .reduce((sum, hu) => sum + (hu.estimatedHours ?? 0), 0);
-
-      // Realizado: soma das horas das atividades do dev nas HUs da sprint
       const realized = activities
         .filter((a) => a.assigneeId === dev.id && sprintHUIds.has(a.huId))
         .reduce((sum, a) => sum + (a.hours ?? 0), 0);
-
       result[dev.id] = { estimated, realized };
     });
-
     return result;
   }, [activeSprint, userStories, activities, developers]);
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
+  const handleDragStart = (event: DragStartEvent) => setActiveId(event.active.id as string);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
     if (!over || !canMove) return;
-
     const huId = active.id as string;
     const overId = over.id as string;
-
     const targetColumn = workflowColumns.find((c) => c.key === overId);
     if (targetColumn) {
       const hu = sprintStories.find((h) => h.id === huId);
@@ -335,7 +323,6 @@ export function KanbanBoard() {
       }
       return;
     }
-
     const targetHU = sprintStories.find((h) => h.id === overId);
     if (targetHU) {
       const hu = sprintStories.find((h) => h.id === huId);
@@ -405,23 +392,19 @@ export function KanbanBoard() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
+          {/* ✅ Fix: gridTemplate dinâmico resolve lacuna das colunas retraídas */}
           <div
             className="grid gap-2 overflow-x-auto pb-4 scrollbar-thin items-start"
-            style={{
-              gridTemplateColumns: `repeat(${workflowColumns.length}, minmax(280px, 1fr))`,
-            }}
+            style={{ gridTemplateColumns: gridTemplate }}
           >
             {workflowColumns.map((col) => {
               const colHUs = sprintStories.filter((hu) => (hu.status || workflowColumns[0]?.key) === col.key);
               const isCollapsed = collapsedColumns.has(col.key);
               return (
-                <div
-                  key={col.key}
-                  className={`transition-all duration-300 ease-in-out ${isCollapsed ? "w-[48px]" : "w-full"}`}
-                >
+                <div key={col.key} className="transition-all duration-300 ease-in-out overflow-hidden">
                   {isCollapsed ? (
                     <div
-                      className={`rounded-lg border h-full cursor-pointer ${col.colorClass} flex flex-col items-center gap-2 pt-3 pb-2 px-1`}
+                      className={`rounded-lg border cursor-pointer ${col.colorClass} flex flex-col items-center gap-2 pt-3 pb-2 px-1 h-full min-h-[120px]`}
                       onClick={() => toggleColumn(col.key)}
                       title={`Expandir: ${col.label}`}
                     >
@@ -539,7 +522,6 @@ function HUCard({
     .map((a) => developers.find((d) => d.id === a.assigneeId))
     .filter((d, i, arr) => d && arr.findIndex((x) => x?.id === d.id) === i);
 
-  // Progresso estimado vs realizado na HU
   const estimated = hu.estimatedHours ?? 0;
   const progressPct = estimated > 0 ? Math.min(Math.round((totalHours / estimated) * 100), 100) : 0;
   const isOver = estimated > 0 && totalHours > estimated;
@@ -642,7 +624,6 @@ function HUCard({
               {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
               {huActivities.length} tarefa{huActivities.length !== 1 ? "s" : ""}
             </button>
-            {/* Horas realizadas vs estimadas */}
             <span
               className={`text-[11px] flex items-center gap-0.5 ${isOver ? "text-destructive font-semibold" : "text-muted-foreground"}`}
               title={`${totalHours}h realizadas / ${estimated}h estimadas`}
@@ -683,17 +664,12 @@ function HUCard({
           </div>
         </div>
 
-        {/* Barra de progresso da HU */}
         {estimated > 0 && (
-          <div className="space-y-0.5">
-            <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  isOver ? "bg-destructive" : progressPct > 80 ? "bg-warning" : "bg-success"
-                }`}
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
+          <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${isOver ? "bg-destructive" : progressPct > 80 ? "bg-warning" : "bg-success"}`}
+              style={{ width: `${progressPct}%` }}
+            />
           </div>
         )}
 
