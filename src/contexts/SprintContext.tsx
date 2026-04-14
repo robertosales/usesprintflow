@@ -251,18 +251,29 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (hu.priority !== undefined) updateData.priority = hu.priority;
     if (hu.status !== undefined) updateData.status = hu.status;
     if ('sprintId' in hu) updateData.sprint_id = hu.sprintId ?? null;
-    if (hu.epicId !== undefined) updateData.epic_id = hu.epicId || null;
+    if ('epicId' in hu) updateData.epic_id = hu.epicId ?? null;
     if (hu.customFields !== undefined) updateData.custom_fields = hu.customFields;
-    if (hu.startDate !== undefined) updateData.start_date = hu.startDate || null;
-    if (hu.endDate !== undefined) updateData.end_date = hu.endDate || null;
-    if ((hu as any).sizeReference !== undefined) updateData.size_reference = (hu as any).sizeReference;
-    if ((hu as any).estimatedHours !== undefined) updateData.estimated_hours = (hu as any).estimatedHours;
+    if ('startDate' in hu) updateData.start_date = hu.startDate || null;
+    if ('endDate' in hu) updateData.end_date = hu.endDate || null;
+    if ((hu as any).sizeReference !== undefined) updateData.size_reference = (hu as any).sizeReference ?? null;
+    if ((hu as any).estimatedHours !== undefined) updateData.estimated_hours = (hu as any).estimatedHours ?? null;
     if ((hu as any).planningStatus !== undefined) updateData.planning_status = (hu as any).planningStatus;
     if ((hu as any).votedAt !== undefined) updateData.voted_at = (hu as any).votedAt;
     if ((hu as any).votedBy !== undefined) updateData.voted_by = (hu as any).votedBy;
-    if ((hu as any).functionPoints !== undefined) updateData.function_points = (hu as any).functionPoints;
-    const { error } = await supabase.from("user_stories").update(updateData).eq("id", id);
-    if (error) { toast.error("Erro ao atualizar HU"); return; }
+    if ((hu as any).functionPoints !== undefined) updateData.function_points = (hu as any).functionPoints ?? null;
+
+    console.log("[updateUserStory] payload:", id, updateData);
+    const { data, error } = await supabase.from("user_stories").update(updateData).eq("id", id).select();
+    if (error) {
+      console.error("[updateUserStory] Supabase error:", error);
+      toast.error("Erro ao atualizar HU: " + error.message);
+      return;
+    }
+    if (!data || data.length === 0) {
+      console.warn("[updateUserStory] No rows updated — possible RLS issue");
+      toast.error("Erro ao atualizar HU: nenhuma linha afetada (verifique permissões)");
+      return;
+    }
     await refreshAll();
   };
   const removeUserStory = async (id: string) => {
