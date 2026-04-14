@@ -2,13 +2,31 @@ import { useState, useMemo } from "react";
 import { SizeBadge } from "@/components/SizeBadge";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { KanbanStatus, isHUOverdue, hasActiveImpediment, IMPEDIMENT_CRITICALITY_LABELS, UserStory } from "@/types/sprint";
+import {
+  KanbanStatus,
+  isHUOverdue,
+  hasActiveImpediment,
+  IMPEDIMENT_CRITICALITY_LABELS,
+  UserStory,
+} from "@/types/sprint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, ShieldAlert, CheckCircle2, Clock, Link2, ChevronDown, ChevronRight, ChevronLeft, Search, Filter, X } from "lucide-react";
+import {
+  AlertTriangle,
+  ShieldAlert,
+  CheckCircle2,
+  Clock,
+  Link2,
+  ChevronDown,
+  ChevronRight,
+  ChevronLeft,
+  Search,
+  Filter,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { ImpedimentDialog } from "@/components/ImpedimentManager";
 import {
@@ -55,19 +73,27 @@ function DraggableCard({ id, children }: { id: string; children: React.ReactNode
 
 // --- Filters Bar ---
 function BoardFilters({
-  search, setSearch,
-  priorityFilter, setPriorityFilter,
-  epicFilter, setEpicFilter,
-  assigneeFilter, setAssigneeFilter,
+  search,
+  setSearch,
+  priorityFilter,
+  setPriorityFilter,
+  epicFilter,
+  setEpicFilter,
+  assigneeFilter,
+  setAssigneeFilter,
   epics,
   developers,
   hasFilters,
   clearFilters,
 }: {
-  search: string; setSearch: (v: string) => void;
-  priorityFilter: string; setPriorityFilter: (v: string) => void;
-  epicFilter: string; setEpicFilter: (v: string) => void;
-  assigneeFilter: string; setAssigneeFilter: (v: string) => void;
+  search: string;
+  setSearch: (v: string) => void;
+  priorityFilter: string;
+  setPriorityFilter: (v: string) => void;
+  epicFilter: string;
+  setEpicFilter: (v: string) => void;
+  assigneeFilter: string;
+  setAssigneeFilter: (v: string) => void;
   epics: { id: string; name: string; color: string }[];
   developers: { id: string; name: string }[];
   hasFilters: boolean;
@@ -104,7 +130,9 @@ function BoardFilters({
           <SelectContent>
             <SelectItem value="all">Todos épicos</SelectItem>
             {epics.map((ep) => (
-              <SelectItem key={ep.id} value={ep.id}>{ep.name}</SelectItem>
+              <SelectItem key={ep.id} value={ep.id}>
+                {ep.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -117,7 +145,9 @@ function BoardFilters({
           <SelectContent>
             <SelectItem value="all">Todos</SelectItem>
             {developers.map((dev) => (
-              <SelectItem key={dev.id} value={dev.id}>{dev.name}</SelectItem>
+              <SelectItem key={dev.id} value={dev.id}>
+                {dev.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -132,18 +162,28 @@ function BoardFilters({
 }
 
 export function KanbanBoard() {
-  const { activities, userStories, developers, updateUserStoryStatus, resolveImpediment, activeSprint, workflowColumns, epics } = useSprint();
+  const {
+    activities,
+    userStories,
+    developers,
+    updateUserStoryStatus,
+    resolveImpediment,
+    activeSprint,
+    workflowColumns,
+    epics,
+  } = useSprint();
   const { hasPermission } = useAuth();
-  const canMove = hasPermission('move_kanban');
+  const canMove = hasPermission("move_kanban");
   const [impedimentDialog, setImpedimentDialog] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [expandedHU, setExpandedHU] = useState<string | null>(null);
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
 
   const toggleColumn = (key: string) => {
-    setCollapsedColumns(prev => {
+    setCollapsedColumns((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -155,16 +195,19 @@ export function KanbanBoard() {
   const [assigneeFilter, setAssigneeFilter] = useState("all");
 
   const hasFilters = search !== "" || priorityFilter !== "all" || epicFilter !== "all" || assigneeFilter !== "all";
-  const clearFilters = () => { setSearch(""); setPriorityFilter("all"); setEpicFilter("all"); setAssigneeFilter("all"); };
+  const clearFilters = () => {
+    setSearch("");
+    setPriorityFilter("all");
+    setEpicFilter("all");
+    setAssigneeFilter("all");
+  };
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const sprintStories = useMemo(() => {
     if (!activeSprint) return [];
     let stories = userStories.filter((hu) => hu.sprintId === activeSprint.id);
-    
+
     if (search) {
       const q = search.toLowerCase();
       stories = stories.filter((hu) => hu.title.toLowerCase().includes(q) || hu.code.toLowerCase().includes(q));
@@ -184,7 +227,9 @@ export function KanbanBoard() {
     return stories;
   }, [activeSprint, userStories, search, priorityFilter, epicFilter, assigneeFilter, activities]);
 
-  const handleDragStart = (event: DragStartEvent) => { setActiveId(event.active.id as string); };
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -225,24 +270,30 @@ export function KanbanBoard() {
           <Badge variant="outline" className="text-xs font-mono">
             {activeSprint.name} • {sprintStories.length} HUs
           </Badge>
-      // 2. Renderiza o badge com o nome (dentro do map dos cards):
-{assignee && (
-  <Badge variant="outline" className="text-[10px] gap-1">
-    👤 {assignee.name}
-  </Badge>
-)}
+        )}
+        // 2. Renderiza o badge com o nome (dentro do map dos cards):
+        {assignee && (
+          <Badge variant="outline" className="text-[10px] gap-1">
+            👤 {assignee.name}
+          </Badge>
         )}
       </div>
 
       {/* Filters */}
       {activeSprint && (
         <BoardFilters
-          search={search} setSearch={setSearch}
-          priorityFilter={priorityFilter} setPriorityFilter={setPriorityFilter}
-          epicFilter={epicFilter} setEpicFilter={setEpicFilter}
-          assigneeFilter={assigneeFilter} setAssigneeFilter={setAssigneeFilter}
-          epics={epics} developers={developers}
-          hasFilters={hasFilters} clearFilters={clearFilters}
+          search={search}
+          setSearch={setSearch}
+          priorityFilter={priorityFilter}
+          setPriorityFilter={setPriorityFilter}
+          epicFilter={epicFilter}
+          setEpicFilter={setEpicFilter}
+          assigneeFilter={assigneeFilter}
+          setAssigneeFilter={setAssigneeFilter}
+          epics={epics}
+          developers={developers}
+          hasFilters={hasFilters}
+          clearFilters={clearFilters}
         />
       )}
 
@@ -265,7 +316,10 @@ export function KanbanBoard() {
               const colHUs = sprintStories.filter((hu) => (hu.status || workflowColumns[0]?.key) === col.key);
               const isCollapsed = collapsedColumns.has(col.key);
               return (
-                <div key={col.key} className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-[48px]' : 'min-w-[300px] w-[300px]'}`}>
+                <div
+                  key={col.key}
+                  className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? "w-[48px]" : "min-w-[300px] w-[300px]"}`}
+                >
                   {isCollapsed ? (
                     <div
                       className={`rounded-lg border h-full cursor-pointer ${col.colorClass} flex flex-col items-center gap-2 pt-3 pb-2 px-1`}
@@ -279,7 +333,7 @@ export function KanbanBoard() {
                       </span>
                       <span
                         className="text-[11px] font-semibold uppercase tracking-wider mt-1"
-                        style={{ writingMode: 'vertical-lr', textOrientation: 'mixed', whiteSpace: 'nowrap' }}
+                        style={{ writingMode: "vertical-lr", textOrientation: "mixed", whiteSpace: "nowrap" }}
                       >
                         {col.label}
                       </span>
@@ -343,11 +397,7 @@ export function KanbanBoard() {
         </DndContext>
       )}
 
-      <ImpedimentDialog
-        huId={impedimentDialog}
-        open={!!impedimentDialog}
-        onClose={() => setImpedimentDialog(null)}
-      />
+      <ImpedimentDialog huId={impedimentDialog} open={!!impedimentDialog} onClose={() => setImpedimentDialog(null)} />
     </div>
   );
 }
@@ -359,7 +409,10 @@ const PRIORITY_COLORS: Record<string, string> = {
   critica: "bg-destructive/15 text-destructive",
 };
 const PRIORITY_LABELS: Record<string, string> = {
-  baixa: "Baixa", media: "Média", alta: "Alta", critica: "Crítica",
+  baixa: "Baixa",
+  media: "Média",
+  alta: "Alta",
+  critica: "Crítica",
 };
 
 function HUCard({
@@ -396,9 +449,14 @@ function HUCard({
     >
       <CardContent className="p-3 space-y-2">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <Badge variant="outline" className="font-mono text-[10px] px-1.5 font-bold">{hu.code}</Badge>
+          <Badge variant="outline" className="font-mono text-[10px] px-1.5 font-bold">
+            {hu.code}
+          </Badge>
           {epic && (
-            <Badge className="text-[8px] px-1 gap-0.5" style={{ backgroundColor: epic.color + "22", color: epic.color }}>
+            <Badge
+              className="text-[8px] px-1 gap-0.5"
+              style={{ backgroundColor: epic.color + "22", color: epic.color }}
+            >
               <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: epic.color }} />
               {epic.name}
             </Badge>
@@ -422,7 +480,10 @@ function HUCard({
         {activeImpediments.length > 0 && (
           <div className="space-y-1">
             {activeImpediments.slice(0, 2).map((imp) => (
-              <div key={imp.id} className="flex items-start gap-1 text-[10px] bg-warning/10 rounded p-1.5 border border-warning/20">
+              <div
+                key={imp.id}
+                className="flex items-start gap-1 text-[10px] bg-warning/10 rounded p-1.5 border border-warning/20"
+              >
                 <ShieldAlert className="h-3 w-3 text-warning shrink-0 mt-0.5" />
                 <div className="flex-1 space-y-0.5">
                   <span className="block line-clamp-1">{imp.reason}</span>
@@ -432,7 +493,8 @@ function HUCard({
                     </Badge>
                     {imp.hasTicket && imp.ticketId && (
                       <Badge variant="outline" className="text-[8px] px-1 gap-0.5">
-                        <Link2 className="h-2 w-2" />{imp.ticketId}
+                        <Link2 className="h-2 w-2" />
+                        {imp.ticketId}
                       </Badge>
                     )}
                   </div>
@@ -441,7 +503,10 @@ function HUCard({
                   variant="ghost"
                   size="icon"
                   className="h-5 w-5 text-success hover:bg-success/10"
-                  onClick={(e) => { e.stopPropagation(); onResolveImpediment(imp.id); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onResolveImpediment(imp.id);
+                  }}
                 >
                   <CheckCircle2 className="h-3 w-3" />
                 </Button>
@@ -455,13 +520,17 @@ function HUCard({
           <div className="flex items-center gap-2">
             <button
               className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpand();
+              }}
             >
               {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
               {huActivities.length} tarefa{huActivities.length !== 1 ? "s" : ""}
             </button>
             <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
-              <Clock className="h-3 w-3" />{totalHours}h
+              <Clock className="h-3 w-3" />
+              {totalHours}h
             </span>
           </div>
           <div className="flex items-center gap-1">
@@ -473,7 +542,12 @@ function HUCard({
                   className="h-5 w-5 rounded-full bg-primary/10 border-2 border-card flex items-center justify-center text-[7px] font-bold text-primary"
                   title={dev!.name}
                 >
-                  {dev!.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                  {dev!.name
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase()}
                 </div>
               ))}
               {assignees.length > 3 && (
@@ -487,7 +561,10 @@ function HUCard({
               size="icon"
               className="h-5 w-5 text-warning hover:bg-warning/10"
               title="Reportar Impedimento"
-              onClick={(e) => { e.stopPropagation(); onImpediment(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onImpediment();
+              }}
             >
               <ShieldAlert className="h-3 w-3" />
             </Button>
@@ -506,7 +583,12 @@ function HUCard({
                   </Badge>
                   <span className="flex-1 truncate">{act.title}</span>
                   <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary text-[7px] font-bold shrink-0">
-                    {dev?.name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() || "?"}
+                    {dev?.name
+                      ?.split(" ")
+                      .map((n) => n[0])
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase() || "?"}
                   </div>
                   <span className="text-muted-foreground shrink-0">{act.hours}h</span>
                 </div>
