@@ -161,6 +161,7 @@ export interface UserStory {
   planningStatus?: string;
   votedAt?: string | null;
   votedBy?: string | null;
+  assigneeId: row.assignee_id || null,
 }
 
 export function isHUOverdue(hu: UserStory, activities: Activity[]): boolean {
