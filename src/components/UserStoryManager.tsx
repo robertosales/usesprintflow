@@ -229,7 +229,7 @@ export function UserStoryManager() {
     setSprintId(hu.sprintId || "");
     setStatusField(hu.status || workflowColumns[0]?.key || "");
     setFunctionPoints(hu.functionPoints != null ? String(hu.functionPoints) : "");
-    setAssigneeId((hu as any).assigneeId || ""); // ← PONTO 2
+    setAssigneeId(hu.assigneeId || ""); //
     setCustomFieldValues(hu.customFields || {});
     setErrors({});
     setOpen(true);
@@ -703,7 +703,7 @@ export function UserStoryManager() {
           const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
           const completionPct =
             huActivities.length > 0 ? Math.round((closedActivities.length / huActivities.length) * 100) : 0;
-          const assignee = (hu as any).assigneeId ? developers.find((d) => d.id === (hu as any).assigneeId) : null;
+          const assignee = hu.assigneeId ? developers.find((d) => d.id === hu.assigneeId) : null;
 
           return (
             <Card
