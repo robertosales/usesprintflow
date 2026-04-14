@@ -20,8 +20,7 @@ import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";
-import { SIZE_REFERENCES, getSizeByKey, type SizeReference } from "@/lib/sizeReference";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { SIZE_REFERENCES, getSizeByKey } from "@/lib/sizeReference";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
   baixa: { label: "Baixa", color: "bg-muted text-muted-foreground" },
@@ -48,6 +47,7 @@ export function UserStoryManager() {
   const { hasPermission, currentTeamId } = useAuth();
   const canCreate = hasPermission("create_backlog");
   const canEdit = hasPermission("edit_backlog");
+
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -64,6 +64,8 @@ export function UserStoryManager() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [sprintId, setSprintId] = useState<string>("");
+  const [statusField, setStatusField] = useState<string>("");
 
   // Filters
   const [searchFilter, setSearchFilter] = useState("");
@@ -72,12 +74,14 @@ export function UserStoryManager() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [epicFilter, setEpicFilter] = useState("all");
   const [sprintFilter, setSprintFilter] = useState("all");
+
   const hasFilters =
     searchFilter !== "" ||
     priorityFilter !== "all" ||
     statusFilter !== "all" ||
     epicFilter !== "all" ||
     sprintFilter !== "all";
+
   const clearFilters = () => {
     setSearchFilter("");
     setPriorityFilter("all");
@@ -101,9 +105,11 @@ export function UserStoryManager() {
       const q = debouncedSearch.toLowerCase();
       stories = stories.filter((hu) => hu.title.toLowerCase().includes(q) || hu.code.toLowerCase().includes(q));
     }
+
     if (priorityFilter !== "all") stories = stories.filter((hu) => hu.priority === priorityFilter);
     if (statusFilter !== "all") stories = stories.filter((hu) => hu.status === statusFilter);
     if (epicFilter !== "all") stories = stories.filter((hu) => hu.epicId === epicFilter);
+
     return stories;
   }, [activeSprint, userStories, debouncedSearch, priorityFilter, statusFilter, epicFilter, sprintFilter]);
 
@@ -115,10 +121,6 @@ export function UserStoryManager() {
     pageSize,
   } = usePagination(filteredStories, { pageSize: 10 });
 
-  const [sprintId, setSprintId] = useState<string>("");
-  const [statusField, setStatusField] = useState<string>("");
-
-  // ── PONTO 3: resetForm limpa assigneeId ──────────────────────────────────
   const resetForm = () => {
     setTitle("");
     setDescription("");
@@ -131,7 +133,7 @@ export function UserStoryManager() {
     setStartDate("");
     setEndDate("");
     setFunctionPoints("");
-    setAssigneeId(""); // ← PONTO 3
+    setAssigneeId("");
     setCustomFieldValues({});
     setErrors({});
     setEditId(null);
@@ -140,6 +142,7 @@ export function UserStoryManager() {
   const validate = () => {
     const e: Record<string, string> = {};
     if (!title.trim()) e.title = "Título é obrigatório";
+
     customFields.forEach((f) => {
       if (f.required) {
         const val = customFieldValues[f.id];
@@ -148,14 +151,15 @@ export function UserStoryManager() {
         }
       }
     });
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  // ── PONTO 1: handleSubmit envia assigneeId nos dois blocos ────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
+
     setSubmitting(true);
     try {
       const s = selectedSize ? getSizeByKey(selectedSize) : null;
@@ -184,7 +188,7 @@ export function UserStoryManager() {
           startDate: startDate || undefined,
           endDate: endDate || undefined,
           functionPoints: fp,
-          assigneeId: assigneeId || null, // ← PONTO 1
+          assigneeId: assigneeId || null,
         } as any);
         toast.success("Alterações salvas com sucesso");
       } else {
@@ -199,10 +203,11 @@ export function UserStoryManager() {
           startDate: startDate || undefined,
           endDate: endDate || undefined,
           functionPoints: fp,
-          assigneeId: assigneeId || null, // ← PONTO 1
+          assigneeId: assigneeId || null,
         } as any);
         toast.success("Registro criado com sucesso");
       }
+
       resetForm();
       setOpen(false);
     } catch {
@@ -212,15 +217,17 @@ export function UserStoryManager() {
     }
   };
 
-  // ── PONTO 2: openEdit carrega assigneeId da HU ───────────────────────────
   const openEdit = (huId: string) => {
     const hu = userStories.find((h) => h.id === huId);
     if (!hu) return;
+
     setEditId(hu.id);
     setTitle(hu.title);
+
     const parts = (hu.description || "").split("\n\n---\n**Critérios de Aceite:**\n");
     setDescription(parts[0] || "");
     setAcceptanceCriteria(parts[1] || "");
+
     setSelectedSize(hu.sizeReference || null);
     setPriority(hu.priority);
     setEpicId(hu.epicId || "");
@@ -229,7 +236,7 @@ export function UserStoryManager() {
     setSprintId(hu.sprintId || "");
     setStatusField(hu.status || workflowColumns[0]?.key || "");
     setFunctionPoints(hu.functionPoints != null ? String(hu.functionPoints) : "");
-    setAssigneeId(hu.assigneeId || ""); //
+    setAssigneeId(hu.assigneeId || "");
     setCustomFieldValues(hu.customFields || {});
     setErrors({});
     setOpen(true);
@@ -237,6 +244,7 @@ export function UserStoryManager() {
 
   const handleConfirmRemove = async () => {
     if (!deleteTarget) return;
+
     const huActivities = activities.filter((a) => a.huId === deleteTarget);
     if (huActivities.length > 0) {
       toast.error(
@@ -245,12 +253,14 @@ export function UserStoryManager() {
       setDeleteTarget(null);
       return;
     }
+
     try {
       await removeUserStory(deleteTarget);
       toast.success("Registro excluído com sucesso");
     } catch {
       toast.error("Falha ao excluir item");
     }
+
     setDeleteTarget(null);
   };
 
@@ -264,6 +274,7 @@ export function UserStoryManager() {
           <h2 className="text-lg font-bold tracking-tight">User Stories (Backlog)</h2>
           <Badge variant="secondary">{totalItems}</Badge>
         </div>
+
         {canCreate && (
           <Dialog
             open={open}
@@ -277,6 +288,7 @@ export function UserStoryManager() {
                 <Plus className="h-4 w-4" /> Nova HU
               </Button>
             </DialogTrigger>
+
             <DialogContent className="max-w-[960px] w-[80vw] max-h-[90vh] overflow-y-auto p-0">
               <DialogHeader className="px-6 pt-6 pb-0">
                 <DialogTitle className="flex items-center gap-2">
@@ -284,10 +296,10 @@ export function UserStoryManager() {
                   {editId ? "Editar User Story" : "Nova User Story"}
                 </DialogTitle>
               </DialogHeader>
+
               <form onSubmit={handleSubmit} className="flex flex-col h-full">
                 <div className="flex-1 px-6 py-4">
                   <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-                    {/* LEFT COLUMN ~60% */}
                     <div className="md:col-span-3 space-y-4">
                       <div>
                         <Label>
@@ -304,6 +316,7 @@ export function UserStoryManager() {
                         />
                         {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
                       </div>
+
                       <div>
                         <Label>Descrição</Label>
                         <Textarea
@@ -314,6 +327,7 @@ export function UserStoryManager() {
                           rows={3}
                         />
                       </div>
+
                       <div>
                         <Label>Critérios de Aceite</Label>
                         <Textarea
@@ -325,18 +339,19 @@ export function UserStoryManager() {
                         />
                       </div>
 
-                      {/* Custom Fields */}
                       {customFields.length > 0 && (
                         <div className="space-y-3 border-t pt-3">
                           <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                             Campos Personalizados
                           </Label>
+
                           {customFields.map((field) => (
                             <div key={field.id}>
                               <Label className="text-sm">
                                 {field.name}
                                 {field.required && <span className="text-destructive"> *</span>}
                               </Label>
+
                               {field.type === "text" && (
                                 <Input
                                   value={String(customFieldValues[field.id] || "")}
@@ -347,6 +362,7 @@ export function UserStoryManager() {
                                   className="mt-1"
                                 />
                               )}
+
                               {field.type === "number" && (
                                 <Input
                                   type="number"
@@ -358,6 +374,7 @@ export function UserStoryManager() {
                                   className="mt-1"
                                 />
                               )}
+
                               {field.type === "select" && field.options && (
                                 <Select
                                   value={String(customFieldValues[field.id] || "")}
@@ -375,6 +392,7 @@ export function UserStoryManager() {
                                   </SelectContent>
                                 </Select>
                               )}
+
                               {errors[`cf_${field.id}`] && (
                                 <p className="text-xs text-destructive mt-1">{errors[`cf_${field.id}`]}</p>
                               )}
@@ -384,10 +402,8 @@ export function UserStoryManager() {
                       )}
                     </div>
 
-                    {/* RIGHT COLUMN ~40% */}
                     <div className="md:col-span-2 space-y-4">
                       <div className="grid grid-cols-2 gap-3">
-                        {/* Linha 1: Sprint | Épico */}
                         <div>
                           <Label className="text-xs">Sprint</Label>
                           <Select
@@ -407,9 +423,10 @@ export function UserStoryManager() {
                             </SelectContent>
                           </Select>
                         </div>
+
                         <div>
                           <Label className="text-xs">Épico</Label>
-                          <Select value={epicId} onValueChange={setEpicId}>
+                          <Select value={epicId || "none"} onValueChange={(v) => setEpicId(v === "none" ? "" : v)}>
                             <SelectTrigger className="mt-1 h-9 text-xs">
                               <SelectValue placeholder="Sem épico" />
                             </SelectTrigger>
@@ -430,7 +447,6 @@ export function UserStoryManager() {
                           </Select>
                         </div>
 
-                        {/* Linha 2: Status | Prioridade */}
                         <div>
                           <Label className="text-xs">Status</Label>
                           <Select
@@ -452,6 +468,7 @@ export function UserStoryManager() {
                             </SelectContent>
                           </Select>
                         </div>
+
                         <div>
                           <Label className="text-xs">
                             Prioridade <span className="text-destructive">*</span>
@@ -470,7 +487,6 @@ export function UserStoryManager() {
                           </Select>
                         </div>
 
-                        {/* Linha 3: Estimativa | Responsável */}
                         <div>
                           <Label className="text-xs">Estimativa em horas</Label>
                           <Select
@@ -490,6 +506,7 @@ export function UserStoryManager() {
                             </SelectContent>
                           </Select>
                         </div>
+
                         <div>
                           <Label className="text-xs">Responsável</Label>
                           <Select
@@ -510,7 +527,6 @@ export function UserStoryManager() {
                           </Select>
                         </div>
 
-                        {/* Linha 4: Data início | Data entrega */}
                         <div>
                           <Label className="text-xs">Data de Início</Label>
                           <Input
@@ -520,6 +536,7 @@ export function UserStoryManager() {
                             className="mt-1 h-9 text-xs"
                           />
                         </div>
+
                         <div>
                           <Label className="text-xs">Data de Entrega</Label>
                           <Input
@@ -530,7 +547,6 @@ export function UserStoryManager() {
                           />
                         </div>
 
-                        {/* Linha 5: Ponto de Função */}
                         <div>
                           <Label className="text-xs">Ponto de Função</Label>
                           <Input
@@ -543,13 +559,13 @@ export function UserStoryManager() {
                             className="mt-1 h-9 text-xs"
                           />
                         </div>
+
                         <div />
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* FIXED FOOTER */}
                 <DialogFooter className="px-6 py-4 border-t bg-muted/30">
                   <Button
                     type="button"
@@ -567,7 +583,7 @@ export function UserStoryManager() {
                     ) : (
                       <Plus className="h-4 w-4" />
                     )}
-                    {editId ? "Salvar HU" : "Salvar HU"}
+                    Salvar HU
                   </Button>
                 </DialogFooter>
               </form>
@@ -576,7 +592,6 @@ export function UserStoryManager() {
         )}
       </div>
 
-      {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[180px] max-w-[280px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -590,6 +605,7 @@ export function UserStoryManager() {
             className="pl-8 h-8 text-xs"
           />
         </div>
+
         <Select
           value={sprintFilter}
           onValueChange={(v) => {
@@ -610,6 +626,7 @@ export function UserStoryManager() {
             ))}
           </SelectContent>
         </Select>
+
         <Select
           value={priorityFilter}
           onValueChange={(v) => {
@@ -628,6 +645,7 @@ export function UserStoryManager() {
             <SelectItem value="baixa">Baixa</SelectItem>
           </SelectContent>
         </Select>
+
         <Select
           value={statusFilter}
           onValueChange={(v) => {
@@ -647,6 +665,7 @@ export function UserStoryManager() {
             ))}
           </SelectContent>
         </Select>
+
         {epics.length > 0 && (
           <Select
             value={epicFilter}
@@ -668,6 +687,7 @@ export function UserStoryManager() {
             </SelectContent>
           </Select>
         )}
+
         {hasFilters && (
           <Button
             variant="ghost"
@@ -717,6 +737,7 @@ export function UserStoryManager() {
                       <Badge variant="outline" className="font-mono text-xs font-bold">
                         {hu.code}
                       </Badge>
+
                       {epic && (
                         <Badge
                           className="text-[10px] gap-1 px-1.5"
@@ -730,31 +751,38 @@ export function UserStoryManager() {
                           {epic.name}
                         </Badge>
                       )}
+
                       <Badge className={`${pInfo.color} text-xs`}>{pInfo.label}</Badge>
                       <SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} />
+
                       {statusCol && (
                         <Badge variant="secondary" className="text-[10px] gap-1">
                           <div className={`h-1.5 w-1.5 rounded-full ${statusCol.dotColor}`} />
                           {statusCol.label}
                         </Badge>
                       )}
+
                       {blocked && (
                         <Badge className="text-[10px] gap-0.5 bg-warning text-warning-foreground">
                           <ShieldAlert className="h-2.5 w-2.5" /> {activeImps} impedimento{activeImps > 1 ? "s" : ""}
                         </Badge>
                       )}
+
                       {huActivities.length > 0 && (
                         <Badge variant="outline" className="text-xs">
                           {closedActivities.length}/{huActivities.length} tarefa{huActivities.length !== 1 ? "s" : ""}
                         </Badge>
                       )}
+
                       {assignee && (
                         <Badge variant="outline" className="text-[10px] gap-1">
                           👤 {assignee.name}
                         </Badge>
                       )}
                     </div>
+
                     <h3 className="font-semibold text-sm">{hu.title}</h3>
+
                     {hu.description && (
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{hu.description}</p>
                     )}
@@ -778,6 +806,7 @@ export function UserStoryManager() {
                         <Clock className="h-3 w-3" />
                         {totalHours}h total
                       </span>
+
                       {huActivities.length > 0 && (
                         <div className="flex items-center gap-2 flex-1">
                           <div className="flex-1 max-w-[120px] h-1.5 bg-muted rounded-full overflow-hidden">
@@ -790,12 +819,14 @@ export function UserStoryManager() {
                         </div>
                       )}
                     </div>
+
                     <FileUploader
                       entityType="user_story"
                       entityId={hu.id}
                       teamId={activeSprint ? currentTeamId || "" : ""}
                     />
                   </div>
+
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {canEdit && (
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(hu.id)}>
