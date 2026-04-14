@@ -169,7 +169,7 @@ export function UserStoryManager() {
 
       const fp = functionPoints ? parseFloat(functionPoints) : null;
       const fullDesc = acceptanceCriteria
-        ? `${description.trim()}\n\n---\n**Critérios de Aceite:**\n${acceptanceCriteria.trim()}`
+        ? `${description.trim()}\\n\\n---\\n**Critérios de Aceite:**\\n${acceptanceCriteria.trim()}`
         : description.trim();
 
       const selectedSprintId = sprintId === "" ? null : sprintId;
@@ -224,7 +224,7 @@ export function UserStoryManager() {
     setEditId(hu.id);
     setTitle(hu.title);
 
-    const parts = (hu.description || "").split("\n\n---\n**Critérios de Aceite:**\n");
+    const parts = (hu.description || "").split("\\n\\n---\\n**Critérios de Aceite:**\\n");
     setDescription(parts[0] || "");
     setAcceptanceCriteria(parts[1] || "");
 
@@ -266,6 +266,295 @@ export function UserStoryManager() {
 
   if (loading) return <SkeletonList count={5} variant="row" />;
 
+  // ─── Formulário do Dialog (reutilizado para criar e editar) ───────────────
+  const dialogForm = (
+    <DialogContent className="max-w-[960px] w-[80vw] max-h-[90vh] overflow-y-auto p-0">
+      <DialogHeader className="px-6 pt-6 pb-0">
+        <DialogTitle className="flex items-center gap-2">
+          <BookOpen className="h-5 w-5 text-primary" />
+          {editId ? "Editar User Story" : "Nova User Story"}
+        </DialogTitle>
+      </DialogHeader>
+
+      <form onSubmit={handleSubmit} className="flex flex-col h-full">
+        <div className="flex-1 px-6 py-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+            <div className="md:col-span-3 space-y-4">
+              <div>
+                <Label>
+                  Título <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={title}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    setErrors((p) => ({ ...p, title: "" }));
+                  }}
+                  placeholder="Como usuário, eu quero..."
+                  className="mt-1"
+                />
+                {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
+              </div>
+
+              <div>
+                <Label>Descrição</Label>
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Descrição detalhada da funcionalidade..."
+                  className="mt-1"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <Label>Critérios de Aceite</Label>
+                <Textarea
+                  value={acceptanceCriteria}
+                  onChange={(e) => setAcceptanceCriteria(e.target.value)}
+                  placeholder="1. Dado que... quando... então..."
+                  className="mt-1"
+                  rows={3}
+                />
+              </div>
+
+              {customFields.length > 0 && (
+                <div className="space-y-3 border-t pt-3">
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Campos Personalizados
+                  </Label>
+
+                  {customFields.map((field) => (
+                    <div key={field.id}>
+                      <Label className="text-sm">
+                        {field.name}
+                        {field.required && <span className="text-destructive"> *</span>}
+                      </Label>
+
+                      {field.type === "text" && (
+                        <Input
+                          value={String(customFieldValues[field.id] || "")}
+                          onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
+                          placeholder={field.name}
+                          className="mt-1"
+                        />
+                      )}
+
+                      {field.type === "number" && (
+                        <Input
+                          type="number"
+                          value={String(customFieldValues[field.id] || "")}
+                          onChange={(e) =>
+                            setCustomFieldValues((prev) => ({ ...prev, [field.id]: Number(e.target.value) }))
+                          }
+                          placeholder={field.name}
+                          className="mt-1"
+                        />
+                      )}
+
+                      {field.type === "select" && field.options && (
+                        <Select
+                          value={String(customFieldValues[field.id] || "")}
+                          onValueChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: v }))}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder={`Selecione ${field.name}`} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {field.options.map((opt) => (
+                              <SelectItem key={opt} value={opt}>
+                                {opt}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+
+                      {errors[`cf_${field.id}`] && (
+                        <p className="text-xs text-destructive mt-1">{errors[`cf_${field.id}`]}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="md:col-span-2 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Sprint</Label>
+                  <Select value={sprintId || "backlog"} onValueChange={(v) => setSprintId(v === "backlog" ? "" : v)}>
+                    <SelectTrigger className="mt-1 h-9 text-xs">
+                      <SelectValue placeholder="Backlog" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="backlog">Backlog Geral</SelectItem>
+                      {sprints.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name} {s.isActive ? "✦" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="text-xs">Épico</Label>
+                  <Select value={epicId || "none"} onValueChange={(v) => setEpicId(v === "none" ? "" : v)}>
+                    <SelectTrigger className="mt-1 h-9 text-xs">
+                      <SelectValue placeholder="Sem épico" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem épico</SelectItem>
+                      {epics.map((ep) => (
+                        <SelectItem key={ep.id} value={ep.id}>
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: ep.color }} />
+                            {ep.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="text-xs">Status</Label>
+                  <Select value={statusField || workflowColumns[0]?.key || ""} onValueChange={(v) => setStatusField(v)}>
+                    <SelectTrigger className="mt-1 h-9 text-xs">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {workflowColumns.map((col) => (
+                        <SelectItem key={col.key} value={col.key}>
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2 w-2 rounded-full ${col.dotColor}`} />
+                            {col.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="text-xs">
+                    Prioridade <span className="text-destructive">*</span>
+                  </Label>
+                  <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)}>
+                    <SelectTrigger className="mt-1 h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(PRIORITY_MAP).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>
+                          {v.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="text-xs">Estimativa em horas</Label>
+                  <Select
+                    value={selectedSize || "none"}
+                    onValueChange={(v) => setSelectedSize(v === "none" ? null : v)}
+                  >
+                    <SelectTrigger className="mt-1 h-9 text-xs">
+                      <SelectValue placeholder="Não estimado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Não estimado</SelectItem>
+                      {SIZE_REFERENCES.map((s) => (
+                        <SelectItem key={s.key} value={s.key}>
+                          {s.label} — {s.hours}h ({s.pointsLabel})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="text-xs">Responsável</Label>
+                  <Select value={assigneeId || "none"} onValueChange={(v) => setAssigneeId(v === "none" ? "" : v)}>
+                    <SelectTrigger className="mt-1 h-9 text-xs">
+                      <SelectValue placeholder="Sem responsável" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem responsável</SelectItem>
+                      {developers.map((dev) => (
+                        <SelectItem key={dev.id} value={dev.id}>
+                          {dev.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="text-xs">Data de Início</Label>
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="mt-1 h-9 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs">Data de Entrega</Label>
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="mt-1 h-9 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs">Ponto de Função</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={functionPoints}
+                    onChange={(e) => setFunctionPoints(e.target.value)}
+                    placeholder="Ex: 12,50"
+                    className="mt-1 h-9 text-xs"
+                  />
+                </div>
+
+                <div />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="px-6 py-4 border-t bg-muted/30">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              resetForm();
+              setOpen(false);
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button type="submit" className="gap-2" disabled={submitting}>
+            {submitting ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            Salvar HU
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -275,321 +564,23 @@ export function UserStoryManager() {
           <Badge variant="secondary">{totalItems}</Badge>
         </div>
 
-        {canCreate && (
-          <Dialog
-            open={open}
-            onOpenChange={(v) => {
-              setOpen(v);
-              if (!v) resetForm();
-            }}
-          >
+        {/* ✅ FIX: Dialog sempre na árvore; DialogTrigger só renderiza se canCreate */}
+        <Dialog
+          open={open}
+          onOpenChange={(v) => {
+            setOpen(v);
+            if (!v) resetForm();
+          }}
+        >
+          {canCreate && (
             <DialogTrigger asChild>
               <Button size="sm" className="gap-1.5">
                 <Plus className="h-4 w-4" /> Nova HU
               </Button>
             </DialogTrigger>
-
-            <DialogContent className="max-w-[960px] w-[80vw] max-h-[90vh] overflow-y-auto p-0">
-              <DialogHeader className="px-6 pt-6 pb-0">
-                <DialogTitle className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-primary" />
-                  {editId ? "Editar User Story" : "Nova User Story"}
-                </DialogTitle>
-              </DialogHeader>
-
-              <form onSubmit={handleSubmit} className="flex flex-col h-full">
-                <div className="flex-1 px-6 py-4">
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-                    <div className="md:col-span-3 space-y-4">
-                      <div>
-                        <Label>
-                          Título <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                          value={title}
-                          onChange={(e) => {
-                            setTitle(e.target.value);
-                            setErrors((p) => ({ ...p, title: "" }));
-                          }}
-                          placeholder="Como usuário, eu quero..."
-                          className="mt-1"
-                        />
-                        {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
-                      </div>
-
-                      <div>
-                        <Label>Descrição</Label>
-                        <Textarea
-                          value={description}
-                          onChange={(e) => setDescription(e.target.value)}
-                          placeholder="Descrição detalhada da funcionalidade..."
-                          className="mt-1"
-                          rows={3}
-                        />
-                      </div>
-
-                      <div>
-                        <Label>Critérios de Aceite</Label>
-                        <Textarea
-                          value={acceptanceCriteria}
-                          onChange={(e) => setAcceptanceCriteria(e.target.value)}
-                          placeholder="1. Dado que... quando... então..."
-                          className="mt-1"
-                          rows={3}
-                        />
-                      </div>
-
-                      {customFields.length > 0 && (
-                        <div className="space-y-3 border-t pt-3">
-                          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                            Campos Personalizados
-                          </Label>
-
-                          {customFields.map((field) => (
-                            <div key={field.id}>
-                              <Label className="text-sm">
-                                {field.name}
-                                {field.required && <span className="text-destructive"> *</span>}
-                              </Label>
-
-                              {field.type === "text" && (
-                                <Input
-                                  value={String(customFieldValues[field.id] || "")}
-                                  onChange={(e) =>
-                                    setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))
-                                  }
-                                  placeholder={field.name}
-                                  className="mt-1"
-                                />
-                              )}
-
-                              {field.type === "number" && (
-                                <Input
-                                  type="number"
-                                  value={String(customFieldValues[field.id] || "")}
-                                  onChange={(e) =>
-                                    setCustomFieldValues((prev) => ({ ...prev, [field.id]: Number(e.target.value) }))
-                                  }
-                                  placeholder={field.name}
-                                  className="mt-1"
-                                />
-                              )}
-
-                              {field.type === "select" && field.options && (
-                                <Select
-                                  value={String(customFieldValues[field.id] || "")}
-                                  onValueChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: v }))}
-                                >
-                                  <SelectTrigger className="mt-1">
-                                    <SelectValue placeholder={`Selecione ${field.name}`} />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {field.options.map((opt) => (
-                                      <SelectItem key={opt} value={opt}>
-                                        {opt}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              )}
-
-                              {errors[`cf_${field.id}`] && (
-                                <p className="text-xs text-destructive mt-1">{errors[`cf_${field.id}`]}</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="md:col-span-2 space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <Label className="text-xs">Sprint</Label>
-                          <Select
-                            value={sprintId || "backlog"}
-                            onValueChange={(v) => setSprintId(v === "backlog" ? "" : v)}
-                          >
-                            <SelectTrigger className="mt-1 h-9 text-xs">
-                              <SelectValue placeholder="Backlog" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="backlog">Backlog Geral</SelectItem>
-                              {sprints.map((s) => (
-                                <SelectItem key={s.id} value={s.id}>
-                                  {s.name} {s.isActive ? "✦" : ""}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <Label className="text-xs">Épico</Label>
-                          <Select value={epicId || "none"} onValueChange={(v) => setEpicId(v === "none" ? "" : v)}>
-                            <SelectTrigger className="mt-1 h-9 text-xs">
-                              <SelectValue placeholder="Sem épico" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Sem épico</SelectItem>
-                              {epics.map((ep) => (
-                                <SelectItem key={ep.id} value={ep.id}>
-                                  <div className="flex items-center gap-2">
-                                    <div
-                                      className="h-2 w-2 rounded-full shrink-0"
-                                      style={{ backgroundColor: ep.color }}
-                                    />
-                                    {ep.name}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <Label className="text-xs">Status</Label>
-                          <Select
-                            value={statusField || workflowColumns[0]?.key || ""}
-                            onValueChange={(v) => setStatusField(v)}
-                          >
-                            <SelectTrigger className="mt-1 h-9 text-xs">
-                              <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {workflowColumns.map((col) => (
-                                <SelectItem key={col.key} value={col.key}>
-                                  <div className="flex items-center gap-2">
-                                    <div className={`h-2 w-2 rounded-full ${col.dotColor}`} />
-                                    {col.label}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <Label className="text-xs">
-                            Prioridade <span className="text-destructive">*</span>
-                          </Label>
-                          <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)}>
-                            <SelectTrigger className="mt-1 h-9 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Object.entries(PRIORITY_MAP).map(([k, v]) => (
-                                <SelectItem key={k} value={k}>
-                                  {v.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <Label className="text-xs">Estimativa em horas</Label>
-                          <Select
-                            value={selectedSize || "none"}
-                            onValueChange={(v) => setSelectedSize(v === "none" ? null : v)}
-                          >
-                            <SelectTrigger className="mt-1 h-9 text-xs">
-                              <SelectValue placeholder="Não estimado" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Não estimado</SelectItem>
-                              {SIZE_REFERENCES.map((s) => (
-                                <SelectItem key={s.key} value={s.key}>
-                                  {s.label} — {s.hours}h ({s.pointsLabel})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <Label className="text-xs">Responsável</Label>
-                          <Select
-                            value={assigneeId || "none"}
-                            onValueChange={(v) => setAssigneeId(v === "none" ? "" : v)}
-                          >
-                            <SelectTrigger className="mt-1 h-9 text-xs">
-                              <SelectValue placeholder="Sem responsável" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Sem responsável</SelectItem>
-                              {developers.map((dev) => (
-                                <SelectItem key={dev.id} value={dev.id}>
-                                  {dev.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <Label className="text-xs">Data de Início</Label>
-                          <Input
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className="mt-1 h-9 text-xs"
-                          />
-                        </div>
-
-                        <div>
-                          <Label className="text-xs">Data de Entrega</Label>
-                          <Input
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            className="mt-1 h-9 text-xs"
-                          />
-                        </div>
-
-                        <div>
-                          <Label className="text-xs">Ponto de Função</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={functionPoints}
-                            onChange={(e) => setFunctionPoints(e.target.value)}
-                            placeholder="Ex: 12,50"
-                            className="mt-1 h-9 text-xs"
-                          />
-                        </div>
-
-                        <div />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <DialogFooter className="px-6 py-4 border-t bg-muted/30">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      resetForm();
-                      setOpen(false);
-                    }}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button type="submit" className="gap-2" disabled={submitting}>
-                    {submitting ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" />
-                    ) : (
-                      <Plus className="h-4 w-4" />
-                    )}
-                    Salvar HU
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        )}
+          )}
+          {dialogForm}
+        </Dialog>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
