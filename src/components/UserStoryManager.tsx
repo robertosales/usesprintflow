@@ -161,7 +161,7 @@ export function UserStoryManager() {
       const s = selectedSize ? getSizeByKey(selectedSize) : null;
       const sizeData = s
         ? { sizeReference: s.key, estimatedHours: s.hours, storyPoints: s.points }
-        : { storyPoints: 0 };
+        : { sizeReference: null, estimatedHours: null, storyPoints: 0 };
 
       const fp = functionPoints ? parseFloat(functionPoints) : null;
       const fullDesc = acceptanceCriteria
@@ -171,6 +171,8 @@ export function UserStoryManager() {
       // If sprintId is "" it means user chose "Backlog" → use null explicitly
       const selectedSprintId = sprintId === "" ? null : sprintId;
       const selectedStatus = statusField || workflowColumns[0]?.key || "aguardando_desenvolvimento";
+      // Map "none" or empty epicId to null
+      const selectedEpicId = (!epicId || epicId === "none") ? null : epicId;
 
       if (editId) {
         await updateUserStory(editId, {
@@ -180,10 +182,10 @@ export function UserStoryManager() {
           priority,
           status: selectedStatus,
           sprintId: selectedSprintId,
-          epicId: epicId || null,
+          epicId: selectedEpicId,
           customFields: customFieldValues,
-          startDate: startDate || undefined,
-          endDate: endDate || undefined,
+          startDate: startDate || null,
+          endDate: endDate || null,
           functionPoints: fp,
         } as any);
         toast.success("Alterações salvas com sucesso");
@@ -194,17 +196,18 @@ export function UserStoryManager() {
           ...sizeData,
           priority,
           sprintId: selectedSprintId,
-          epicId: epicId || null,
+          epicId: selectedEpicId,
           customFields: customFieldValues,
-          startDate: startDate || undefined,
-          endDate: endDate || undefined,
+          startDate: startDate || null,
+          endDate: endDate || null,
           functionPoints: fp,
         } as any);
         toast.success("Registro criado com sucesso");
       }
       resetForm();
       setOpen(false);
-    } catch {
+    } catch (err) {
+      console.error("Error saving user story:", err);
       toast.error("Erro ao salvar. Tente novamente.");
     } finally {
       setSubmitting(false);
