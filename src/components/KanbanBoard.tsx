@@ -73,7 +73,95 @@ function DraggableCard({ id, children }: { id: string; children: React.ReactNode
   );
 }
 
-// --- Filters Bar (sem responsável) ---
+// --- Workload bar por dev ---
+function WorkloadBar({ pct }: { pct: number }) {
+  const capped = Math.min(pct, 100);
+  const color = pct > 100 ? "bg-destructive" : pct > 80 ? "bg-warning" : "bg-success";
+  return (
+    <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+      <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${capped}%` }} />
+    </div>
+  );
+}
+
+// --- Team Avatar Filter Bar com carga ---
+function TeamAvatarFilter({
+  developers,
+  activeFilter,
+  onToggle,
+  workload,
+}: {
+  developers: { id: string; name: string }[];
+  activeFilter: string;
+  onToggle: (id: string) => void;
+  workload: Record<string, { estimated: number; realized: number }>;
+}) {
+  if (developers.length === 0) return null;
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {developers.map((dev) => {
+        const isActive = activeFilter === dev.id;
+        const load = workload[dev.id] ?? { estimated: 0, realized: 0 };
+        const pct = load.estimated > 0 ? Math.round((load.realized / load.estimated) * 100) : 0;
+        const isOverloaded = pct > 100;
+
+        return (
+          <button
+            key={dev.id}
+            onClick={() => onToggle(dev.id)}
+            title={`${dev.name} — ${load.realized}h realizadas / ${load.estimated}h estimadas (${pct}%)`}
+            className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-lg transition-all border
+              ${
+                isActive
+                  ? "bg-primary/10 border-primary shadow-sm scale-105"
+                  : "border-transparent hover:bg-muted hover:border-border"
+              }`}
+          >
+            {/* Avatar */}
+            <div
+              className={`h-7 w-7 rounded-full text-[11px] font-bold flex items-center justify-center transition-all
+                ${
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : isOverloaded
+                      ? "bg-destructive/15 text-destructive"
+                      : "bg-muted text-muted-foreground"
+                }`}
+            >
+              {getInitials(dev.name)}
+            </div>
+
+            {/* Barra de carga */}
+            <div className="w-10">
+              <WorkloadBar pct={pct} />
+            </div>
+
+            {/* Horas */}
+            <span
+              className={`text-[9px] font-medium leading-none ${
+                isOverloaded ? "text-destructive" : "text-muted-foreground"
+              }`}
+            >
+              {load.realized}h/{load.estimated}h
+            </span>
+          </button>
+        );
+      })}
+
+      {activeFilter !== "all" && (
+        <button
+          onClick={() => onToggle("all")}
+          className="h-6 w-6 rounded-full bg-muted/80 text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors self-start mt-1"
+          title="Limpar filtro de responsável"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// --- Filters Bar ---
 function BoardFilters({
   search,
   setSearch,
@@ -142,50 +230,6 @@ function BoardFilters({
   );
 }
 
-// --- Team Avatar Filter Bar ---
-function TeamAvatarFilter({
-  developers,
-  activeFilter,
-  onToggle,
-}: {
-  developers: { id: string; name: string }[];
-  activeFilter: string;
-  onToggle: (id: string) => void;
-}) {
-  if (developers.length === 0) return null;
-  return (
-    <div className="flex items-center gap-1.5">
-      {developers.map((dev) => {
-        const isActive = activeFilter === dev.id;
-        return (
-          <button
-            key={dev.id}
-            onClick={() => onToggle(dev.id)}
-            title={dev.name}
-            className={`h-8 w-8 rounded-full text-[11px] font-bold transition-all border-2 flex items-center justify-center
-              ${
-                isActive
-                  ? "bg-primary text-primary-foreground border-primary shadow-md scale-110"
-                  : "bg-muted text-muted-foreground border-transparent hover:border-primary/40 hover:scale-105"
-              }`}
-          >
-            {getInitials(dev.name)}
-          </button>
-        );
-      })}
-      {activeFilter !== "all" && (
-        <button
-          onClick={() => onToggle("all")}
-          className="h-6 w-6 rounded-full bg-muted/80 text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
-          title="Limpar filtro de responsável"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      )}
-    </div>
-  );
-}
-
 export function KanbanBoard() {
   const {
     activities,
@@ -213,7 +257,6 @@ export function KanbanBoard() {
     });
   };
 
-  // Filters
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [epicFilter, setEpicFilter] = useState("all");
@@ -232,25 +275,44 @@ export function KanbanBoard() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
+  // Sprint stories filtradas
   const sprintStories = useMemo(() => {
     if (!activeSprint) return [];
     let stories = userStories.filter((hu) => hu.sprintId === activeSprint.id);
-
     if (search) {
       const q = search.toLowerCase();
       stories = stories.filter((hu) => hu.title.toLowerCase().includes(q) || hu.code.toLowerCase().includes(q));
     }
-    if (priorityFilter !== "all") {
-      stories = stories.filter((hu) => hu.priority === priorityFilter);
-    }
-    if (epicFilter !== "all") {
-      stories = stories.filter((hu) => hu.epicId === epicFilter);
-    }
-    if (assigneeFilter !== "all") {
-      stories = stories.filter((hu) => hu.assigneeId === assigneeFilter);
-    }
+    if (priorityFilter !== "all") stories = stories.filter((hu) => hu.priority === priorityFilter);
+    if (epicFilter !== "all") stories = stories.filter((hu) => hu.epicId === epicFilter);
+    if (assigneeFilter !== "all") stories = stories.filter((hu) => hu.assigneeId === assigneeFilter);
     return stories;
   }, [activeSprint, userStories, search, priorityFilter, epicFilter, assigneeFilter]);
+
+  // Cálculo de carga por desenvolvedor (todas as HUs da sprint, sem filtro)
+  const workload = useMemo(() => {
+    if (!activeSprint) return {};
+    const sprintHUs = userStories.filter((hu) => hu.sprintId === activeSprint.id);
+    const sprintHUIds = new Set(sprintHUs.map((hu) => hu.id));
+
+    const result: Record<string, { estimated: number; realized: number }> = {};
+
+    developers.forEach((dev) => {
+      // Estimado: soma das estimatedHours das HUs onde dev é responsável
+      const estimated = sprintHUs
+        .filter((hu) => hu.assigneeId === dev.id)
+        .reduce((sum, hu) => sum + (hu.estimatedHours ?? 0), 0);
+
+      // Realizado: soma das horas das atividades do dev nas HUs da sprint
+      const realized = activities
+        .filter((a) => a.assigneeId === dev.id && sprintHUIds.has(a.huId))
+        .reduce((sum, a) => sum + (a.hours ?? 0), 0);
+
+      result[dev.id] = { estimated, realized };
+    });
+
+    return result;
+  }, [activeSprint, userStories, activities, developers]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -289,7 +351,7 @@ export function KanbanBoard() {
 
   return (
     <div className="space-y-4">
-      {/* Header com avatares do time */}
+      {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-bold tracking-tight">Board — User Stories</h2>
@@ -299,12 +361,22 @@ export function KanbanBoard() {
             </Badge>
           )}
         </div>
-        {activeSprint && (
-          <TeamAvatarFilter developers={developers} activeFilter={assigneeFilter} onToggle={handleAvatarToggle} />
-        )}
       </div>
 
-      {/* Filtros (sem responsável) */}
+      {/* Team workload + avatar filter */}
+      {activeSprint && developers.length > 0 && (
+        <div className="flex items-start gap-3 flex-wrap">
+          <span className="text-xs text-muted-foreground mt-2 shrink-0">Time:</span>
+          <TeamAvatarFilter
+            developers={developers}
+            activeFilter={assigneeFilter}
+            onToggle={handleAvatarToggle}
+            workload={workload}
+          />
+        </div>
+      )}
+
+      {/* Filtros */}
       {activeSprint && (
         <BoardFilters
           search={search}
@@ -333,7 +405,6 @@ export function KanbanBoard() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          {/* Grid com colunas de tamanho igual */}
           <div
             className="grid gap-2 overflow-x-auto pb-4 scrollbar-thin items-start"
             style={{
@@ -463,14 +534,15 @@ function HUCard({
   const activeImpediments = (hu.impediments || []).filter((i) => !i.resolvedAt);
   const totalHours = huActivities.reduce((s, a) => s + a.hours, 0);
   const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
-
-  // Responsável direto da HU
   const assignee = hu.assigneeId ? developers.find((d) => d.id === hu.assigneeId) : null;
-
-  // Avatares dos devs com atividades na HU
   const activityAssignees = huActivities
     .map((a) => developers.find((d) => d.id === a.assigneeId))
     .filter((d, i, arr) => d && arr.findIndex((x) => x?.id === d.id) === i);
+
+  // Progresso estimado vs realizado na HU
+  const estimated = hu.estimatedHours ?? 0;
+  const progressPct = estimated > 0 ? Math.min(Math.round((totalHours / estimated) * 100), 100) : 0;
+  const isOver = estimated > 0 && totalHours > estimated;
 
   return (
     <Card
@@ -479,7 +551,6 @@ function HUCard({
       } ${blocked ? "ring-2 ring-warning" : ""}`}
     >
       <CardContent className="p-3 space-y-2">
-        {/* Badges */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <Badge variant="outline" className="font-mono text-[10px] px-1.5 font-bold">
             {hu.code}
@@ -507,10 +578,8 @@ function HUCard({
           )}
         </div>
 
-        {/* Título */}
         <p className="text-sm font-medium leading-tight">{hu.title}</p>
 
-        {/* Responsável da HU */}
         {assignee && (
           <div className="flex items-center gap-1.5">
             <div
@@ -523,7 +592,6 @@ function HUCard({
           </div>
         )}
 
-        {/* Impedimentos ativos */}
         {activeImpediments.length > 0 && (
           <div className="space-y-1">
             {activeImpediments.slice(0, 2).map((imp) => (
@@ -562,7 +630,6 @@ function HUCard({
           </div>
         )}
 
-        {/* Footer: tarefas + avatares de atividades + botão impedimento */}
         <div className="flex items-center justify-between pt-1 border-t border-border/50">
           <div className="flex items-center gap-2">
             <button
@@ -575,9 +642,13 @@ function HUCard({
               {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
               {huActivities.length} tarefa{huActivities.length !== 1 ? "s" : ""}
             </button>
-            <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
+            {/* Horas realizadas vs estimadas */}
+            <span
+              className={`text-[11px] flex items-center gap-0.5 ${isOver ? "text-destructive font-semibold" : "text-muted-foreground"}`}
+              title={`${totalHours}h realizadas / ${estimated}h estimadas`}
+            >
               <Clock className="h-3 w-3" />
-              {totalHours}h
+              {totalHours}h{estimated > 0 ? `/${estimated}h` : ""}
             </span>
           </div>
           <div className="flex items-center gap-1">
@@ -612,7 +683,20 @@ function HUCard({
           </div>
         </div>
 
-        {/* Lista expandida de atividades */}
+        {/* Barra de progresso da HU */}
+        {estimated > 0 && (
+          <div className="space-y-0.5">
+            <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  isOver ? "bg-destructive" : progressPct > 80 ? "bg-warning" : "bg-success"
+                }`}
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         {expanded && huActivities.length > 0 && (
           <div className="space-y-1 pt-1">
             {huActivities.map((act) => {
