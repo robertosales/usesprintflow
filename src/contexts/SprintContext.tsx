@@ -2,9 +2,21 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  Developer, UserStory, Activity, Sprint, KanbanStatus, calculateEndDate,
-  Impediment, ImpedimentType, ImpedimentCriticality, ActivityType,
-  Epic, CustomFieldDefinition, AutomationRule, WorkflowColumn, DEFAULT_KANBAN_COLUMNS,
+  Developer,
+  UserStory,
+  Activity,
+  Sprint,
+  KanbanStatus,
+  calculateEndDate,
+  Impediment,
+  ImpedimentType,
+  ImpedimentCriticality,
+  ActivityType,
+  Epic,
+  CustomFieldDefinition,
+  AutomationRule,
+  WorkflowColumn,
+  DEFAULT_KANBAN_COLUMNS,
 } from "@/types/sprint";
 import { toast } from "sonner";
 
@@ -109,71 +121,144 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         supabase.from("workflow_columns").select("*").eq("team_id", teamId).order("sort_order"),
       ]);
 
-      setDevelopers((devRes.data || []).map((d: any) => ({
-        id: d.id, name: d.name, email: d.email, role: d.role, avatar: d.avatar,
-      })));
+      setDevelopers(
+        (devRes.data || []).map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          email: d.email,
+          role: d.role,
+          avatar: d.avatar,
+        })),
+      );
 
-      setSprints((sprintRes.data || []).map((s: any) => ({
-        id: s.id, name: s.name, startDate: s.start_date, endDate: s.end_date,
-        goal: s.goal || "", isActive: s.is_active, createdAt: s.created_at,
-      })));
+      setSprints(
+        (sprintRes.data || []).map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          startDate: s.start_date,
+          endDate: s.end_date,
+          goal: s.goal || "",
+          isActive: s.is_active,
+          createdAt: s.created_at,
+        })),
+      );
 
-      setEpics((epicRes.data || []).map((e: any) => ({
-        id: e.id, name: e.name, description: e.description || "", color: e.color, createdAt: e.created_at,
-      })));
+      setEpics(
+        (epicRes.data || []).map((e: any) => ({
+          id: e.id,
+          name: e.name,
+          description: e.description || "",
+          color: e.color,
+          createdAt: e.created_at,
+        })),
+      );
 
-      // Map impediments to user stories
       const impData = (impRes.data || []) as any[];
-      setImpediments(impData.map((imp: any) => ({
-        id: imp.id, huId: imp.hu_id, reason: imp.reason, type: imp.type, criticality: imp.criticality,
-        hasTicket: imp.has_ticket, ticketUrl: imp.ticket_url, ticketId: imp.ticket_id,
-        reportedAt: imp.reported_at, resolvedAt: imp.resolved_at, resolution: imp.resolution,
-      })));
+      setImpediments(
+        impData.map((imp: any) => ({
+          id: imp.id,
+          huId: imp.hu_id,
+          reason: imp.reason,
+          type: imp.type,
+          criticality: imp.criticality,
+          hasTicket: imp.has_ticket,
+          ticketUrl: imp.ticket_url,
+          ticketId: imp.ticket_id,
+          reportedAt: imp.reported_at,
+          resolvedAt: imp.resolved_at,
+          resolution: imp.resolution,
+        })),
+      );
 
       const huData = (huRes.data || []) as any[];
-      setUserStories(huData.map((h: any) => ({
-        id: h.id, code: h.code, title: h.title, description: h.description || "",
-        storyPoints: h.story_points, priority: h.priority, status: h.status,
-        sprintId: h.sprint_id, epicId: h.epic_id,
-        startDate: h.start_date || undefined, endDate: h.end_date || undefined,
-        sizeReference: h.size_reference || null,
-        estimatedHours: h.estimated_hours != null ? Number(h.estimated_hours) : null,
-        planningStatus: h.planning_status || 'pending',
-        votedAt: h.voted_at || null,
-        votedBy: h.voted_by || null,
-        functionPoints: h.function_points != null ? Number(h.function_points) : null,
-        impediments: impData.filter((imp: any) => imp.hu_id === h.id).map((imp: any) => ({
-          id: imp.id, reason: imp.reason, type: imp.type, criticality: imp.criticality,
-          hasTicket: imp.has_ticket, ticketUrl: imp.ticket_url, ticketId: imp.ticket_id,
-          reportedAt: imp.reported_at, resolvedAt: imp.resolved_at, resolution: imp.resolution,
+      setUserStories(
+        huData.map((h: any) => ({
+          id: h.id,
+          code: h.code,
+          title: h.title,
+          description: h.description || "",
+          storyPoints: h.story_points,
+          priority: h.priority,
+          status: h.status,
+          sprintId: h.sprint_id,
+          epicId: h.epic_id,
+          startDate: h.start_date || undefined,
+          endDate: h.end_date || undefined,
+          sizeReference: h.size_reference || null,
+          estimatedHours: h.estimated_hours != null ? Number(h.estimated_hours) : null,
+          planningStatus: h.planning_status || "pending",
+          votedAt: h.voted_at || null,
+          votedBy: h.voted_by || null,
+          functionPoints: h.function_points != null ? Number(h.function_points) : null,
+          // ✅ CORREÇÃO 1: leitura do assignee_id do banco
+          assigneeId: h.assignee_id || null,
+          impediments: impData
+            .filter((imp: any) => imp.hu_id === h.id)
+            .map((imp: any) => ({
+              id: imp.id,
+              reason: imp.reason,
+              type: imp.type,
+              criticality: imp.criticality,
+              hasTicket: imp.has_ticket,
+              ticketUrl: imp.ticket_url,
+              ticketId: imp.ticket_id,
+              reportedAt: imp.reported_at,
+              resolvedAt: imp.resolved_at,
+              resolution: imp.resolution,
+            })),
+          customFields: h.custom_fields || {},
+          createdAt: h.created_at,
         })),
-        customFields: h.custom_fields || {},
-        createdAt: h.created_at,
-      })));
+      );
 
-      setActivities((actRes.data || []).map((a: any) => ({
-        id: a.id, huId: a.hu_id, title: a.title, description: a.description || "",
-        activityType: a.activity_type, assigneeId: a.assignee_id || "",
-        hours: Number(a.hours), startDate: a.start_date, endDate: a.end_date,
-        createdAt: a.created_at, isClosed: a.is_closed, closedAt: a.closed_at,
-      })));
+      setActivities(
+        (actRes.data || []).map((a: any) => ({
+          id: a.id,
+          huId: a.hu_id,
+          title: a.title,
+          description: a.description || "",
+          activityType: a.activity_type,
+          assigneeId: a.assignee_id || "",
+          hours: Number(a.hours),
+          startDate: a.start_date,
+          endDate: a.end_date,
+          createdAt: a.created_at,
+          isClosed: a.is_closed,
+          closedAt: a.closed_at,
+        })),
+      );
 
-      setCustomFields((cfRes.data || []).map((f: any) => ({
-        id: f.id, name: f.name, type: f.field_type, options: f.options, required: f.required,
-      })));
+      setCustomFields(
+        (cfRes.data || []).map((f: any) => ({
+          id: f.id,
+          name: f.name,
+          type: f.field_type,
+          options: f.options,
+          required: f.required,
+        })),
+      );
 
-      setAutomationRules((arRes.data || []).map((r: any) => ({
-        id: r.id, name: r.name, enabled: r.enabled,
-        trigger: { type: r.trigger_type, fromStatus: r.trigger_from_status, toStatus: r.trigger_to_status },
-        action: { type: r.action_type, targetStatus: r.action_target_status, message: r.action_message },
-        createdAt: r.created_at,
-      })));
+      setAutomationRules(
+        (arRes.data || []).map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          enabled: r.enabled,
+          trigger: { type: r.trigger_type, fromStatus: r.trigger_from_status, toStatus: r.trigger_to_status },
+          action: { type: r.action_type, targetStatus: r.action_target_status, message: r.action_message },
+          createdAt: r.created_at,
+        })),
+      );
 
       const wc = (wcRes.data || []) as any[];
       if (wc.length > 0) {
-        setWorkflowColumnsState(wc.map((c: any) => ({
-          key: c.key, label: c.label, colorClass: c.color_class, dotColor: c.dot_color,
-        })));
+        setWorkflowColumnsState(
+          wc.map((c: any) => ({
+            key: c.key,
+            label: c.label,
+            colorClass: c.color_class,
+            dotColor: c.dot_color,
+          })),
+        );
       } else {
         setWorkflowColumnsState(DEFAULT_KANBAN_COLUMNS);
       }
@@ -184,42 +269,59 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     }
   }, [teamId]);
 
-  useEffect(() => { refreshAll(); }, [refreshAll]);
+  useEffect(() => {
+    refreshAll();
+  }, [refreshAll]);
 
   const activeSprint = sprints.find((s) => s.isActive) || null;
 
   // ---- AUTOMATION ENGINE ----
-  const runAutomations = useCallback(async (huId: string, fromStatus: string, toStatus: string) => {
-    const rules = automationRules.filter((r) => r.enabled && r.trigger.type === "status_change");
-    for (const rule of rules) {
-      const matchFrom = !rule.trigger.fromStatus || rule.trigger.fromStatus === fromStatus;
-      const matchTo = rule.trigger.toStatus === toStatus;
-      if (matchFrom && matchTo) {
-        if (rule.action.type === "notify" && rule.action.message) {
-          toast.info(`🤖 Automação "${rule.name}": ${rule.action.message}`);
-        }
-        if (rule.action.type === "change_status" && rule.action.targetStatus) {
-          await supabase.from("user_stories").update({ status: rule.action.targetStatus }).eq("id", huId);
-          toast.info(`🤖 Automação "${rule.name}": Status alterado automaticamente`);
+  const runAutomations = useCallback(
+    async (huId: string, fromStatus: string, toStatus: string) => {
+      const rules = automationRules.filter((r) => r.enabled && r.trigger.type === "status_change");
+      for (const rule of rules) {
+        const matchFrom = !rule.trigger.fromStatus || rule.trigger.fromStatus === fromStatus;
+        const matchTo = rule.trigger.toStatus === toStatus;
+        if (matchFrom && matchTo) {
+          if (rule.action.type === "notify" && rule.action.message) {
+            toast.info(`🤖 Automação "${rule.name}": ${rule.action.message}`);
+          }
+          if (rule.action.type === "change_status" && rule.action.targetStatus) {
+            await supabase.from("user_stories").update({ status: rule.action.targetStatus }).eq("id", huId);
+            toast.info(`🤖 Automação "${rule.name}": Status alterado automaticamente`);
+          }
         }
       }
-    }
-  }, [automationRules]);
+    },
+    [automationRules],
+  );
 
   // ---- DEVELOPERS ----
   const addDeveloper = async (dev: Omit<Developer, "id">) => {
     if (!teamId) return;
     const { error } = await supabase.from("developers").insert({
-      team_id: teamId, name: dev.name, email: dev.email, role: dev.role, avatar: dev.avatar,
+      team_id: teamId,
+      name: dev.name,
+      email: dev.email,
+      role: dev.role,
+      avatar: dev.avatar,
     });
-    if (error) { toast.error("Erro ao adicionar desenvolvedor"); return; }
+    if (error) {
+      toast.error("Erro ao adicionar desenvolvedor");
+      return;
+    }
     await refreshAll();
   };
+
   const updateDeveloper = async (id: string, dev: Partial<Omit<Developer, "id">>) => {
     const { error } = await supabase.from("developers").update(dev).eq("id", id);
-    if (error) { toast.error("Erro ao atualizar"); return; }
+    if (error) {
+      toast.error("Erro ao atualizar");
+      return;
+    }
     await refreshAll();
   };
+
   const removeDeveloper = async (id: string) => {
     await supabase.from("developers").delete().eq("id", id);
     await refreshAll();
@@ -231,18 +333,31 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const count = userStories.length + 1;
     const firstCol = workflowColumns[0]?.key || "aguardando_desenvolvimento";
     const { error } = await supabase.from("user_stories").insert({
-      team_id: teamId, sprint_id: hu.sprintId, epic_id: hu.epicId || null,
-      code: `HU-${String(count).padStart(3, "0")}`, title: hu.title,
-      description: hu.description, story_points: hu.storyPoints,
-      priority: hu.priority, status: firstCol, custom_fields: hu.customFields || {},
-      start_date: hu.startDate || null, end_date: hu.endDate || null,
+      team_id: teamId,
+      sprint_id: hu.sprintId,
+      epic_id: hu.epicId || null,
+      code: `HU-${String(count).padStart(3, "0")}`,
+      title: hu.title,
+      description: hu.description,
+      story_points: hu.storyPoints,
+      priority: hu.priority,
+      status: firstCol,
+      custom_fields: hu.customFields || {},
+      start_date: hu.startDate || null,
+      end_date: hu.endDate || null,
       size_reference: (hu as any).sizeReference || null,
       estimated_hours: (hu as any).estimatedHours || null,
       function_points: (hu as any).functionPoints || null,
+      // ✅ CORREÇÃO 2: salvar assignee_id na inclusão
+      assignee_id: (hu as any).assigneeId || null,
     });
-    if (error) { toast.error("Erro ao criar HU"); return; }
+    if (error) {
+      toast.error("Erro ao criar HU");
+      return;
+    }
     await refreshAll();
   };
+
   const updateUserStory = async (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => {
     const updateData: any = {};
     if (hu.title !== undefined) updateData.title = hu.title;
@@ -250,17 +365,19 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (hu.storyPoints !== undefined) updateData.story_points = hu.storyPoints;
     if (hu.priority !== undefined) updateData.priority = hu.priority;
     if (hu.status !== undefined) updateData.status = hu.status;
-    if ('sprintId' in hu) updateData.sprint_id = hu.sprintId ?? null;
-    if ('epicId' in hu) updateData.epic_id = hu.epicId ?? null;
+    if ("sprintId" in hu) updateData.sprint_id = hu.sprintId ?? null;
+    if ("epicId" in hu) updateData.epic_id = hu.epicId ?? null;
     if (hu.customFields !== undefined) updateData.custom_fields = hu.customFields;
-    if ('startDate' in hu) updateData.start_date = hu.startDate || null;
-    if ('endDate' in hu) updateData.end_date = hu.endDate || null;
+    if ("startDate" in hu) updateData.start_date = hu.startDate || null;
+    if ("endDate" in hu) updateData.end_date = hu.endDate || null;
     if ((hu as any).sizeReference !== undefined) updateData.size_reference = (hu as any).sizeReference ?? null;
     if ((hu as any).estimatedHours !== undefined) updateData.estimated_hours = (hu as any).estimatedHours ?? null;
     if ((hu as any).planningStatus !== undefined) updateData.planning_status = (hu as any).planningStatus;
     if ((hu as any).votedAt !== undefined) updateData.voted_at = (hu as any).votedAt;
     if ((hu as any).votedBy !== undefined) updateData.voted_by = (hu as any).votedBy;
     if ((hu as any).functionPoints !== undefined) updateData.function_points = (hu as any).functionPoints ?? null;
+    // ✅ CORREÇÃO 3: mapear assigneeId → assignee_id na edição
+    if ("assigneeId" in hu) updateData.assignee_id = (hu as any).assigneeId ?? null;
 
     console.log("[updateUserStory] payload:", id, updateData);
     const { data, error } = await supabase.from("user_stories").update(updateData).eq("id", id).select();
@@ -276,10 +393,12 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     }
     await refreshAll();
   };
+
   const removeUserStory = async (id: string) => {
     await supabase.from("user_stories").delete().eq("id", id);
     await refreshAll();
   };
+
   const updateUserStoryStatus = async (id: string, status: KanbanStatus) => {
     const hu = userStories.find((h) => h.id === id);
     if (hu) {
@@ -297,13 +416,23 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (!teamId) return;
     const endDate = calculateEndDate(act.startDate, act.hours);
     const { error } = await supabase.from("activities").insert({
-      team_id: teamId, hu_id: act.huId, title: act.title, description: act.description,
-      activity_type: act.activityType, assignee_id: act.assigneeId || null,
-      hours: act.hours, start_date: act.startDate, end_date: endDate,
+      team_id: teamId,
+      hu_id: act.huId,
+      title: act.title,
+      description: act.description,
+      activity_type: act.activityType,
+      assignee_id: act.assigneeId || null,
+      hours: act.hours,
+      start_date: act.startDate,
+      end_date: endDate,
     });
-    if (error) { toast.error("Erro ao criar atividade"); return; }
+    if (error) {
+      toast.error("Erro ao criar atividade");
+      return;
+    }
     await refreshAll();
   };
+
   const updateActivity = async (id: string, act: Partial<Omit<Activity, "id" | "createdAt">>) => {
     const existing = activities.find((a) => a.id === id);
     if (!existing) return;
@@ -320,34 +449,41 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       updateData.end_date = calculateEndDate(newStart, newHours);
     }
     const { error } = await supabase.from("activities").update(updateData).eq("id", id);
-    if (error) { toast.error("Erro ao atualizar atividade"); return; }
+    if (error) {
+      toast.error("Erro ao atualizar atividade");
+      return;
+    }
     await refreshAll();
   };
+
   const removeActivity = async (id: string) => {
     await supabase.from("activities").delete().eq("id", id);
     await refreshAll();
   };
+
   const closeActivity = async (id: string) => {
     await supabase.from("activities").update({ is_closed: true, closed_at: new Date().toISOString() }).eq("id", id);
     await refreshAll();
-    // Auto-move HU to last column if all activities are closed
     const act = activities.find((a) => a.id === id);
     if (act) {
       const huActs = activities.filter((a) => a.huId === act.huId);
-      const allClosed = huActs.every((a) => a.id === id ? true : a.isClosed);
+      const allClosed = huActs.every((a) => (a.id === id ? true : a.isClosed));
       if (allClosed && huActs.length > 0) {
         const lastCol = workflowColumns[workflowColumns.length - 1]?.key;
         if (lastCol) {
           const hu = userStories.find((h) => h.id === act.huId);
           if (hu && hu.status !== lastCol) {
             await supabase.from("user_stories").update({ status: lastCol }).eq("id", act.huId);
-            toast.info(`🎉 Todas as atividades concluídas! HU movida para "${workflowColumns[workflowColumns.length - 1]?.label}"`);
+            toast.info(
+              `🎉 Todas as atividades concluídas! HU movida para "${workflowColumns[workflowColumns.length - 1]?.label}"`,
+            );
             await refreshAll();
           }
         }
       }
     }
   };
+
   const reopenActivity = async (id: string) => {
     await supabase.from("activities").update({ is_closed: false, closed_at: null }).eq("id", id);
     await refreshAll();
@@ -357,32 +493,52 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const addImpediment = async (huId: string, data: AddImpedimentData) => {
     if (!teamId) return;
     const { error } = await supabase.from("impediments").insert({
-      team_id: teamId, hu_id: huId, reason: data.reason, type: data.type,
-      criticality: data.criticality, has_ticket: data.hasTicket,
-      ticket_url: data.ticketUrl, ticket_id: data.ticketId,
+      team_id: teamId,
+      hu_id: huId,
+      reason: data.reason,
+      type: data.type,
+      criticality: data.criticality,
+      has_ticket: data.hasTicket,
+      ticket_url: data.ticketUrl,
+      ticket_id: data.ticketId,
     });
-    if (error) { toast.error("Erro ao adicionar impedimento"); return; }
+    if (error) {
+      toast.error("Erro ao adicionar impedimento");
+      return;
+    }
     await refreshAll();
   };
+
   const resolveImpediment = async (_huId: string, impedimentId: string, resolution?: string) => {
-    await supabase.from("impediments").update({
-      resolved_at: new Date().toISOString(), resolution: resolution || null,
-    }).eq("id", impedimentId);
+    await supabase
+      .from("impediments")
+      .update({
+        resolved_at: new Date().toISOString(),
+        resolution: resolution || null,
+      })
+      .eq("id", impedimentId);
     await refreshAll();
   };
 
   // ---- SPRINTS ----
   const addSprint = async (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => {
     if (!teamId) return;
-    // Deactivate all sprints first
     await supabase.from("sprints").update({ is_active: false }).eq("team_id", teamId);
     const { error } = await supabase.from("sprints").insert({
-      team_id: teamId, name: sprint.name, start_date: sprint.startDate,
-      end_date: sprint.endDate, goal: sprint.goal, is_active: true,
+      team_id: teamId,
+      name: sprint.name,
+      start_date: sprint.startDate,
+      end_date: sprint.endDate,
+      goal: sprint.goal,
+      is_active: true,
     });
-    if (error) { toast.error("Erro ao criar sprint"); return; }
+    if (error) {
+      toast.error("Erro ao criar sprint");
+      return;
+    }
     await refreshAll();
   };
+
   const updateSprint = async (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => {
     const updateData: any = {};
     if (sprint.name !== undefined) updateData.name = sprint.name;
@@ -391,13 +547,18 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (sprint.goal !== undefined) updateData.goal = sprint.goal;
     if (sprint.isActive !== undefined) updateData.is_active = sprint.isActive;
     const { error } = await supabase.from("sprints").update(updateData).eq("id", id);
-    if (error) { toast.error("Erro ao atualizar sprint"); return; }
+    if (error) {
+      toast.error("Erro ao atualizar sprint");
+      return;
+    }
     await refreshAll();
   };
+
   const removeSprint = async (id: string) => {
     await supabase.from("sprints").delete().eq("id", id);
     await refreshAll();
   };
+
   const setActiveSprintFn = async (id: string) => {
     if (!teamId) return;
     await supabase.from("sprints").update({ is_active: false }).eq("team_id", teamId);
@@ -409,16 +570,27 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const addEpic = async (epic: Omit<Epic, "id" | "createdAt">) => {
     if (!teamId) return;
     const { error } = await supabase.from("epics").insert({
-      team_id: teamId, name: epic.name, description: epic.description, color: epic.color,
+      team_id: teamId,
+      name: epic.name,
+      description: epic.description,
+      color: epic.color,
     });
-    if (error) { toast.error("Erro ao criar épico"); return; }
+    if (error) {
+      toast.error("Erro ao criar épico");
+      return;
+    }
     await refreshAll();
   };
+
   const updateEpic = async (id: string, epic: Partial<Omit<Epic, "id" | "createdAt">>) => {
     const { error } = await supabase.from("epics").update(epic).eq("id", id);
-    if (error) { toast.error("Erro ao atualizar épico"); return; }
+    if (error) {
+      toast.error("Erro ao atualizar épico");
+      return;
+    }
     await refreshAll();
   };
+
   const removeEpic = async (id: string) => {
     await supabase.from("epics").delete().eq("id", id);
     await refreshAll();
@@ -428,12 +600,19 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const addCustomField = async (field: Omit<CustomFieldDefinition, "id">) => {
     if (!teamId) return;
     const { error } = await supabase.from("custom_field_definitions").insert({
-      team_id: teamId, name: field.name, field_type: field.type,
-      options: field.options || null, required: field.required,
+      team_id: teamId,
+      name: field.name,
+      field_type: field.type,
+      options: field.options || null,
+      required: field.required,
     });
-    if (error) { toast.error("Erro ao criar campo"); return; }
+    if (error) {
+      toast.error("Erro ao criar campo");
+      return;
+    }
     await refreshAll();
   };
+
   const updateCustomField = async (id: string, field: Partial<Omit<CustomFieldDefinition, "id">>) => {
     const updateData: any = {};
     if (field.name !== undefined) updateData.name = field.name;
@@ -441,9 +620,13 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (field.options !== undefined) updateData.options = field.options;
     if (field.required !== undefined) updateData.required = field.required;
     const { error } = await supabase.from("custom_field_definitions").update(updateData).eq("id", id);
-    if (error) { toast.error("Erro ao atualizar campo"); return; }
+    if (error) {
+      toast.error("Erro ao atualizar campo");
+      return;
+    }
     await refreshAll();
   };
+
   const removeCustomField = async (id: string) => {
     await supabase.from("custom_field_definitions").delete().eq("id", id);
     await refreshAll();
@@ -453,15 +636,23 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const addAutomationRule = async (rule: Omit<AutomationRule, "id" | "createdAt">) => {
     if (!teamId) return;
     const { error } = await supabase.from("automation_rules").insert({
-      team_id: teamId, name: rule.name, enabled: rule.enabled,
-      trigger_type: rule.trigger.type, trigger_from_status: rule.trigger.fromStatus || null,
+      team_id: teamId,
+      name: rule.name,
+      enabled: rule.enabled,
+      trigger_type: rule.trigger.type,
+      trigger_from_status: rule.trigger.fromStatus || null,
       trigger_to_status: rule.trigger.toStatus,
-      action_type: rule.action.type, action_target_status: rule.action.targetStatus || null,
+      action_type: rule.action.type,
+      action_target_status: rule.action.targetStatus || null,
       action_message: rule.action.message || null,
     });
-    if (error) { toast.error("Erro ao criar automação"); return; }
+    if (error) {
+      toast.error("Erro ao criar automação");
+      return;
+    }
     await refreshAll();
   };
+
   const updateAutomationRule = async (id: string, rule: Partial<Omit<AutomationRule, "id" | "createdAt">>) => {
     const updateData: any = {};
     if (rule.name !== undefined) updateData.name = rule.name;
@@ -477,9 +668,13 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       if (rule.action.message !== undefined) updateData.action_message = rule.action.message;
     }
     const { error } = await supabase.from("automation_rules").update(updateData).eq("id", id);
-    if (error) { toast.error("Erro ao atualizar automação"); return; }
+    if (error) {
+      toast.error("Erro ao atualizar automação");
+      return;
+    }
     await refreshAll();
   };
+
   const removeAutomationRule = async (id: string) => {
     await supabase.from("automation_rules").delete().eq("id", id);
     await refreshAll();
@@ -487,21 +682,31 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
   // ---- WORKFLOW COLUMNS ----
   const setWorkflowColumns = (columns: WorkflowColumn[]) => setWorkflowColumnsState(columns);
+
   const addWorkflowColumn = async (col: WorkflowColumn) => {
     if (!teamId) return;
     const maxOrder = workflowColumns.length;
     const { error } = await supabase.from("workflow_columns").insert({
-      team_id: teamId, key: col.key, label: col.label,
-      color_class: col.colorClass, dot_color: col.dotColor, sort_order: maxOrder,
+      team_id: teamId,
+      key: col.key,
+      label: col.label,
+      color_class: col.colorClass,
+      dot_color: col.dotColor,
+      sort_order: maxOrder,
     });
-    if (error) { toast.error("Erro ao adicionar coluna"); return; }
+    if (error) {
+      toast.error("Erro ao adicionar coluna");
+      return;
+    }
     await refreshAll();
   };
+
   const removeWorkflowColumn = async (key: string) => {
     if (!teamId) return;
     await supabase.from("workflow_columns").delete().eq("team_id", teamId).eq("key", key);
     await refreshAll();
   };
+
   const updateWorkflowColumn = async (key: string, col: Partial<WorkflowColumn>) => {
     if (!teamId) return;
     const updateData: any = {};
@@ -511,11 +716,11 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     await supabase.from("workflow_columns").update(updateData).eq("team_id", teamId).eq("key", key);
     await refreshAll();
   };
+
   const reorderWorkflowColumns = async (columns: WorkflowColumn[]) => {
     if (!teamId) return;
     for (let i = 0; i < columns.length; i++) {
-      await supabase.from("workflow_columns").update({ sort_order: i })
-        .eq("team_id", teamId).eq("key", columns[i].key);
+      await supabase.from("workflow_columns").update({ sort_order: i }).eq("team_id", teamId).eq("key", columns[i].key);
     }
     setWorkflowColumnsState(columns);
   };
@@ -523,17 +728,49 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   return (
     <SprintContext.Provider
       value={{
-        developers, userStories, activities, sprints, epics, customFields, automationRules,
-        workflowColumns, activeSprint, loading, impediments,
-        addDeveloper, updateDeveloper, removeDeveloper,
-        addUserStory, updateUserStory, removeUserStory, updateUserStoryStatus,
-        addActivity, updateActivity, removeActivity, closeActivity, reopenActivity,
-        addImpediment, resolveImpediment,
-        addSprint, updateSprint, removeSprint, setActiveSprint: setActiveSprintFn,
-        addEpic, updateEpic, removeEpic,
-        addCustomField, updateCustomField, removeCustomField,
-        addAutomationRule, updateAutomationRule, removeAutomationRule,
-        setWorkflowColumns, addWorkflowColumn, removeWorkflowColumn, updateWorkflowColumn, reorderWorkflowColumns,
+        developers,
+        userStories,
+        activities,
+        sprints,
+        epics,
+        customFields,
+        automationRules,
+        workflowColumns,
+        activeSprint,
+        loading,
+        impediments,
+        addDeveloper,
+        updateDeveloper,
+        removeDeveloper,
+        addUserStory,
+        updateUserStory,
+        removeUserStory,
+        updateUserStoryStatus,
+        addActivity,
+        updateActivity,
+        removeActivity,
+        closeActivity,
+        reopenActivity,
+        addImpediment,
+        resolveImpediment,
+        addSprint,
+        updateSprint,
+        removeSprint,
+        setActiveSprint: setActiveSprintFn,
+        addEpic,
+        updateEpic,
+        removeEpic,
+        addCustomField,
+        updateCustomField,
+        removeCustomField,
+        addAutomationRule,
+        updateAutomationRule,
+        removeAutomationRule,
+        setWorkflowColumns,
+        addWorkflowColumn,
+        removeWorkflowColumn,
+        updateWorkflowColumn,
+        reorderWorkflowColumns,
         refreshAll,
       }}
     >
