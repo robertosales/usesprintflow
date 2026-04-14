@@ -125,6 +125,7 @@ export function UserStoryManager() {
     setPriority("media");
     setEpicId("");
     setSprintId(activeSprint?.id || "");
+    setStatusField(workflowColumns[0]?.key || "");
     setStartDate("");
     setEndDate("");
     setFunctionPoints("");
@@ -150,6 +151,7 @@ export function UserStoryManager() {
   };
 
   const [sprintId, setSprintId] = useState<string>("");
+  const [statusField, setStatusField] = useState<string>("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,7 +168,9 @@ export function UserStoryManager() {
         ? `${description.trim()}\n\n---\n**Critérios de Aceite:**\n${acceptanceCriteria.trim()}`
         : description.trim();
 
-      const selectedSprintId = sprintId || activeSprint?.id || null;
+      // If sprintId is "" it means user chose "Backlog" → use null explicitly
+      const selectedSprintId = sprintId === "" ? null : sprintId;
+      const selectedStatus = statusField || workflowColumns[0]?.key || "aguardando_desenvolvimento";
 
       if (editId) {
         await updateUserStory(editId, {
@@ -174,8 +178,9 @@ export function UserStoryManager() {
           description: fullDesc,
           ...sizeData,
           priority,
-          sprintId: selectedSprintId || undefined,
-          epicId: epicId || undefined,
+          status: selectedStatus,
+          sprintId: selectedSprintId,
+          epicId: epicId || null,
           customFields: customFieldValues,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
@@ -189,7 +194,7 @@ export function UserStoryManager() {
           ...sizeData,
           priority,
           sprintId: selectedSprintId,
-          epicId: epicId || undefined,
+          epicId: epicId || null,
           customFields: customFieldValues,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
@@ -221,6 +226,7 @@ export function UserStoryManager() {
     setStartDate(hu.startDate || "");
     setEndDate(hu.endDate || "");
     setSprintId(hu.sprintId || "");
+    setStatusField(hu.status || workflowColumns[0]?.key || "");
     setFunctionPoints(hu.functionPoints != null ? String(hu.functionPoints) : "");
     setCustomFieldValues(hu.customFields || {});
     setErrors({});
@@ -425,11 +431,24 @@ export function UserStoryManager() {
                         {/* Linha 2: Status | Prioridade */}
                         <div>
                           <Label className="text-xs">Status</Label>
-                          <Input
-                            value={workflowColumns[0]?.label || "Aguardando"}
-                            readOnly
-                            className="mt-1 h-9 text-xs bg-muted/50"
-                          />
+                          <Select
+                            value={statusField || workflowColumns[0]?.key || ""}
+                            onValueChange={(v) => setStatusField(v)}
+                          >
+                            <SelectTrigger className="mt-1 h-9 text-xs">
+                              <SelectValue placeholder="Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {workflowColumns.map((col) => (
+                                <SelectItem key={col.key} value={col.key}>
+                                  <div className="flex items-center gap-2">
+                                    <div className={`h-2 w-2 rounded-full ${col.dotColor}`} />
+                                    {col.label}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div>
                           <Label className="text-xs">

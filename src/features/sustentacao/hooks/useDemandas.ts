@@ -67,7 +67,7 @@ export function useDemandas() {
   };
 
   const moveTo = async (demanda: Demanda, newStatus: string, justificativa?: string) => {
-    if (REQUIRES_JUSTIFICATIVA.includes(newStatus) && !justificativa) {
+    if ((REQUIRES_JUSTIFICATIVA as readonly string[]).includes(newStatus) && !justificativa) {
       toast.error("Justificativa obrigatória para este status");
       return false;
     }
