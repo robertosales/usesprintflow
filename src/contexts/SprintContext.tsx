@@ -250,7 +250,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (hu.storyPoints !== undefined) updateData.story_points = hu.storyPoints;
     if (hu.priority !== undefined) updateData.priority = hu.priority;
     if (hu.status !== undefined) updateData.status = hu.status;
-    if (hu.sprintId !== undefined) updateData.sprint_id = hu.sprintId;
+    if ('sprintId' in hu) updateData.sprint_id = hu.sprintId ?? null;
     if (hu.epicId !== undefined) updateData.epic_id = hu.epicId || null;
     if (hu.customFields !== undefined) updateData.custom_fields = hu.customFields;
     if (hu.startDate !== undefined) updateData.start_date = hu.startDate || null;
