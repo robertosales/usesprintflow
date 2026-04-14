@@ -2,13 +2,7 @@ import { useState, useMemo } from "react";
 import { SizeBadge } from "@/components/SizeBadge";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  KanbanStatus,
-  isHUOverdue,
-  hasActiveImpediment,
-  IMPEDIMENT_CRITICALITY_LABELS,
-  UserStory,
-} from "@/types/sprint";
+import { isHUOverdue, hasActiveImpediment, IMPEDIMENT_CRITICALITY_LABELS, UserStory } from "@/types/sprint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +19,6 @@ import {
   ChevronLeft,
   Search,
   X,
-  User,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ImpedimentDialog } from "@/components/ImpedimentManager";
@@ -43,6 +36,7 @@ import {
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+// ─── DroppableColumn ────────────────────────────────────────────────────────
 function DroppableColumn({ id, children }: { id: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
@@ -57,6 +51,7 @@ function DroppableColumn({ id, children }: { id: string; children: React.ReactNo
   );
 }
 
+// ─── DraggableCard ──────────────────────────────────────────────────────────
 function DraggableCard({ id, children }: { id: string; children: React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = {
@@ -71,6 +66,7 @@ function DraggableCard({ id, children }: { id: string; children: React.ReactNode
   );
 }
 
+// ─── BoardFilters ────────────────────────────────────────────────────────────
 function BoardFilters({
   search,
   setSearch,
@@ -109,6 +105,7 @@ function BoardFilters({
           className="pl-8 h-8 text-xs"
         />
       </div>
+
       <Select value={priorityFilter} onValueChange={setPriorityFilter}>
         <SelectTrigger className="h-8 w-[130px] text-xs">
           <SelectValue placeholder="Prioridade" />
@@ -121,6 +118,7 @@ function BoardFilters({
           <SelectItem value="baixa">Baixa</SelectItem>
         </SelectContent>
       </Select>
+
       {epics.length > 0 && (
         <Select value={epicFilter} onValueChange={setEpicFilter}>
           <SelectTrigger className="h-8 w-[140px] text-xs">
@@ -136,6 +134,7 @@ function BoardFilters({
           </SelectContent>
         </Select>
       )}
+
       {developers.length > 0 && (
         <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
           <SelectTrigger className="h-8 w-[150px] text-xs">
@@ -151,6 +150,7 @@ function BoardFilters({
           </SelectContent>
         </Select>
       )}
+
       {hasFilters && (
         <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-muted-foreground" onClick={clearFilters}>
           <X className="h-3 w-3" /> Limpar
@@ -160,6 +160,7 @@ function BoardFilters({
   );
 }
 
+// ─── KanbanBoard (export principal) ─────────────────────────────────────────
 export function KanbanBoard() {
   const {
     activities,
@@ -173,6 +174,7 @@ export function KanbanBoard() {
   } = useSprint();
   const { hasPermission } = useAuth();
   const canMove = hasPermission("move_kanban");
+
   const [impedimentDialog, setImpedimentDialog] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [expandedHU, setExpandedHU] = useState<string | null>(null);
@@ -193,6 +195,7 @@ export function KanbanBoard() {
   const [assigneeFilter, setAssigneeFilter] = useState("all");
 
   const hasFilters = search !== "" || priorityFilter !== "all" || epicFilter !== "all" || assigneeFilter !== "all";
+
   const clearFilters = () => {
     setSearch("");
     setPriorityFilter("all");
@@ -217,7 +220,6 @@ export function KanbanBoard() {
       stories = stories.filter((hu) => hu.epicId === epicFilter);
     }
     if (assigneeFilter !== "all") {
-      // Filtra por assigneeId direto da HU OU via activities
       stories = stories.filter((hu) => {
         if (hu.assigneeId === assigneeFilter) return true;
         const huActs = activities.filter((a) => a.huId === hu.id);
@@ -264,6 +266,7 @@ export function KanbanBoard() {
 
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold tracking-tight">Board — User Stories</h2>
         {activeSprint && (
@@ -273,6 +276,7 @@ export function KanbanBoard() {
         )}
       </div>
 
+      {/* Filtros */}
       {activeSprint && (
         <BoardFilters
           search={search}
@@ -311,7 +315,9 @@ export function KanbanBoard() {
               return (
                 <div
                   key={col.key}
-                  className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? "w-[48px]" : "min-w-[300px] w-[300px]"}`}
+                  className={`flex-shrink-0 transition-all duration-300 ease-in-out ${
+                    isCollapsed ? "w-[48px]" : "min-w-[300px] w-[300px]"
+                  }`}
                 >
                   {isCollapsed ? (
                     <div
@@ -326,7 +332,11 @@ export function KanbanBoard() {
                       </span>
                       <span
                         className="text-[11px] font-semibold uppercase tracking-wider mt-1"
-                        style={{ writingMode: "vertical-lr", textOrientation: "mixed", whiteSpace: "nowrap" }}
+                        style={{
+                          writingMode: "vertical-lr",
+                          textOrientation: "mixed",
+                          whiteSpace: "nowrap",
+                        }}
                       >
                         {col.label}
                       </span>
@@ -395,12 +405,14 @@ export function KanbanBoard() {
   );
 }
 
+// ─── Constantes de prioridade ────────────────────────────────────────────────
 const PRIORITY_COLORS: Record<string, string> = {
   baixa: "bg-muted text-muted-foreground",
   media: "bg-info/15 text-info",
   alta: "bg-warning/15 text-warning",
   critica: "bg-destructive/15 text-destructive",
 };
+
 const PRIORITY_LABELS: Record<string, string> = {
   baixa: "Baixa",
   media: "Média",
@@ -408,6 +420,17 @@ const PRIORITY_LABELS: Record<string, string> = {
   critica: "Crítica",
 };
 
+// ─── Helper ──────────────────────────────────────────────────────────────────
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+// ─── HUCard ──────────────────────────────────────────────────────────────────
 function HUCard({
   hu,
   expanded,
@@ -429,22 +452,13 @@ function HUCard({
   const totalHours = huActivities.reduce((s, a) => s + a.hours, 0);
   const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
 
-  // ── Responsável direto da HU (assigneeId) ──
-  const assignee = hu.assigneeId ? developers.find((d) => d.id === hu.assigneeId) : null;
+  // Responsável direto da HU (campo assigneeId)
+  const assignee = hu.assigneeId ? (developers.find((d) => d.id === hu.assigneeId) ?? null) : null;
 
-  // ── Assignees via activities (avatares no footer) ──
+  // Assignees via activities (avatares no footer)
   const assignees = huActivities
     .map((a) => developers.find((d) => d.id === a.assigneeId))
-    .filter((d, i, arr) => d && arr.findIndex((x) => x?.id === d.id) === i);
-
-  // Iniciais do nome
-  const getInitials = (name: string) =>
-    name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase();
+    .filter((d, i, arr): d is NonNullable<typeof d> => !!d && arr.findIndex((x) => x?.id === d.id) === i);
 
   return (
     <Card
@@ -533,7 +547,7 @@ function HUCard({
           </div>
         )}
 
-        {/* Footer: tarefas + avatares de activities + impedimento */}
+        {/* Footer: tarefas + avatares + impedimento */}
         <div className="flex items-center justify-between pt-1 border-t border-border/50">
           <div className="flex items-center gap-2">
             <button
@@ -551,17 +565,18 @@ function HUCard({
               {totalHours}h
             </span>
           </div>
+
           <div className="flex items-center gap-1">
             {/* Avatares dos assignees via activities */}
             {assignees.length > 0 && (
               <div className="flex -space-x-1.5">
                 {assignees.slice(0, 3).map((dev) => (
                   <div
-                    key={dev!.id}
+                    key={dev.id}
                     className="h-5 w-5 rounded-full bg-primary/10 border-2 border-card flex items-center justify-center text-[7px] font-bold text-primary"
-                    title={dev!.name}
+                    title={dev.name}
                   >
-                    {getInitials(dev!.name)}
+                    {getInitials(dev.name)}
                   </div>
                 ))}
                 {assignees.length > 3 && (
