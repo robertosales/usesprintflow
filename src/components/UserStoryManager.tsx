@@ -24,18 +24,9 @@ import { SIZE_REFERENCES, getSizeByKey } from "@/lib/sizeReference";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
   baixa: { label: "Baixa", color: "bg-muted text-muted-foreground" },
-  media: {
-    label: "Média",
-    color: "bg-info/15 text-info border border-info/30",
-  },
-  alta: {
-    label: "Alta",
-    color: "bg-warning/15 text-warning border border-warning/30",
-  },
-  critica: {
-    label: "Crítica",
-    color: "bg-destructive/15 text-destructive border border-destructive/30",
-  },
+  media: { label: "Média", color: "bg-info/15 text-info border border-info/30" },
+  alta: { label: "Alta", color: "bg-warning/15 text-warning border border-warning/30" },
+  critica: { label: "Crítica", color: "bg-destructive/15 text-destructive border border-destructive/30" },
 };
 
 export function UserStoryManager() {
@@ -309,7 +300,6 @@ export function UserStoryManager() {
               <form onSubmit={handleSubmit} className="flex flex-col h-full">
                 <div className="flex-1 px-6 py-4">
                   <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-                    {/* Coluna esquerda */}
                     <div className="md:col-span-3 space-y-4">
                       <div>
                         <Label>
@@ -366,10 +356,7 @@ export function UserStoryManager() {
                                 <Input
                                   value={String(customFieldValues[field.id] || "")}
                                   onChange={(e) =>
-                                    setCustomFieldValues((prev) => ({
-                                      ...prev,
-                                      [field.id]: e.target.value,
-                                    }))
+                                    setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))
                                   }
                                   placeholder={field.name}
                                   className="mt-1"
@@ -381,10 +368,7 @@ export function UserStoryManager() {
                                   type="number"
                                   value={String(customFieldValues[field.id] || "")}
                                   onChange={(e) =>
-                                    setCustomFieldValues((prev) => ({
-                                      ...prev,
-                                      [field.id]: Number(e.target.value),
-                                    }))
+                                    setCustomFieldValues((prev) => ({ ...prev, [field.id]: Number(e.target.value) }))
                                   }
                                   placeholder={field.name}
                                   className="mt-1"
@@ -394,12 +378,7 @@ export function UserStoryManager() {
                               {field.type === "select" && field.options && (
                                 <Select
                                   value={String(customFieldValues[field.id] || "")}
-                                  onValueChange={(v) =>
-                                    setCustomFieldValues((prev) => ({
-                                      ...prev,
-                                      [field.id]: v,
-                                    }))
-                                  }
+                                  onValueChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: v }))}
                                 >
                                   <SelectTrigger className="mt-1">
                                     <SelectValue placeholder={`Selecione ${field.name}`} />
@@ -423,7 +402,6 @@ export function UserStoryManager() {
                       )}
                     </div>
 
-                    {/* Coluna direita */}
                     <div className="md:col-span-2 space-y-4">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -614,7 +592,6 @@ export function UserStoryManager() {
         )}
       </div>
 
-      {/* Filtros */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[180px] max-w-[280px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
