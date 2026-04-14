@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import {
   DndContext,
   DragEndEvent,
   DragStartEvent,
@@ -161,13 +162,11 @@ function BoardFilters({
 
 // ─── HU Card ─────────────────────────────────────────────────────────────────
 
-import { Activity } from "@/types/sprint"; // importe o tipo real
-
 interface HUCardProps {
   hu: UserStory;
   developers: { id: string; name: string }[];
   epics: { id: string; name: string; color: string }[];
-  activities: Activity[]; // ← tipo correto em vez do objeto inline
+  activities: Activity[];
   onImpediment: () => void;
   onResolveImpediment: (id: string) => void;
   isDragging?: boolean;
@@ -177,7 +176,7 @@ function HUCard({
   hu,
   developers,
   epics,
-  activities, // ← já vem via props ✅
+  activities,
   onImpediment,
   onResolveImpediment,
   isDragging = false,
@@ -186,10 +185,9 @@ function HUCard({
 
   const epic = epics.find((e) => e.id === hu.epicId);
   const assignee = developers.find((d) => d.id === hu.assigneeId);
-  const overdue = isHUOverdue(hu, activities); // ← adicione activities aqui
+  const overdue = isHUOverdue(hu, activities);
   const blocked = hasActiveImpediment(hu);
   const activeImpediments = (hu.impediments || []).filter((i) => !i.resolvedAt);
-
   const huActivities = activities.filter((a) => a.huId === hu.id);
   const totalHours = huActivities.reduce((s, a) => s + (a.hours || 0), 0);
 
@@ -200,7 +198,6 @@ function HUCard({
       } ${overdue ? "border-destructive/50" : ""} ${blocked ? "border-warning/50 bg-warning/5" : ""}`}
     >
       <CardContent className="p-3 space-y-2">
-        {/* Top badges */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <Badge variant="outline" className="font-mono text-[10px] px-1.5 font-bold">
             {hu.code}
@@ -233,10 +230,8 @@ function HUCard({
           )}
         </div>
 
-        {/* Title */}
         <p className="text-xs font-medium leading-snug line-clamp-2">{hu.title}</p>
 
-        {/* Assignee direto da HU */}
         {assignee && (
           <div className="flex items-center gap-1.5">
             <div
@@ -249,20 +244,15 @@ function HUCard({
           </div>
         )}
 
-        {/* Impedimentos ativos */}
         {activeImpediments.length > 0 && (
           <div className="space-y-1">
             {activeImpediments.slice(0, 2).map((imp) => {
-              // IMPEDIMENT_CRITICALITY_LABELS pode ser Record<string, string> ou Record<string, {label,color}>
-              // Normalizamos para sempre exibir uma string segura
-              const critLabel = (() => {
-                const val = IMPEDIMENT_CRITICALITY_LABELS[imp.criticality];
-                if (!val) return String(imp.criticality);
-                if (typeof val === "string") return val;
-                return (val as { label: string; color: string }).label;
-              })();
-
-              // imp.reason é o campo correto; fallback para imp.description se existir
+              const critVal = IMPEDIMENT_CRITICALITY_LABELS[imp.criticality];
+              const critLabel = !critVal
+                ? String(imp.criticality)
+                : typeof critVal === "string"
+                  ? critVal
+                  : (critVal as { label: string }).label;
               const impText = (imp as any).reason ?? (imp as any).description ?? "";
 
               return (
@@ -301,7 +291,6 @@ function HUCard({
           </div>
         )}
 
-        {/* Footer */}
         <div className="flex items-center justify-between pt-0.5">
           <div className="flex items-center gap-2">
             {huActivities.length > 0 && (
@@ -325,12 +314,12 @@ function HUCard({
           </div>
 
           <div className="flex items-center gap-1">
-            {[...new Set(huActivities.map((a) => a.assigneeId).filter(Boolean))].slice(0, 3).map((devId) => {
+            {[...new Set(huActivities.map((a) => (a as any).assigneeId).filter(Boolean))].slice(0, 3).map((devId) => {
               const dev = developers.find((d) => d.id === devId);
               if (!dev) return null;
               return (
                 <div
-                  key={devId}
+                  key={devId as string}
                   className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[8px] font-bold flex items-center justify-center"
                   title={dev.name}
                 >
@@ -353,20 +342,19 @@ function HUCard({
           </div>
         </div>
 
-        {/* Expanded activities */}
         {expanded && huActivities.length > 0 && (
           <div className="border-t pt-2 space-y-1">
             {huActivities.map((act, i) => {
-              const dev = developers.find((d) => d.id === act.assigneeId);
+              const dev = developers.find((d) => d.id === (act as any).assigneeId);
               return (
                 <div key={i} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <span className="flex-1 truncate">{act.title}</span>
+                  <span className="flex-1 truncate">{(act as any).title ?? act.description}</span>
                   {dev && (
                     <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary text-[7px] font-bold shrink-0">
                       {getInitials(dev.name)}
                     </div>
                   )}
-                  <span className="text-muted-foreground shrink-0">{act.hours}h</span>
+                  <span className="shrink-0">{act.hours}h</span>
                 </div>
               );
             })}
@@ -457,15 +445,9 @@ export function KanbanBoard() {
       const q = search.toLowerCase();
       stories = stories.filter((hu) => hu.title.toLowerCase().includes(q) || hu.code?.toLowerCase().includes(q));
     }
-    if (priorityFilter !== "all") {
-      stories = stories.filter((hu) => hu.priority === priorityFilter);
-    }
-    if (epicFilter !== "all") {
-      stories = stories.filter((hu) => hu.epicId === epicFilter);
-    }
-    if (assigneeFilter !== "all") {
-      stories = stories.filter((hu) => hu.assigneeId === assigneeFilter);
-    }
+    if (priorityFilter !== "all") stories = stories.filter((hu) => hu.priority === priorityFilter);
+    if (epicFilter !== "all") stories = stories.filter((hu) => hu.epicId === epicFilter);
+    if (assigneeFilter !== "all") stories = stories.filter((hu) => hu.assigneeId === assigneeFilter);
     return stories;
   }, [activeSprint, userStories, search, priorityFilter, epicFilter, assigneeFilter]);
 
@@ -498,7 +480,6 @@ export function KanbanBoard() {
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="space-y-4">
-        {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="text-lg font-semibold">Board Kanban</h2>
@@ -511,7 +492,6 @@ export function KanbanBoard() {
           </div>
         </div>
 
-        {/* Filters */}
         <BoardFilters
           search={search}
           setSearch={setSearch}
@@ -527,7 +507,6 @@ export function KanbanBoard() {
           clearFilters={clearFilters}
         />
 
-        {/* Board */}
         <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin" style={{ minHeight: 500 }}>
           {workflowColumns.map((col) => {
             const isCollapsed = collapsedColumns.has(col.key);
@@ -553,18 +532,13 @@ export function KanbanBoard() {
                       </Badge>
                       <span
                         className="text-[11px] font-semibold text-muted-foreground"
-                        style={{
-                          writingMode: "vertical-lr",
-                          textOrientation: "mixed",
-                          whiteSpace: "nowrap",
-                        }}
+                        style={{ writingMode: "vertical-lr", textOrientation: "mixed", whiteSpace: "nowrap" }}
                       >
                         {col.label}
                       </span>
                     </div>
                   ) : (
                     <div className="p-2 h-full flex flex-col">
-                      {/* Column header */}
                       <div className="flex items-center justify-between mb-2 px-1">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <button
@@ -581,7 +555,6 @@ export function KanbanBoard() {
                         </Badge>
                       </div>
 
-                      {/* Cards */}
                       <div className="space-y-2 overflow-y-auto flex-1 max-h-[calc(100vh-280px)] pr-0.5">
                         {colStories.map((hu) => (
                           <DraggableHUCard
@@ -616,7 +589,6 @@ export function KanbanBoard() {
         </p>
       </div>
 
-      {/* Drag overlay */}
       <DragOverlay>
         {activeHU && (
           <HUCard
