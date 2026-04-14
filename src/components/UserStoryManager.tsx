@@ -71,7 +71,7 @@ export function UserStoryManager() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [epicFilter, setEpicFilter] = useState("all");
-  const [sprintFilter, setSprintFilter] = useState("all"); // "all" | "backlog" | sprintId
+  const [sprintFilter, setSprintFilter] = useState("all");
   const hasFilters =
     searchFilter !== "" ||
     priorityFilter !== "all" ||
@@ -89,13 +89,11 @@ export function UserStoryManager() {
   const filteredStories = useMemo(() => {
     let stories = [...userStories];
 
-    // Sprint/Backlog filter
     if (sprintFilter === "backlog") {
       stories = stories.filter((hu) => !hu.sprintId);
     } else if (sprintFilter !== "all") {
       stories = stories.filter((hu) => hu.sprintId === sprintFilter);
     } else if (activeSprint) {
-      // Default: show active sprint + backlog
       stories = stories.filter((hu) => hu.sprintId === activeSprint.id || !hu.sprintId);
     }
 
@@ -117,6 +115,10 @@ export function UserStoryManager() {
     pageSize,
   } = usePagination(filteredStories, { pageSize: 10 });
 
+  const [sprintId, setSprintId] = useState<string>("");
+  const [statusField, setStatusField] = useState<string>("");
+
+  // ── PONTO 3: resetForm limpa assigneeId ──────────────────────────────────
   const resetForm = () => {
     setTitle("");
     setDescription("");
@@ -129,7 +131,7 @@ export function UserStoryManager() {
     setStartDate("");
     setEndDate("");
     setFunctionPoints("");
-    setAssigneeId("");
+    setAssigneeId(""); // ← PONTO 3
     setCustomFieldValues({});
     setErrors({});
     setEditId(null);
@@ -150,9 +152,7 @@ export function UserStoryManager() {
     return Object.keys(e).length === 0;
   };
 
-  const [sprintId, setSprintId] = useState<string>("");
-  const [statusField, setStatusField] = useState<string>("");
-
+  // ── PONTO 1: handleSubmit envia assigneeId nos dois blocos ────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
@@ -161,18 +161,15 @@ export function UserStoryManager() {
       const s = selectedSize ? getSizeByKey(selectedSize) : null;
       const sizeData = s
         ? { sizeReference: s.key, estimatedHours: s.hours, storyPoints: s.points }
-        : { sizeReference: null, estimatedHours: null, storyPoints: 0 };
+        : { storyPoints: 0 };
 
       const fp = functionPoints ? parseFloat(functionPoints) : null;
       const fullDesc = acceptanceCriteria
         ? `${description.trim()}\n\n---\n**Critérios de Aceite:**\n${acceptanceCriteria.trim()}`
         : description.trim();
 
-      // If sprintId is "" it means user chose "Backlog" → use null explicitly
       const selectedSprintId = sprintId === "" ? null : sprintId;
       const selectedStatus = statusField || workflowColumns[0]?.key || "aguardando_desenvolvimento";
-      // Map "none" or empty epicId to null
-      const selectedEpicId = (!epicId || epicId === "none") ? null : epicId;
 
       if (editId) {
         await updateUserStory(editId, {
@@ -182,11 +179,12 @@ export function UserStoryManager() {
           priority,
           status: selectedStatus,
           sprintId: selectedSprintId,
-          epicId: selectedEpicId,
+          epicId: epicId || null,
           customFields: customFieldValues,
-          startDate: startDate || null,
-          endDate: endDate || null,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
           functionPoints: fp,
+          assigneeId: assigneeId || null, // ← PONTO 1
         } as any);
         toast.success("Alterações salvas com sucesso");
       } else {
@@ -196,30 +194,30 @@ export function UserStoryManager() {
           ...sizeData,
           priority,
           sprintId: selectedSprintId,
-          epicId: selectedEpicId,
+          epicId: epicId || null,
           customFields: customFieldValues,
-          startDate: startDate || null,
-          endDate: endDate || null,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
           functionPoints: fp,
+          assigneeId: assigneeId || null, // ← PONTO 1
         } as any);
         toast.success("Registro criado com sucesso");
       }
       resetForm();
       setOpen(false);
-    } catch (err) {
-      console.error("Error saving user story:", err);
+    } catch {
       toast.error("Erro ao salvar. Tente novamente.");
     } finally {
       setSubmitting(false);
     }
   };
 
+  // ── PONTO 2: openEdit carrega assigneeId da HU ───────────────────────────
   const openEdit = (huId: string) => {
     const hu = userStories.find((h) => h.id === huId);
     if (!hu) return;
     setEditId(hu.id);
     setTitle(hu.title);
-    // Split description and acceptance criteria
     const parts = (hu.description || "").split("\n\n---\n**Critérios de Aceite:**\n");
     setDescription(parts[0] || "");
     setAcceptanceCriteria(parts[1] || "");
@@ -231,6 +229,7 @@ export function UserStoryManager() {
     setSprintId(hu.sprintId || "");
     setStatusField(hu.status || workflowColumns[0]?.key || "");
     setFunctionPoints(hu.functionPoints != null ? String(hu.functionPoints) : "");
+    setAssigneeId((hu as any).assigneeId || ""); // ← PONTO 2
     setCustomFieldValues(hu.customFields || {});
     setErrors({});
     setOpen(true);
@@ -471,7 +470,7 @@ export function UserStoryManager() {
                           </Select>
                         </div>
 
-                        {/* Linha 3: Pontos (combobox) | Responsável */}
+                        {/* Linha 3: Estimativa | Responsável */}
                         <div>
                           <Label className="text-xs">Estimativa em horas</Label>
                           <Select
@@ -689,8 +688,6 @@ export function UserStoryManager() {
           icon={BookOpen}
           title="Nenhum item encontrado"
           description={hasFilters ? "Tente ajustar os filtros" : "Adicione as User Stories desta Sprint"}
-          //actionLabel={!hasFilters && canCreate ? "Criar novo" : undefined}
-          //onAction={!hasFilters && canCreate ? () => setOpen(true) : undefined}
         />
       )}
 
@@ -706,6 +703,7 @@ export function UserStoryManager() {
           const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
           const completionPct =
             huActivities.length > 0 ? Math.round((closedActivities.length / huActivities.length) * 100) : 0;
+          const assignee = (hu as any).assigneeId ? developers.find((d) => d.id === (hu as any).assigneeId) : null;
 
           return (
             <Card
@@ -748,6 +746,11 @@ export function UserStoryManager() {
                       {huActivities.length > 0 && (
                         <Badge variant="outline" className="text-xs">
                           {closedActivities.length}/{huActivities.length} tarefa{huActivities.length !== 1 ? "s" : ""}
+                        </Badge>
+                      )}
+                      {assignee && (
+                        <Badge variant="outline" className="text-[10px] gap-1">
+                          👤 {assignee.name}
                         </Badge>
                       )}
                     </div>
