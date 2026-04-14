@@ -184,7 +184,7 @@ function HUCard({
 
   const epic = epics.find((e) => e.id === hu.epicId);
   const assignee = developers.find((d) => d.id === hu.assigneeId);
-  const overdue = isHUOverdue(hu);
+  const overdue = isHUOverdue(hu, activities);
   const blocked = hasActiveImpediment(hu);
 
   // Usa resolvedAt (campo correto do tipo Impediment)
