@@ -18,6 +18,7 @@ import {
   hasActiveImpediment,
   IMPEDIMENT_CRITICALITY_LABELS,
   UserStory,
+  Activity,
 } from "@/types/sprint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -623,7 +624,7 @@ export function KanbanBoard() {
             hu={activeHU}
             developers={developers}
             epics={epics}
-            activities={activities as any}
+            activities={activities}
             onImpediment={() => {}}
             onResolveImpediment={() => {}}
             isDragging
