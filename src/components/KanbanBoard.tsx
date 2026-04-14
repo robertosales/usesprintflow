@@ -175,7 +175,7 @@ function HUCard({
   hu,
   developers,
   epics,
-  activities,
+  activities, // ← já vem via props ✅
   onImpediment,
   onResolveImpediment,
   isDragging = false,
@@ -184,10 +184,8 @@ function HUCard({
 
   const epic = epics.find((e) => e.id === hu.epicId);
   const assignee = developers.find((d) => d.id === hu.assigneeId);
-  const overdue = isHUOverdue(hu, activities);
+  const overdue = isHUOverdue(hu, activities); // ← adicione activities aqui
   const blocked = hasActiveImpediment(hu);
-
-  // Usa resolvedAt (campo correto do tipo Impediment)
   const activeImpediments = (hu.impediments || []).filter((i) => !i.resolvedAt);
 
   const huActivities = activities.filter((a) => a.huId === hu.id);
