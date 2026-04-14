@@ -161,11 +161,13 @@ function BoardFilters({
 
 // ─── HU Card ─────────────────────────────────────────────────────────────────
 
+import { Activity } from "@/types/sprint"; // importe o tipo real
+
 interface HUCardProps {
   hu: UserStory;
   developers: { id: string; name: string }[];
   epics: { id: string; name: string; color: string }[];
-  activities: { huId: string; hours: number; title: string; assigneeId?: string }[];
+  activities: Activity[]; // ← tipo correto em vez do objeto inline
   onImpediment: () => void;
   onResolveImpediment: (id: string) => void;
   isDragging?: boolean;
@@ -588,7 +590,7 @@ export function KanbanBoard() {
                             hu={hu}
                             developers={developers}
                             epics={epics}
-                            activities={activities as any}
+                            activities={activities}
                             onImpediment={() => setImpedimentDialog(hu.id)}
                             onResolveImpediment={(impId) => resolveImpediment(hu.id, impId)}
                             canMove={canMove}
