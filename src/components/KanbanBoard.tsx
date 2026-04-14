@@ -24,8 +24,8 @@ import {
   ChevronRight,
   ChevronLeft,
   Search,
-  Filter,
   X,
+  User,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ImpedimentDialog } from "@/components/ImpedimentManager";
@@ -71,7 +71,6 @@ function DraggableCard({ id, children }: { id: string; children: React.ReactNode
   );
 }
 
-// --- Filters Bar ---
 function BoardFilters({
   search,
   setSearch,
@@ -188,7 +187,6 @@ export function KanbanBoard() {
     });
   };
 
-  // Filters
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [epicFilter, setEpicFilter] = useState("all");
@@ -219,7 +217,9 @@ export function KanbanBoard() {
       stories = stories.filter((hu) => hu.epicId === epicFilter);
     }
     if (assigneeFilter !== "all") {
+      // Filtra por assigneeId direto da HU OU via activities
       stories = stories.filter((hu) => {
+        if (hu.assigneeId === assigneeFilter) return true;
         const huActs = activities.filter((a) => a.huId === hu.id);
         return huActs.some((a) => a.assigneeId === assigneeFilter);
       });
@@ -271,15 +271,8 @@ export function KanbanBoard() {
             {activeSprint.name} • {sprintStories.length} HUs
           </Badge>
         )}
-        // 2. Renderiza o badge com o nome (dentro do map dos cards):
-        {assignee && (
-          <Badge variant="outline" className="text-[10px] gap-1">
-            👤 {assignee.name}
-          </Badge>
-        )}
       </div>
 
-      {/* Filters */}
       {activeSprint && (
         <BoardFilters
           search={search}
@@ -436,10 +429,22 @@ function HUCard({
   const totalHours = huActivities.reduce((s, a) => s + a.hours, 0);
   const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
 
-  // Get unique assignees for this HU
+  // ── Responsável direto da HU (assigneeId) ──
+  const assignee = hu.assigneeId ? developers.find((d) => d.id === hu.assigneeId) : null;
+
+  // ── Assignees via activities (avatares no footer) ──
   const assignees = huActivities
     .map((a) => developers.find((d) => d.id === a.assigneeId))
     .filter((d, i, arr) => d && arr.findIndex((x) => x?.id === d.id) === i);
+
+  // Iniciais do nome
+  const getInitials = (name: string) =>
+    name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
 
   return (
     <Card
@@ -448,6 +453,7 @@ function HUCard({
       } ${blocked ? "ring-2 ring-warning" : ""}`}
     >
       <CardContent className="p-3 space-y-2">
+        {/* Badges de topo */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <Badge variant="outline" className="font-mono text-[10px] px-1.5 font-bold">
             {hu.code}
@@ -475,8 +481,20 @@ function HUCard({
           )}
         </div>
 
+        {/* Título */}
         <p className="text-sm font-medium leading-tight">{hu.title}</p>
 
+        {/* ── RESPONSÁVEL DA HU ── */}
+        {assignee && (
+          <div className="flex items-center gap-1.5">
+            <div className="h-5 w-5 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[7px] font-bold text-primary shrink-0">
+              {getInitials(assignee.name)}
+            </div>
+            <span className="text-[11px] text-muted-foreground truncate">{assignee.name}</span>
+          </div>
+        )}
+
+        {/* Impedimentos ativos */}
         {activeImpediments.length > 0 && (
           <div className="space-y-1">
             {activeImpediments.slice(0, 2).map((imp) => (
@@ -515,7 +533,7 @@ function HUCard({
           </div>
         )}
 
-        {/* Footer: tasks + assignees */}
+        {/* Footer: tarefas + avatares de activities + impedimento */}
         <div className="flex items-center justify-between pt-1 border-t border-border/50">
           <div className="flex items-center gap-2">
             <button
@@ -534,28 +552,25 @@ function HUCard({
             </span>
           </div>
           <div className="flex items-center gap-1">
-            {/* Assignee avatars */}
-            <div className="flex -space-x-1.5">
-              {assignees.slice(0, 3).map((dev) => (
-                <div
-                  key={dev!.id}
-                  className="h-5 w-5 rounded-full bg-primary/10 border-2 border-card flex items-center justify-center text-[7px] font-bold text-primary"
-                  title={dev!.name}
-                >
-                  {dev!.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase()}
-                </div>
-              ))}
-              {assignees.length > 3 && (
-                <div className="h-5 w-5 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[7px] font-bold text-muted-foreground">
-                  +{assignees.length - 3}
-                </div>
-              )}
-            </div>
+            {/* Avatares dos assignees via activities */}
+            {assignees.length > 0 && (
+              <div className="flex -space-x-1.5">
+                {assignees.slice(0, 3).map((dev) => (
+                  <div
+                    key={dev!.id}
+                    className="h-5 w-5 rounded-full bg-primary/10 border-2 border-card flex items-center justify-center text-[7px] font-bold text-primary"
+                    title={dev!.name}
+                  >
+                    {getInitials(dev!.name)}
+                  </div>
+                ))}
+                {assignees.length > 3 && (
+                  <div className="h-5 w-5 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[7px] font-bold text-muted-foreground">
+                    +{assignees.length - 3}
+                  </div>
+                )}
+              </div>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -571,7 +586,7 @@ function HUCard({
           </div>
         </div>
 
-        {/* Expanded tasks list */}
+        {/* Lista expandida de tarefas */}
         {expanded && huActivities.length > 0 && (
           <div className="space-y-1 pt-1">
             {huActivities.map((act) => {
@@ -582,13 +597,11 @@ function HUCard({
                     {act.activityType === "bug" ? "🐛" : act.activityType === "architecture" ? "🏗️" : "📋"}
                   </Badge>
                   <span className="flex-1 truncate">{act.title}</span>
-                  <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary text-[7px] font-bold shrink-0">
-                    {dev?.name
-                      ?.split(" ")
-                      .map((n) => n[0])
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase() || "?"}
+                  <div
+                    className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary text-[7px] font-bold shrink-0"
+                    title={dev?.name}
+                  >
+                    {dev ? getInitials(dev.name) : "?"}
                   </div>
                   <span className="text-muted-foreground shrink-0">{act.hours}h</span>
                 </div>
