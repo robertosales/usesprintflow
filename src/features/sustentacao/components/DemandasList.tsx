@@ -1,8 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MoreHorizontal, Plus, Search, ListTodo } from "lucide-react";
 import {
@@ -21,9 +20,47 @@ import { useDemandas } from "../hooks/useDemandas";
 import { toast } from "sonner";
 import { DemandaForm } from "./DemandaForm";
 import { DemandaDetail } from "./DemandaDetail";
-// ✅ ALTERAÇÃO 1: adicionado getResponsavelAtivo no import
-import { SITUACAO_LABELS, SITUACAO_COLORS, isDemandaIniciada, getResponsavelAtivo } from "../types/demanda";
+import { SITUACAO_LABELS, SITUACAO_COLORS, isDemandaIniciada } from "../types/demanda";
 import type { Demanda } from "../types/demanda";
+import { supabase } from "@/integrations/supabase/client";
+
+// Mapeamento de situação → papel esperado do responsável
+const SITUACAO_PAPEL_MAP: Record<string, string> = {
+  fila_atendimento: "analista",
+  planejamento_elaboracao: "analista",
+  planejamento_ag_aprovacao: "analista",
+  planejamento_aprovada: "analista",
+  em_execucao: "desenvolvedor",
+  bloqueada: "desenvolvedor",
+  fila_producao: "desenvolvedor",
+  hom_ag_homologacao: "arquiteto",
+  hom_homologada: "arquiteto",
+};
+
+// Busca todos os responsáveis de uma lista de demandas em UMA única query
+async function fetchResponsaveisBatch(
+  demandaIds: string[],
+): Promise<Map<string, { papel: string; display_name: string }[]>> {
+  if (demandaIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("demanda_responsaveis")
+    .select("demanda_id, papel, profiles(display_name)")
+    .in("demanda_id", demandaIds);
+
+  const map = new Map<string, { papel: string; display_name: string }[]>();
+  if (error || !data) return map;
+
+  data.forEach((r: any) => {
+    const nome = r.profiles?.display_name || null;
+    if (!nome) return;
+    const lista = map.get(r.demanda_id) || [];
+    lista.push({ papel: r.papel, display_name: nome });
+    map.set(r.demanda_id, lista);
+  });
+
+  return map;
+}
 
 export function DemandasList() {
   const { demandas, loading, error, create, update, moveTo, remove, reload } = useDemandas();
@@ -34,6 +71,27 @@ export function DemandasList() {
   const [filterTipo, setFilterTipo] = useState("all");
   const [filterSituacao, setFilterSituacao] = useState("all");
   const debouncedSearch = useDebounce(search, 300);
+
+  // ✅ Mapa de responsáveis: demanda_id → lista de { papel, display_name }
+  const [responsaveisMap, setResponsaveisMap] = useState<Map<string, { papel: string; display_name: string }[]>>(
+    new Map(),
+  );
+
+  // ✅ Busca todos os responsáveis em batch quando as demandas carregam
+  useEffect(() => {
+    if (demandas.length === 0) return;
+    const ids = demandas.map((d) => d.id);
+    fetchResponsaveisBatch(ids).then(setResponsaveisMap);
+  }, [demandas]);
+
+  // ✅ Retorna o nome do responsável ativo conforme situação da demanda
+  function getResponsavelDaLista(d: Demanda): string | null {
+    const papelEsperado = SITUACAO_PAPEL_MAP[d.situacao];
+    const lista = responsaveisMap.get(d.id) || [];
+    const match = lista.find((r) => r.papel === papelEsperado);
+    // Fallback: se não achou pelo papel, pega o primeiro da lista
+    return match?.display_name || lista[0]?.display_name || null;
+  }
 
   const filtered = useMemo(() => {
     return demandas.filter((d) => {
@@ -49,7 +107,7 @@ export function DemandasList() {
     });
   }, [demandas, debouncedSearch, filterTipo, filterSituacao]);
 
-  const { paginatedItems, currentPage, setCurrentPage, totalPages, totalItems } = usePagination(filtered, {
+  const { paginatedItems, currentPage, setCurrentPage, totalItems } = usePagination(filtered, {
     pageSize: 20,
   });
 
@@ -112,7 +170,6 @@ export function DemandasList() {
                   <TableHead>Projeto</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Situação</TableHead>
-                  {/* ✅ ALTERAÇÃO 2: cabeçalho atualizado */}
                   <TableHead>Responsável</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
@@ -132,10 +189,10 @@ export function DemandasList() {
                         {SITUACAO_LABELS[d.situacao] || d.situacao}
                       </Badge>
                     </TableCell>
-                    {/* ✅ ALTERAÇÃO 3: célula SLA substituída pelo responsável ativo */}
+                    {/* ✅ Responsável ativo por papel conforme situação */}
                     <TableCell>
                       <span className="text-xs">
-                        {getResponsavelAtivo(d) ?? <span className="text-muted-foreground">—</span>}
+                        {getResponsavelDaLista(d) ?? <span className="text-muted-foreground">—</span>}
                       </span>
                     </TableCell>
                     <TableCell>
