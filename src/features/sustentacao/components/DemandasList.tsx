@@ -79,6 +79,7 @@ export function DemandasList() {
 
   // ✅ Busca todos os responsáveis em batch quando as demandas carregam
   useEffect(() => {
+    console.log("=== BATCH EFFECT RODOU, demandas:", demandas.length);
     if (demandas.length === 0) return;
     const ids = demandas.map((d) => d.id);
 
@@ -87,10 +88,8 @@ export function DemandasList() {
       .select("demanda_id, papel, profiles(display_name)")
       .in("demanda_id", ids)
       .then(({ data, error }) => {
-        console.log("=== DEBUG RESPONSAVEIS ===");
-        console.log("IDs buscados:", ids.length);
-        console.log("Erro:", error);
-        console.log("Data retornada:", data);
+        console.log("BATCH DATA:", data);
+        console.log("BATCH ERROR:", error);
       });
   }, [demandas]);
 
