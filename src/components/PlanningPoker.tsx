@@ -3,6 +3,7 @@ import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { SizeBadge } from "@/components/SizeBadge";
+import { CountdownTimer } from "@/components/CountdownTimer";
 import { SIZE_REFERENCES, FIBONACCI_DECK, getSizeByKey, getSizeByPoints, type SizeReference } from "@/lib/sizeReference";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   Search, Play, RotateCcw, ChevronLeft, ChevronRight, Check, Settings, Users, Copy,
-  Eye, EyeOff, Clock, Coffee, Infinity, HelpCircle, XCircle, AlertTriangle
+  Eye, EyeOff, Clock, Coffee, Infinity, HelpCircle, XCircle, AlertTriangle, FastForward
 } from "lucide-react";
 import type { UserStory } from "@/types/sprint";
 
@@ -38,12 +39,22 @@ interface Vote {
   revealed: boolean;
 }
 
+interface Participant {
+  id: string;
+  userId: string;
+  displayName: string;
+  isOnline: boolean;
+  isFacilitator: boolean;
+}
+
 export function PlanningPoker() {
   const { userStories, activeSprint, sprints, updateUserStory, refreshAll } = useSprint();
   const { currentTeamId, profile } = useAuth();
 
   const [session, setSession] = useState<PlanningSession | null>(null);
   const [votes, setVotes] = useState<Vote[]>([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [currentHuId, setCurrentHuId] = useState<string | null>(null);
   const [myVote, setMyVote] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
@@ -89,6 +100,19 @@ export function PlanningPoker() {
     );
   }, [categorizedStories.pending, searchTerm]);
 
+  // Load profiles
+  useEffect(() => {
+    const loadProfiles = async () => {
+      const { data } = await supabase.from("profiles").select("user_id, display_name");
+      if (data) {
+        const map: Record<string, string> = {};
+        data.forEach(p => { map[p.user_id] = p.display_name; });
+        setProfiles(map);
+      }
+    };
+    loadProfiles();
+  }, []);
+
   const loadSession = useCallback(async () => {
     if (!currentTeamId || !activeSprint) return;
     const { data } = await supabase
@@ -114,6 +138,24 @@ export function PlanningPoker() {
     }
   }, [currentTeamId, activeSprint]);
 
+  const loadParticipants = useCallback(async () => {
+    if (!session) return;
+    const { data } = await supabase
+      .from("planning_participants")
+      .select("*")
+      .eq("session_id", session.id);
+
+    if (data) {
+      setParticipants(data.map((p: any) => ({
+        id: p.id,
+        userId: p.user_id,
+        displayName: profiles[p.user_id] || "Participante",
+        isOnline: p.is_online,
+        isFacilitator: p.is_facilitator,
+      })));
+    }
+  }, [session, profiles]);
+
   const loadVotes = useCallback(async () => {
     if (!session || !currentHuId) return;
     const { data } = await supabase
@@ -135,18 +177,52 @@ export function PlanningPoker() {
 
   useEffect(() => { loadSession(); }, [loadSession]);
   useEffect(() => { loadVotes(); }, [loadVotes]);
+  useEffect(() => { loadParticipants(); }, [loadParticipants]);
 
+  // Real-time subscriptions
   useEffect(() => {
     if (!session) return;
     const channel = supabase
-      .channel(`planning-votes-${session.id}`)
+      .channel(`planning-${session.id}`)
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'planning_votes',
         filter: `session_id=eq.${session.id}`,
       }, () => { loadVotes(); })
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'planning_participants',
+        filter: `session_id=eq.${session.id}`,
+      }, () => { loadParticipants(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [session, loadVotes]);
+  }, [session, loadVotes, loadParticipants]);
+
+  // Join session as participant
+  const joinSession = useCallback(async (sessionId: string, isCreator: boolean) => {
+    if (!userId) return;
+    const { data: existing } = await supabase
+      .from("planning_participants")
+      .select("id")
+      .eq("session_id", sessionId)
+      .eq("user_id", userId)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      await supabase.from("planning_participants")
+        .update({ is_online: true, last_seen_at: new Date().toISOString() })
+        .eq("id", existing[0].id);
+    } else {
+      await supabase.from("planning_participants").insert({
+        session_id: sessionId, user_id: userId,
+        is_facilitator: isCreator, is_online: true,
+      });
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (session && userId) {
+      joinSession(session.id, session.createdBy === userId);
+    }
+  }, [session, userId, joinSession]);
 
   const startSession = async () => {
     if (!currentTeamId || !activeSprint || !userId) return;
@@ -157,10 +233,12 @@ export function PlanningPoker() {
     }).select().single();
 
     if (error) { toast.error("Erro ao iniciar sessão"); return; }
-    setSession({
+    const newSession = {
       id: data.id, deckMode: data.deck_mode as DeckMode,
       deckConfig: data.deck_config, status: data.status, createdBy: data.created_by,
-    });
+    };
+    setSession(newSession);
+    await joinSession(data.id, true);
     const firstPending = sprintStories.find(hu => hu.planningStatus !== "voted" && !hu.sizeReference);
     if (firstPending) setCurrentHuId(firstPending.id);
     toast.success("Sessão iniciada!");
@@ -182,6 +260,25 @@ export function PlanningPoker() {
     await supabase.from("planning_votes")
       .update({ revealed: true }).eq("session_id", session.id).eq("hu_id", currentHuId);
     setRevealed(true);
+  };
+
+  // Force reveal: mark non-voters as "Sem voto" and reveal all
+  const forceReveal = async () => {
+    if (!session || !currentHuId) return;
+    const voterIds = new Set(votes.map(v => v.userId));
+    const nonVoters = participants.filter(p => !voterIds.has(p.userId));
+
+    for (const p of nonVoters) {
+      await supabase.from("planning_votes").insert({
+        session_id: session.id, hu_id: currentHuId, user_id: p.userId,
+        vote_value: "—", revealed: true,
+      });
+    }
+
+    await supabase.from("planning_votes")
+      .update({ revealed: true }).eq("session_id", session.id).eq("hu_id", currentHuId);
+    setRevealed(true);
+    toast.info("Votos forçados e revelados");
   };
 
   const revote = async () => {
@@ -223,7 +320,6 @@ export function PlanningPoker() {
     if (!session) return;
     setCancelling(true);
     try {
-      // Revert all voted HUs in this session
       const votedHus = sprintStories.filter(hu => hu.planningStatus === "voted" && hu.votedAt);
       for (const hu of votedHus) {
         await supabase.from("user_stories").update({
@@ -232,9 +328,8 @@ export function PlanningPoker() {
           voted_at: null, voted_by: null,
         }).eq("id", hu.id);
       }
-      // Delete all votes
       await supabase.from("planning_votes").delete().eq("session_id", session.id);
-      // Mark session cancelled
+      await supabase.from("planning_participants").delete().eq("session_id", session.id);
       await supabase.from("planning_sessions")
         .update({ status: "cancelled", finished_at: new Date().toISOString() }).eq("id", session.id);
 
@@ -255,25 +350,43 @@ export function PlanningPoker() {
     return customCards;
   };
 
-  const getConsensus = (): { size: SizeReference | null; counts: Record<string, number> } => {
+  const getConsensus = (): { size: SizeReference | null; counts: Record<string, number>; avg: number; mode: string; hasDivergence: boolean } => {
     const counts: Record<string, number> = {};
     const numericVotes: number[] = [];
     votes.forEach(v => {
+      if (v.voteValue === "—") return; // skip no-vote
       counts[v.voteValue] = (counts[v.voteValue] || 0) + 1;
       const num = parseFloat(v.voteValue === "½" ? "0.5" : v.voteValue);
       if (!isNaN(num)) numericVotes.push(num);
     });
-    if (numericVotes.length === 0) return { size: null, counts };
-    const uniqueValues = [...new Set(votes.map(v => v.voteValue))];
+
+    if (numericVotes.length === 0) return { size: null, counts, avg: 0, mode: "—", hasDivergence: false };
+
+    // Average
+    const avg = numericVotes.reduce((s, n) => s + n, 0) / numericVotes.length;
+
+    // Mode
+    let maxCount = 0;
+    let modeVal = "";
+    Object.entries(counts).forEach(([val, count]) => {
+      if (count > maxCount) { maxCount = count; modeVal = val; }
+    });
+
+    // Divergence: check if min and max differ by more than 2 fibonacci steps
+    const min = Math.min(...numericVotes);
+    const max = Math.max(...numericVotes);
+    const hasDivergence = max > 0 && (max / Math.max(min, 0.5)) >= 3;
+
+    const uniqueValues = [...new Set(votes.filter(v => v.voteValue !== "—").map(v => v.voteValue))];
     if (uniqueValues.length === 1) {
-      if (deckMode === "hours") return { size: getSizeByKey(uniqueValues[0]) || null, counts };
-      return { size: getSizeByPoints(numericVotes[0]) || null, counts };
+      if (deckMode === "hours") return { size: getSizeByKey(uniqueValues[0]) || null, counts, avg, mode: modeVal, hasDivergence: false };
+      return { size: getSizeByPoints(numericVotes[0]) || null, counts, avg, mode: modeVal, hasDivergence: false };
     }
     numericVotes.sort((a, b) => a - b);
     const mid = Math.floor(numericVotes.length / 2);
     const median = numericVotes.length % 2 !== 0
       ? numericVotes[mid] : (numericVotes[mid - 1] + numericVotes[mid]) / 2;
-    return { size: getSizeByPoints(median) || null, counts };
+    return { size: getSizeByPoints(median) || null, counts, avg, mode: modeVal, hasDivergence };
   };
 
   const currentHu = currentHuId ? sprintStories.find(hu => hu.id === currentHuId) : null;
@@ -282,10 +395,21 @@ export function PlanningPoker() {
   const pendingCount = categorizedStories.pending.length;
   const votingCount = currentHuId ? 1 : 0;
 
+  // Participant vote status
+  const participantVoteStatus = useMemo(() => {
+    const voterIds = new Set(votes.map(v => v.userId));
+    return participants.map(p => ({
+      ...p,
+      displayName: profiles[p.userId] || p.displayName,
+      hasVoted: voterIds.has(p.userId),
+    }));
+  }, [participants, votes, profiles]);
+
   const cardDisplayValue = (val: string) => {
     if (val === "☕") return <Coffee className="h-5 w-5" />;
     if (val === "∞") return <Infinity className="h-5 w-5" />;
     if (val === "?") return <HelpCircle className="h-5 w-5" />;
+    if (val === "—") return <span className="text-muted-foreground text-xs">N/V</span>;
     return val;
   };
 
@@ -402,13 +526,14 @@ export function PlanningPoker() {
           <p className="text-sm text-muted-foreground">{activeSprint.name} · {sprintStories.length} HUs</p>
         </div>
         <div className="flex items-center gap-2">
+          <CountdownTimer isFacilitator={isHost} />
           <Badge className="bg-success/15 text-success border border-success/30 gap-1">
             <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> Sessão Ativa
           </Badge>
           <Button variant="outline" size="sm" onClick={endSession}>Encerrar Sessão</Button>
           {isHost && (
             <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setCancelOpen(true)}>
-              <XCircle className="h-3.5 w-3.5 mr-1" /> Cancelar Sessão
+              <XCircle className="h-3.5 w-3.5 mr-1" /> Cancelar
             </Button>
           )}
         </div>
@@ -417,16 +542,15 @@ export function PlanningPoker() {
       {/* Main grid */}
       <div className="grid grid-cols-12 gap-4">
         {/* Left panel */}
-        <div className="col-span-4 space-y-3">
+        <div className="col-span-3 space-y-3">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
               placeholder="Buscar por ID ou título..." className="pl-8 h-8 text-xs" />
           </div>
 
-          <ScrollArea className="h-[calc(100vh-320px)]">
+          <ScrollArea className="h-[calc(100vh-380px)]">
             <div className="space-y-2 pr-2">
-              {/* Voting */}
               {categorizedStories.voting.map(hu => (
                 <Card key={hu.id} className="border-warning/50 bg-warning/5 cursor-pointer" onClick={() => setCurrentHuId(hu.id)}>
                   <CardContent className="p-3">
@@ -440,7 +564,6 @@ export function PlanningPoker() {
                   </CardContent>
                 </Card>
               ))}
-              {/* Pending */}
               {filteredPending.map(hu => (
                 <Card key={hu.id}
                   className={cn("cursor-pointer hover:shadow-sm transition-shadow", currentHuId === hu.id && "ring-2 ring-primary")}
@@ -448,14 +571,12 @@ export function PlanningPoker() {
                   <CardContent className="p-3">
                     <div className="flex items-center gap-2 mb-1">
                       <Badge variant="outline" className="font-mono text-[10px]">{hu.code}</Badge>
-                      <span className="text-muted-foreground text-[10px]">—</span>
                       <Badge variant="secondary" className="text-[10px]">Pendente</Badge>
                     </div>
                     <p className="text-xs font-medium line-clamp-2">{hu.title}</p>
                   </CardContent>
                 </Card>
               ))}
-              {/* Voted */}
               {categorizedStories.voted.map(hu => (
                 <Card key={hu.id} className="border-success/50 bg-success/5 opacity-75">
                   <CardContent className="p-3">
@@ -474,8 +595,8 @@ export function PlanningPoker() {
           </ScrollArea>
         </div>
 
-        {/* Right panel */}
-        <div className="col-span-8 space-y-4">
+        {/* Center panel */}
+        <div className="col-span-6 space-y-4">
           {currentHu ? (
             <>
               <Card className="border-warning/30 bg-warning/5">
@@ -494,43 +615,93 @@ export function PlanningPoker() {
                 </CardContent>
               </Card>
 
-              {/* Votes */}
+              {/* Votes display */}
               {votes.length > 0 && (
                 <Card>
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-semibold text-muted-foreground uppercase">Participantes ({votes.length})</span>
-                      {!revealed && (
-                        <Button size="sm" variant="outline" onClick={revealVotes} className="gap-1 text-xs">
-                          <Eye className="h-3 w-3" /> Revelar todos ▶
-                        </Button>
+                      <span className="text-xs font-semibold text-muted-foreground uppercase">Votos ({votes.length})</span>
+                      {!revealed && isHost && (
+                        <div className="flex gap-1.5">
+                          <Button size="sm" variant="outline" onClick={revealVotes} className="gap-1 text-xs">
+                            <Eye className="h-3 w-3" /> Revelar
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={forceReveal} className="gap-1 text-xs text-warning border-warning/30">
+                            <FastForward className="h-3 w-3" /> Forçar Revelação
+                          </Button>
+                        </div>
                       )}
                     </div>
-                    <div className="flex flex-wrap gap-3">
+
+                    {/* Votes table */}
+                    <div className="space-y-1.5">
                       {votes.map(v => (
-                        <div key={v.id} className="flex flex-col items-center gap-1">
+                        <div key={v.id} className="flex items-center gap-3 rounded-lg border p-2">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 shrink-0">
+                            <span className="text-[10px] font-bold text-primary">
+                              {(profiles[v.userId] || "?").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                            </span>
+                          </div>
+                          <span className="text-xs font-medium flex-1 truncate">
+                            {v.userId === userId ? "Você" : profiles[v.userId] || "Participante"}
+                          </span>
                           <div className={cn(
-                            "h-14 w-10 rounded-lg border-2 flex items-center justify-center text-sm font-bold transition-all",
+                            "h-10 w-8 rounded-lg border-2 flex items-center justify-center text-sm font-bold transition-all",
                             revealed ? "border-primary bg-primary/10 text-primary" : "border-muted bg-muted text-muted-foreground"
                           )}>
-                            {revealed ? cardDisplayValue(v.voteValue) : <EyeOff className="h-4 w-4" />}
+                            {revealed ? cardDisplayValue(v.voteValue) : <EyeOff className="h-3.5 w-3.5" />}
                           </div>
-                          <span className="text-[10px] text-muted-foreground truncate max-w-[60px]">
-                            {v.userId === userId ? "Você" : "Participante"}
-                          </span>
+                          {revealed && (
+                            <span className="text-xs text-muted-foreground w-12 text-right">
+                              {(() => {
+                                const num = parseFloat(v.voteValue === "½" ? "0.5" : v.voteValue);
+                                if (isNaN(num)) return "";
+                                const size = deckMode === "hours" ? getSizeByKey(v.voteValue) : getSizeByPoints(num);
+                                return size ? `${size.hours}h` : "";
+                              })()}
+                            </span>
+                          )}
                         </div>
                       ))}
                     </div>
 
-                    {revealed && consensus?.size && (
-                      <div className="mt-4 p-3 rounded-lg bg-success/10 border border-success/30">
-                        <p className="text-sm font-bold text-success">
-                          Consenso: {consensus.size.label} — {consensus.size.hours}h
-                        </p>
-                        <div className="flex gap-2 mt-1">
-                          {Object.entries(consensus.counts).map(([val, count]) => (
-                            <Badge key={val} variant="outline" className="text-[10px]">{val} × {count}</Badge>
-                          ))}
+                    {/* Consensus stats */}
+                    {revealed && consensus && (
+                      <div className="mt-4 space-y-3">
+                        {consensus.hasDivergence && (
+                          <div className="p-2 rounded-lg bg-warning/10 border border-warning/30 flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+                            <span className="text-xs text-warning font-medium">⚠️ Alta divergência detectada — considere rediscutir antes de confirmar</span>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="rounded-lg bg-muted p-3 text-center">
+                            <p className="text-[10px] text-muted-foreground uppercase">Média</p>
+                            <p className="text-lg font-bold">{consensus.avg.toFixed(1)}</p>
+                          </div>
+                          <div className="rounded-lg bg-muted p-3 text-center">
+                            <p className="text-[10px] text-muted-foreground uppercase">Moda</p>
+                            <p className="text-lg font-bold">{consensus.mode}</p>
+                          </div>
+                          <div className="rounded-lg bg-success/10 border border-success/30 p-3 text-center">
+                            <p className="text-[10px] text-success uppercase">Consenso</p>
+                            <p className="text-lg font-bold text-success">
+                              {consensus.size ? `${consensus.size.label} — ${consensus.size.hours}h` : "—"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Distribution */}
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase mb-1.5">Distribuição</p>
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(consensus.counts).sort(([, a], [, b]) => b - a).map(([val, count]) => (
+                              <Badge key={val} variant="outline" className="text-xs gap-1">
+                                {cardDisplayValue(val)} × {count}
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -564,6 +735,53 @@ export function PlanningPoker() {
               <p className="text-lg text-muted-foreground font-medium">Selecione uma HU para iniciar a votação</p>
             </div>
           )}
+        </div>
+
+        {/* Right panel - Participants */}
+        <div className="col-span-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5" /> Participantes ({participants.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 pt-0">
+              <div className="space-y-1.5">
+                {participantVoteStatus.map(p => (
+                  <div key={p.id} className="flex items-center gap-2 rounded-lg border p-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 shrink-0">
+                      <span className="text-[10px] font-bold text-primary">
+                        {p.displayName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">
+                        {p.userId === userId ? `${p.displayName} (você)` : p.displayName}
+                      </p>
+                      {p.isFacilitator && (
+                        <p className="text-[10px] text-primary">Facilitador</p>
+                      )}
+                    </div>
+                    {currentHuId && (
+                      <Badge
+                        variant="outline"
+                        className={cn("text-[10px] shrink-0",
+                          p.hasVoted
+                            ? "bg-success/15 text-success border-success/30"
+                            : "bg-muted text-muted-foreground"
+                        )}
+                      >
+                        {p.hasVoted ? "✅ votou" : "⏳ aguardando"}
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+                {participants.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">Nenhum participante ainda</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 

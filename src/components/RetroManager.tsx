@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { CountdownTimer } from "@/components/CountdownTimer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   Plus, Pencil, Trash2, Check, ChevronRight, Play,
-  BookOpen, Zap, AlertTriangle, XCircle
+  BookOpen, Zap, AlertTriangle, XCircle, Trophy
 } from "lucide-react";
 
 // ─── Models (PT-BR) ───
@@ -112,6 +113,11 @@ export function RetroManager() {
 
   const isHost = session?.createdBy === userId;
   const model = RETRO_MODELS[session?.model || selectedModel];
+
+  // Top 3 cards by votes
+  const top3Cards = useMemo(() => {
+    return [...cards].sort((a, b) => b.votes - a.votes).filter(c => c.votes > 0).slice(0, 3);
+  }, [cards]);
 
   const loadSession = useCallback(async () => {
     if (!currentTeamId || !activeSprint) return;
@@ -289,6 +295,9 @@ export function RetroManager() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {session && session.status === "active" && (
+            <CountdownTimer isFacilitator={isHost} />
+          )}
           {session && session.status === "active" && step >= 2 && (
             <Button onClick={() => { setStep(5); setReportOpen(true); }} className="gap-1">
               Finalizar e ver Relatório <ChevronRight className="h-4 w-4" />
@@ -364,7 +373,7 @@ export function RetroManager() {
       {/* Step 2 - Collect Cards */}
       {step === 2 && session && (
         <div className={cn("grid gap-3", model.columns.length <= 3 ? "grid-cols-3" : model.columns.length === 4 ? "grid-cols-4" : "grid-cols-5")}
-             style={{ height: "calc(100vh - 260px)" }}>
+             style={{ height: "calc(100vh - 300px)" }}>
           {model.columns.map(col => {
             const colCards = cards.filter(c => c.columnKey === col.key);
             return (
@@ -461,6 +470,36 @@ export function RetroManager() {
               );
             })}
           </div>
+
+          {/* Top 3 Ranking */}
+          {top3Cards.length > 0 && (
+            <Card className="border-warning/30 bg-warning/5">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Trophy className="h-4 w-4 text-warning" />
+                  <span className="text-xs font-semibold text-warning uppercase">Top 3 — Ranking Automático</span>
+                </div>
+                <div className="space-y-2">
+                  {top3Cards.map((card, i) => {
+                    const col = model.columns.find(c => c.key === card.columnKey);
+                    return (
+                      <div key={card.id} className="flex items-center gap-3 rounded-lg border bg-card p-2">
+                        <span className={cn("text-lg font-bold", i === 0 ? "text-warning" : i === 1 ? "text-muted-foreground" : "text-muted-foreground/60")}>
+                          {i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉"}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{card.text}</p>
+                          <p className="text-[10px] text-muted-foreground">{col?.icon} {col?.label}</p>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">{card.votes} votos</Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Button onClick={() => setStep(4)} className="gap-1">Próximo <ChevronRight className="h-4 w-4" /></Button>
         </div>
       )}
@@ -520,6 +559,33 @@ export function RetroManager() {
                 );
               })}
             </div>
+
+            {/* Top 3 in report */}
+            {top3Cards.length > 0 && (
+              <>
+                <Separator />
+                <div>
+                  <h3 className="text-sm font-bold mb-2 flex items-center gap-1.5">
+                    <Trophy className="h-4 w-4 text-warning" /> Top 3 Cards
+                  </h3>
+                  <div className="space-y-2">
+                    {top3Cards.map((card, i) => {
+                      const col = model.columns.find(c => c.key === card.columnKey);
+                      return (
+                        <div key={card.id} className="flex items-center gap-3 rounded-lg border p-2">
+                          <span className="text-lg">{i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉"}</span>
+                          <div className="flex-1">
+                            <p className="text-xs">{card.text}</p>
+                            <p className="text-[10px] text-muted-foreground">{col?.icon} {col?.label}</p>
+                          </div>
+                          <Badge variant="secondary">{card.votes} votos</Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
 
             <Separator />
 

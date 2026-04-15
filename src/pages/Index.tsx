@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { AgileHistory } from "@/components/AgileHistory";
 import { TeamSelectionModal } from "@/shared/components/common/TeamSelectionModal";
 import { SprintManager } from "@/components/SprintManager";
 import { DeveloperManager } from "@/components/DeveloperManager";
@@ -28,7 +29,7 @@ import {
   LayoutDashboard, Users, ListTodo, Columns3, BarChart3, Zap, ShieldAlert,
   Layers, GitBranch, SlidersHorizontal, Wand2,
   LogOut, Building2, UserCircle, UsersRound, ShieldCheck, CalendarDays, Home, Hexagon,
-  Spade, MessageSquare
+  Spade, MessageSquare, History
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasActiveImpediment } from "@/types/sprint";
@@ -41,7 +42,7 @@ import {
   SidebarHeader, SidebarFooter, SidebarSeparator, useSidebar,
 } from "@/components/ui/sidebar";
 
-type NavKey = "dashboard" | "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "planning" | "team" | "activities" | "kanban" | "impediments" | "retro" | "metrics" | "workflow" | "custom-fields" | "automations" | "calendar";
+type NavKey = "dashboard" | "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "planning" | "team" | "activities" | "kanban" | "impediments" | "retro" | "metrics" | "workflow" | "custom-fields" | "automations" | "calendar" | "history";
 
 const NAV_PERMISSIONS: Partial<Record<NavKey, Permission>> = {
   teams: 'manage_teams',
@@ -74,6 +75,7 @@ const NAV_SECTIONS = [
     { key: "impediments" as NavKey, label: "Impedimentos", icon: ShieldAlert },
     { key: "retro" as NavKey, label: "Retrospectiva", icon: MessageSquare },
     { key: "metrics" as NavKey, label: "Métricas", icon: BarChart3 },
+    { key: "history" as NavKey, label: "Histórico", icon: History },
   ]},
   { title: "Organização", items: [
     { key: "teams" as NavKey, label: "Times", icon: Building2 },
@@ -319,6 +321,7 @@ const Index = () => {
                   {active === "impediments" && <ImpedimentList />}
                   {active === "retro" && <RetroManager />}
                   {active === "metrics" && <MetricsDashboard />}
+                  {active === "history" && <AgileHistory />}
                   {active === "workflow" && <WorkflowManager />}
                   {active === "custom-fields" && <CustomFieldManager />}
                   {active === "automations" && <AutomationManager />}

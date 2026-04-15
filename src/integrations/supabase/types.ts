@@ -660,6 +660,7 @@ export type Database = {
           name: string
           role: string
           team_id: string
+          user_id: string | null
         }
         Insert: {
           avatar?: string | null
@@ -669,6 +670,7 @@ export type Database = {
           name: string
           role?: string
           team_id: string
+          user_id?: string | null
         }
         Update: {
           avatar?: string | null
@@ -678,6 +680,7 @@ export type Database = {
           name?: string
           role?: string
           team_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1571,6 +1574,7 @@ export type Database = {
       user_stories: {
         Row: {
           added_to_sprint_at: string | null
+          assignee_id: string | null
           backlog_order: number | null
           code: string
           created_at: string
@@ -1596,6 +1600,7 @@ export type Database = {
         }
         Insert: {
           added_to_sprint_at?: string | null
+          assignee_id?: string | null
           backlog_order?: number | null
           code: string
           created_at?: string
@@ -1621,6 +1626,7 @@ export type Database = {
         }
         Update: {
           added_to_sprint_at?: string | null
+          assignee_id?: string | null
           backlog_order?: number | null
           code?: string
           created_at?: string
