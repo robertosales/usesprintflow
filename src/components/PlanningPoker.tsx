@@ -38,6 +38,7 @@ import {
   AlertTriangle,
   FastForward,
   BarChart2,
+  ThumbsUp,
 } from "lucide-react";
 import type { UserStory } from "@/types/sprint";
 
@@ -85,6 +86,7 @@ export function PlanningPoker() {
   const [hoursConfig, setHoursConfig] = useState(SIZE_REFERENCES.map((s) => ({ ...s })));
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [selectedConsensus, setSelectedConsensus] = useState<string | null>(null);
 
   const userId = profile?.user_id;
   const isHost = session?.createdBy === userId;
@@ -114,7 +116,6 @@ export function PlanningPoker() {
     );
   }, [categorizedStories.pending, searchTerm]);
 
-  // ✅ NOVO: resumo das HUs votadas com total de horas
   const votedSummary = useMemo(() => {
     const items = categorizedStories.voted.map((hu) => ({
       code: hu.code,
@@ -152,7 +153,6 @@ export function PlanningPoker() {
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(1);
-
     if (data && data.length > 0) {
       const s = data[0];
       setSession({
@@ -215,6 +215,9 @@ export function PlanningPoker() {
   useEffect(() => {
     loadParticipants();
   }, [loadParticipants]);
+  useEffect(() => {
+    setSelectedConsensus(null);
+  }, [currentHuId, revealed]);
 
   useEffect(() => {
     if (!session) return;
@@ -285,14 +288,13 @@ export function PlanningPoker() {
       toast.error("Erro ao iniciar sessão");
       return;
     }
-    const newSession = {
+    setSession({
       id: data.id,
       deckMode: data.deck_mode as DeckMode,
       deckConfig: data.deck_config,
       status: data.status,
       createdBy: data.created_by,
-    };
-    setSession(newSession);
+    });
     await joinSession(data.id, true);
     const firstPending = sprintStories.find((hu) => hu.planningStatus !== "voted" && !hu.sizeReference);
     if (firstPending) setCurrentHuId(firstPending.id);
@@ -347,6 +349,7 @@ export function PlanningPoker() {
     setVotes([]);
     setMyVote(null);
     setRevealed(false);
+    setSelectedConsensus(null);
     toast.info("Nova rodada de votação");
   };
 
@@ -373,6 +376,7 @@ export function PlanningPoker() {
     setMyVote(null);
     setVotes([]);
     setRevealed(false);
+    setSelectedConsensus(null);
     await refreshAll();
   };
 
@@ -415,6 +419,7 @@ export function PlanningPoker() {
       setCurrentHuId(null);
       setMyVote(null);
       setVotes([]);
+      setSelectedConsensus(null);
       setCancelOpen(false);
       await refreshAll();
       toast.success("Sessão cancelada. Todas as votações foram descartadas.");
@@ -427,14 +432,15 @@ export function PlanningPoker() {
 
   const getDeckCards = (): string[] => {
     if (deckMode === "fibonacci") return FIBONACCI_DECK;
-    if (deckMode === "hours") return SIZE_REFERENCES.map((s) => s.key);
+    if (deckMode === "hours") return hoursConfig.map((s) => s.key);
     return customCards;
   };
 
   const resolveSizeFromVote = useCallback(
     (voteValue: string): SizeReference | null => {
-      if (deckMode === "hours")
+      if (deckMode === "hours") {
         return (hoursConfig.find((s) => s.key === voteValue) as SizeReference) ?? getSizeByKey(voteValue);
+      }
       const num = parseFloat(voteValue === "½" ? "0.5" : voteValue);
       if (isNaN(num)) return null;
       return getSizeByPoints(num);
@@ -442,63 +448,110 @@ export function PlanningPoker() {
     [deckMode, hoursConfig],
   );
 
+  // ✅ LÓGICA CORRIGIDA: divergência baseada em HORAS reais (P=4, M=6, G=12, GG=16, XG=24)
   const getConsensus = useCallback((): {
-    size: SizeReference | null;
+    suggestedKey: string | null;
+    suggestedSize: SizeReference | null;
     counts: Record<string, number>;
-    avg: number;
-    mode: string;
-    hasDivergence: boolean;
+    isUnanimous: boolean;
+    divergenceLevel: "none" | "low" | "high"; // none=ok, low=aviso, high=alerta
+    divergenceLabel: string;
+    allKeys: string[];
   } => {
     const counts: Record<string, number> = {};
-    const numericVotes: number[] = [];
     votes.forEach((v) => {
       if (v.voteValue === "—") return;
       counts[v.voteValue] = (counts[v.voteValue] || 0) + 1;
-      let num: number;
-      if (deckMode === "hours") {
-        const s = hoursConfig.find((h) => h.key === v.voteValue);
-        num = s ? s.points : NaN;
-      } else {
-        num = parseFloat(v.voteValue === "½" ? "0.5" : v.voteValue);
-      }
-      if (!isNaN(num)) numericVotes.push(num);
     });
-    if (numericVotes.length === 0) return { size: null, counts, avg: 0, mode: "—", hasDivergence: false };
-    const avg = numericVotes.reduce((s, n) => s + n, 0) / numericVotes.length;
+
+    const validVotes = votes.filter((v) => v.voteValue !== "—");
+    if (validVotes.length === 0) {
+      return {
+        suggestedKey: null,
+        suggestedSize: null,
+        counts,
+        isUnanimous: false,
+        divergenceLevel: "none",
+        divergenceLabel: "",
+        allKeys: getDeckCards(),
+      };
+    }
+
+    const uniqueValues = [...new Set(validVotes.map((v) => v.voteValue))];
+    const isUnanimous = uniqueValues.length === 1;
+
+    // Moda: valor mais votado (critério de sugestão)
     let maxCount = 0;
-    let modeVal = "";
+    let modeKey = uniqueValues[0];
     Object.entries(counts).forEach(([val, count]) => {
       if (count > maxCount) {
         maxCount = count;
-        modeVal = val;
+        modeKey = val;
       }
     });
-    const min = Math.min(...numericVotes);
-    const max = Math.max(...numericVotes);
-    const hasDivergence = max > 0 && max / Math.max(min, 0.5) >= 3;
-    const uniqueValues = [...new Set(votes.filter((v) => v.voteValue !== "—").map((v) => v.voteValue))];
-    if (uniqueValues.length === 1)
-      return { size: resolveSizeFromVote(uniqueValues[0]), counts, avg, mode: modeVal, hasDivergence: false };
-    numericVotes.sort((a, b) => a - b);
-    const mid = Math.floor(numericVotes.length / 2);
-    const median = numericVotes.length % 2 !== 0 ? numericVotes[mid] : (numericVotes[mid - 1] + numericVotes[mid]) / 2;
-    let resolvedSize: SizeReference | null = null;
-    if (deckMode === "hours") {
-      resolvedSize = hoursConfig.reduce((prev, curr) =>
-        Math.abs(curr.points - median) < Math.abs(prev.points - median) ? curr : prev,
-      ) as SizeReference;
-    } else {
-      resolvedSize =
-        getSizeByPoints(median) ??
-        SIZE_REFERENCES.reduce((prev, curr) =>
-          Math.abs(curr.points - median) < Math.abs(prev.points - median) ? curr : prev,
-        );
+
+    // ✅ Divergência calculada por HORAS reais
+    let divergenceLevel: "none" | "low" | "high" = "none";
+    let divergenceLabel = "";
+
+    if (!isUnanimous) {
+      let hoursList: number[] = [];
+
+      if (deckMode === "hours") {
+        // Usa horas diretamente do hoursConfig: P=4, M=6, G=12, GG=16, XG=24
+        hoursList = uniqueValues.map((k) => hoursConfig.find((h) => h.key === k)?.hours ?? 0).filter((h) => h > 0);
+      } else {
+        // Fibonacci: converte pontos em horas aproximadas via SIZE_REFERENCES
+        hoursList = uniqueValues
+          .map((v) => {
+            const num = parseFloat(v === "½" ? "0.5" : v);
+            if (isNaN(num)) return 0;
+            const size = getSizeByPoints(num);
+            return size?.hours ?? num; // fallback para o valor numérico
+          })
+          .filter((h) => h > 0);
+      }
+
+      if (hoursList.length >= 2) {
+        const minH = Math.min(...hoursList);
+        const maxH = Math.max(...hoursList);
+        const ratio = maxH / Math.max(minH, 1);
+
+        // Tabela de divergência por horas reais:
+        // P(4) → M(6): ratio 1.5 → normal
+        // M(6) → G(12): ratio 2.0 → low
+        // P(4) → G(12): ratio 3.0 → high
+        // M(6) → GG(16): ratio 2.67 → high
+        // P(4) → GG(16): ratio 4.0 → high
+        // qualquer → XG(24): provavelmente high
+        if (ratio >= 2.5) {
+          divergenceLevel = "high";
+          divergenceLabel = `Diferença de ${minH}h → ${maxH}h (${ratio.toFixed(1)}x) — discussão necessária`;
+        } else if (ratio >= 1.8) {
+          divergenceLevel = "low";
+          divergenceLabel = `Diferença de ${minH}h → ${maxH}h — verifique com a equipe`;
+        }
+      }
     }
-    return { size: resolvedSize || null, counts, avg, mode: modeVal, hasDivergence };
+
+    const suggestedSize = resolveSizeFromVote(modeKey);
+
+    return {
+      suggestedKey: modeKey,
+      suggestedSize,
+      counts,
+      isUnanimous,
+      divergenceLevel,
+      divergenceLabel,
+      allKeys: getDeckCards(),
+    };
   }, [votes, deckMode, hoursConfig, resolveSizeFromVote]);
 
   const currentHu = currentHuId ? sprintStories.find((hu) => hu.id === currentHuId) : null;
   const consensus = revealed ? getConsensus() : null;
+  const finalKey = consensus?.isUnanimous ? consensus.suggestedKey : selectedConsensus;
+  const finalSize = finalKey ? resolveSizeFromVote(finalKey) : null;
+
   const votedCount = categorizedStories.voted.length;
   const pendingCount = categorizedStories.pending.length;
   const votingCount = currentHuId ? 1 : 0;
@@ -550,7 +603,11 @@ export function PlanningPoker() {
             <div className="grid grid-cols-3 gap-3">
               {[
                 { mode: "fibonacci" as DeckMode, label: "Fibonacci", desc: "0, ½, 1, 2, 3, 5, 8, 13, 21..." },
-                { mode: "hours" as DeckMode, label: "Referência em Horas", desc: "P→4h, M→6h, G→12h, GG→16h, XG→24h" },
+                {
+                  mode: "hours" as DeckMode,
+                  label: "Referência em Horas",
+                  desc: "P=4h · M=6h · G=12h · GG=16h · XG=24h",
+                },
                 { mode: "custom" as DeckMode, label: "Customizado", desc: "Crie seu próprio baralho" },
               ].map(({ mode, label, desc }) => (
                 <button
@@ -581,17 +638,16 @@ export function PlanningPoker() {
             )}
             {deckMode === "hours" && (
               <div className="space-y-2">
-                <div className="grid grid-cols-5 gap-2 text-center text-xs font-medium text-muted-foreground">
+                <div className="grid grid-cols-4 gap-2 text-center text-xs font-medium text-muted-foreground px-1">
                   <span>Tamanho</span>
-                  <span>Pontos</span>
+                  <span>Label</span>
                   <span>Horas</span>
-                  <span></span>
-                  <span></span>
+                  <span>Pontos</span>
                 </div>
                 {hoursConfig.map((s, i) => (
-                  <div key={s.key} className="grid grid-cols-5 gap-2 items-center">
+                  <div key={s.key} className="grid grid-cols-4 gap-2 items-center">
                     <Input value={s.key} readOnly className="h-8 text-xs text-center font-bold" />
-                    <Input value={s.pointsLabel} readOnly className="h-8 text-xs text-center" />
+                    <Input value={s.label} readOnly className="h-8 text-xs text-center" />
                     <Input
                       type="number"
                       value={s.hours}
@@ -602,28 +658,37 @@ export function PlanningPoker() {
                       }}
                       className="h-8 text-xs text-center"
                     />
-                    <span className="text-xs text-muted-foreground text-center">{s.label}</span>
-                    <span></span>
+                    <Input value={s.pointsLabel} readOnly className="h-8 text-xs text-center text-muted-foreground" />
                   </div>
                 ))}
+                {/* Preview das cartas com horas */}
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {hoursConfig.map((s) => (
+                    <div
+                      key={s.key}
+                      className="flex flex-col items-center justify-center h-14 w-12 rounded-lg border bg-card gap-0.5"
+                    >
+                      <span className="text-sm font-bold">{s.key}</span>
+                      <span className="text-[10px] text-muted-foreground">{s.hours}h</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             {deckMode === "custom" && (
               <div className="space-y-3">
-                <div className="flex gap-2">
-                  <Input
-                    value={customInput}
-                    onChange={(e) => setCustomInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && customInput.trim()) {
-                        setCustomCards([...customCards, customInput.trim()]);
-                        setCustomInput("");
-                      }
-                    }}
-                    placeholder="Adicione um valor e pressione Enter"
-                    className="h-8 text-sm"
-                  />
-                </div>
+                <Input
+                  value={customInput}
+                  onChange={(e) => setCustomInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && customInput.trim()) {
+                      setCustomCards([...customCards, customInput.trim()]);
+                      setCustomInput("");
+                    }
+                  }}
+                  placeholder="Adicione um valor e pressione Enter"
+                  className="h-8 text-sm"
+                />
                 <div className="flex flex-wrap gap-2">
                   {customCards.map((card, i) => (
                     <Badge
@@ -640,7 +705,7 @@ export function PlanningPoker() {
               </div>
             )}
             <Separator />
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end">
               <Button
                 onClick={startSession}
                 disabled={deckMode === "custom" && customCards.length < 2}
@@ -688,7 +753,6 @@ export function PlanningPoker() {
         </div>
       </div>
 
-      {/* Main grid */}
       <div className="grid grid-cols-12 gap-4">
         {/* Left panel */}
         <div className="col-span-3 space-y-3">
@@ -734,6 +798,7 @@ export function PlanningPoker() {
                     setMyVote(null);
                     setVotes([]);
                     setRevealed(false);
+                    setSelectedConsensus(null);
                   }}
                 >
                   <CardContent className="p-3">
@@ -793,8 +858,8 @@ export function PlanningPoker() {
 
               {votes.length > 0 && (
                 <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-3">
+                  <CardContent className="p-4 space-y-4">
+                    <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-muted-foreground uppercase">
                         Votos ({votes.length})
                       </span>
@@ -809,11 +874,13 @@ export function PlanningPoker() {
                             onClick={forceReveal}
                             className="gap-1 text-xs text-warning border-warning/30"
                           >
-                            <FastForward className="h-3 w-3" /> Forçar Revelação
+                            <FastForward className="h-3 w-3" /> Forçar
                           </Button>
                         </div>
                       )}
                     </div>
+
+                    {/* Lista de votos */}
                     <div className="space-y-1.5">
                       {votes.map((v) => (
                         <div key={v.id} className="flex items-center gap-3 rounded-lg border p-2">
@@ -843,92 +910,198 @@ export function PlanningPoker() {
                           {revealed && (
                             <span className="text-xs text-muted-foreground w-12 text-right">
                               {(() => {
-                                const size = resolveSizeFromVote(v.voteValue);
-                                return size ? `${size.hours}h` : "";
+                                const s = resolveSizeFromVote(v.voteValue);
+                                return s ? `${s.hours}h` : "";
                               })()}
                             </span>
                           )}
                         </div>
                       ))}
                     </div>
+
+                    {/* Painel pós-revelação */}
                     {revealed && consensus && (
-                      <div className="mt-4 space-y-3">
-                        {consensus.hasDivergence && (
-                          <div className="p-2 rounded-lg bg-warning/10 border border-warning/30 flex items-center gap-2">
-                            <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
-                            <span className="text-xs text-warning font-medium">
-                              ⚠️ Alta divergência detectada — considere rediscutir antes de confirmar
-                            </span>
+                      <div className="space-y-4">
+                        {/* Alerta de divergência HIGH */}
+                        {consensus.divergenceLevel === "high" && (
+                          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 flex items-start gap-2">
+                            <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-xs text-destructive font-semibold">
+                                🚨 Alta divergência entre os votos
+                              </p>
+                              <p className="text-[11px] text-destructive/80 mt-0.5">{consensus.divergenceLabel}</p>
+                            </div>
                           </div>
                         )}
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="rounded-lg bg-muted p-3 text-center">
-                            <p className="text-[10px] text-muted-foreground uppercase">Média</p>
-                            <p className="text-lg font-bold">{consensus.avg.toFixed(1)}</p>
+
+                        {/* Alerta de divergência LOW */}
+                        {consensus.divergenceLevel === "low" && (
+                          <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 flex items-start gap-2">
+                            <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-xs text-warning font-semibold">⚠️ Divergência moderada</p>
+                              <p className="text-[11px] text-warning/80 mt-0.5">{consensus.divergenceLabel}</p>
+                            </div>
                           </div>
-                          <div className="rounded-lg bg-muted p-3 text-center">
-                            <p className="text-[10px] text-muted-foreground uppercase">Moda</p>
-                            <p className="text-lg font-bold">{consensus.mode}</p>
-                          </div>
-                          <div className="rounded-lg bg-success/10 border border-success/30 p-3 text-center">
-                            <p className="text-[10px] text-success uppercase">Consenso</p>
-                            <p className="text-lg font-bold text-success">
-                              {consensus.size ? `${consensus.size.label} — ${consensus.size.hours}h` : "—"}
-                            </p>
-                          </div>
-                        </div>
+                        )}
+
+                        {/* Distribuição */}
                         <div>
-                          <p className="text-[10px] text-muted-foreground uppercase mb-1.5">Distribuição</p>
+                          <p className="text-[10px] text-muted-foreground uppercase mb-1.5">Distribuição dos votos</p>
                           <div className="flex flex-wrap gap-2">
                             {Object.entries(consensus.counts)
                               .sort(([, a], [, b]) => b - a)
-                              .map(([val, count]) => (
-                                <Badge key={val} variant="outline" className="text-xs gap-1">
-                                  {cardDisplayValue(val)} × {count}
-                                </Badge>
-                              ))}
+                              .map(([val, count]) => {
+                                const size = resolveSizeFromVote(val);
+                                return (
+                                  <Badge
+                                    key={val}
+                                    variant="outline"
+                                    className={cn(
+                                      "text-xs gap-1",
+                                      val === consensus.suggestedKey && "border-primary text-primary bg-primary/5",
+                                    )}
+                                  >
+                                    {val}
+                                    {size ? ` (${size.hours}h)` : ""} × {count}
+                                    {val === consensus.suggestedKey && <span className="text-[9px] ml-0.5">★</span>}
+                                  </Badge>
+                                );
+                              })}
                           </div>
                         </div>
+
+                        {/* Consenso */}
+                        {consensus.isUnanimous ? (
+                          <div className="rounded-lg bg-success/10 border border-success/30 p-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <ThumbsUp className="h-4 w-4 text-success" />
+                              <span className="text-xs font-semibold text-success">Unanimidade!</span>
+                            </div>
+                            <p className="text-sm font-bold text-success">
+                              {consensus.suggestedSize
+                                ? `${consensus.suggestedSize.key} — ${consensus.suggestedSize.hours}h`
+                                : consensus.suggestedKey}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-semibold uppercase text-muted-foreground">
+                                Consenso da equipe
+                              </p>
+                              {consensus.suggestedKey && consensus.suggestedSize && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  Sugestão (mais votado):
+                                  <span className="font-semibold text-primary ml-1">
+                                    {consensus.suggestedKey} — {consensus.suggestedSize.hours}h ★
+                                  </span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Cards clicáveis — facilitador escolhe o consenso */}
+                            <div className="flex flex-wrap gap-2">
+                              {consensus.allKeys
+                                .filter((k) => !["☕", "∞", "?"].includes(k))
+                                .map((key) => {
+                                  const size = resolveSizeFromVote(key);
+                                  const isSuggested = key === consensus.suggestedKey;
+                                  const isSelected = key === selectedConsensus;
+                                  return (
+                                    <button
+                                      key={key}
+                                      type="button"
+                                      onClick={() => setSelectedConsensus(isSelected ? null : key)}
+                                      className={cn(
+                                        "flex flex-col items-center justify-center h-14 w-12 rounded-lg border-2 text-xs font-bold transition-all cursor-pointer relative",
+                                        isSelected
+                                          ? "border-success bg-success text-success-foreground shadow-md scale-105"
+                                          : isSuggested
+                                            ? "border-primary bg-primary/10 text-primary"
+                                            : "border-border bg-card hover:border-primary/40",
+                                      )}
+                                    >
+                                      <span className="text-sm">{key}</span>
+                                      {size && <span className="text-[9px] font-normal opacity-80">{size.hours}h</span>}
+                                      {isSuggested && !isSelected && (
+                                        <span className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 rounded-full bg-primary text-[8px] text-primary-foreground flex items-center justify-center">
+                                          ★
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                            </div>
+
+                            {selectedConsensus && finalSize ? (
+                              <div className="rounded-lg bg-success/10 border border-success/30 p-2.5 flex items-center justify-between">
+                                <span className="text-xs text-success font-medium flex items-center gap-1">
+                                  <Check className="h-3.5 w-3.5" /> Consenso registrado:
+                                </span>
+                                <span className="text-sm font-bold text-success">
+                                  {finalSize.key} — {finalSize.hours}h
+                                </span>
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-muted-foreground text-center py-1">
+                                👆 Selecione o tamanho acordado pela equipe para liberar o botão confirmar
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </CardContent>
                 </Card>
               )}
 
+              {/* Baralho de votação */}
               <Card>
                 <CardContent className="p-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase mb-3">Escolha sua carta</p>
                   <div className="flex flex-wrap gap-2">
-                    {getDeckCards().map((card) => (
-                      <button
-                        key={card}
-                        type="button"
-                        onClick={() => castVote(card)}
-                        className={cn(
-                          "h-16 w-12 rounded-lg border-2 flex items-center justify-center text-sm font-bold transition-all cursor-pointer",
-                          myVote === card
-                            ? "border-primary bg-primary text-primary-foreground shadow-md scale-105"
-                            : "border-border bg-card hover:border-primary/50 hover:shadow-sm",
-                        )}
-                      >
-                        {cardDisplayValue(card)}
-                      </button>
-                    ))}
+                    {getDeckCards().map((card) => {
+                      const size = deckMode === "hours" ? resolveSizeFromVote(card) : null;
+                      return (
+                        <button
+                          key={card}
+                          type="button"
+                          onClick={() => castVote(card)}
+                          className={cn(
+                            "flex flex-col items-center justify-center h-16 w-12 rounded-lg border-2 text-sm font-bold transition-all cursor-pointer",
+                            myVote === card
+                              ? "border-primary bg-primary text-primary-foreground shadow-md scale-105"
+                              : "border-border bg-card hover:border-primary/50 hover:shadow-sm",
+                          )}
+                        >
+                          <span>{cardDisplayValue(card)}</span>
+                          {size && (
+                            <span
+                              className={cn(
+                                "text-[9px] font-normal mt-0.5",
+                                myVote === card ? "text-primary-foreground/80" : "text-muted-foreground",
+                              )}
+                            >
+                              {size.hours}h
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
             </>
-          ) : /* ✅ NOVO: quando não há HU em votação, exibe o resumo das votadas */
-          votedSummary.items.length > 0 ? (
+          ) : votedSummary.items.length > 0 ? (
             <Card className="border-success/30">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <BarChart2 className="h-4 w-4 text-success" />
-                  Resumo das Estimativas
+                  <BarChart2 className="h-4 w-4 text-success" /> Resumo das Estimativas
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0 space-y-3">
-                {/* Lista de HUs votadas */}
                 <div className="space-y-1.5">
                   {votedSummary.items.map((hu) => (
                     <div
@@ -952,12 +1125,9 @@ export function PlanningPoker() {
                     </div>
                   ))}
                 </div>
-
                 <Separator />
-
-                {/* Totalizador */}
                 <div className="flex items-center justify-between rounded-lg bg-success/10 border border-success/30 px-4 py-3">
-                  <div className="space-y-0.5">
+                  <div>
                     <p className="text-[10px] text-success uppercase font-semibold">Total estimado</p>
                     <p className="text-xs text-muted-foreground">
                       {votedSummary.items.length} HU{votedSummary.items.length !== 1 ? "s" : ""} estimada
@@ -971,9 +1141,8 @@ export function PlanningPoker() {
                     )}
                   </div>
                 </div>
-
                 <p className="text-[11px] text-muted-foreground text-center">
-                  Selecione uma HU pendente para continuar a votação
+                  Selecione uma HU pendente para continuar
                 </p>
               </CardContent>
             </Card>
@@ -1048,7 +1217,6 @@ export function PlanningPoker() {
               <Clock className="h-3 w-3 text-warning" /> {votingCount} em andamento
             </span>
             <span className="flex items-center gap-1">○ {pendingCount} pendentes</span>
-            {/* ✅ NOVO: total de horas no footer */}
             {votedSummary.totalHours > 0 && (
               <>
                 <Separator orientation="vertical" className="h-3" />
@@ -1064,9 +1232,13 @@ export function PlanningPoker() {
                 <Button variant="outline" size="sm" onClick={revote} className="gap-1 text-xs">
                   <RotateCcw className="h-3 w-3" /> Revotar
                 </Button>
-                {consensus?.size && (
-                  <Button size="sm" onClick={() => confirmAndAdvance(consensus.size!.key)} className="gap-1 text-xs">
-                    <Check className="h-3 w-3" /> Confirmar {consensus.size.label} e avançar{" "}
+                {finalKey && finalSize && (
+                  <Button
+                    size="sm"
+                    onClick={() => confirmAndAdvance(finalKey)}
+                    className="gap-1 text-xs bg-success hover:bg-success/90 text-success-foreground"
+                  >
+                    <Check className="h-3 w-3" /> Confirmar {finalSize.key} ({finalSize.hours}h) e avançar
                     <ChevronRight className="h-3 w-3" />
                   </Button>
                 )}
