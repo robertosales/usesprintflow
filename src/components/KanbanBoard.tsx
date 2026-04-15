@@ -45,27 +45,66 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-function DroppableColumn({ id, children }: { id: string; children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+// ✅ NOVO: borda superior colorida por coluna (usa dotColor como referência)
+function getAccentBorder(dotColor: string): string {
+  if (dotColor.includes("slate")) return "border-t-slate-400";
+  if (dotColor.includes("blue")) return "border-t-blue-400";
+  if (dotColor.includes("indigo")) return "border-t-indigo-400";
+  if (dotColor.includes("violet")) return "border-t-violet-400";
+  if (dotColor.includes("amber")) return "border-t-amber-400";
+  if (dotColor.includes("yellow")) return "border-t-yellow-400";
+  if (dotColor.includes("red")) return "border-t-red-400";
+  if (dotColor.includes("rose")) return "border-t-rose-400";
+  if (dotColor.includes("cyan")) return "border-t-cyan-400";
+  if (dotColor.includes("teal")) return "border-t-teal-400";
+  if (dotColor.includes("green")) return "border-t-green-400";
+  if (dotColor.includes("emerald")) return "border-t-emerald-400";
+  if (dotColor.includes("orange")) return "border-t-orange-400";
+  if (dotColor.includes("purple")) return "border-t-purple-400";
+  return "border-t-primary";
+}
+
+// ✅ MELHORADO: feedback visual de "isOver" passado como prop
+function DroppableColumn({
+  id,
+  children,
+  isEmpty,
+  isOver,
+}: {
+  id: string;
+  children: React.ReactNode;
+  isEmpty: boolean;
+  isOver: boolean;
+}) {
+  const { setNodeRef, isOver: dndIsOver } = useDroppable({ id });
+  const over = isOver || dndIsOver;
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-b-lg border border-t-0 min-h-[400px] p-2 space-y-2 transition-colors ${
-        isOver ? "bg-primary/5 border-primary/30" : "bg-muted/30"
-      }`}
+      className={`
+        rounded-b-xl border border-t-0 min-h-[120px] p-2 space-y-2 transition-all duration-150
+        ${over ? "bg-primary/5 border-primary/40 ring-1 ring-primary/20" : "bg-muted/30 border-border/60"}
+      `}
     >
-      {children}
+      {isEmpty ? (
+        <div
+          className={`
+          flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-xs transition-colors
+          ${over ? "border-primary/50 text-primary bg-primary/5" : "border-border/40 text-muted-foreground"}
+        `}
+        >
+          {over ? "Soltar aqui" : "Vazio"}
+        </div>
+      ) : (
+        children
+      )}
     </div>
   );
 }
 
 function DraggableCard({ id, children }: { id: string; children: React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  };
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       {children}
@@ -73,7 +112,6 @@ function DraggableCard({ id, children }: { id: string; children: React.ReactNode
   );
 }
 
-// --- Workload bar ---
 function WorkloadBar({ pct }: { pct: number }) {
   const capped = Math.min(pct, 100);
   const color = pct > 100 ? "bg-destructive" : pct > 80 ? "bg-warning" : "bg-success";
@@ -84,7 +122,6 @@ function WorkloadBar({ pct }: { pct: number }) {
   );
 }
 
-// --- Team Avatar Filter com carga ---
 function TeamAvatarFilter({
   developers,
   activeFilter,
@@ -118,13 +155,13 @@ function TeamAvatarFilter({
           >
             <div
               className={`h-7 w-7 rounded-full text-[11px] font-bold flex items-center justify-center transition-all
-                ${
-                  isActive
-                    ? "bg-primary text-primary-foreground"
-                    : isOverloaded
-                      ? "bg-destructive/15 text-destructive"
-                      : "bg-muted text-muted-foreground"
-                }`}
+              ${
+                isActive
+                  ? "bg-primary text-primary-foreground"
+                  : isOverloaded
+                    ? "bg-destructive/15 text-destructive"
+                    : "bg-muted text-muted-foreground"
+              }`}
             >
               {getInitials(dev.name)}
             </div>
@@ -152,7 +189,6 @@ function TeamAvatarFilter({
   );
 }
 
-// --- Filters Bar ---
 function BoardFilters({
   search,
   setSearch,
@@ -175,22 +211,23 @@ function BoardFilters({
   clearFilters: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    // ✅ NOVO: filtros agrupados em container visual (igual ao Sustentação)
+    <div className="flex items-center gap-2 flex-wrap p-3 bg-muted/30 rounded-lg border border-border/60">
       <div className="relative flex-1 min-w-[180px] max-w-[280px]">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar HU..."
-          className="pl-8 h-8 text-xs"
+          className="pl-8 h-8 text-xs bg-background"
         />
       </div>
       <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-        <SelectTrigger className="h-8 w-[130px] text-xs">
+        <SelectTrigger className="h-8 w-[130px] text-xs bg-background">
           <SelectValue placeholder="Prioridade" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Todas</SelectItem>
+          <SelectItem value="all">Todas prioridades</SelectItem>
           <SelectItem value="critica">Crítica</SelectItem>
           <SelectItem value="alta">Alta</SelectItem>
           <SelectItem value="media">Média</SelectItem>
@@ -199,7 +236,7 @@ function BoardFilters({
       </Select>
       {epics.length > 0 && (
         <Select value={epicFilter} onValueChange={setEpicFilter}>
-          <SelectTrigger className="h-8 w-[140px] text-xs">
+          <SelectTrigger className="h-8 w-[140px] text-xs bg-background">
             <SelectValue placeholder="Épico" />
           </SelectTrigger>
           <SelectContent>
@@ -239,6 +276,8 @@ export function KanbanBoard() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [expandedHU, setExpandedHU] = useState<string | null>(null);
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
+  // ✅ NOVO: rastreia coluna sendo hovereada no drag
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -246,18 +285,12 @@ export function KanbanBoard() {
   const [assigneeFilter, setAssigneeFilter] = useState("all");
 
   const hasFilters = search !== "" || priorityFilter !== "all" || epicFilter !== "all";
-
   const clearFilters = () => {
     setSearch("");
     setPriorityFilter("all");
     setEpicFilter("all");
   };
-
-  // ✅ Fix: toggle limpo sem closure stale
-  const handleAvatarToggle = (id: string) => {
-    setAssigneeFilter(assigneeFilter === id ? "all" : id);
-  };
-
+  const handleAvatarToggle = (id: string) => setAssigneeFilter(assigneeFilter === id ? "all" : id);
   const toggleColumn = (key: string) => {
     setCollapsedColumns((prev) => {
       const next = new Set(prev);
@@ -267,14 +300,12 @@ export function KanbanBoard() {
     });
   };
 
-  // ✅ Fix: gridTemplate dinâmico — colunas retraídas ficam 48px, expandidas dividem 1fr
   const gridTemplate = workflowColumns
-    .map((col) => (collapsedColumns.has(col.key) ? "48px" : "minmax(280px, 1fr)"))
+    .map((col) => (collapsedColumns.has(col.key) ? "48px" : "minmax(260px, 1fr)"))
     .join(" ");
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  // ✅ Fix: assigneeFilter incluído nas dependências do useMemo
   const sprintStories = useMemo(() => {
     if (!activeSprint) return [];
     let stories = userStories.filter((hu) => hu.sprintId === activeSprint.id);
@@ -288,7 +319,6 @@ export function KanbanBoard() {
     return stories;
   }, [activeSprint, userStories, search, priorityFilter, epicFilter, assigneeFilter]);
 
-  // Carga por desenvolvedor (todas as HUs da sprint, sem filtros)
   const workload = useMemo(() => {
     if (!activeSprint) return {};
     const sprintHUs = userStories.filter((hu) => hu.sprintId === activeSprint.id);
@@ -311,6 +341,7 @@ export function KanbanBoard() {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
+    setDragOverColumn(null);
     if (!over || !canMove) return;
     const huId = active.id as string;
     const overId = over.id as string;
@@ -338,7 +369,7 @@ export function KanbanBoard() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {/* ── Cabeçalho ── */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-bold tracking-tight">Board — User Stories</h2>
@@ -350,10 +381,11 @@ export function KanbanBoard() {
         </div>
       </div>
 
-      {/* Team workload + avatar filter */}
+      {/* ── Time + carga ── */}
       {activeSprint && developers.length > 0 && (
-        <div className="flex items-start gap-3 flex-wrap">
-          <span className="text-xs text-muted-foreground mt-2 shrink-0">Time:</span>
+        // ✅ NOVO: container visual para o time (consistência com filtros)
+        <div className="flex items-start gap-3 flex-wrap p-3 bg-muted/20 rounded-lg border border-border/40">
+          <span className="text-xs text-muted-foreground mt-2 shrink-0 font-medium">Time:</span>
           <TeamAvatarFilter
             developers={developers}
             activeFilter={assigneeFilter}
@@ -363,7 +395,7 @@ export function KanbanBoard() {
         </div>
       )}
 
-      {/* Filtros */}
+      {/* ── Filtros ── */}
       {activeSprint && (
         <BoardFilters
           search={search}
@@ -392,25 +424,32 @@ export function KanbanBoard() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          {/* ✅ Fix: gridTemplate dinâmico resolve lacuna das colunas retraídas */}
           <div
-            className="grid gap-2 overflow-x-auto pb-4 scrollbar-thin items-start"
+            className="grid gap-3 overflow-x-auto pb-4 scrollbar-thin items-start"
             style={{ gridTemplateColumns: gridTemplate }}
           >
             {workflowColumns.map((col) => {
               const colHUs = sprintStories.filter((hu) => (hu.status || workflowColumns[0]?.key) === col.key);
               const isCollapsed = collapsedColumns.has(col.key);
+              // ✅ NOVO: borda superior colorida derivada do dotColor da coluna
+              const accentBorder = getAccentBorder(col.dotColor || "");
+
               return (
                 <div key={col.key} className="transition-all duration-300 ease-in-out overflow-hidden">
                   {isCollapsed ? (
+                    // ── Coluna retraída ──
                     <div
-                      className={`rounded-lg border cursor-pointer ${col.colorClass} flex flex-col items-center gap-2 pt-3 pb-2 px-1 h-full min-h-[120px]`}
+                      className={`
+                        rounded-xl border-2 ${accentBorder} cursor-pointer shadow-sm
+                        ${col.colorClass} flex flex-col items-center gap-2 pt-3 pb-2 px-1
+                        min-h-[120px] hover:shadow-md transition-shadow
+                      `}
                       onClick={() => toggleColumn(col.key)}
                       title={`Expandir: ${col.label}`}
                     >
                       <ChevronRight className="h-4 w-4 shrink-0" />
                       <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${col.dotColor}`} />
-                      <span className="text-xs font-bold bg-background/80 rounded-full h-5 min-w-5 flex items-center justify-center px-1.5">
+                      <span className="text-xs font-bold bg-background/80 rounded-full h-5 min-w-5 flex items-center justify-center px-1.5 shadow-sm">
                         {colHUs.length}
                       </span>
                       <span
@@ -421,8 +460,15 @@ export function KanbanBoard() {
                       </span>
                     </div>
                   ) : (
+                    // ── Coluna expandida ──
                     <>
-                      <div className={`rounded-t-lg px-3 py-2.5 ${col.colorClass} border border-b-0`}>
+                      {/* ✅ NOVO: cabeçalho com border-t-2 colorida + rounded-t-xl */}
+                      <div
+                        className={`
+                        rounded-t-xl px-3 py-2.5 shadow-sm
+                        ${col.colorClass} border border-b-0 border-t-2 ${accentBorder}
+                      `}
+                      >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <button
@@ -435,12 +481,14 @@ export function KanbanBoard() {
                             <div className={`h-2.5 w-2.5 rounded-full ${col.dotColor}`} />
                             <span className="text-xs font-semibold uppercase tracking-wider">{col.label}</span>
                           </div>
-                          <span className="text-xs font-bold bg-background/80 rounded-full h-5 min-w-5 flex items-center justify-center px-1.5">
+                          {/* ✅ NOVO: badge do contador com fundo neutro (consistência) */}
+                          <span className="text-xs font-bold bg-background/80 rounded-full h-5 min-w-5 flex items-center justify-center px-1.5 shadow-sm">
                             {colHUs.length}
                           </span>
                         </div>
                       </div>
-                      <DroppableColumn id={col.key}>
+                      {/* ✅ MELHORADO: DroppableColumn agora recebe isEmpty e isOver para o placeholder */}
+                      <DroppableColumn id={col.key} isEmpty={colHUs.length === 0} isOver={dragOverColumn === col.key}>
                         {colHUs.map((hu) => (
                           <DraggableCard key={hu.id} id={hu.id}>
                             <HUCard
@@ -465,7 +513,7 @@ export function KanbanBoard() {
 
           <DragOverlay>
             {activeHU && (
-              <div className="opacity-90 rotate-2 scale-105">
+              <div className="opacity-90 rotate-2 scale-105 shadow-xl">
                 <HUCard
                   hu={activeHU}
                   expanded={false}
@@ -527,10 +575,13 @@ function HUCard({
   const isOver = estimated > 0 && totalHours > estimated;
 
   return (
+    // ✅ NOVO: sombra mais pronunciada + transição suave
     <Card
-      className={`shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${
-        overdue ? "border-destructive border-2 bg-destructive/5" : ""
-      } ${blocked ? "ring-2 ring-warning" : ""}`}
+      className={`
+      shadow-sm hover:shadow-md transition-all duration-150 cursor-grab active:cursor-grabbing
+      ${overdue ? "border-destructive border-2 bg-destructive/5" : "border-border/60"}
+      ${blocked ? "ring-2 ring-warning" : ""}
+    `}
     >
       <CardContent className="p-3 space-y-2">
         <div className="flex items-center gap-1.5 flex-wrap">
