@@ -42,7 +42,7 @@ import {
   SidebarHeader, SidebarFooter, SidebarSeparator, useSidebar,
 } from "@/components/ui/sidebar";
 
-type NavKey = "dashboard" | "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "planning" | "team" | "activities" | "kanban" | "impediments" | "retro" | "metrics" | "workflow" | "custom-fields" | "automations" | "calendar";
+type NavKey = "dashboard" | "teams" | "team-members" | "user-roles" | "backlog" | "epics" | "planning" | "team" | "activities" | "kanban" | "impediments" | "retro" | "metrics" | "workflow" | "custom-fields" | "automations" | "calendar" | "history";
 
 const NAV_PERMISSIONS: Partial<Record<NavKey, Permission>> = {
   teams: 'manage_teams',
