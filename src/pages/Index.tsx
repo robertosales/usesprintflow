@@ -29,7 +29,7 @@ import {
   LayoutDashboard, Users, ListTodo, Columns3, BarChart3, Zap, ShieldAlert,
   Layers, GitBranch, SlidersHorizontal, Wand2,
   LogOut, Building2, UserCircle, UsersRound, ShieldCheck, CalendarDays, Home, Hexagon,
-  Spade, MessageSquare
+  Spade, MessageSquare, History
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasActiveImpediment } from "@/types/sprint";
