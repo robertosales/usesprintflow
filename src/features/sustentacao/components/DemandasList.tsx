@@ -21,7 +21,8 @@ import { useDemandas } from "../hooks/useDemandas";
 import { toast } from "sonner";
 import { DemandaForm } from "./DemandaForm";
 import { DemandaDetail } from "./DemandaDetail";
-import { SITUACAO_LABELS, SITUACAO_COLORS, isDemandaIniciada } from "../types/demanda";
+// ✅ ALTERAÇÃO 1: adicionado getResponsavelAtivo no import
+import { SITUACAO_LABELS, SITUACAO_COLORS, isDemandaIniciada, getResponsavelAtivo } from "../types/demanda";
 import type { Demanda } from "../types/demanda";
 
 export function DemandasList() {
@@ -111,6 +112,7 @@ export function DemandasList() {
                   <TableHead>Projeto</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Situação</TableHead>
+                  {/* ✅ ALTERAÇÃO 2: cabeçalho atualizado */}
                   <TableHead>Responsável</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
@@ -130,14 +132,11 @@ export function DemandasList() {
                         {SITUACAO_LABELS[d.situacao] || d.situacao}
                       </Badge>
                     </TableCell>
+                    {/* ✅ ALTERAÇÃO 3: célula SLA substituída pelo responsável ativo */}
                     <TableCell>
-                      {d.sla === "continuo" ? (
-                        <Badge variant="destructive" className="text-[10px]">
-                          Contínuo
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Padrão</span>
-                      )}
+                      <span className="text-xs">
+                        {getResponsavelAtivo(d) ?? <span className="text-muted-foreground">—</span>}
+                      </span>
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
