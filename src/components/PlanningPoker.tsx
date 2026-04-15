@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
@@ -25,12 +24,10 @@ import {
   Search,
   Play,
   RotateCcw,
-  ChevronLeft,
   ChevronRight,
   Check,
   Settings,
   Users,
-  Copy,
   Eye,
   EyeOff,
   Clock,
@@ -40,6 +37,7 @@ import {
   XCircle,
   AlertTriangle,
   FastForward,
+  BarChart2,
 } from "lucide-react";
 import type { UserStory } from "@/types/sprint";
 
@@ -70,7 +68,7 @@ interface Participant {
 }
 
 export function PlanningPoker() {
-  const { userStories, activeSprint, sprints, updateUserStory, refreshAll } = useSprint();
+  const { userStories, activeSprint, updateUserStory, refreshAll } = useSprint();
   const { currentTeamId, profile } = useAuth();
 
   const [session, setSession] = useState<PlanningSession | null>(null);
@@ -116,6 +114,20 @@ export function PlanningPoker() {
     );
   }, [categorizedStories.pending, searchTerm]);
 
+  // ✅ NOVO: resumo das HUs votadas com total de horas
+  const votedSummary = useMemo(() => {
+    const items = categorizedStories.voted.map((hu) => ({
+      code: hu.code,
+      title: hu.title,
+      sizeReference: hu.sizeReference,
+      hours: hu.estimatedHours ?? 0,
+      storyPoints: hu.storyPoints,
+    }));
+    const totalHours = items.reduce((sum, hu) => sum + hu.hours, 0);
+    const totalPoints = items.reduce((sum, hu) => sum + (hu.storyPoints ?? 0), 0);
+    return { items, totalHours, totalPoints };
+  }, [categorizedStories.voted]);
+
   useEffect(() => {
     const loadProfiles = async () => {
       const { data } = await supabase.from("profiles").select("user_id, display_name");
@@ -151,16 +163,13 @@ export function PlanningPoker() {
         createdBy: s.created_by,
       });
       setDeckMode(s.deck_mode as DeckMode);
-      if (s.deck_config && Array.isArray(s.deck_config)) {
-        setCustomCards(s.deck_config as string[]);
-      }
+      if (s.deck_config && Array.isArray(s.deck_config)) setCustomCards(s.deck_config as string[]);
     }
   }, [currentTeamId, activeSprint]);
 
   const loadParticipants = useCallback(async () => {
     if (!session) return;
     const { data } = await supabase.from("planning_participants").select("*").eq("session_id", session.id);
-
     if (data) {
       setParticipants(
         data.map((p: any) => ({
@@ -181,7 +190,6 @@ export function PlanningPoker() {
       .select("*")
       .eq("session_id", session.id)
       .eq("hu_id", currentHuId);
-
     if (data) {
       setVotes(
         data.map((v: any) => ({
@@ -214,24 +222,14 @@ export function PlanningPoker() {
       .channel(`planning-${session.id}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "planning_votes",
-          filter: `session_id=eq.${session.id}`,
-        },
+        { event: "*", schema: "public", table: "planning_votes", filter: `session_id=eq.${session.id}` },
         () => {
           loadVotes();
         },
       )
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "planning_participants",
-          filter: `session_id=eq.${session.id}`,
-        },
+        { event: "*", schema: "public", table: "planning_participants", filter: `session_id=eq.${session.id}` },
         () => {
           loadParticipants();
         },
@@ -251,19 +249,15 @@ export function PlanningPoker() {
         .eq("session_id", sessionId)
         .eq("user_id", userId)
         .limit(1);
-
       if (existing && existing.length > 0) {
         await supabase
           .from("planning_participants")
           .update({ is_online: true, last_seen_at: new Date().toISOString() })
           .eq("id", existing[0].id);
       } else {
-        await supabase.from("planning_participants").insert({
-          session_id: sessionId,
-          user_id: userId,
-          is_facilitator: isCreator,
-          is_online: true,
-        });
+        await supabase
+          .from("planning_participants")
+          .insert({ session_id: sessionId, user_id: userId, is_facilitator: isCreator, is_online: true });
       }
     },
     [userId],
@@ -287,7 +281,6 @@ export function PlanningPoker() {
       })
       .select()
       .single();
-
     if (error) {
       toast.error("Erro ao iniciar sessão");
       return;
@@ -314,13 +307,9 @@ export function PlanningPoker() {
       .eq("session_id", session.id)
       .eq("hu_id", currentHuId)
       .eq("user_id", userId);
-    await supabase.from("planning_votes").insert({
-      session_id: session.id,
-      hu_id: currentHuId,
-      user_id: userId,
-      vote_value: value,
-      revealed: false,
-    });
+    await supabase
+      .from("planning_votes")
+      .insert({ session_id: session.id, hu_id: currentHuId, user_id: userId, vote_value: value, revealed: false });
     setMyVote(value);
   };
 
@@ -339,13 +328,9 @@ export function PlanningPoker() {
     const voterIds = new Set(votes.map((v) => v.userId));
     const nonVoters = participants.filter((p) => !voterIds.has(p.userId));
     for (const p of nonVoters) {
-      await supabase.from("planning_votes").insert({
-        session_id: session.id,
-        hu_id: currentHuId,
-        user_id: p.userId,
-        vote_value: "—",
-        revealed: true,
-      });
+      await supabase
+        .from("planning_votes")
+        .insert({ session_id: session.id, hu_id: currentHuId, user_id: p.userId, vote_value: "—", revealed: true });
     }
     await supabase
       .from("planning_votes")
@@ -367,13 +352,11 @@ export function PlanningPoker() {
 
   const confirmAndAdvance = async (sizeKey: string) => {
     if (!currentHuId || !userId) return;
-    // 🔧 FIX RISCO 2: usa hoursConfig se deckMode === "hours"
     const size =
       deckMode === "hours"
         ? (hoursConfig.find((s) => s.key === sizeKey) ?? getSizeByKey(sizeKey))
         : getSizeByKey(sizeKey);
     if (!size) return;
-
     await updateUserStory(currentHuId, {
       storyPoints: size.points,
       sizeReference: size.key,
@@ -382,7 +365,6 @@ export function PlanningPoker() {
       votedAt: new Date().toISOString(),
       votedBy: userId,
     } as any);
-
     toast.success(`HU confirmada: ${size.label} — ${size.hours}h`);
     const nextPending = sprintStories.find(
       (hu) => hu.id !== currentHuId && hu.planningStatus !== "voted" && !hu.sizeReference,
@@ -415,7 +397,7 @@ export function PlanningPoker() {
           .from("user_stories")
           .update({
             planning_status: "pending",
-            story_points: null, // 🔧 FIX RISCO 3: null em vez de 0
+            story_points: null,
             size_reference: null,
             estimated_hours: null,
             voted_at: null,
@@ -429,7 +411,6 @@ export function PlanningPoker() {
         .from("planning_sessions")
         .update({ status: "cancelled", finished_at: new Date().toISOString() })
         .eq("id", session.id);
-
       setSession(null);
       setCurrentHuId(null);
       setMyVote(null);
@@ -450,12 +431,10 @@ export function PlanningPoker() {
     return customCards;
   };
 
-  // 🔧 FIX RISCO 2: resolve size respeitando hoursConfig no modo hours
   const resolveSizeFromVote = useCallback(
     (voteValue: string): SizeReference | null => {
-      if (deckMode === "hours") {
+      if (deckMode === "hours")
         return (hoursConfig.find((s) => s.key === voteValue) as SizeReference) ?? getSizeByKey(voteValue);
-      }
       const num = parseFloat(voteValue === "½" ? "0.5" : voteValue);
       if (isNaN(num)) return null;
       return getSizeByPoints(num);
@@ -463,7 +442,6 @@ export function PlanningPoker() {
     [deckMode, hoursConfig],
   );
 
-  // 🔧 FIX COMPLETO: getConsensus agora lida corretamente com modo hours (cartas são letras, não números)
   const getConsensus = useCallback((): {
     size: SizeReference | null;
     counts: Record<string, number>;
@@ -473,12 +451,9 @@ export function PlanningPoker() {
   } => {
     const counts: Record<string, number> = {};
     const numericVotes: number[] = [];
-
     votes.forEach((v) => {
       if (v.voteValue === "—") return;
       counts[v.voteValue] = (counts[v.voteValue] || 0) + 1;
-
-      // 🔧 modo hours: pontos vêm do hoursConfig, não de parseFloat da letra
       let num: number;
       if (deckMode === "hours") {
         const s = hoursConfig.find((h) => h.key === v.voteValue);
@@ -488,11 +463,8 @@ export function PlanningPoker() {
       }
       if (!isNaN(num)) numericVotes.push(num);
     });
-
     if (numericVotes.length === 0) return { size: null, counts, avg: 0, mode: "—", hasDivergence: false };
-
     const avg = numericVotes.reduce((s, n) => s + n, 0) / numericVotes.length;
-
     let maxCount = 0;
     let modeVal = "";
     Object.entries(counts).forEach(([val, count]) => {
@@ -501,45 +473,27 @@ export function PlanningPoker() {
         modeVal = val;
       }
     });
-
     const min = Math.min(...numericVotes);
     const max = Math.max(...numericVotes);
     const hasDivergence = max > 0 && max / Math.max(min, 0.5) >= 3;
-
     const uniqueValues = [...new Set(votes.filter((v) => v.voteValue !== "—").map((v) => v.voteValue))];
-
-    // Consenso unânime
-    if (uniqueValues.length === 1) {
-      return {
-        size: resolveSizeFromVote(uniqueValues[0]),
-        counts,
-        avg,
-        mode: modeVal,
-        hasDivergence: false,
-      };
-    }
-
-    // Consenso por mediana
+    if (uniqueValues.length === 1)
+      return { size: resolveSizeFromVote(uniqueValues[0]), counts, avg, mode: modeVal, hasDivergence: false };
     numericVotes.sort((a, b) => a - b);
     const mid = Math.floor(numericVotes.length / 2);
     const median = numericVotes.length % 2 !== 0 ? numericVotes[mid] : (numericVotes[mid - 1] + numericVotes[mid]) / 2;
-
     let resolvedSize: SizeReference | null = null;
-
     if (deckMode === "hours") {
-      // 🔧 modo hours: pega o tamanho cujos pontos são mais próximos da mediana
       resolvedSize = hoursConfig.reduce((prev, curr) =>
         Math.abs(curr.points - median) < Math.abs(prev.points - median) ? curr : prev,
       ) as SizeReference;
     } else {
-      // 🔧 FIX RISCO 4: se getSizeByPoints retornar null, pega o mais próximo
       resolvedSize =
         getSizeByPoints(median) ??
         SIZE_REFERENCES.reduce((prev, curr) =>
           Math.abs(curr.points - median) < Math.abs(prev.points - median) ? curr : prev,
         );
     }
-
     return { size: resolvedSize || null, counts, avg, mode: modeVal, hasDivergence };
   }, [votes, deckMode, hoursConfig, resolveSizeFromVote]);
 
@@ -588,7 +542,6 @@ export function PlanningPoker() {
             </p>
           </div>
         </div>
-
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Configurar Baralho</CardTitle>
@@ -614,7 +567,6 @@ export function PlanningPoker() {
                 </button>
               ))}
             </div>
-
             {deckMode === "fibonacci" && (
               <div className="flex flex-wrap gap-2">
                 {FIBONACCI_DECK.map((card) => (
@@ -627,7 +579,6 @@ export function PlanningPoker() {
                 ))}
               </div>
             )}
-
             {deckMode === "hours" && (
               <div className="space-y-2">
                 <div className="grid grid-cols-5 gap-2 text-center text-xs font-medium text-muted-foreground">
@@ -657,7 +608,6 @@ export function PlanningPoker() {
                 ))}
               </div>
             )}
-
             {deckMode === "custom" && (
               <div className="space-y-3">
                 <div className="flex gap-2">
@@ -689,7 +639,6 @@ export function PlanningPoker() {
                 {customCards.length < 2 && <p className="text-xs text-muted-foreground">Mínimo 2 cartas necessárias</p>}
               </div>
             )}
-
             <Separator />
             <div className="flex justify-end gap-3">
               <Button
@@ -752,7 +701,6 @@ export function PlanningPoker() {
               className="pl-8 h-8 text-xs"
             />
           </div>
-
           <ScrollArea className="h-[calc(100vh-380px)]">
             <div className="space-y-2 pr-2">
               {categorizedStories.voting.map((hu) => (
@@ -866,7 +814,6 @@ export function PlanningPoker() {
                         </div>
                       )}
                     </div>
-
                     <div className="space-y-1.5">
                       {votes.map((v) => (
                         <div key={v.id} className="flex items-center gap-3 rounded-lg border p-2">
@@ -904,7 +851,6 @@ export function PlanningPoker() {
                         </div>
                       ))}
                     </div>
-
                     {revealed && consensus && (
                       <div className="mt-4 space-y-3">
                         {consensus.hasDivergence && (
@@ -972,6 +918,65 @@ export function PlanningPoker() {
                 </CardContent>
               </Card>
             </>
+          ) : /* ✅ NOVO: quando não há HU em votação, exibe o resumo das votadas */
+          votedSummary.items.length > 0 ? (
+            <Card className="border-success/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <BarChart2 className="h-4 w-4 text-success" />
+                  Resumo das Estimativas
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-0 space-y-3">
+                {/* Lista de HUs votadas */}
+                <div className="space-y-1.5">
+                  {votedSummary.items.map((hu) => (
+                    <div
+                      key={hu.code}
+                      className="flex items-center justify-between rounded-lg border border-success/20 bg-success/5 px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Badge variant="outline" className="font-mono text-[10px] shrink-0">
+                          {hu.code}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground truncate">{hu.title}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        {hu.sizeReference && (
+                          <Badge className="bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold">
+                            {hu.sizeReference}
+                          </Badge>
+                        )}
+                        <span className="text-xs font-semibold text-success w-10 text-right">{hu.hours}h</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <Separator />
+
+                {/* Totalizador */}
+                <div className="flex items-center justify-between rounded-lg bg-success/10 border border-success/30 px-4 py-3">
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] text-success uppercase font-semibold">Total estimado</p>
+                    <p className="text-xs text-muted-foreground">
+                      {votedSummary.items.length} HU{votedSummary.items.length !== 1 ? "s" : ""} estimada
+                      {votedSummary.items.length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-success">{votedSummary.totalHours}h</p>
+                    {votedSummary.totalPoints > 0 && (
+                      <p className="text-[10px] text-muted-foreground">{votedSummary.totalPoints} pts</p>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground text-center">
+                  Selecione uma HU pendente para continuar a votação
+                </p>
+              </CardContent>
+            </Card>
           ) : (
             <div className="flex flex-col items-center justify-center py-20 space-y-4">
               <Play className="h-14 w-14 text-muted-foreground/30" />
@@ -1043,6 +1048,15 @@ export function PlanningPoker() {
               <Clock className="h-3 w-3 text-warning" /> {votingCount} em andamento
             </span>
             <span className="flex items-center gap-1">○ {pendingCount} pendentes</span>
+            {/* ✅ NOVO: total de horas no footer */}
+            {votedSummary.totalHours > 0 && (
+              <>
+                <Separator orientation="vertical" className="h-3" />
+                <span className="flex items-center gap-1 text-success font-semibold">
+                  <BarChart2 className="h-3 w-3" /> {votedSummary.totalHours}h estimadas
+                </span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {currentHuId && revealed && (
@@ -1052,7 +1066,7 @@ export function PlanningPoker() {
                 </Button>
                 {consensus?.size && (
                   <Button size="sm" onClick={() => confirmAndAdvance(consensus.size!.key)} className="gap-1 text-xs">
-                    <Check className="h-3 w-3" /> Confirmar {consensus.size.label} e avançar
+                    <Check className="h-3 w-3" /> Confirmar {consensus.size.label} e avançar{" "}
                     <ChevronRight className="h-3 w-3" />
                   </Button>
                 )}
