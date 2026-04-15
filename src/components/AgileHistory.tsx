@@ -22,8 +22,6 @@ import {
   Users,
   CheckCircle2,
   XCircle,
-  ChevronDown,
-  ChevronRight,
   AlertTriangle,
   ThumbsUp,
   Calendar,
@@ -95,27 +93,18 @@ const RETRO_MODEL_LABELS: Record<string, string> = {
   kpt: "KPT",
 };
 
-const SIZE_COLORS: Record<SizeKey, { badge: string; bar: string; text: string }> = {
-  P: {
-    badge: "bg-emerald-500/15 text-emerald-600 border-emerald-300",
-    bar: "bg-emerald-400",
-    text: "text-emerald-600",
-  },
-  M: { badge: "bg-blue-500/15 text-blue-600 border-blue-300", bar: "bg-blue-400", text: "text-blue-600" },
-  G: { badge: "bg-yellow-500/15 text-yellow-600 border-yellow-300", bar: "bg-yellow-400", text: "text-yellow-600" },
-  GG: { badge: "bg-orange-500/15 text-orange-600 border-orange-300", bar: "bg-orange-400", text: "text-orange-600" },
-  XG: { badge: "bg-red-500/15 text-red-600 border-red-300", bar: "bg-red-400", text: "text-red-600" },
+const SIZE_COLORS: Record<SizeKey, { badge: string; bar: string }> = {
+  P: { badge: "bg-emerald-500/15 text-emerald-600 border-emerald-300", bar: "bg-emerald-400" },
+  M: { badge: "bg-blue-500/15 text-blue-600 border-blue-300", bar: "bg-blue-400" },
+  G: { badge: "bg-yellow-500/15 text-yellow-600 border-yellow-300", bar: "bg-yellow-400" },
+  GG: { badge: "bg-orange-500/15 text-orange-600 border-orange-300", bar: "bg-orange-400" },
+  XG: { badge: "bg-red-500/15 text-red-600 border-red-300", bar: "bg-red-400" },
 };
 
 const HOURS_MAP: Record<SizeKey, number> = { P: 4, M: 6, G: 12, GG: 16, XG: 24 };
 const POINTS_MAP: Record<SizeKey, number> = { P: 2, M: 3, G: 6, GG: 13, XG: 21 };
 const SIZE_KEYS: SizeKey[] = ["P", "M", "G", "GG", "XG"];
-
-const DECK_MODE_LABELS: Record<string, string> = {
-  fibonacci: "Fibonacci",
-  hours: "Horas",
-  custom: "Custom",
-};
+const DECK_MODE_LABELS: Record<string, string> = { fibonacci: "Fibonacci", hours: "Horas", custom: "Custom" };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -147,7 +136,6 @@ function classifyVoteToSize(value: string): SizeKey | null {
   return map[value] ?? null;
 }
 
-// Retorna o voto mais frequente (moda); em empate usa o menor valor
 function getModeVote(voteValues: string[]): string {
   const freq: Record<string, number> = {};
   voteValues.forEach((v) => {
@@ -158,7 +146,6 @@ function getModeVote(voteValues: string[]): string {
     .filter(([, f]) => f === maxFreq)
     .map(([v]) => v);
   if (candidates.length === 1) return candidates[0];
-  // empate: retorna o menor numericamente
   const nums = candidates
     .map((v) => parseFloat(v === "½" ? "0.5" : v))
     .filter((n) => !isNaN(n))
@@ -169,19 +156,13 @@ function getModeVote(voteValues: string[]): string {
 function calcDivergenceLevel(voteValues: string[], deckMode: string): "none" | "low" | "high" {
   const unique = [...new Set(voteValues.filter((v) => v !== "—"))];
   if (unique.length <= 1) return "none";
-
-  let hours: number[];
-  if (deckMode === "hours") {
-    hours = unique.map((k) => HOURS_MAP[k as SizeKey] ?? 0).filter((h) => h > 0);
-  } else {
-    hours = unique
-      .map((v) => {
-        const size = classifyVoteToSize(v);
-        return size ? HOURS_MAP[size] : 0;
-      })
-      .filter((h) => h > 0);
-  }
-
+  const hours = unique
+    .map((v) => {
+      if (deckMode === "hours") return HOURS_MAP[v as SizeKey] ?? 0;
+      const size = classifyVoteToSize(v);
+      return size ? HOURS_MAP[size] : 0;
+    })
+    .filter((h) => h > 0);
   if (hours.length < 2) return "none";
   const ratio = Math.max(...hours) / Math.max(Math.min(...hours), 1);
   if (ratio >= 2.5) return "high";
@@ -191,7 +172,6 @@ function calcDivergenceLevel(voteValues: string[], deckMode: string): "none" | "
 
 // ─── Sub-componentes ─────────────────────────────────────────────────────────
 
-// Métrica simples reutilizável
 function MetricCard({ label, value, valueClass }: { label: string; value: string | number; valueClass?: string }) {
   return (
     <Card>
@@ -203,7 +183,6 @@ function MetricCard({ label, value, valueClass }: { label: string; value: string
   );
 }
 
-// Badge de status
 function StatusBadge({ status }: { status: "finished" | "cancelled" }) {
   return (
     <Badge
@@ -228,7 +207,6 @@ function StatusBadge({ status }: { status: "finished" | "cancelled" }) {
   );
 }
 
-// Barra de distribuição de tamanhos
 function SizeDistributionBar({ score }: { score: SprintScoreBreakdown }) {
   if (score.total === 0) return null;
   return (
@@ -247,16 +225,7 @@ function SizeDistributionBar({ score }: { score: SprintScoreBreakdown }) {
   );
 }
 
-// Card de pontuação agrupada por sprint
-function SprintScoreCard({
-  sprintId,
-  sprintName,
-  score,
-}: {
-  sprintId: string;
-  sprintName: string;
-  score: SprintScoreBreakdown;
-}) {
+function SprintScoreCard({ sprintName, score }: { sprintName: string; score: SprintScoreBreakdown }) {
   if (!score || score.total === 0) return null;
   return (
     <Card className="mb-4 border-primary/20 bg-primary/5">
@@ -313,45 +282,18 @@ function SprintScoreCard({
   );
 }
 
-// ─── Card de Sessão Planning (novo design) ────────────────────────────────────
-
 function PlanningSessionCard({
   session,
   profiles,
   onView,
-  isExpanded,
-  onToggle,
 }: {
   session: PlanningSessionHistory;
   profiles: Record<string, string>;
   onView: () => void;
-  isExpanded?: boolean;
-  onToggle?: () => void;
 }) {
-  const isCancelled = session.status === "cancelled";
-
-  if (isCancelled) {
-    return (
-      <div className="flex items-center justify-between px-4 py-2.5 rounded-lg border border-dashed border-muted-foreground/20 bg-muted/30 text-muted-foreground">
-        <div className="flex items-center gap-3 text-xs">
-          <XCircle className="h-3.5 w-3.5 text-destructive/50" />
-          <span>{formatDate(session.createdAt)}</span>
-          <span className="font-medium">{session.sprintName}</span>
-          <Badge variant="outline" className="text-[9px] bg-destructive/10 text-destructive/60 border-destructive/20">
-            Cancelada
-          </Badge>
-        </div>
-        <Button variant="ghost" size="sm" className="h-6 text-xs gap-1 opacity-50 hover:opacity-100" onClick={onView}>
-          <Eye className="h-3 w-3" />
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <Card className="border-success/20 hover:border-success/40 transition-colors">
       <CardContent className="p-0">
-        {/* Header do card */}
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -362,34 +304,24 @@ function PlanningSessionCard({
             <span className="text-sm font-semibold">{session.sprintName}</span>
             <StatusBadge status={session.status} />
           </div>
-
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-3 text-xs text-muted-foreground mr-2">
-              <span className="flex items-center gap-1">
-                <Hash className="h-3 w-3" />
-                {session.husVoted} HUs
-              </span>
-              <span className="flex items-center gap-1">
-                <Users className="h-3 w-3" />
-                {session.participantCount}
-              </span>
-              <span className="flex items-center gap-1 font-semibold text-success">
-                <Clock className="h-3 w-3" />
-                {session.totalHours}h
-              </span>
-              <span className="text-[10px] text-muted-foreground">
-                {DECK_MODE_LABELS[session.deckMode] ?? session.deckMode}
-              </span>
-              <span className="text-[10px] text-muted-foreground">{profiles[session.createdBy] ?? "—"}</span>
-            </div>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground mr-2">
+            <span className="flex items-center gap-1">
+              <Hash className="h-3 w-3" />
+              {session.husVoted} HUs
+            </span>
+            <span className="flex items-center gap-1">
+              <Users className="h-3 w-3" />
+              {session.participantCount}
+            </span>
+            <span className="flex items-center gap-1 font-semibold text-success">
+              <Clock className="h-3 w-3" />
+              {session.totalHours}h
+            </span>
+            <span>{DECK_MODE_LABELS[session.deckMode] ?? session.deckMode}</span>
+            <span>{profiles[session.createdBy] ?? "—"}</span>
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={onView}>
               <Eye className="h-3 w-3" /> Ver
             </Button>
-            {onToggle && (
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onToggle}>
-                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              </Button>
-            )}
           </div>
         </div>
       </CardContent>
@@ -412,7 +344,6 @@ export function AgileHistory() {
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [sprintScores, setSprintScores] = useState<Record<string, SprintScoreBreakdown>>({});
 
-  // Detail dialog
   const [detailSession, setDetailSession] = useState<PlanningSessionHistory | RetroSessionHistory | null>(null);
   const [detailType, setDetailType] = useState<"planning" | "retro">("planning");
   const [detailHuSummaries, setDetailHuSummaries] = useState<HuVoteSummary[]>([]);
@@ -438,7 +369,7 @@ export function AgileHistory() {
       .from("planning_sessions")
       .select("*")
       .eq("team_id", currentTeamId)
-      .in("status", ["finished", "cancelled"])
+      .eq("status", "finished") // ✅ só finished — canceladas não são exibidas
       .order("created_at", { ascending: false });
     if (!data) return;
 
@@ -455,7 +386,7 @@ export function AgileHistory() {
       const uniqueHus = new Set(votes?.map((v) => v.hu_id) || []);
       let sessionTotalHours = 0;
 
-      if (s.status === "finished" && votes?.length) {
+      if (votes?.length) {
         const sprintId = s.sprint_id;
         if (!scores[sprintId]) {
           scores[sprintId] = { P: 0, M: 0, G: 0, GG: 0, XG: 0, total: 0, totalPoints: 0, totalHours: 0 };
@@ -468,9 +399,16 @@ export function AgileHistory() {
         });
 
         Object.values(byHu).forEach((huVotes) => {
-          const modeVote = getModeVote(huVotes.filter((v) => v !== "—"));
-          const size = classifyVoteToSize(modeVote) ?? (s.deck_mode === "hours" ? (modeVote as SizeKey) : null);
-          if (size && HOURS_MAP[size]) {
+          const validVotes = huVotes.filter((v) => v !== "—");
+          if (!validVotes.length) return;
+          const modeVote = getModeVote(validVotes);
+          const size: SizeKey | null =
+            s.deck_mode === "hours"
+              ? HOURS_MAP[modeVote as SizeKey]
+                ? (modeVote as SizeKey)
+                : null
+              : classifyVoteToSize(modeVote);
+          if (size) {
             scores[sprintId][size]++;
             scores[sprintId].total++;
             scores[sprintId].totalPoints += POINTS_MAP[size];
@@ -483,9 +421,9 @@ export function AgileHistory() {
       sessions.push({
         id: s.id,
         sprintId: s.sprint_id,
-        sprintName: sprint?.name || "Sprint desconhecida",
+        sprintName: sprint?.name ?? "Sprint desconhecida",
         deckMode: s.deck_mode as DeckMode,
-        status: s.status as "finished" | "cancelled",
+        status: "finished",
         createdAt: s.created_at,
         finishedAt: s.finished_at,
         createdBy: s.created_by,
@@ -519,7 +457,7 @@ export function AgileHistory() {
       sessions.push({
         id: s.id,
         sprintId: s.sprint_id,
-        sprintName: sprint?.name || "Sprint desconhecida",
+        sprintName: sprint?.name ?? "Sprint desconhecida",
         model: s.model,
         status: s.status as "finished" | "cancelled",
         createdAt: s.created_at,
@@ -537,7 +475,7 @@ export function AgileHistory() {
     Promise.all([loadProfiles(), loadPlanningSessions(), loadRetroSessions()]).finally(() => setLoading(false));
   }, [loadProfiles, loadPlanningSessions, loadRetroSessions]);
 
-  // ─── Filtros ───────────────────────────────────────────────────────────────
+  // ─── Filtros ──────────────────────────────────────────────────────────────
 
   const filteredPlanning = useMemo(() => {
     let list = planningSessions;
@@ -561,35 +499,62 @@ export function AgileHistory() {
     return list;
   }, [retroSessions, sprintFilter, searchTerm]);
 
-  // ─── Métricas ──────────────────────────────────────────────────────────────
+  // ─── Métricas ─────────────────────────────────────────────────────────────
 
   const planningMetrics = useMemo(() => {
-    const finished = planningSessions.filter((s) => s.status === "finished");
-    const totalHus = finished.reduce((sum, s) => sum + s.husVoted, 0);
-    const totalParticipants = finished.reduce((sum, s) => sum + s.participantCount, 0);
-    const totalHours = finished.reduce((sum, s) => sum + s.totalHours, 0);
+    // Métricas sempre baseadas nas sessões filtradas
+    const base = filteredPlanning;
+    const totalHus = base.reduce((sum, s) => sum + s.husVoted, 0);
+    const totalParticipants = base.reduce((sum, s) => sum + s.participantCount, 0);
+    const totalHours = base.reduce((sum, s) => sum + s.totalHours, 0);
     return {
-      sessions: finished.length,
-      avgHusPerSession: finished.length > 0 ? (totalHus / finished.length).toFixed(1) : "0",
-      avgParticipants: finished.length > 0 ? (totalParticipants / finished.length).toFixed(1) : "0",
+      sessions: base.length,
+      avgHusPerSession: base.length > 0 ? (totalHus / base.length).toFixed(1) : "0",
+      avgParticipants: base.length > 0 ? (totalParticipants / base.length).toFixed(1) : "0",
       totalHours,
-      cancelled: planningSessions.filter((s) => s.status === "cancelled").length,
     };
-  }, [planningSessions]);
+  }, [filteredPlanning]);
 
   const retroMetrics = useMemo(() => {
-    const finished = retroSessions.filter((s) => s.status === "finished");
+    const finished = filteredRetro.filter((s) => s.status === "finished");
     const totalCards = finished.reduce((sum, s) => sum + s.cardCount, 0);
     const totalActions = finished.reduce((sum, s) => sum + s.actionCount, 0);
     return {
       sessions: finished.length,
       avgCards: finished.length > 0 ? (totalCards / finished.length).toFixed(1) : "0",
       avgActions: finished.length > 0 ? (totalActions / finished.length).toFixed(1) : "0",
-      cancelled: retroSessions.filter((s) => s.status === "cancelled").length,
+      cancelled: filteredRetro.filter((s) => s.status === "cancelled").length,
     };
-  }, [retroSessions]);
+  }, [filteredRetro]);
 
-  // ─── Detalhes ──────────────────────────────────────────────────────────────
+  // ─── Última sessão concluída por sprint ───────────────────────────────────
+
+  const lastSessionPerSprint = useMemo(() => {
+    const seen = new Set<string>();
+    return filteredPlanning.filter((s) => {
+      if (seen.has(s.sprintId)) return false;
+      seen.add(s.sprintId);
+      return true;
+    });
+  }, [filteredPlanning]);
+
+  // ─── Score da sprint selecionada ──────────────────────────────────────────
+
+  // Quando "all": soma os scores de todas as sprints presentes nos filteredPlanning
+  const activeScore = useMemo((): SprintScoreBreakdown | null => {
+    if (sprintFilter !== "all") {
+      return sprintScores[sprintFilter] ?? null;
+    }
+    // "all" → não exibe o card (retorna null)
+    return null;
+  }, [sprintFilter, sprintScores]);
+
+  const activeSprintName = useMemo(() => {
+    if (sprintFilter === "all") return "";
+    return sprints.find((s) => s.id === sprintFilter)?.name ?? "Sprint";
+  }, [sprintFilter, sprints]);
+
+  // ─── Detalhes ─────────────────────────────────────────────────────────────
 
   const openPlanningDetail = async (session: PlanningSessionHistory) => {
     setDetailType("planning");
@@ -606,7 +571,6 @@ export function AgileHistory() {
       return;
     }
 
-    // Busca títulos/códigos das HUs
     const huIds = [...new Set(votes.map((v) => v.hu_id))];
     const { data: huData } = await supabase.from("user_stories").select("id, code, title").in("id", huIds);
     const huMap: Record<string, { code: string; title: string }> = {};
@@ -614,7 +578,6 @@ export function AgileHistory() {
       huMap[hu.id] = { code: hu.code, title: hu.title };
     });
 
-    // Agrupa votos por HU e calcula consenso/divergência
     const byHu: Record<string, any[]> = {};
     votes.forEach((v) => {
       if (!byHu[v.hu_id]) byHu[v.hu_id] = [];
@@ -624,24 +587,23 @@ export function AgileHistory() {
     const summaries: HuVoteSummary[] = Object.entries(byHu).map(([huId, huVotes]) => {
       const validVotes = huVotes.filter((v) => v.vote_value !== "—");
       const modeVote = getModeVote(validVotes.map((v) => v.vote_value));
-      const consensusKey =
+      const consensusKey: string | null =
         session.deckMode === "hours"
           ? HOURS_MAP[modeVote as SizeKey]
             ? modeVote
             : null
-          : classifyVoteToSize(modeVote);
+          : (classifyVoteToSize(modeVote) as string | null);
       const consensusHours = consensusKey ? (HOURS_MAP[consensusKey as SizeKey] ?? 0) : 0;
       const divergence = calcDivergenceLevel(
         validVotes.map((v) => v.vote_value),
         session.deckMode,
       );
-
       return {
         huId,
         huCode: huMap[huId]?.code ?? huId.slice(0, 8) + "...",
         huTitle: huMap[huId]?.title ?? "—",
         votes: huVotes.map((v) => ({ userId: v.user_id, value: v.vote_value })),
-        consensusKey: consensusKey as string | null,
+        consensusKey,
         consensusHours,
         hadDivergence: divergence !== "none",
       };
@@ -668,7 +630,7 @@ export function AgileHistory() {
     setDetailActions([]);
   };
 
-  // ─── Loading ───────────────────────────────────────────────────────────────
+  // ─── Loading ──────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -677,12 +639,6 @@ export function AgileHistory() {
       </div>
     );
   }
-
-  // ─── Sprint IDs únicos para os cards de pontuação ─────────────────────────
-
-  const finishedSprintIds = [
-    ...new Set(filteredPlanning.filter((s) => s.status === "finished").map((s) => s.sprintId)),
-  ];
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -733,70 +689,46 @@ export function AgileHistory() {
           </TabsTrigger>
         </TabsList>
 
-        {/* ── Tab Planning ──────────────────────────────────────────────── */}
+        {/* ── Tab Planning ───────────────────────────────────────────── */}
         <TabsContent value="planning" className="space-y-4 mt-4">
-          {/* Métricas */}
-          <div className="grid grid-cols-5 gap-3">
-            <MetricCard label="Sessões" value={planningMetrics.sessions} />
+          {/* Métricas — sempre refletem o filtro ativo */}
+          <div className="grid grid-cols-4 gap-3">
+            <MetricCard label="Sessões Concluídas" value={planningMetrics.sessions} />
             <MetricCard label="Média HUs/Sessão" value={planningMetrics.avgHusPerSession} />
             <MetricCard label="Média Participantes" value={planningMetrics.avgParticipants} />
-            <MetricCard label="Total de Horas" value={`${planningMetrics.totalHours}h`} valueClass="text-success" />
-            <MetricCard label="Canceladas" value={planningMetrics.cancelled} valueClass="text-destructive" />
+            <MetricCard
+              label={sprintFilter === "all" ? "Total de Horas (Todas)" : "Total de Horas (Sprint)"}
+              value={`${planningMetrics.totalHours}h`}
+              valueClass="text-success"
+            />
           </div>
 
-          {/* Pontuação por Sprint */}
-          {(sprintFilter !== "all" ? [sprintFilter] : finishedSprintIds).map((sprintId) => (
-            <SprintScoreCard
-              key={sprintId}
-              sprintId={sprintId}
-              sprintName={filteredPlanning.find((s) => s.sprintId === sprintId)?.sprintName ?? "Sprint"}
-              score={sprintScores[sprintId]}
-            />
-          ))}
+          {/* ✅ Card de estimativas: só aparece quando uma sprint específica está selecionada */}
+          {sprintFilter !== "all" && activeScore && (
+            <SprintScoreCard sprintName={activeSprintName} score={activeScore} />
+          )}
 
-          {/* Lista de sessões — novo design */}
+          {/* ✅ Lista: somente a última sessão concluída por sprint */}
           <div className="space-y-2">
-            {/* Concluídas */}
-            {filteredPlanning
-              .filter((s) => s.status === "finished")
-              .map((session) => (
+            {lastSessionPerSprint.length > 0 ? (
+              lastSessionPerSprint.map((session) => (
                 <PlanningSessionCard
                   key={session.id}
                   session={session}
                   profiles={profiles}
                   onView={() => openPlanningDetail(session)}
                 />
-              ))}
-
-            {/* Canceladas — seção colapsável */}
-            {filteredPlanning.filter((s) => s.status === "cancelled").length > 0 && (
-              <div className="space-y-1.5 pt-2">
-                <p className="text-[10px] text-muted-foreground uppercase font-semibold px-1">
-                  Canceladas ({filteredPlanning.filter((s) => s.status === "cancelled").length})
-                </p>
-                {filteredPlanning
-                  .filter((s) => s.status === "cancelled")
-                  .map((session) => (
-                    <PlanningSessionCard
-                      key={session.id}
-                      session={session}
-                      profiles={profiles}
-                      onView={() => openPlanningDetail(session)}
-                    />
-                  ))}
-              </div>
-            )}
-
-            {filteredPlanning.length === 0 && (
-              <div className="text-center text-sm text-muted-foreground py-12">Nenhuma sessão encontrada</div>
+              ))
+            ) : (
+              <div className="text-center text-sm text-muted-foreground py-12">Nenhuma sessão concluída encontrada</div>
             )}
           </div>
         </TabsContent>
 
-        {/* ── Tab Retro ────────────────────────────────────────────────── */}
+        {/* ── Tab Retro ──────────────────────────────────────────────── */}
         <TabsContent value="retro" className="space-y-4 mt-4">
           <div className="grid grid-cols-4 gap-3">
-            <MetricCard label="Sessões" value={retroMetrics.sessions} />
+            <MetricCard label="Sessões Concluídas" value={retroMetrics.sessions} />
             <MetricCard label="Média Cards" value={retroMetrics.avgCards} />
             <MetricCard label="Média Ações" value={retroMetrics.avgActions} />
             <MetricCard label="Canceladas" value={retroMetrics.cancelled} valueClass="text-destructive" />
@@ -852,7 +784,7 @@ export function AgileHistory() {
         </TabsContent>
       </Tabs>
 
-      {/* ── Dialog de Detalhes ─────────────────────────────────────────── */}
+      {/* ── Dialog de Detalhes ─────────────────────────────────────── */}
       <Dialog
         open={!!detailSession}
         onOpenChange={(open) => {
@@ -875,7 +807,7 @@ export function AgileHistory() {
           </DialogHeader>
 
           <ScrollArea className="flex-1 pr-2">
-            {/* ── Detalhe Planning ─────────────────────────────────────── */}
+            {/* ── Detalhe Planning ─────────────────────────────────── */}
             {detailSession &&
               detailType === "planning" &&
               (() => {
@@ -884,9 +816,8 @@ export function AgileHistory() {
                 const divergedCount = detailHuSummaries.filter((hu) => hu.hadDivergence).length;
                 return (
                   <div className="space-y-5 pt-1">
-                    {/* Cabeçalho */}
                     <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="space-y-0.5">
+                      <div>
                         <p className="text-base font-bold">{s.sprintName}</p>
                         <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                           <Calendar className="h-3 w-3" />
@@ -894,13 +825,12 @@ export function AgileHistory() {
                           <span className="mx-1">·</span>
                           {DECK_MODE_LABELS[s.deckMode] ?? s.deckMode}
                           <span className="mx-1">·</span>
-                          Facilitador: {profiles[s.createdBy] ?? "—"}
+                          {profiles[s.createdBy] ?? "—"}
                         </p>
                       </div>
                       <StatusBadge status={s.status} />
                     </div>
 
-                    {/* Métricas da sessão */}
                     <div className="grid grid-cols-4 gap-3">
                       <Card>
                         <CardContent className="p-3 text-center">
@@ -922,7 +852,7 @@ export function AgileHistory() {
                       </Card>
                       <Card className={cn(divergedCount > 0 && "border-warning/30 bg-warning/5")}>
                         <CardContent className="p-3 text-center">
-                          <p className="text-[10px] text-muted-foreground">HUs com Divergência</p>
+                          <p className="text-[10px] text-muted-foreground">Com Divergência</p>
                           <p className={cn("text-2xl font-bold", divergedCount > 0 ? "text-warning" : "text-success")}>
                             {divergedCount}
                           </p>
@@ -932,7 +862,6 @@ export function AgileHistory() {
 
                     <Separator />
 
-                    {/* HUs votadas — cards melhorados */}
                     <div>
                       <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
                         <Hash className="h-4 w-4" /> HUs Estimadas ({detailHuSummaries.length})
@@ -953,15 +882,14 @@ export function AgileHistory() {
                                     <Badge variant="outline" className="font-mono text-[10px]">
                                       {hu.huCode}
                                     </Badge>
-                                    {hu.hadDivergence && (
+                                    {hu.hadDivergence ? (
                                       <Badge
                                         variant="outline"
                                         className="text-[9px] bg-warning/10 text-warning border-warning/30 gap-1"
                                       >
                                         <AlertTriangle className="h-2.5 w-2.5" /> Divergência
                                       </Badge>
-                                    )}
-                                    {!hu.hadDivergence && (
+                                    ) : (
                                       <Badge
                                         variant="outline"
                                         className="text-[9px] bg-success/10 text-success border-success/30 gap-1"
@@ -972,7 +900,6 @@ export function AgileHistory() {
                                   </div>
                                   <p className="text-xs font-medium truncate">{hu.huTitle}</p>
                                 </div>
-                                {/* Consenso final */}
                                 {hu.consensusKey && (
                                   <div className="flex flex-col items-end shrink-0">
                                     <Badge
@@ -989,8 +916,6 @@ export function AgileHistory() {
                                   </div>
                                 )}
                               </div>
-
-                              {/* Votos individuais */}
                               <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-current/10">
                                 {hu.votes.map((v, i) => (
                                   <div key={i} className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5">
@@ -1020,7 +945,7 @@ export function AgileHistory() {
                 );
               })()}
 
-            {/* ── Detalhe Retro ─────────────────────────────────────────── */}
+            {/* ── Detalhe Retro ─────────────────────────────────────── */}
             {detailSession &&
               detailType === "retro" &&
               (() => {
@@ -1042,7 +967,6 @@ export function AgileHistory() {
                       <StatusBadge status={s.status} />
                     </div>
 
-                    {/* Top 3 */}
                     <div>
                       <h3 className="text-sm font-bold mb-2">🏆 Top 3 Cards</h3>
                       <div className="space-y-2">
@@ -1065,7 +989,6 @@ export function AgileHistory() {
 
                     <Separator />
 
-                    {/* Todos os cards */}
                     <div>
                       <h3 className="text-sm font-bold mb-2">Todos os Cards ({detailCards.length})</h3>
                       <div className="space-y-1.5">
