@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { AgileHistory } from "@/components/AgileHistory";
 import { TeamSelectionModal } from "@/shared/components/common/TeamSelectionModal";
 import { SprintManager } from "@/components/SprintManager";
 import { DeveloperManager } from "@/components/DeveloperManager";
