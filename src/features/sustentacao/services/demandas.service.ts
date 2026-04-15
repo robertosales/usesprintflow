@@ -79,11 +79,26 @@ export async function deleteHour(id: string) {
   if (error) throw error;
 }
 
+// ✅ CORRIGIDO: tipo do parâmetro agora inclui todos os campos opcionais
+// e ambos insert/update os enviam para o Supabase
 export async function upsertDemandas(
   teamId: string,
-  rows: Array<{ rhm: string; projeto: string; situacao: string; tipo: string }>,
+  rows: Array<{
+    rhm: string;
+    projeto: string;
+    situacao: string;
+    tipo: string;
+    sla?: string;
+    descricao?: string;
+    tipo_defeito?: string;
+    originada_diagnostico?: boolean;
+    data_previsao_encerramento?: string;
+    prazo_inicio_atendimento?: string;
+    prazo_solucao?: string;
+  }>,
 ) {
   const results = { importados: 0, atualizados: 0, erros: 0 };
+
   for (const row of rows) {
     try {
       const { data: existing } = await supabase
@@ -92,10 +107,22 @@ export async function upsertDemandas(
         .eq("team_id", teamId)
         .eq("rhm", row.rhm)
         .maybeSingle();
+
       if ((existing as any)?.id) {
         await supabase
           .from("demandas" as any)
-          .update({ projeto: row.projeto, situacao: row.situacao, tipo: row.tipo } as any)
+          .update({
+            projeto: row.projeto,
+            situacao: row.situacao,
+            tipo: row.tipo,
+            sla: row.sla,
+            descricao: row.descricao,
+            tipo_defeito: row.tipo_defeito,
+            originada_diagnostico: row.originada_diagnostico,
+            data_previsao_encerramento: row.data_previsao_encerramento,
+            prazo_inicio_atendimento: row.prazo_inicio_atendimento,
+            prazo_solucao: row.prazo_solucao,
+          } as any)
           .eq("id", (existing as any).id);
         results.atualizados++;
       } else {
@@ -105,6 +132,13 @@ export async function upsertDemandas(
           projeto: row.projeto,
           situacao: row.situacao,
           tipo: row.tipo,
+          sla: row.sla,
+          descricao: row.descricao,
+          tipo_defeito: row.tipo_defeito,
+          originada_diagnostico: row.originada_diagnostico,
+          data_previsao_encerramento: row.data_previsao_encerramento,
+          prazo_inicio_atendimento: row.prazo_inicio_atendimento,
+          prazo_solucao: row.prazo_solucao,
         } as any);
         results.importados++;
       }
@@ -112,5 +146,6 @@ export async function upsertDemandas(
       results.erros++;
     }
   }
+
   return results;
 }
