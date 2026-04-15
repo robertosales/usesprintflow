@@ -111,7 +111,7 @@ export function DemandasList() {
                   <TableHead>Projeto</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Situação</TableHead>
-                  <TableHead>SLA</TableHead>
+                  <TableHead>Responsável</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
