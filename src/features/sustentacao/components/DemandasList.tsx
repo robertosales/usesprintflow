@@ -37,22 +37,34 @@ const SITUACAO_PAPEL_MAP: Record<string, string> = {
   hom_homologada: "arquiteto",
 };
 
-// Busca todos os responsáveis de uma lista de demandas em UMA única query
+// ✅ CORRIGIDO: busca em 2 etapas separadas (sem join automático)
 async function fetchResponsaveisBatch(
   demandaIds: string[],
 ): Promise<Map<string, { papel: string; display_name: string }[]>> {
   if (demandaIds.length === 0) return new Map();
 
-  const { data, error } = await supabase
+  // 1️⃣ Busca os responsáveis sem join
+  const { data: respData, error: respError } = await supabase
     .from("demanda_responsaveis")
-    .select("demanda_id, papel, profiles(display_name)")
+    .select("demanda_id, papel, user_id")
     .in("demanda_id", demandaIds);
 
-  const map = new Map<string, { papel: string; display_name: string }[]>();
-  if (error || !data) return map;
+  if (respError || !respData || respData.length === 0) return new Map();
 
-  data.forEach((r: any) => {
-    const nome = r.profiles?.display_name || null;
+  // 2️⃣ Busca os profiles dos user_ids encontrados
+  const userIds = [...new Set(respData.map((r: any) => r.user_id))];
+  const { data: profilesData } = await supabase.from("profiles").select("user_id, display_name").in("user_id", userIds);
+
+  // 3️⃣ Monta mapa user_id → display_name
+  const profilesMap = new Map<string, string>();
+  (profilesData || []).forEach((p: any) => {
+    profilesMap.set(p.user_id, p.display_name);
+  });
+
+  // 4️⃣ Monta mapa demanda_id → lista de { papel, display_name }
+  const map = new Map<string, { papel: string; display_name: string }[]>();
+  respData.forEach((r: any) => {
+    const nome = profilesMap.get(r.user_id);
     if (!nome) return;
     const lista = map.get(r.demanda_id) || [];
     lista.push({ papel: r.papel, display_name: nome });
@@ -72,33 +84,23 @@ export function DemandasList() {
   const [filterSituacao, setFilterSituacao] = useState("all");
   const debouncedSearch = useDebounce(search, 300);
 
-  // ✅ Mapa de responsáveis: demanda_id → lista de { papel, display_name }
+  // Mapa de responsáveis: demanda_id → lista de { papel, display_name }
   const [responsaveisMap, setResponsaveisMap] = useState<Map<string, { papel: string; display_name: string }[]>>(
     new Map(),
   );
 
-  // ✅ Busca todos os responsáveis em batch quando as demandas carregam
+  // ✅ CORRIGIDO: usa fetchResponsaveisBatch com as 2 queries separadas
   useEffect(() => {
-    console.log("=== BATCH EFFECT RODOU, demandas:", demandas.length);
     if (demandas.length === 0) return;
     const ids = demandas.map((d) => d.id);
-
-    supabase
-      .from("demanda_responsaveis")
-      .select("demanda_id, papel, profiles(display_name)")
-      .in("demanda_id", ids)
-      .then(({ data, error }) => {
-        console.log("BATCH DATA:", data);
-        console.log("BATCH ERROR:", error);
-      });
+    fetchResponsaveisBatch(ids).then(setResponsaveisMap);
   }, [demandas]);
 
-  // ✅ Retorna o nome do responsável ativo conforme situação da demanda
+  // Retorna o nome do responsável ativo conforme situação da demanda
   function getResponsavelDaLista(d: Demanda): string | null {
     const papelEsperado = SITUACAO_PAPEL_MAP[d.situacao];
     const lista = responsaveisMap.get(d.id) || [];
     const match = lista.find((r) => r.papel === papelEsperado);
-    // Fallback: se não achou pelo papel, pega o primeiro da lista
     return match?.display_name || lista[0]?.display_name || null;
   }
 
@@ -198,7 +200,6 @@ export function DemandasList() {
                         {SITUACAO_LABELS[d.situacao] || d.situacao}
                       </Badge>
                     </TableCell>
-                    {/* ✅ Responsável ativo por papel conforme situação */}
                     <TableCell>
                       <span className="text-xs">
                         {getResponsavelDaLista(d) ?? <span className="text-muted-foreground">—</span>}
