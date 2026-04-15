@@ -321,6 +321,7 @@ const Index = () => {
                   {active === "impediments" && <ImpedimentList />}
                   {active === "retro" && <RetroManager />}
                   {active === "metrics" && <MetricsDashboard />}
+                  {active === "history" && <AgileHistory />}
                   {active === "workflow" && <WorkflowManager />}
                   {active === "custom-fields" && <CustomFieldManager />}
                   {active === "automations" && <AutomationManager />}
