@@ -75,6 +75,7 @@ const NAV_SECTIONS = [
     { key: "impediments" as NavKey, label: "Impedimentos", icon: ShieldAlert },
     { key: "retro" as NavKey, label: "Retrospectiva", icon: MessageSquare },
     { key: "metrics" as NavKey, label: "Métricas", icon: BarChart3 },
+    { key: "history" as NavKey, label: "Histórico", icon: History },
   ]},
   { title: "Organização", items: [
     { key: "teams" as NavKey, label: "Times", icon: Building2 },
