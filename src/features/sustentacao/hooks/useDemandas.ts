@@ -3,8 +3,37 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import * as svc from "../services/demandas.service";
+import { fetchResponsaveis } from "../services/responsaveis.service";
 import type { Demanda, DemandaTransition, DemandaHour } from "../types/demanda";
 import { REQUIRES_JUSTIFICATIVA } from "../types/demanda";
+
+// ✅ Injeta os nomes dos responsáveis nas demandas após busca em lote
+async function enrichComResponsaveis(demandas: Demanda[]): Promise<Demanda[]> {
+  if (demandas.length === 0) return demandas;
+
+  const resultados = await Promise.all(
+    demandas.map((d) =>
+      fetchResponsaveis(d.id)
+        .then((resp) => ({ id: d.id, resp }))
+        .catch(() => ({ id: d.id, resp: [] })),
+    ),
+  );
+
+  return demandas.map((d) => {
+    const entry = resultados.find((r) => r.id === d.id);
+    const responsaveis = entry?.resp ?? [];
+
+    const getPorPapel = (papel: string) => responsaveis.find((r) => r.papel === papel)?.profile?.display_name ?? null;
+
+    return {
+      ...d,
+      responsavel_dev: getPorPapel("desenvolvedor") ?? d.responsavel_dev,
+      responsavel_requisitos: getPorPapel("analista") ?? d.responsavel_requisitos,
+      responsavel_arquiteto: getPorPapel("arquiteto") ?? d.responsavel_arquiteto,
+      responsavel_teste: getPorPapel("testador") ?? d.responsavel_teste,
+    };
+  });
+}
 
 export function useDemandas() {
   const { currentTeamId, user } = useAuth();
@@ -18,7 +47,9 @@ export function useDemandas() {
     setError(null);
     try {
       const data = await svc.fetchDemandas(currentTeamId);
-      setDemandas(data);
+      // ✅ Enriquece as demandas com os responsáveis vinculados
+      const enriched = await enrichComResponsaveis(data);
+      setDemandas(enriched);
     } catch (err: any) {
       setError(err.message);
       toast.error("Erro ao carregar demandas");
@@ -27,7 +58,9 @@ export function useDemandas() {
     }
   }, [currentTeamId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   // Realtime subscription
   useEffect(() => {
@@ -35,12 +68,16 @@ export function useDemandas() {
     const channel = supabase
       .channel(`demandas-rt-${currentTeamId}`)
       .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'demandas', filter: `team_id=eq.${currentTeamId}` },
-        () => { load(); }
+        "postgres_changes",
+        { event: "*", schema: "public", table: "demandas", filter: `team_id=eq.${currentTeamId}` },
+        () => {
+          load();
+        },
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [currentTeamId, load]);
 
   const create = async (d: Partial<Demanda>) => {
@@ -48,11 +85,16 @@ export function useDemandas() {
     try {
       const created = await svc.createDemanda({ ...d, team_id: currentTeamId, rhm: d.rhm! });
       if (user) {
-        await svc.addTransition({ demanda_id: created.id, from_status: null, to_status: 'nova', user_id: user.id, justificativa: null });
+        await svc.addTransition({
+          demanda_id: created.id,
+          from_status: null,
+          to_status: "nova",
+          user_id: user.id,
+          justificativa: null,
+        });
       }
       toast.success("Demanda criada com sucesso");
-      // Realtime will trigger reload
-    } catch (err: any) {
+    } catch {
       toast.error("Erro ao criar demanda");
     }
   };
@@ -61,7 +103,7 @@ export function useDemandas() {
     try {
       await svc.updateDemanda(id, updates);
       toast.success("Demanda atualizada com sucesso");
-    } catch (err: any) {
+    } catch {
       toast.error("Erro ao atualizar demanda");
     }
   };
@@ -117,7 +159,9 @@ export function useTransitions(demandaId: string | null) {
     }
   }, [demandaId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return { transitions, loading, reload: load };
 }
@@ -135,7 +179,9 @@ export function useHours(demandaId: string | null) {
     setLoading(false);
   }, [demandaId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const add = async (h: { horas: number; fase: string; descricao: string }) => {
     if (!demandaId || !user) return;
