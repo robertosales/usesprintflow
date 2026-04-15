@@ -11,24 +11,81 @@ import { useProjetos } from "../hooks/useProjetos";
 import * as XLSX from "xlsx";
 import { parse, isValid, startOfDay, format } from "date-fns";
 
+// ✅ ADICIONADO: mapeamento dos labels do Redmine para slugs do banco
+const SITUACAO_MAP: Record<string, string> = {
+  // Valores já no formato slug (passam direto)
+  fila_atendimento: "fila_atendimento",
+  planejamento_elaboracao: "planejamento_elaboracao",
+  planejamento_ag_aprovacao: "planejamento_ag_aprovacao",
+  planejamento_aprovada: "planejamento_aprovada",
+  em_execucao: "em_execucao",
+  bloqueada: "bloqueada",
+  hom_ag_homologacao: "hom_ag_homologacao",
+  hom_homologada: "hom_homologada",
+  rejeitada: "rejeitada",
+  fila_producao: "fila_producao",
+  ag_aceite_final: "ag_aceite_final",
+  cancelada: "cancelada",
+  // Labels legíveis do Redmine
+  "fila de atendimento": "fila_atendimento",
+  nova: "fila_atendimento",
+  "planejamento: em elaboracao": "planejamento_elaboracao",
+  "planejamento: em elaboração": "planejamento_elaboracao",
+  "planejamento: ag. aprovacao": "planejamento_ag_aprovacao",
+  "planejamento: ag. aprovação": "planejamento_ag_aprovacao",
+  "planejamento: aprovada p/ exec": "planejamento_aprovada",
+  "em execucao": "em_execucao",
+  "em execução": "em_execucao",
+  bloqueada: "bloqueada",
+  "hom: ag. homologacao": "hom_ag_homologacao",
+  "hom: ag. homologação": "hom_ag_homologacao",
+  "hom: homologada": "hom_homologada",
+  homologada: "hom_homologada",
+  rejeitada: "rejeitada",
+  "fila para producao (infra)": "fila_producao",
+  "fila para produção (infra)": "fila_producao",
+  "ag. aceite final": "ag_aceite_final",
+  "aguardando aceite final": "ag_aceite_final",
+  cancelada: "cancelada",
+};
+
+// ✅ ADICIONADO: função para mapear situacao com fallback seguro
+function normalizeSituacao(raw: string): string {
+  const cleaned = raw
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return SITUACAO_MAP[cleaned] || SITUACAO_MAP[raw.trim().toLowerCase()] || "fila_atendimento";
+}
+
 const VALID_TIPOS_MAP: Record<string, string> = {};
-TIPOS_DEMANDA_IMR.forEach(t => {
+TIPOS_DEMANDA_IMR.forEach((t) => {
   VALID_TIPOS_MAP[t.label.toLowerCase()] = t.value;
   VALID_TIPOS_MAP[t.value] = t.value;
 });
 
 function normalize(str: string): string {
-  return str.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return str
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 function removeEmojis(str: string): string {
-  return str.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}]/gu, '').trim();
+  return str
+    .replace(
+      /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}]/gu,
+      "",
+    )
+    .trim();
 }
 
 function normalizeSLA(raw: string): string | null {
-  if (!raw || raw === '-') return null;
-  if (/\d+\s*x\s*7/i.test(raw)) return 'continuo';
-  if (normalize(raw) === 'padrao' || normalize(raw) === 'padrão') return 'padrao';
+  if (!raw || raw === "-") return null;
+  if (/\d+\s*x\s*7/i.test(raw)) return "continuo";
+  if (normalize(raw) === "padrao" || normalize(raw) === "padrão") return "padrao";
   return raw.trim();
 }
 
@@ -51,11 +108,14 @@ function normalizeTipo(raw: string): { value: string; autoCreated: boolean } | n
   for (const [key, val] of Object.entries(VALID_TIPOS_MAP)) {
     if (key.includes(lower) || lower.includes(key)) return { value: val, autoCreated: false };
   }
-  if (lower === 'corretiva') return { value: 'manutencao_corretiva', autoCreated: false };
-  if (lower === 'evolutiva') return { value: 'evolutiva_pequeno_porte', autoCreated: false };
-  // Auto-create: normalize the raw value as a key
-  const autoKey = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-  return { value: autoKey || lower.replace(/\s+/g, '_'), autoCreated: true };
+  if (lower === "corretiva") return { value: "manutencao_corretiva", autoCreated: false };
+  if (lower === "evolutiva") return { value: "evolutiva_pequeno_porte", autoCreated: false };
+  const autoKey = lower
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_]/g, "");
+  return { value: autoKey || lower.replace(/\s+/g, "_"), autoCreated: true };
 }
 
 interface ValidationError {
@@ -79,22 +139,29 @@ interface ParsedRow {
   prazo_solucao?: string;
 }
 
-type ImportMode = null | 'demandas' | 'projetos';
+type ImportMode = null | "demandas" | "projetos";
 
 export function ImportacaoView() {
   const { currentTeamId } = useAuth();
   const { projetos, reload: reloadProjetos } = useProjetos();
   const [mode, setMode] = useState<ImportMode>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ importados: number; atualizados: number; erros: number; tiposCriados?: string[] } | null>(null);
+  const [result, setResult] = useState<{
+    importados: number;
+    atualizados: number;
+    erros: number;
+    tiposCriados?: string[];
+  } | null>(null);
   const [validRows, setValidRows] = useState<ParsedRow[]>([]);
   const [autoCreatedTypes, setAutoCreatedTypes] = useState<string[]>([]);
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [showPreview, setShowPreview] = useState(false);
-  const [projetoResult, setProjetoResult] = useState<{ importados: number; existentes: number; erros: number } | null>(null);
+  const [projetoResult, setProjetoResult] = useState<{ importados: number; existentes: number; erros: number } | null>(
+    null,
+  );
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const projetoNamesNorm = new Map(projetos.map(p => [normalize(p.nome), p.nome]));
+  const projetoNamesNorm = new Map(projetos.map((p) => [normalize(p.nome), p.nome]));
 
   const handleFileDemandas = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -107,7 +174,7 @@ export function ImportacaoView() {
 
     try {
       const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+      const wb = XLSX.read(buffer, { type: "array", cellDates: true });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { raw: false });
 
@@ -117,71 +184,106 @@ export function ImportacaoView() {
 
       rows.forEach((r, idx) => {
         const linha = idx + 2;
-        const rhm = String(r['RHM'] || r['rhm'] || r['#'] || '').trim();
-        const projeto = String(r['Projeto'] || r['projeto'] || '').trim();
-        const tipoRaw = String(r['Tipo'] || r['tipo'] || '').trim();
-        const dataInicioRaw = r['Criado em'] || r['Data de Início'] || r['Data de Inicio'] || r['data_inicio'] || null;
+        const rhm = String(r["RHM"] || r["rhm"] || r["#"] || "").trim();
+        const projeto = String(r["Projeto"] || r["projeto"] || "").trim();
+        const tipoRaw = String(r["Tipo"] || r["tipo"] || "").trim();
+        const dataInicioRaw = r["Criado em"] || r["Data de Início"] || r["Data de Inicio"] || r["data_inicio"] || null;
 
-        if (!rhm) { errs.push({ linha, mensagem: '# não informado.' }); return; }
-        if (!projeto) { errs.push({ linha, mensagem: 'Projeto não informado.' }); return; }
+        if (!rhm) {
+          errs.push({ linha, mensagem: "# não informado." });
+          return;
+        }
+        if (!projeto) {
+          errs.push({ linha, mensagem: "Projeto não informado." });
+          return;
+        }
 
         const projNorm = normalize(projeto);
         if (!projetoNamesNorm.has(projNorm)) {
-          errs.push({ linha, mensagem: `Projeto '${projeto}' não encontrado. Verifique o cadastro (busca ignora maiúsculas e acentos).` }); return;
+          errs.push({
+            linha,
+            mensagem: `Projeto '${projeto}' não encontrado. Verifique o cadastro (busca ignora maiúsculas e acentos).`,
+          });
+          return;
         }
 
-        if (!tipoRaw) { errs.push({ linha, mensagem: 'Tipo não informado.' }); return; }
+        if (!tipoRaw) {
+          errs.push({ linha, mensagem: "Tipo não informado." });
+          return;
+        }
         const tipoResult = normalizeTipo(tipoRaw);
-        if (!tipoResult) { errs.push({ linha, mensagem: `Tipo '${tipoRaw}' não reconhecido.` }); return; }
+        if (!tipoResult) {
+          errs.push({ linha, mensagem: `Tipo '${tipoRaw}' não reconhecido.` });
+          return;
+        }
         if (tipoResult.autoCreated && !newTypes.includes(tipoRaw)) {
           newTypes.push(tipoRaw);
         }
         const tipoNorm = tipoResult.value;
 
-        if (!dataInicioRaw) { errs.push({ linha, mensagem: 'Criado em inválido ou ausente.' }); return; }
+        if (!dataInicioRaw) {
+          errs.push({ linha, mensagem: "Criado em inválido ou ausente." });
+          return;
+        }
         const dataInicio = parseDataInicio(dataInicioRaw);
-        if (!dataInicio) { errs.push({ linha, mensagem: 'Criado em inválido ou ausente.' }); return; }
+        if (!dataInicio) {
+          errs.push({ linha, mensagem: "Criado em inválido ou ausente." });
+          return;
+        }
 
-        // Optional fields
-        let situacao = String(r['Situação'] || r['Situacao'] || r['situacao'] || 'nova').trim();
-        situacao = removeEmojis(situacao).toLowerCase().replace(/\s+/g, '_');
-        const isCorretiva = tipoNorm === 'manutencao_corretiva';
+        // ✅ CORRIGIDO: usa normalizeSituacao() no lugar da normalização genérica anterior
+        const situacaoRaw = String(r["Situação"] || r["Situacao"] || r["situacao"] || "Nova").trim();
+        const situacao = normalizeSituacao(removeEmojis(situacaoRaw));
 
-        let sla = 'padrao';
-        const regimeRaw = String(r['Regime de Atendimento'] || r['Regime'] || r['regime'] || '').trim();
-        if (isCorretiva && /\d+\s*x\s*7/i.test(regimeRaw)) sla = 'continuo';
-        else if (isCorretiva && (normalize(regimeRaw) === 'continuo' || normalize(regimeRaw) === 'contínuo')) sla = 'continuo';
+        const isCorretiva = tipoNorm === "manutencao_corretiva";
+
+        let sla = "padrao";
+        const regimeRaw = String(r["Regime de Atendimento"] || r["Regime"] || r["regime"] || "").trim();
+        if (isCorretiva && /\d+\s*x\s*7/i.test(regimeRaw)) sla = "continuo";
+        else if (isCorretiva && (normalize(regimeRaw) === "continuo" || normalize(regimeRaw) === "contínuo"))
+          sla = "continuo";
 
         let tipo_defeito: string | undefined;
-        const defeitoRaw = String(r['Defeito Impeditivo'] || r['Tipo de Defeito'] || r['tipo_defeito'] || '').trim().toLowerCase();
+        const defeitoRaw = String(r["Defeito Impeditivo"] || r["Tipo de Defeito"] || r["tipo_defeito"] || "")
+          .trim()
+          .toLowerCase();
         if (isCorretiva && defeitoRaw) {
-          tipo_defeito = (defeitoRaw === 'sim' || defeitoRaw === 'impeditivo') ? 'impeditivo' : 'nao_impeditivo';
+          tipo_defeito = defeitoRaw === "sim" || defeitoRaw === "impeditivo" ? "impeditivo" : "nao_impeditivo";
         } else if (isCorretiva) {
-          tipo_defeito = 'impeditivo';
+          tipo_defeito = "impeditivo";
         }
 
         let originada_diagnostico = false;
-        const diagRaw = String(r['Originada de Diagnóstico'] || r['Originada de Diagnostico'] || '').trim().toLowerCase();
-        if (isCorretiva && (diagRaw === 'sim' || diagRaw === 'true' || diagRaw === '1')) originada_diagnostico = true;
+        const diagRaw = String(r["Originada de Diagnóstico"] || r["Originada de Diagnostico"] || "")
+          .trim()
+          .toLowerCase();
+        if (isCorretiva && (diagRaw === "sim" || diagRaw === "true" || diagRaw === "1")) originada_diagnostico = true;
 
         const regime = isCorretiva ? sla : undefined;
         const defeito = isCorretiva ? tipo_defeito : undefined;
         const prazoInicio = calcPrazoInicio(dataInicio, tipoNorm, regime, defeito);
         const prazoSolucao = calcPrazoSolucao(dataInicio, tipoNorm, regime, defeito);
 
-        const descVal = String(r['Título'] || r['Descrição'] || r['Descricao'] || r['descricao'] || '').trim() || undefined;
-        const prevEncRaw = r['Data de Previsão de Encerramento'] || r['Data Previsão Encerramento'] || null;
+        const descVal =
+          String(r["Título"] || r["Descrição"] || r["Descricao"] || r["descricao"] || "").trim() || undefined;
+        const prevEncRaw = r["Data de Previsão de Encerramento"] || r["Data Previsão Encerramento"] || null;
         let prevEnc: string | undefined;
         if (prevEncRaw) {
           const d = parseDataInicio(prevEncRaw);
-          if (d) prevEnc = format(d, 'yyyy-MM-dd');
+          if (d) prevEnc = format(d, "yyyy-MM-dd");
         }
 
         parsed.push({
-          rhm, projeto: projetoNamesNorm.get(projNorm) || projeto, tipo: tipoNorm, data_inicio: dataInicio,
-          situacao, sla, tipo_defeito, originada_diagnostico,
+          rhm,
+          projeto: projetoNamesNorm.get(projNorm) || projeto,
+          tipo: tipoNorm,
+          data_inicio: dataInicio,
+          situacao,
+          sla,
+          tipo_defeito,
+          originada_diagnostico,
           descricao: descVal,
-          data_previsao_encerramento: prevEnc || (prazoSolucao ? format(prazoSolucao, 'yyyy-MM-dd') : undefined),
+          data_previsao_encerramento: prevEnc || (prazoSolucao ? format(prazoSolucao, "yyyy-MM-dd") : undefined),
           prazo_inicio_atendimento: prazoInicio?.toISOString(),
           prazo_solucao: prazoSolucao?.toISOString(),
         });
@@ -198,7 +300,7 @@ export function ImportacaoView() {
     } catch {
       toast.error("Erro ao processar arquivo.");
     } finally {
-      if (inputRef.current) inputRef.current.value = '';
+      if (inputRef.current) inputRef.current.value = "";
     }
   };
 
@@ -211,26 +313,29 @@ export function ImportacaoView() {
 
     try {
       const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+      const wb = XLSX.read(buffer, { type: "array", cellDates: true });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { raw: false });
 
       const results = { importados: 0, existentes: 0, erros: 0 };
-      const existingNorms = new Set(projetos.map(p => normalize(p.nome)));
+      const existingNorms = new Set(projetos.map((p) => normalize(p.nome)));
 
       for (const r of rows) {
-        const nome = String(r['Nome'] || r['nome'] || '').trim();
-        if (!nome) { results.erros++; continue; }
+        const nome = String(r["Nome"] || r["nome"] || "").trim();
+        if (!nome) {
+          results.erros++;
+          continue;
+        }
 
         if (existingNorms.has(normalize(nome))) {
           results.existentes++;
           continue;
         }
 
-        const descricao = String(r['Descrição'] || r['Descricao'] || r['descricao'] || '').trim();
-        const equipe = String(r['Equipe'] || r['equipe'] || '').trim();
-        const slaRaw = String(r['SLA'] || r['sla'] || '').trim();
-        const sla = normalizeSLA(slaRaw) || 'padrao';
+        const descricao = String(r["Descrição"] || r["Descricao"] || r["descricao"] || "").trim();
+        const equipe = String(r["Equipe"] || r["equipe"] || "").trim();
+        const slaRaw = String(r["SLA"] || r["sla"] || "").trim();
+        const sla = normalizeSLA(slaRaw) || "padrao";
 
         try {
           await upsertProjetos(currentTeamId, [{ nome, descricao, equipe, sla }]);
@@ -242,13 +347,15 @@ export function ImportacaoView() {
       }
 
       setProjetoResult(results);
-      toast.success(`Importação de projetos concluída: ${results.importados} novos, ${results.existentes} já existentes`);
+      toast.success(
+        `Importação de projetos concluída: ${results.importados} novos, ${results.existentes} já existentes`,
+      );
       await reloadProjetos();
     } catch {
       toast.error("Erro ao processar arquivo.");
     } finally {
       setLoading(false);
-      if (inputRef.current) inputRef.current.value = '';
+      if (inputRef.current) inputRef.current.value = "";
     }
   };
 
@@ -259,9 +366,14 @@ export function ImportacaoView() {
     const results = { importados: 0, atualizados: 0, erros: 0 };
     for (const row of validRows) {
       try {
-        const res = await upsertDemandas(currentTeamId, [{
-          rhm: row.rhm, projeto: row.projeto, situacao: row.situacao || 'nova', tipo: row.tipo,
-        }]);
+        const res = await upsertDemandas(currentTeamId, [
+          {
+            rhm: row.rhm,
+            projeto: row.projeto,
+            situacao: row.situacao || "fila_atendimento",
+            tipo: row.tipo,
+          },
+        ]);
         results.importados += res.importados;
         results.atualizados += res.atualizados;
         results.erros += res.erros;
@@ -272,30 +384,44 @@ export function ImportacaoView() {
 
     setResult({ ...results, tiposCriados: autoCreatedTypes });
     setShowPreview(false);
-    const tipoMsg = autoCreatedTypes.length > 0 ? ` | ${autoCreatedTypes.length} tipo(s) criado(s) automaticamente` : '';
+    const tipoMsg =
+      autoCreatedTypes.length > 0 ? ` | ${autoCreatedTypes.length} tipo(s) criado(s) automaticamente` : "";
     toast.success(`Importação concluída: ${results.importados} novos, ${results.atualizados} atualizados${tipoMsg}`);
     setLoading(false);
   };
 
-  // Selection screen
   if (mode === null) {
     return (
       <div className="space-y-6 max-w-2xl">
         <h2 className="text-lg font-semibold">Importação</h2>
         <p className="text-sm text-muted-foreground">Selecione o tipo de importação que deseja realizar.</p>
         <div className="grid grid-cols-2 gap-4">
-          <Card className="cursor-pointer hover:shadow-md transition-shadow border-2 hover:border-info/40" onClick={() => setMode('demandas')}>
+          <Card
+            className="cursor-pointer hover:shadow-md transition-shadow border-2 hover:border-info/40"
+            onClick={() => setMode("demandas")}
+          >
             <CardContent className="p-6 text-center space-y-3">
               <FileSpreadsheet className="h-10 w-10 mx-auto text-info" />
               <h3 className="font-semibold">📋 Demandas</h3>
-              <p className="text-xs text-muted-foreground">Importar do Redmine<br />(.csv / .xlsx)</p>
+              <p className="text-xs text-muted-foreground">
+                Importar do Redmine
+                <br />
+                (.csv / .xlsx)
+              </p>
             </CardContent>
           </Card>
-          <Card className="cursor-pointer hover:shadow-md transition-shadow border-2 hover:border-info/40" onClick={() => setMode('projetos')}>
+          <Card
+            className="cursor-pointer hover:shadow-md transition-shadow border-2 hover:border-info/40"
+            onClick={() => setMode("projetos")}
+          >
             <CardContent className="p-6 text-center space-y-3">
               <FolderKanban className="h-10 w-10 mx-auto text-info" />
               <h3 className="font-semibold">📁 Projetos</h3>
-              <p className="text-xs text-muted-foreground">Importar sistemas<br />de sustentação (.csv / .xlsx)</p>
+              <p className="text-xs text-muted-foreground">
+                Importar sistemas
+                <br />
+                de sustentação (.csv / .xlsx)
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -306,29 +432,44 @@ export function ImportacaoView() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={() => { setMode(null); setResult(null); setProjetoResult(null); setShowPreview(false); }}>
-          <ArrowLeft className="h-4 w-4 mr-1" />Voltar
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setMode(null);
+            setResult(null);
+            setProjetoResult(null);
+            setShowPreview(false);
+          }}
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Voltar
         </Button>
-        <h2 className="text-lg font-semibold">{mode === 'demandas' ? 'Importar Demandas' : 'Importar Projetos'}</h2>
+        <h2 className="text-lg font-semibold">{mode === "demandas" ? "Importar Demandas" : "Importar Projetos"}</h2>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
-            {mode === 'demandas' ? 'Importar do Redmine' : 'Importar Projetos'}
+            {mode === "demandas" ? "Importar do Redmine" : "Importar Projetos"}
           </CardTitle>
           <CardDescription>
-            {mode === 'demandas' ? (
+            {mode === "demandas" ? (
               <>
                 Faça upload do arquivo .csv ou .xlsx exportado do Redmine.
-                <br />Colunas obrigatórias: <strong>RHM, Projeto, Tipo, Criado em</strong>.
-                <br /><span className="text-xs text-muted-foreground">Não são aceitas demandas com data em 'Criado em' retroativa.</span>
+                <br />
+                Colunas obrigatórias: <strong>RHM, Projeto, Tipo, Criado em</strong>.
+                <br />
+                <span className="text-xs text-muted-foreground">
+                  Não são aceitas demandas com data em 'Criado em' retroativa.
+                </span>
               </>
             ) : (
               <>
                 Faça upload do arquivo .csv ou .xlsx com as colunas: <strong>Nome, Descrição, Equipe, SLA</strong>.
-                <br /><span className="text-xs text-muted-foreground">Projetos já cadastrados serão ignorados.</span>
+                <br />
+                <span className="text-xs text-muted-foreground">Projetos já cadastrados serão ignorados.</span>
               </>
             )}
           </CardDescription>
@@ -337,14 +478,19 @@ export function ImportacaoView() {
           <div className="border-2 border-dashed rounded-lg p-8 text-center space-y-3">
             <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
             <p className="text-sm text-muted-foreground">Arraste ou clique para selecionar</p>
-            <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv" onChange={mode === 'demandas' ? handleFileDemandas : handleFileProjetos} className="hidden" />
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={mode === "demandas" ? handleFileDemandas : handleFileProjetos}
+              className="hidden"
+            />
             <Button variant="outline" onClick={() => inputRef.current?.click()} disabled={loading}>
-              {loading ? 'Processando...' : 'Selecionar Arquivo'}
+              {loading ? "Processando..." : "Selecionar Arquivo"}
             </Button>
           </div>
 
-          {/* Preview for demandas */}
-          {mode === 'demandas' && showPreview && (
+          {mode === "demandas" && showPreview && (
             <div className="space-y-4">
               <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
                 <div className="flex items-center gap-2 flex-1">
@@ -361,9 +507,13 @@ export function ImportacaoView() {
 
               {autoCreatedTypes.length > 0 && (
                 <div className="border border-amber-300 rounded-lg p-3 space-y-1.5 bg-amber-50">
-                  <p className="text-xs font-semibold text-amber-800 uppercase">Tipos não encontrados (serão criados automaticamente):</p>
+                  <p className="text-xs font-semibold text-amber-800 uppercase">
+                    Tipos não encontrados (serão criados automaticamente):
+                  </p>
                   <ul className="list-disc pl-5 text-xs text-amber-700">
-                    {autoCreatedTypes.map((t, i) => <li key={i}>{t}</li>)}
+                    {autoCreatedTypes.map((t, i) => (
+                      <li key={i}>{t}</li>
+                    ))}
                   </ul>
                 </div>
               )}
@@ -374,49 +524,96 @@ export function ImportacaoView() {
                   {errors.map((err, i) => (
                     <div key={i} className="flex items-start gap-2 text-xs">
                       <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0 mt-0.5" />
-                      <span>Linha {err.linha}: {err.mensagem}</span>
+                      <span>
+                        Linha {err.linha}: {err.mensagem}
+                      </span>
                     </div>
                   ))}
                 </div>
               )}
 
               <div className="flex gap-3">
-                <Button style={{ backgroundColor: '#1a6fa8' }} className="hover:opacity-90 text-white" onClick={handleImport} disabled={loading || validRows.length === 0}>
-                  {loading ? 'Importando...' : `Importar somente as válidas (${validRows.length})`}
+                <Button
+                  style={{ backgroundColor: "#1a6fa8" }}
+                  className="hover:opacity-90 text-white"
+                  onClick={handleImport}
+                  disabled={loading || validRows.length === 0}
+                >
+                  {loading ? "Importando..." : `Importar somente as válidas (${validRows.length})`}
                 </Button>
-                <Button variant="outline" onClick={() => { setShowPreview(false); setValidRows([]); setErrors([]); setAutoCreatedTypes([]); }}>Cancelar</Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowPreview(false);
+                    setValidRows([]);
+                    setErrors([]);
+                    setAutoCreatedTypes([]);
+                  }}
+                >
+                  Cancelar
+                </Button>
               </div>
             </div>
           )}
 
-          {/* Result for demandas */}
-          {mode === 'demandas' && result && (
+          {mode === "demandas" && result && (
             <div className="border rounded-lg p-4 space-y-2">
-              <p className="font-medium flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" />Resultado da importação</p>
+              <p className="font-medium flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                Resultado da importação
+              </p>
               <div className="grid grid-cols-3 gap-3 text-sm">
-                <div className="text-center p-2 bg-emerald-50 rounded"><p className="text-lg font-bold text-emerald-700">{result.importados}</p><p className="text-xs text-muted-foreground">Importados</p></div>
-                <div className="text-center p-2 rounded" style={{ backgroundColor: '#e8f2fa' }}><p className="text-lg font-bold" style={{ color: '#1a6fa8' }}>{result.atualizados}</p><p className="text-xs text-muted-foreground">Atualizados</p></div>
-                <div className="text-center p-2 bg-red-50 rounded"><p className="text-lg font-bold text-destructive">{result.erros}</p><p className="text-xs text-muted-foreground">Erros</p></div>
+                <div className="text-center p-2 bg-emerald-50 rounded">
+                  <p className="text-lg font-bold text-emerald-700">{result.importados}</p>
+                  <p className="text-xs text-muted-foreground">Importados</p>
+                </div>
+                <div className="text-center p-2 rounded" style={{ backgroundColor: "#e8f2fa" }}>
+                  <p className="text-lg font-bold" style={{ color: "#1a6fa8" }}>
+                    {result.atualizados}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Atualizados</p>
+                </div>
+                <div className="text-center p-2 bg-red-50 rounded">
+                  <p className="text-lg font-bold text-destructive">{result.erros}</p>
+                  <p className="text-xs text-muted-foreground">Erros</p>
+                </div>
               </div>
               {result.tiposCriados && result.tiposCriados.length > 0 && (
                 <div className="border border-amber-300 rounded-lg p-3 bg-amber-50 mt-2">
-                  <p className="text-xs font-semibold text-amber-800">Tipos criados automaticamente ({result.tiposCriados.length}):</p>
+                  <p className="text-xs font-semibold text-amber-800">
+                    Tipos criados automaticamente ({result.tiposCriados.length}):
+                  </p>
                   <ul className="list-disc pl-5 text-xs text-amber-700 mt-1">
-                    {result.tiposCriados.map((t, i) => <li key={i}>{t}</li>)}
+                    {result.tiposCriados.map((t, i) => (
+                      <li key={i}>{t}</li>
+                    ))}
                   </ul>
                 </div>
               )}
             </div>
           )}
 
-          {/* Result for projetos */}
-          {mode === 'projetos' && projetoResult && (
+          {mode === "projetos" && projetoResult && (
             <div className="border rounded-lg p-4 space-y-2">
-              <p className="font-medium flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" />Resultado da importação</p>
+              <p className="font-medium flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                Resultado da importação
+              </p>
               <div className="grid grid-cols-3 gap-3 text-sm">
-                <div className="text-center p-2 bg-emerald-50 rounded"><p className="text-lg font-bold text-emerald-700">{projetoResult.importados}</p><p className="text-xs text-muted-foreground">Importados</p></div>
-                <div className="text-center p-2 rounded" style={{ backgroundColor: '#e8f2fa' }}><p className="text-lg font-bold" style={{ color: '#1a6fa8' }}>{projetoResult.existentes}</p><p className="text-xs text-muted-foreground">Já existentes</p></div>
-                <div className="text-center p-2 bg-red-50 rounded"><p className="text-lg font-bold text-destructive">{projetoResult.erros}</p><p className="text-xs text-muted-foreground">Erros</p></div>
+                <div className="text-center p-2 bg-emerald-50 rounded">
+                  <p className="text-lg font-bold text-emerald-700">{projetoResult.importados}</p>
+                  <p className="text-xs text-muted-foreground">Importados</p>
+                </div>
+                <div className="text-center p-2 rounded" style={{ backgroundColor: "#e8f2fa" }}>
+                  <p className="text-lg font-bold" style={{ color: "#1a6fa8" }}>
+                    {projetoResult.existentes}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Já existentes</p>
+                </div>
+                <div className="text-center p-2 bg-red-50 rounded">
+                  <p className="text-lg font-bold text-destructive">{projetoResult.erros}</p>
+                  <p className="text-xs text-muted-foreground">Erros</p>
+                </div>
               </div>
             </div>
           )}
