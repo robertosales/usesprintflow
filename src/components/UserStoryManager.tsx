@@ -165,7 +165,7 @@ export function UserStoryManager() {
       const s = selectedSize ? getSizeByKey(selectedSize) : null;
       const sizeData = s
         ? { sizeReference: s.key, estimatedHours: s.hours, storyPoints: s.points }
-        : { storyPoints: 0 };
+        : { sizeReference: null, estimatedHours: null, storyPoints: 0 };
 
       const fp = functionPoints ? parseFloat(functionPoints) : null;
       const fullDesc = acceptanceCriteria
@@ -228,7 +228,7 @@ export function UserStoryManager() {
     setDescription(parts[0] || "");
     setAcceptanceCriteria(parts[1] || "");
 
-    setSelectedSize(hu.sizeReference || null);
+    setSelectedSize(hu.sizeReference ?? null);
     setPriority(hu.priority);
     setEpicId(hu.epicId || "");
     setStartDate(hu.startDate || "");
@@ -458,7 +458,7 @@ export function UserStoryManager() {
                 <div>
                   <Label className="text-xs">Estimativa em horas</Label>
                   <Select
-                    value={selectedSize || "none"}
+                    value={selectedSize ?? "none"}
                     onValueChange={(v) => setSelectedSize(v === "none" ? null : v)}
                   >
                     <SelectTrigger className="mt-1 h-9 text-xs">
