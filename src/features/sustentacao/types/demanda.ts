@@ -116,13 +116,34 @@ export function isDemandaIniciada(demanda: Demanda): boolean {
   return demanda.situacao !== "fila_atendimento";
 }
 
+// ✅ CORRIGIDO: tenta o responsável da fase atual primeiro,
+// com fallback para qualquer campo preenchido
 export function getResponsavelAtivo(demanda: Demanda): string | null {
   const s = demanda.situacao;
-  if (["fila_atendimento", "planejamento_elaboracao", "planejamento_ag_aprovacao", "planejamento_aprovada"].includes(s))
-    return demanda.responsavel_requisitos ?? null;
-  if (["em_execucao", "bloqueada", "fila_producao"].includes(s)) return demanda.responsavel_dev ?? null;
-  if (["hom_ag_homologacao", "hom_homologada"].includes(s)) return demanda.responsavel_arquiteto ?? null;
-  return null;
+
+  const porFase = [
+    "fila_atendimento",
+    "planejamento_elaboracao",
+    "planejamento_ag_aprovacao",
+    "planejamento_aprovada",
+  ].includes(s)
+    ? demanda.responsavel_requisitos
+    : ["em_execucao", "bloqueada", "fila_producao"].includes(s)
+      ? demanda.responsavel_dev
+      : ["hom_ag_homologacao", "hom_homologada"].includes(s)
+        ? demanda.responsavel_arquiteto
+        : null;
+
+  if (porFase) return porFase;
+
+  // Fallback: retorna qualquer responsável preenchido
+  return (
+    demanda.responsavel_dev ??
+    demanda.responsavel_requisitos ??
+    demanda.responsavel_teste ??
+    demanda.responsavel_arquiteto ??
+    null
+  );
 }
 
 /** @deprecated Use FLOW_PRINCIPAL */
