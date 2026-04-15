@@ -81,7 +81,17 @@ export function DemandasList() {
   useEffect(() => {
     if (demandas.length === 0) return;
     const ids = demandas.map((d) => d.id);
-    fetchResponsaveisBatch(ids).then(setResponsaveisMap);
+
+    supabase
+      .from("demanda_responsaveis")
+      .select("demanda_id, papel, profiles(display_name)")
+      .in("demanda_id", ids)
+      .then(({ data, error }) => {
+        console.log("=== DEBUG RESPONSAVEIS ===");
+        console.log("IDs buscados:", ids.length);
+        console.log("Erro:", error);
+        console.log("Data retornada:", data);
+      });
   }, [demandas]);
 
   // ✅ Retorna o nome do responsável ativo conforme situação da demanda
