@@ -41,7 +41,7 @@ export function DemandaCard({ demanda, onOpen, onDelete, draggable, onDragStart 
     >
       <div className="flex items-start justify-between gap-2">
         <div className="space-y-1.5 min-w-0 flex-1">
-          {/* ── Linha 1: RHM + badges de alerta ── */}
+          {/* RHM + badges */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-xs font-mono font-bold text-info">{demanda.rhm}</span>
             {demanda.sla === "24x7" && (
@@ -56,36 +56,31 @@ export function DemandaCard({ demanda, onOpen, onDelete, draggable, onDragStart 
             )}
           </div>
 
-          {/* ── Linha 2: Projeto ── */}
+          {/* Projeto */}
           <p className="text-xs text-muted-foreground truncate">{demanda.projeto}</p>
 
-          {/* ── Linha 3: Título/descrição ── */}
+          {/* Responsável — só renderiza se existir, sem fallback de texto */}
+          {responsavel && (
+            <div className="flex items-center gap-1.5">
+              <div
+                className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[9px] font-bold flex items-center justify-center shrink-0"
+                title={responsavel}
+              >
+                {getInitials(responsavel)}
+              </div>
+              <span className="text-[10px] text-muted-foreground truncate max-w-[140px]">{responsavel}</span>
+            </div>
+          )}
+
+          {/* Título */}
           {demanda.descricao && <p className="text-xs font-medium leading-tight line-clamp-2">{demanda.descricao}</p>}
 
-          {/* ── Linha 4: Tipo + Responsável ── */}
-          <div className="flex items-center justify-between gap-1.5 pt-0.5">
-            <Badge variant="outline" className="text-[10px] h-4 px-1.5 capitalize shrink-0">
-              {demanda.tipo}
-            </Badge>
-
-            {/* ✅ NOVO: avatar com iniciais + nome do responsável ativo */}
-            {responsavel ? (
-              <div className="flex items-center gap-1 min-w-0">
-                <div
-                  className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[9px] font-bold flex items-center justify-center shrink-0"
-                  title={responsavel}
-                >
-                  {getInitials(responsavel)}
-                </div>
-                <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">{responsavel}</span>
-              </div>
-            ) : (
-              <span className="text-[10px] text-muted-foreground/50 italic">Sem responsável</span>
-            )}
-          </div>
+          {/* Tipo */}
+          <Badge variant="outline" className="text-[10px] h-4 px-1.5 capitalize">
+            {demanda.tipo}
+          </Badge>
         </div>
 
-        {/* ── Menu de ações ── */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
             <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0">
