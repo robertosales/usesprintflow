@@ -116,11 +116,11 @@ export function isDemandaIniciada(demanda: Demanda): boolean {
   return demanda.situacao !== "fila_atendimento";
 }
 
-// ✅ CORRIGIDO: tenta o responsável da fase atual primeiro,
-// com fallback para qualquer campo preenchido
 export function getResponsavelAtivo(demanda: Demanda): string | null {
+  // ✅ CORRIGIDO: tenta pelo campo da fase atual, com fallback para qualquer preenchido
   const s = demanda.situacao;
 
+  // Tenta o responsável esperado para a fase
   const porFase = [
     "fila_atendimento",
     "planejamento_elaboracao",
@@ -136,7 +136,7 @@ export function getResponsavelAtivo(demanda: Demanda): string | null {
 
   if (porFase) return porFase;
 
-  // Fallback: retorna qualquer responsável preenchido
+  // ✅ Fallback: retorna qualquer responsável preenchido
   return (
     demanda.responsavel_dev ??
     demanda.responsavel_requisitos ??
