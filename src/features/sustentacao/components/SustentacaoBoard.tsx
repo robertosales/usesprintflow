@@ -34,7 +34,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
-// Colunas fixas do board na ordem correta do fluxo
 const BOARD_COLUMNS = [
   "fila_atendimento",
   "planejamento_elaboracao",
@@ -50,7 +49,6 @@ const BOARD_COLUMNS = [
   "cancelada",
 ];
 
-// Cores para cabeçalho das colunas
 const COL_COLORS: Record<string, string> = {
   fila_atendimento: "bg-slate-100 text-slate-700 border-slate-300",
   planejamento_elaboracao: "bg-blue-100 text-blue-700 border-blue-300",
@@ -66,7 +64,22 @@ const COL_COLORS: Record<string, string> = {
   cancelada: "bg-gray-200 text-gray-700 border-gray-300",
 };
 
-// Labels curtos para cabeçalho (evita texto longo nas colunas)
+// ✅ Cores de borda superior para visual moderno por coluna
+const COL_ACCENT: Record<string, string> = {
+  fila_atendimento: "border-t-slate-400",
+  planejamento_elaboracao: "border-t-blue-400",
+  planejamento_ag_aprovacao: "border-t-indigo-400",
+  planejamento_aprovada: "border-t-violet-400",
+  em_execucao: "border-t-amber-400",
+  bloqueada: "border-t-red-400",
+  hom_ag_homologacao: "border-t-cyan-400",
+  hom_homologada: "border-t-teal-400",
+  rejeitada: "border-t-rose-400",
+  fila_producao: "border-t-orange-400",
+  ag_aceite_final: "border-t-emerald-400",
+  cancelada: "border-t-gray-400",
+};
+
 const COL_LABELS: Record<string, string> = {
   fila_atendimento: "Fila Atendimento",
   planejamento_elaboracao: "Em Elaboração",
@@ -91,7 +104,6 @@ function isForwardMove(demanda: Demanda, targetStatus: string): boolean {
   if (targetStatus === "cancelada") return true;
   if (demanda.situacao === "rejeitada") return targetStatus === "em_execucao";
   if (demanda.situacao === "bloqueada") return false;
-
   const flow = Array.from(FLOW_PRINCIPAL);
   const currentIdx = flow.indexOf(demanda.situacao as any);
   const targetIdx = flow.indexOf(targetStatus as any);
@@ -113,6 +125,7 @@ export function SustentacaoBoard() {
   );
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
   const [evidenceCache, setEvidenceCache] = useState<Record<string, number>>({});
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [filterTipo, setFilterTipo] = useState("all");
@@ -156,14 +169,10 @@ export function SustentacaoBoard() {
     [demandas, debouncedSearch, filterTipo, filterSla, filterProjeto],
   );
 
-  // Sempre usa BOARD_COLUMNS como base; se o hook retornar steps extras não mapeados, ignora.
-  // Isso garante que o board nunca fique vazio por dependência do hook.
   const columns = useMemo(() => {
     if (workflowSteps.length > 0) {
-      // Filtra apenas os steps que existem em BOARD_COLUMNS para manter a ordem correta
       const known = new Set(BOARD_COLUMNS);
       const fromHook = workflowSteps.map((s) => s.key).filter((k) => known.has(k));
-      // Garante que todos de BOARD_COLUMNS estejam presentes (adiciona os faltantes no fim)
       const extra = BOARD_COLUMNS.filter((c) => !fromHook.includes(c));
       return [...fromHook, ...extra];
     }
@@ -194,10 +203,10 @@ export function SustentacaoBoard() {
 
   const handleDrop = async (e: React.DragEvent, status: string) => {
     e.preventDefault();
+    setDragOverColumn(null);
     const id = e.dataTransfer.getData("demanda-id");
     const demanda = demandas.find((d) => d.id === id);
     if (!demanda || demanda.situacao === status) return;
-
     const validation = validateDrop(demanda, status);
     if (validation.error) {
       toast.error(validation.error);
@@ -227,22 +236,27 @@ export function SustentacaoBoard() {
 
   return (
     <div className="space-y-4">
+      {/* ── Cabeçalho ── */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-lg font-semibold">Board Kanban</h2>
-          <p className="text-sm text-muted-foreground">
-            Exibe todas as demandas. Clique no ícone do cabeçalho para retrair/expandir colunas.
+          <p className="text-xs text-muted-foreground">
+            Clique no ícone do cabeçalho para retrair/expandir colunas. Arraste para mover demandas.
           </p>
         </div>
+        <Badge variant="outline" className="text-xs">
+          {filtered.length} demanda{filtered.length !== 1 ? "s" : ""}
+        </Badge>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      {/* ── Filtros ── */}
+      <div className="flex flex-wrap gap-2 p-3 bg-muted/30 rounded-lg border">
         <Select value={filterProjeto} onValueChange={setFilterProjeto}>
-          <SelectTrigger className="w-[150px] h-9 text-xs">
+          <SelectTrigger className="w-[150px] h-8 text-xs bg-background">
             <SelectValue placeholder="Projeto" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="all">Todos projetos</SelectItem>
             {projetos.map((p) => (
               <SelectItem key={p} value={p}>
                 {p}
@@ -251,33 +265,33 @@ export function SustentacaoBoard() {
           </SelectContent>
         </Select>
         <Select value={filterTipo} onValueChange={setFilterTipo}>
-          <SelectTrigger className="w-[140px] h-9 text-xs">
+          <SelectTrigger className="w-[150px] h-8 text-xs bg-background">
             <SelectValue placeholder="Tipo" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="all">Todos tipos</SelectItem>
             <SelectItem value="corretiva">Corretiva</SelectItem>
             <SelectItem value="evolutiva">Evolutiva</SelectItem>
             <SelectItem value="manutencao_corretiva">Manutenção Corretiva</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterSla} onValueChange={setFilterSla}>
-          <SelectTrigger className="w-[100px] h-9 text-xs">
+          <SelectTrigger className="w-[110px] h-8 text-xs bg-background">
             <SelectValue placeholder="SLA" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="all">Todos SLA</SelectItem>
             <SelectItem value="24x7">24x7</SelectItem>
             <SelectItem value="padrao">Padrão</SelectItem>
           </SelectContent>
         </Select>
         <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por RHM ou projeto..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-9 text-xs"
+            className="pl-9 h-8 text-xs bg-background"
           />
         </div>
       </div>
@@ -290,25 +304,40 @@ export function SustentacaoBoard() {
         />
       )}
 
-      <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-thin" style={{ minHeight: 400 }}>
+      {/* ── Board ── */}
+      {/* ✅ CORRIGIDO: altura baseada em conteúdo, não fixa */}
+      <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: 500 }}>
         {columns.map((status) => {
           const items = filtered.filter((d) => d.situacao === status);
           const isCollapsed = collapsedColumns.has(status);
           const colColor = COL_COLORS[status] || "bg-slate-100 text-slate-700 border-slate-300";
+          const accentBorder = COL_ACCENT[status] || "border-t-slate-400";
+          const isDragOver = dragOverColumn === status;
 
           return (
             <div
               key={status}
-              className={`flex-shrink-0 transition-all duration-300 ease-in-out ${isCollapsed ? "w-[44px]" : "w-[260px]"}`}
-              onDragOver={(e) => e.preventDefault()}
+              className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out ${isCollapsed ? "w-[44px]" : "w-[240px]"}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverColumn(status);
+              }}
+              onDragLeave={() => setDragOverColumn(null)}
               onDrop={(e) => handleDrop(e, status)}
             >
+              {/* ✅ CORRIGIDO: flex flex-col sem h-full fixo, cresce com conteúdo */}
               <div
-                className={`rounded-lg bg-muted/40 border h-full transition-all duration-300 ${isCollapsed ? "p-1" : "p-2"}`}
+                className={`
+                  flex flex-col rounded-xl border bg-muted/30 transition-all duration-200 shadow-sm
+                  border-t-2 ${accentBorder}
+                  ${isDragOver ? "ring-2 ring-info/40 bg-info/5" : ""}
+                  ${isCollapsed ? "p-1 items-center" : "p-2"}
+                `}
               >
                 {isCollapsed ? (
+                  /* ── Coluna retraída ── */
                   <div
-                    className="flex flex-col items-center gap-2 cursor-pointer h-full pt-2"
+                    className="flex flex-col items-center gap-2 cursor-pointer py-3"
                     onClick={() => toggleColumn(status)}
                     title={`Expandir: ${resolveLabel(status)}`}
                   >
@@ -317,16 +346,18 @@ export function SustentacaoBoard() {
                       {items.length}
                     </Badge>
                     <span
-                      className="text-[11px] font-semibold text-muted-foreground"
+                      className="text-[10px] font-semibold text-muted-foreground mt-1"
                       style={{ writingMode: "vertical-lr", textOrientation: "mixed", whiteSpace: "nowrap" }}
                     >
                       {resolveLabel(status)}
                     </span>
                   </div>
                 ) : (
+                  /* ── Coluna expandida ── */
                   <>
-                    <div className="flex items-center justify-between mb-2 px-1 gap-1">
-                      <div className="flex items-center gap-1 min-w-0 flex-1">
+                    {/* Cabeçalho da coluna */}
+                    <div className="flex items-center justify-between mb-2.5 px-0.5 gap-1">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
                         <button
                           onClick={() => toggleColumn(status)}
                           className="p-0.5 rounded hover:bg-muted transition-colors shrink-0"
@@ -334,17 +365,29 @@ export function SustentacaoBoard() {
                         >
                           <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
                         </button>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border truncate ${colColor}`}>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border truncate ${colColor}`}>
                           {resolveLabel(status)}
                         </span>
                       </div>
-                      <Badge className="text-[10px] h-5 min-w-5 flex items-center justify-center bg-info/10 text-info border-info/20 shrink-0">
+                      <Badge className="text-[10px] h-5 min-w-[20px] flex items-center justify-center bg-background border shadow-sm text-foreground shrink-0">
                         {items.length}
                       </Badge>
                     </div>
-                    <ScrollArea className="max-h-[calc(100vh-280px)]">
-                      <div className="space-y-2">
-                        {items.map((d) => (
+
+                    {/* ✅ CORRIGIDO: sem max-h fixo — a coluna cresce com os cards */}
+                    <div className="flex flex-col gap-2">
+                      {items.length === 0 ? (
+                        <div
+                          className={`
+                          flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-xs text-muted-foreground
+                          transition-colors duration-150
+                          ${isDragOver ? "border-info/50 bg-info/5 text-info" : "border-border/50"}
+                        `}
+                        >
+                          {isDragOver ? "Soltar aqui" : "Vazio"}
+                        </div>
+                      ) : (
+                        items.map((d) => (
                           <DemandaCard
                             key={d.id}
                             demanda={d}
@@ -357,9 +400,9 @@ export function SustentacaoBoard() {
                             draggable
                             onDragStart={(e, dem) => e.dataTransfer.setData("demanda-id", dem.id)}
                           />
-                        ))}
-                      </div>
-                    </ScrollArea>
+                        ))
+                      )}
+                    </div>
                   </>
                 )}
               </div>
@@ -368,7 +411,7 @@ export function SustentacaoBoard() {
         })}
       </div>
 
-      <p className="text-[10px] text-muted-foreground text-center">
+      <p className="text-[10px] text-muted-foreground text-center pb-2">
         Arraste os cards para alterar a situação. O sistema valida progressão sequencial e evidências obrigatórias
         automaticamente.
       </p>
