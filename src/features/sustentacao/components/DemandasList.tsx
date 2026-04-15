@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MoreHorizontal, Plus, Search, ListTodo } from "lucide-react";
 import {
@@ -24,7 +25,6 @@ import { SITUACAO_LABELS, SITUACAO_COLORS, isDemandaIniciada } from "../types/de
 import type { Demanda } from "../types/demanda";
 import { supabase } from "@/integrations/supabase/client";
 
-// Mapeamento de situação → papel esperado do responsável
 const SITUACAO_PAPEL_MAP: Record<string, string> = {
   fila_atendimento: "analista",
   planejamento_elaboracao: "analista",
@@ -37,13 +37,11 @@ const SITUACAO_PAPEL_MAP: Record<string, string> = {
   hom_homologada: "arquiteto",
 };
 
-// ✅ CORRIGIDO: busca em 2 etapas separadas (sem join automático)
 async function fetchResponsaveisBatch(
   demandaIds: string[],
 ): Promise<Map<string, { papel: string; display_name: string }[]>> {
   if (demandaIds.length === 0) return new Map();
 
-  // 1️⃣ Busca os responsáveis sem join
   const { data: respData, error: respError } = await supabase
     .from("demanda_responsaveis")
     .select("demanda_id, papel, user_id")
@@ -51,17 +49,14 @@ async function fetchResponsaveisBatch(
 
   if (respError || !respData || respData.length === 0) return new Map();
 
-  // 2️⃣ Busca os profiles dos user_ids encontrados
   const userIds = [...new Set(respData.map((r: any) => r.user_id))];
   const { data: profilesData } = await supabase.from("profiles").select("user_id, display_name").in("user_id", userIds);
 
-  // 3️⃣ Monta mapa user_id → display_name
   const profilesMap = new Map<string, string>();
   (profilesData || []).forEach((p: any) => {
     profilesMap.set(p.user_id, p.display_name);
   });
 
-  // 4️⃣ Monta mapa demanda_id → lista de { papel, display_name }
   const map = new Map<string, { papel: string; display_name: string }[]>();
   respData.forEach((r: any) => {
     const nome = profilesMap.get(r.user_id);
@@ -74,6 +69,9 @@ async function fetchResponsaveisBatch(
   return map;
 }
 
+// ✅ Opções de itens por página
+const PAGE_SIZE_OPTIONS = [20, 50, 100];
+
 export function DemandasList() {
   const { demandas, loading, error, create, update, moveTo, remove, reload } = useDemandas();
   const [showForm, setShowForm] = useState(false);
@@ -84,19 +82,19 @@ export function DemandasList() {
   const [filterSituacao, setFilterSituacao] = useState("all");
   const debouncedSearch = useDebounce(search, 300);
 
-  // Mapa de responsáveis: demanda_id → lista de { papel, display_name }
+  // ✅ Estado do tamanho da página
+  const [pageSize, setPageSize] = useState(20);
+
   const [responsaveisMap, setResponsaveisMap] = useState<Map<string, { papel: string; display_name: string }[]>>(
     new Map(),
   );
 
-  // ✅ CORRIGIDO: usa fetchResponsaveisBatch com as 2 queries separadas
   useEffect(() => {
     if (demandas.length === 0) return;
     const ids = demandas.map((d) => d.id);
     fetchResponsaveisBatch(ids).then(setResponsaveisMap);
   }, [demandas]);
 
-  // Retorna o nome do responsável ativo conforme situação da demanda
   function getResponsavelDaLista(d: Demanda): string | null {
     const papelEsperado = SITUACAO_PAPEL_MAP[d.situacao];
     const lista = responsaveisMap.get(d.id) || [];
@@ -118,8 +116,9 @@ export function DemandasList() {
     });
   }, [demandas, debouncedSearch, filterTipo, filterSituacao]);
 
+  // ✅ pageSize dinâmico
   const { paginatedItems, currentPage, setCurrentPage, totalItems } = usePagination(filtered, {
-    pageSize: 20,
+    pageSize,
   });
 
   if (selected) {
@@ -244,12 +243,38 @@ export function DemandasList() {
               </TableBody>
             </Table>
           </div>
-          <PaginationControls
-            currentPage={currentPage}
-            totalItems={totalItems}
-            pageSize={20}
-            onPageChange={setCurrentPage}
-          />
+
+          {/* ✅ Rodapé com seletor de itens por página + paginação */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Itens por página:</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(v) => {
+                  setPageSize(Number(v));
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="h-8 w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt} value={String(opt)}>
+                      {opt}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <PaginationControls
+              currentPage={currentPage}
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+            />
+          </div>
         </>
       )}
 
