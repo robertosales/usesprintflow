@@ -6,14 +6,11 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { upsertDemandas } from "../services/demandas.service";
 import { upsertProjetos } from "../services/projetos.service";
-import { TIPOS_DEMANDA_IMR, calcPrazoInicio, calcPrazoSolucao, isSolucaoDefinidaNaOS } from "../types/imr";
+import { TIPOS_DEMANDA_IMR, calcPrazoInicio, calcPrazoSolucao } from "../types/imr";
 import { useProjetos } from "../hooks/useProjetos";
-import * as XLSX from "xlsx";
-import { parse, isValid, startOfDay, format } from "date-fns";
+import { parse, isValid, format } from "date-fns";
 
-// ✅ ADICIONADO: mapeamento dos labels do Redmine para slugs do banco
 const SITUACAO_MAP: Record<string, string> = {
-  // Valores já no formato slug (passam direto)
   fila_atendimento: "fila_atendimento",
   planejamento_elaboracao: "planejamento_elaboracao",
   planejamento_ag_aprovacao: "planejamento_ag_aprovacao",
@@ -26,7 +23,6 @@ const SITUACAO_MAP: Record<string, string> = {
   fila_producao: "fila_producao",
   ag_aceite_final: "ag_aceite_final",
   cancelada: "cancelada",
-  // Labels legíveis do Redmine
   "fila de atendimento": "fila_atendimento",
   nova: "fila_atendimento",
   "planejamento: em elaboracao": "planejamento_elaboracao",
@@ -36,20 +32,16 @@ const SITUACAO_MAP: Record<string, string> = {
   "planejamento: aprovada p/ exec": "planejamento_aprovada",
   "em execucao": "em_execucao",
   "em execução": "em_execucao",
-  bloqueada: "bloqueada",
   "hom: ag. homologacao": "hom_ag_homologacao",
   "hom: ag. homologação": "hom_ag_homologacao",
   "hom: homologada": "hom_homologada",
   homologada: "hom_homologada",
-  rejeitada: "rejeitada",
   "fila para producao (infra)": "fila_producao",
   "fila para produção (infra)": "fila_producao",
   "ag. aceite final": "ag_aceite_final",
   "aguardando aceite final": "ag_aceite_final",
-  cancelada: "cancelada",
 };
 
-// ✅ ADICIONADO: função para mapear situacao com fallback seguro
 function normalizeSituacao(raw: string): string {
   const cleaned = raw
     .trim()
@@ -132,7 +124,6 @@ interface ParsedRow {
   sla?: string;
   tipo_defeito?: string;
   originada_diagnostico?: boolean;
-  demandante?: string;
   descricao?: string;
   data_previsao_encerramento?: string;
   prazo_inicio_atendimento?: string;
@@ -163,6 +154,28 @@ export function ImportacaoView() {
 
   const projetoNamesNorm = new Map(projetos.map((p) => [normalize(p.nome), p.nome]));
 
+  // ✅ FIX 1: leitura manual do CSV com TextDecoder para preservar acentos e BOM
+  function parseCsvToRows(buffer: ArrayBuffer): Record<string, string>[] {
+    const text = new TextDecoder("utf-8").decode(buffer);
+    const lines = text
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .split("\n")
+      .filter((l) => l.trim());
+    if (lines.length < 2) return [];
+    // Remove BOM da primeira linha
+    lines[0] = lines[0].replace(/^\uFEFF/, "");
+    const headers = lines[0].split(";").map((h) => h.trim());
+    return lines.slice(1).map((line) => {
+      const values = line.split(";");
+      const obj: Record<string, string> = {};
+      headers.forEach((h, i) => {
+        obj[h] = (values[i] || "").trim();
+      });
+      return obj;
+    });
+  }
+
   const handleFileDemandas = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentTeamId) return;
@@ -174,9 +187,9 @@ export function ImportacaoView() {
 
     try {
       const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: "array", cellDates: true });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { raw: false });
+
+      // ✅ FIX 1: usa parseCsvToRows para CSV com ";", preservando "Título" corretamente
+      const rows = parseCsvToRows(buffer);
 
       const parsed: ParsedRow[] = [];
       const errs: ValidationError[] = [];
@@ -184,10 +197,18 @@ export function ImportacaoView() {
 
       rows.forEach((r, idx) => {
         const linha = idx + 2;
-        const rhm = String(r["RHM"] || r["rhm"] || r["#"] || "").trim();
+
+        // ✅ FIX 2: campo "#" do Redmine é o RHM
+        const rhm = String(r["#"] || r["RHM"] || r["rhm"] || "").trim();
         const projeto = String(r["Projeto"] || r["projeto"] || "").trim();
         const tipoRaw = String(r["Tipo"] || r["tipo"] || "").trim();
-        const dataInicioRaw = r["Criado em"] || r["Data de Início"] || r["Data de Inicio"] || r["data_inicio"] || null;
+        const dataInicioRaw =
+          r["Criado em"] || r["Criado Em"] || r["Data de Início"] || r["Data de Inicio"] || r["data_inicio"] || null;
+
+        // ✅ FIX 3: "Título" do CSV → campo descricao no banco
+        const descricao =
+          String(r["Título"] || r["Titulo"] || r["Subject"] || r["Descrição"] || r["descricao"] || "").trim() ||
+          undefined;
 
         if (!rhm) {
           errs.push({ linha, mensagem: "# não informado." });
@@ -200,10 +221,7 @@ export function ImportacaoView() {
 
         const projNorm = normalize(projeto);
         if (!projetoNamesNorm.has(projNorm)) {
-          errs.push({
-            linha,
-            mensagem: `Projeto '${projeto}' não encontrado. Verifique o cadastro (busca ignora maiúsculas e acentos).`,
-          });
+          errs.push({ linha, mensagem: `Projeto '${projeto}' não encontrado. Verifique o cadastro.` });
           return;
         }
 
@@ -216,9 +234,7 @@ export function ImportacaoView() {
           errs.push({ linha, mensagem: `Tipo '${tipoRaw}' não reconhecido.` });
           return;
         }
-        if (tipoResult.autoCreated && !newTypes.includes(tipoRaw)) {
-          newTypes.push(tipoRaw);
-        }
+        if (tipoResult.autoCreated && !newTypes.includes(tipoRaw)) newTypes.push(tipoRaw);
         const tipoNorm = tipoResult.value;
 
         if (!dataInicioRaw) {
@@ -231,12 +247,10 @@ export function ImportacaoView() {
           return;
         }
 
-        // ✅ CORRIGIDO: usa normalizeSituacao() no lugar da normalização genérica anterior
         const situacaoRaw = String(r["Situação"] || r["Situacao"] || r["situacao"] || "Nova").trim();
         const situacao = normalizeSituacao(removeEmojis(situacaoRaw));
 
         const isCorretiva = tipoNorm === "manutencao_corretiva";
-
         let sla = "padrao";
         const regimeRaw = String(r["Regime de Atendimento"] || r["Regime"] || r["regime"] || "").trim();
         if (isCorretiva && /\d+\s*x\s*7/i.test(regimeRaw)) sla = "continuo";
@@ -264,8 +278,6 @@ export function ImportacaoView() {
         const prazoInicio = calcPrazoInicio(dataInicio, tipoNorm, regime, defeito);
         const prazoSolucao = calcPrazoSolucao(dataInicio, tipoNorm, regime, defeito);
 
-        const descVal =
-          String(r["Título"] || r["Descrição"] || r["Descricao"] || r["descricao"] || "").trim() || undefined;
         const prevEncRaw = r["Data de Previsão de Encerramento"] || r["Data Previsão Encerramento"] || null;
         let prevEnc: string | undefined;
         if (prevEncRaw) {
@@ -282,7 +294,7 @@ export function ImportacaoView() {
           sla,
           tipo_defeito,
           originada_diagnostico,
-          descricao: descVal,
+          descricao, // ✅ título do CSV gravado aqui
           data_previsao_encerramento: prevEnc || (prazoSolucao ? format(prazoSolucao, "yyyy-MM-dd") : undefined),
           prazo_inicio_atendimento: prazoInicio?.toISOString(),
           prazo_solucao: prazoSolucao?.toISOString(),
@@ -294,9 +306,7 @@ export function ImportacaoView() {
       setAutoCreatedTypes(newTypes);
       setShowPreview(true);
 
-      if (parsed.length === 0 && errs.length === 0) {
-        toast.error("Nenhuma linha encontrada no arquivo.");
-      }
+      if (parsed.length === 0 && errs.length === 0) toast.error("Nenhuma linha encontrada no arquivo.");
     } catch {
       toast.error("Erro ao processar arquivo.");
     } finally {
@@ -313,9 +323,7 @@ export function ImportacaoView() {
 
     try {
       const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: "array", cellDates: true });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { raw: false });
+      const rows = parseCsvToRows(buffer);
 
       const results = { importados: 0, existentes: 0, erros: 0 };
       const existingNorms = new Set(projetos.map((p) => normalize(p.nome)));
@@ -326,7 +334,6 @@ export function ImportacaoView() {
           results.erros++;
           continue;
         }
-
         if (existingNorms.has(normalize(nome))) {
           results.existentes++;
           continue;
@@ -359,6 +366,7 @@ export function ImportacaoView() {
     }
   };
 
+  // ✅ FIX 4: handleImport agora envia TODOS os campos incluindo descricao
   const handleImport = async () => {
     if (!currentTeamId || validRows.length === 0) return;
     setLoading(true);
@@ -372,6 +380,13 @@ export function ImportacaoView() {
             projeto: row.projeto,
             situacao: row.situacao || "fila_atendimento",
             tipo: row.tipo,
+            sla: row.sla,
+            descricao: row.descricao, // ✅ título gravado no banco
+            tipo_defeito: row.tipo_defeito,
+            originada_diagnostico: row.originada_diagnostico,
+            data_previsao_encerramento: row.data_previsao_encerramento,
+            prazo_inicio_atendimento: row.prazo_inicio_atendimento,
+            prazo_solucao: row.prazo_solucao,
           },
         ]);
         results.importados += res.importados;
@@ -457,18 +472,14 @@ export function ImportacaoView() {
           <CardDescription>
             {mode === "demandas" ? (
               <>
-                Faça upload do arquivo .csv ou .xlsx exportado do Redmine.
+                Faça upload do arquivo .csv exportado do Redmine.
                 <br />
-                Colunas obrigatórias: <strong>RHM, Projeto, Tipo, Criado em</strong>.
-                <br />
-                <span className="text-xs text-muted-foreground">
-                  Não são aceitas demandas com data em 'Criado em' retroativa.
-                </span>
+                Colunas obrigatórias: <strong>#, Projeto, Tipo, Criado em</strong>.<br />
+                Coluna opcional importada: <strong>Título, Situação</strong>.
               </>
             ) : (
               <>
-                Faça upload do arquivo .csv ou .xlsx com as colunas: <strong>Nome, Descrição, Equipe, SLA</strong>.
-                <br />
+                Faça upload do arquivo .csv com as colunas: <strong>Nome, Descrição, Equipe, SLA</strong>.<br />
                 <span className="text-xs text-muted-foreground">Projetos já cadastrados serão ignorados.</span>
               </>
             )}
@@ -481,7 +492,7 @@ export function ImportacaoView() {
             <input
               ref={inputRef}
               type="file"
-              accept=".xlsx,.xls,.csv"
+              accept=".csv"
               onChange={mode === "demandas" ? handleFileDemandas : handleFileProjetos}
               className="hidden"
             />
