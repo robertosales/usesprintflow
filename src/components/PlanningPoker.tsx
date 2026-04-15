@@ -367,13 +367,11 @@ export function PlanningPoker() {
 
   const confirmAndAdvance = async (sizeKey: string) => {
     if (!currentHuId || !userId) return;
-
-    // 🔧 FIX RISCO 2: usa hoursConfig se deckMode === "hours", senão getSizeByKey
+    // 🔧 FIX RISCO 2: usa hoursConfig se deckMode === "hours"
     const size =
       deckMode === "hours"
         ? (hoursConfig.find((s) => s.key === sizeKey) ?? getSizeByKey(sizeKey))
         : getSizeByKey(sizeKey);
-
     if (!size) return;
 
     await updateUserStory(currentHuId, {
@@ -452,17 +450,21 @@ export function PlanningPoker() {
     return customCards;
   };
 
-  // 🔧 FIX RISCO 2: helper que resolve size usando hoursConfig quando modo hours
-  const resolveSizeFromVote = (voteValue: string): SizeReference | null => {
-    if (deckMode === "hours") {
-      return (hoursConfig.find((s) => s.key === voteValue) as SizeReference) ?? getSizeByKey(voteValue);
-    }
-    const num = parseFloat(voteValue === "½" ? "0.5" : voteValue);
-    if (isNaN(num)) return null;
-    return getSizeByPoints(num);
-  };
+  // 🔧 FIX RISCO 2: resolve size respeitando hoursConfig no modo hours
+  const resolveSizeFromVote = useCallback(
+    (voteValue: string): SizeReference | null => {
+      if (deckMode === "hours") {
+        return (hoursConfig.find((s) => s.key === voteValue) as SizeReference) ?? getSizeByKey(voteValue);
+      }
+      const num = parseFloat(voteValue === "½" ? "0.5" : voteValue);
+      if (isNaN(num)) return null;
+      return getSizeByPoints(num);
+    },
+    [deckMode, hoursConfig],
+  );
 
-  const getConsensus = (): {
+  // 🔧 FIX COMPLETO: getConsensus agora lida corretamente com modo hours (cartas são letras, não números)
+  const getConsensus = useCallback((): {
     size: SizeReference | null;
     counts: Record<string, number>;
     avg: number;
@@ -471,16 +473,26 @@ export function PlanningPoker() {
   } => {
     const counts: Record<string, number> = {};
     const numericVotes: number[] = [];
+
     votes.forEach((v) => {
       if (v.voteValue === "—") return;
       counts[v.voteValue] = (counts[v.voteValue] || 0) + 1;
-      const num = parseFloat(v.voteValue === "½" ? "0.5" : v.voteValue);
+
+      // 🔧 modo hours: pontos vêm do hoursConfig, não de parseFloat da letra
+      let num: number;
+      if (deckMode === "hours") {
+        const s = hoursConfig.find((h) => h.key === v.voteValue);
+        num = s ? s.points : NaN;
+      } else {
+        num = parseFloat(v.voteValue === "½" ? "0.5" : v.voteValue);
+      }
       if (!isNaN(num)) numericVotes.push(num);
     });
 
     if (numericVotes.length === 0) return { size: null, counts, avg: 0, mode: "—", hasDivergence: false };
 
     const avg = numericVotes.reduce((s, n) => s + n, 0) / numericVotes.length;
+
     let maxCount = 0;
     let modeVal = "";
     Object.entries(counts).forEach(([val, count]) => {
@@ -495,24 +507,41 @@ export function PlanningPoker() {
     const hasDivergence = max > 0 && max / Math.max(min, 0.5) >= 3;
 
     const uniqueValues = [...new Set(votes.filter((v) => v.voteValue !== "—").map((v) => v.voteValue))];
+
+    // Consenso unânime
     if (uniqueValues.length === 1) {
-      return { size: resolveSizeFromVote(uniqueValues[0]), counts, avg, mode: modeVal, hasDivergence: false };
+      return {
+        size: resolveSizeFromVote(uniqueValues[0]),
+        counts,
+        avg,
+        mode: modeVal,
+        hasDivergence: false,
+      };
     }
 
+    // Consenso por mediana
     numericVotes.sort((a, b) => a - b);
     const mid = Math.floor(numericVotes.length / 2);
     const median = numericVotes.length % 2 !== 0 ? numericVotes[mid] : (numericVotes[mid - 1] + numericVotes[mid]) / 2;
 
-    // 🔧 FIX RISCO 4: se getSizeByPoints retornar null, pega o tamanho mais próximo
-    const exactSize = getSizeByPoints(median);
-    const resolvedSize =
-      exactSize ??
-      SIZE_REFERENCES.reduce((prev, curr) =>
+    let resolvedSize: SizeReference | null = null;
+
+    if (deckMode === "hours") {
+      // 🔧 modo hours: pega o tamanho cujos pontos são mais próximos da mediana
+      resolvedSize = hoursConfig.reduce((prev, curr) =>
         Math.abs(curr.points - median) < Math.abs(prev.points - median) ? curr : prev,
-      );
+      ) as SizeReference;
+    } else {
+      // 🔧 FIX RISCO 4: se getSizeByPoints retornar null, pega o mais próximo
+      resolvedSize =
+        getSizeByPoints(median) ??
+        SIZE_REFERENCES.reduce((prev, curr) =>
+          Math.abs(curr.points - median) < Math.abs(prev.points - median) ? curr : prev,
+        );
+    }
 
     return { size: resolvedSize || null, counts, avg, mode: modeVal, hasDivergence };
-  };
+  }, [votes, deckMode, hoursConfig, resolveSizeFromVote]);
 
   const currentHu = currentHuId ? sprintStories.find((hu) => hu.id === currentHuId) : null;
   const consensus = revealed ? getConsensus() : null;
@@ -867,7 +896,6 @@ export function PlanningPoker() {
                           {revealed && (
                             <span className="text-xs text-muted-foreground w-12 text-right">
                               {(() => {
-                                // 🔧 FIX RISCO 2: usa resolveSizeFromVote para exibir horas corretas
                                 const size = resolveSizeFromVote(v.voteValue);
                                 return size ? `${size.hours}h` : "";
                               })()}
