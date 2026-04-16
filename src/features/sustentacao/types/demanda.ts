@@ -78,6 +78,7 @@ export interface Demanda {
   team_id: string;
   rhm: string;
   projeto: string;
+  titulo?: string | null; // ← adicionar aqui
   tipo: DemandaTipo;
   situacao: string;
   descricao: string;
