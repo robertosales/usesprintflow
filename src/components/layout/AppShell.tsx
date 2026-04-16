@@ -117,7 +117,7 @@ const NAV_SALA_AGIL: NavItem[] = [
   { key: "times", label: "Times", icon: Users, path: "/sala-agil/times", group: "config" },
   { key: "membros", label: "Membros", icon: User, path: "/sala-agil/membros", group: "config" },
   { key: "perfis", label: "Perfis (RBAC)", icon: ShieldCheck, path: "/sala-agil/perfis", group: "config" },
-  { key: "fluxo", label: "Fluxo", icon: GitBranch, path: "/sala-agil/fluxo", group: "config" },
+  { key: "fluxo", label: "Fluxo de Trabalho", icon: GitBranch, path: "/sala-agil/fluxo", group: "config" },
   { key: "campos", label: "Campos Custom", icon: Settings, path: "/sala-agil/campos", group: "config" },
   { key: "automacoes", label: "Automações", icon: Repeat, path: "/sala-agil/automacoes", group: "config" },
 ];
@@ -328,7 +328,7 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
 // ─── AppShell ─────────────────────────────────────────────────────────────────
 
 export function AppShell({ module, children, activeKey, onNavigate }: AppShellProps) {
-  const { profile, isAdmin, signOut, roles } = useAuth();
+  const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
 
   const moduleAccess = profile?.module_access ?? "sala_agil";
@@ -397,7 +397,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                     {profile?.display_name ?? "Usuário"}
                   </p>
                   <p className="text-[10px] text-white/40 capitalize truncate leading-none">
-                    {roles[0] ?? "membro"}
+                    {profile?.role ?? "membro"}
                   </p>
                 </div>
                 <ChevronRight className="h-3.5 w-3.5 text-white/30 group-hover:text-white/60 transition-colors shrink-0" />
@@ -406,7 +406,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             <DropdownMenuContent align="end" side="top" className="w-48 mb-1">
               <DropdownMenuLabel className="text-xs">
                 <p className="font-semibold">{profile?.display_name}</p>
-                <p className="text-muted-foreground font-normal capitalize">{roles[0] ?? "membro"}</p>
+                <p className="text-muted-foreground font-normal capitalize">{profile?.role}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               {canSwitch && (
