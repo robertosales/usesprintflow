@@ -49,6 +49,7 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   path: string;
+  key: string; // ← ADD
   group: "main" | "org" | "config";
 }
 
