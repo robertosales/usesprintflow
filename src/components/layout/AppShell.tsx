@@ -406,7 +406,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             <DropdownMenuContent align="end" side="top" className="w-48 mb-1">
               <DropdownMenuLabel className="text-xs">
                 <p className="font-semibold">{profile?.display_name}</p>
-                <p className="text-muted-foreground font-normal capitalize">{profile?.role}</p>
+                <p className="text-muted-foreground font-normal capitalize">{roles[0] ?? "membro"}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               {canSwitch && (
