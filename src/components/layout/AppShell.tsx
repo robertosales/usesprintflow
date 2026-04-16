@@ -1,9 +1,7 @@
-import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprint } from "@/contexts/SprintContext";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -46,11 +44,18 @@ import { cn } from "@/lib/utils";
 type ActiveModule = "sala_agil" | "sustentacao";
 
 interface NavItem {
+  key: string;
   label: string;
   icon: React.ElementType;
   path: string;
-  key: string; // ← ADD
   group: "main" | "org" | "config";
+}
+
+interface AppShellProps {
+  module: ActiveModule;
+  children: React.ReactNode;
+  activeKey?: string;
+  onNavigate?: (key: string) => void;
 }
 
 // ─── SVG Copas ────────────────────────────────────────────────────────────────
@@ -63,44 +68,7 @@ function HeartSuitIcon({ className }: { className?: string }) {
   );
 }
 
-// ─── Nav config ───────────────────────────────────────────────────────────────
-
-const NAV_SALA_AGIL: NavItem[] = [
-  { label: "Dashboard", icon: LayoutDashboard, path: "/sala-agil", group: "main" },
-  { label: "Board Kanban", icon: Kanban, path: "/sala-agil/board", group: "main" },
-  { label: "Backlog", icon: ListTodo, path: "/sala-agil/backlog", group: "main" },
-  { label: "Épicos", icon: Layers, path: "/sala-agil/epicos", group: "main" },
-  { label: "Planning", icon: GitBranch, path: "/sala-agil/planning", group: "main" },
-  { label: "Calendário", icon: Calendar, path: "/sala-agil/calendario", group: "main" },
-  { label: "Equipe", icon: Users, path: "/sala-agil/equipe", group: "main" },
-  { label: "Atividades", icon: Activity, path: "/sala-agil/atividades", group: "main" },
-  { label: "Impedimentos", icon: AlertTriangle, path: "/sala-agil/impedimentos", group: "main" },
-  { label: "Retrospectiva", icon: Repeat, path: "/sala-agil/retro", group: "main" },
-  { label: "Métricas", icon: BarChart3, path: "/sala-agil/metricas", group: "org" },
-  { label: "Histórico", icon: History, path: "/sala-agil/historico", group: "org" },
-  { label: "Times", icon: Users, path: "/sala-agil/times", group: "config" },
-  { label: "Membros", icon: User, path: "/sala-agil/membros", group: "config" },
-  { label: "Perfis (RBAC)", icon: ShieldCheck, path: "/sala-agil/perfis", group: "config" },
-  { label: "Fluxo", icon: GitBranch, path: "/sala-agil/fluxo", group: "config" },
-  { label: "Campos Custom", icon: Settings, path: "/sala-agil/campos", group: "config" },
-  { label: "Automações", icon: Repeat, path: "/sala-agil/automacoes", group: "config" },
-];
-
-const NAV_SUSTENTACAO: NavItem[] = [
-  { label: "Dashboard", icon: LayoutDashboard, path: "/sustentacao", group: "main" },
-  { label: "Board Kanban", icon: Kanban, path: "/sustentacao/board", group: "main" },
-  { label: "Demandas", icon: ListTodo, path: "/sustentacao/demandas", group: "main" },
-  { label: "Projetos", icon: Layers, path: "/sustentacao/projetos", group: "main" },
-  { label: "Importação Excel", icon: Upload, path: "/sustentacao/importacao", group: "main" },
-  { label: "Equipe", icon: Users, path: "/sustentacao/equipe", group: "main" },
-  { label: "Fluxo de Trabalho", icon: GitBranch, path: "/sustentacao/fluxo", group: "main" },
-  { label: "Relatórios", icon: FileText, path: "/sustentacao/relatorios", group: "org" },
-  { label: "Times", icon: Users, path: "/sustentacao/times", group: "config" },
-  { label: "Membros", icon: User, path: "/sustentacao/membros", group: "config" },
-  { label: "Perfis (RBAC)", icon: ShieldCheck, path: "/sustentacao/perfis", group: "config" },
-  { label: "Campos Custom", icon: Settings, path: "/sustentacao/campos", group: "config" },
-  { label: "Automações", icon: Repeat, path: "/sustentacao/automacoes", group: "config" },
-];
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const GROUP_LABELS: Record<NavItem["group"], string> = {
   main: "PRINCIPAL",
@@ -108,84 +76,62 @@ const GROUP_LABELS: Record<NavItem["group"], string> = {
   config: "CONFIGURAÇÕES",
 };
 
+const NAV_SALA_AGIL: NavItem[] = [
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/sala-agil", group: "main" },
+  { key: "board", label: "Board Kanban", icon: Kanban, path: "/sala-agil/board", group: "main" },
+  { key: "backlog", label: "Backlog", icon: ListTodo, path: "/sala-agil/backlog", group: "main" },
+  { key: "epicos", label: "Épicos", icon: Layers, path: "/sala-agil/epicos", group: "main" },
+  { key: "planning", label: "Planning", icon: GitBranch, path: "/sala-agil/planning", group: "main" },
+  { key: "calendario", label: "Calendário", icon: Calendar, path: "/sala-agil/calendario", group: "main" },
+  { key: "equipe", label: "Equipe", icon: Users, path: "/sala-agil/equipe", group: "main" },
+  { key: "atividades", label: "Atividades", icon: Activity, path: "/sala-agil/atividades", group: "main" },
+  { key: "impedimentos", label: "Impedimentos", icon: AlertTriangle, path: "/sala-agil/impedimentos", group: "main" },
+  { key: "retro", label: "Retrospectiva", icon: Repeat, path: "/sala-agil/retro", group: "main" },
+  { key: "metricas", label: "Métricas", icon: BarChart3, path: "/sala-agil/metricas", group: "org" },
+  { key: "historico", label: "Histórico", icon: History, path: "/sala-agil/historico", group: "org" },
+  { key: "times", label: "Times", icon: Users, path: "/sala-agil/times", group: "config" },
+  { key: "membros", label: "Membros", icon: User, path: "/sala-agil/membros", group: "config" },
+  { key: "perfis", label: "Perfis (RBAC)", icon: ShieldCheck, path: "/sala-agil/perfis", group: "config" },
+  { key: "fluxo", label: "Fluxo", icon: GitBranch, path: "/sala-agil/fluxo", group: "config" },
+  { key: "campos", label: "Campos Custom", icon: Settings, path: "/sala-agil/campos", group: "config" },
+  { key: "automacoes", label: "Automações", icon: Repeat, path: "/sala-agil/automacoes", group: "config" },
+];
+
+const NAV_SUSTENTACAO: NavItem[] = [
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/sustentacao", group: "main" },
+  { key: "board", label: "Board Kanban", icon: Kanban, path: "/sustentacao/board", group: "main" },
+  { key: "demandas", label: "Demandas", icon: ListTodo, path: "/sustentacao/demandas", group: "main" },
+  { key: "projetos", label: "Projetos", icon: Layers, path: "/sustentacao/projetos", group: "main" },
+  { key: "importacao", label: "Importação Excel", icon: Upload, path: "/sustentacao/importacao", group: "main" },
+  { key: "equipe", label: "Equipe", icon: Users, path: "/sustentacao/equipe", group: "main" },
+  { key: "fluxo", label: "Fluxo de Trabalho", icon: GitBranch, path: "/sustentacao/fluxo", group: "main" },
+  { key: "relatorios", label: "Relatórios", icon: FileText, path: "/sustentacao/relatorios", group: "org" },
+  { key: "times", label: "Times", icon: Users, path: "/sustentacao/times", group: "config" },
+  { key: "membros", label: "Membros", icon: User, path: "/sustentacao/membros", group: "config" },
+  { key: "perfis", label: "Perfis (RBAC)", icon: ShieldCheck, path: "/sustentacao/perfis", group: "config" },
+  { key: "campos", label: "Campos Custom", icon: Settings, path: "/sustentacao/campos", group: "config" },
+  { key: "automacoes", label: "Automações", icon: Repeat, path: "/sustentacao/automacoes", group: "config" },
+];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getAccentClass(module: ActiveModule) {
+function getAccent(module: ActiveModule) {
   return module === "sala_agil"
     ? {
         text: "text-[hsl(var(--sidebar-primary))]",
         bg: "bg-[hsl(var(--sidebar-primary)/0.12)]",
         border: "border-[hsl(var(--sidebar-primary)/0.25)]",
+        dot: "bg-[hsl(var(--sidebar-primary))]",
       }
-    : { text: "text-amber-400", bg: "bg-amber-400/10", border: "border-amber-400/25" };
+    : { text: "text-amber-400", bg: "bg-amber-400/10", border: "border-amber-400/25", dot: "bg-amber-400" };
 }
 
-// ─── Nav Item ─────────────────────────────────────────────────────────────────
+// ─── Sub-componentes ──────────────────────────────────────────────────────────
 
-function NavItemButton({ item, module, isActive }: { item: NavItem; module: ActiveModule; isActive: boolean }) {
-  const navigate = useNavigate();
-  const accent = getAccentClass(module);
-
-  return (
-    <button
-      onClick={() => navigate(item.path)}
-      className={cn(
-        "w-full flex items-center gap-3 px-[10px] py-[7px] rounded-md text-[13px] transition-all duration-100 relative group",
-        isActive
-          ? "bg-white/[0.06] text-white"
-          : "text-[hsl(var(--sidebar-foreground))] hover:bg-white/[0.05] hover:text-white",
-      )}
-    >
-      {/* Dot ativo */}
-      {isActive && (
-        <span
-          className={cn(
-            "absolute left-1.5 top-1/2 -translate-y-1/2 h-[5px] w-[5px] rounded-full",
-            accent.text.replace("text-", "bg-"),
-          )}
-        />
-      )}
-      <item.icon className={cn("h-4 w-4 shrink-0", isActive ? accent.text : "text-[hsl(var(--sidebar-foreground))]")} />
-      <span className="truncate">{item.label}</span>
-    </button>
-  );
+function HeartIcon({ module }: { module: ActiveModule }) {
+  const accent = getAccent(module);
+  return <HeartSuitIcon className={cn("h-6 w-6 shrink-0", accent.text)} />;
 }
-
-// ─── Sidebar Nav ──────────────────────────────────────────────────────────────
-
-function SidebarNav({ module }: { module: ActiveModule }) {
-  const location = useLocation();
-  const items = module === "sala_agil" ? NAV_SALA_AGIL : NAV_SUSTENTACAO;
-
-  const isActive = (path: string) => {
-    const roots = ["/sala-agil", "/sustentacao"];
-    if (roots.includes(path)) return location.pathname === path;
-    return location.pathname.startsWith(path);
-  };
-
-  const groups: NavItem["group"][] = ["main", "org", "config"];
-
-  return (
-    <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 scrollbar-thin px-2">
-      {groups.map((group) => {
-        const groupItems = items.filter((i) => i.group === group);
-        if (!groupItems.length) return null;
-        return (
-          <div key={group} className="mt-4 first:mt-0">
-            <p className="px-3 mb-1 text-[10px] font-semibold tracking-[0.08em] text-white/25 uppercase select-none">
-              {GROUP_LABELS[group]}
-            </p>
-            {groupItems.map((item) => (
-              <NavItemButton key={item.path} item={item} module={module} isActive={isActive(item.path)} />
-            ))}
-          </div>
-        );
-      })}
-    </nav>
-  );
-}
-
-// ─── Module Switcher (dentro da sidebar) ──────────────────────────────────────
 
 function ModuleSwitcher({ module }: { module: ActiveModule }) {
   const navigate = useNavigate();
@@ -215,35 +161,117 @@ function ModuleSwitcher({ module }: { module: ActiveModule }) {
   );
 }
 
-// ─── Topbar ───────────────────────────────────────────────────────────────────
+function NavItemButton({
+  item,
+  module,
+  isActive,
+  onNavigate,
+}: {
+  item: NavItem;
+  module: ActiveModule;
+  isActive: boolean;
+  onNavigate?: (key: string) => void;
+}) {
+  const navigate = useNavigate();
+  const accent = getAccent(module);
 
-function Topbar({ module }: { module: ActiveModule }) {
+  const handleClick = () => {
+    if (onNavigate) {
+      onNavigate(item.key);
+    } else {
+      navigate(item.path);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      className={cn(
+        "w-full flex items-center gap-3 px-[10px] py-[7px] rounded-md text-[13px] transition-all duration-100 relative",
+        isActive
+          ? "bg-white/[0.06] text-white"
+          : "text-[hsl(var(--sidebar-foreground))] hover:bg-white/[0.05] hover:text-white",
+      )}
+    >
+      {isActive && (
+        <span className={cn("absolute left-1.5 top-1/2 -translate-y-1/2 h-[5px] w-[5px] rounded-full", accent.dot)} />
+      )}
+      <item.icon className={cn("h-4 w-4 shrink-0", isActive ? accent.text : "text-[hsl(var(--sidebar-foreground))]")} />
+      <span className="truncate">{item.label}</span>
+    </button>
+  );
+}
+
+function SidebarNav({
+  module,
+  activeKey,
+  onNavigate,
+}: {
+  module: ActiveModule;
+  activeKey?: string;
+  onNavigate?: (key: string) => void;
+}) {
+  const location = useLocation();
+  const items = module === "sala_agil" ? NAV_SALA_AGIL : NAV_SUSTENTACAO;
+  const groups: NavItem["group"][] = ["main", "org", "config"];
+
+  const isActive = (item: NavItem): boolean => {
+    if (activeKey !== undefined) return item.key === activeKey;
+    const roots = ["/sala-agil", "/sustentacao"];
+    if (roots.includes(item.path)) return location.pathname === item.path;
+    return location.pathname.startsWith(item.path);
+  };
+
+  return (
+    <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 scrollbar-thin px-2">
+      {groups.map((group) => {
+        const groupItems = items.filter((i) => i.group === group);
+        if (!groupItems.length) return null;
+        return (
+          <div key={group} className="mt-4 first:mt-0">
+            <p className="px-3 mb-1 text-[10px] font-semibold tracking-[0.08em] text-white/25 uppercase select-none">
+              {GROUP_LABELS[group]}
+            </p>
+            {groupItems.map((item) => (
+              <NavItemButton
+                key={item.key}
+                item={item}
+                module={module}
+                isActive={isActive(item)}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
+function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: string }) {
   const { activeSprint } = useSprint();
   const location = useLocation();
-  const accent = getAccentClass(module);
-
-  // Breadcrumb: pega o label do item ativo
+  const accent = getAccent(module);
   const items = module === "sala_agil" ? NAV_SALA_AGIL : NAV_SUSTENTACAO;
-  const activeItem = items.find((i) => {
-    const roots = ["/sala-agil", "/sustentacao"];
-    if (roots.includes(i.path)) return location.pathname === i.path;
-    return location.pathname.startsWith(i.path);
-  });
+
+  const activeItem = activeKey
+    ? items.find((i) => i.key === activeKey)
+    : items.find((i) => {
+        const roots = ["/sala-agil", "/sustentacao"];
+        if (roots.includes(i.path)) return location.pathname === i.path;
+        return location.pathname.startsWith(i.path);
+      });
+
   const pageLabel = activeItem?.label ?? "Dashboard";
 
   return (
     <header
-      className="h-11 shrink-0 flex items-center justify-between px-4"
+      className="h-11 shrink-0 flex items-center justify-between px-4 bg-[#0f0f11]"
       style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.06)" }}
     >
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2">
-        <span className="text-[13px] font-medium text-white">{pageLabel}</span>
-      </div>
+      <span className="text-[13px] font-medium text-white">{pageLabel}</span>
 
-      {/* Direita */}
       <div className="flex items-center gap-2">
-        {/* Sprint badge — só Sala Ágil */}
         {module === "sala_agil" && activeSprint && (
           <Badge
             variant="outline"
@@ -258,8 +286,6 @@ function Topbar({ module }: { module: ActiveModule }) {
             {activeSprint.name}
           </Badge>
         )}
-
-        {/* Notificações */}
         <NotificationBell />
       </div>
     </header>
@@ -268,20 +294,13 @@ function Topbar({ module }: { module: ActiveModule }) {
 
 // ─── AppShell ─────────────────────────────────────────────────────────────────
 
-interface AppShellProps {
-  module: ActiveModule;
-  children: React.ReactNode;
-  activeKey?: string; // ← ADD
-  onNavigate?: (key: string) => void; // ← ADD
-}
-
-export function AppShell({ module, children }: AppShellProps) {
+export function AppShell({ module, children, activeKey, onNavigate }: AppShellProps) {
   const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
 
   const moduleAccess = profile?.module_access ?? "sala_agil";
   const canSwitch = isAdmin || moduleAccess === "admin";
-  const accent = getAccentClass(module);
+  const accent = getAccent(module);
 
   const initials = (profile?.display_name ?? "U")
     .split(" ")
@@ -292,14 +311,14 @@ export function AppShell({ module, children }: AppShellProps) {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
-      {/* ── Sidebar ─────────────────────────────────────────────────── */}
+      {/* ── Sidebar ───────────────────────────────────────────────── */}
       <aside
         className="flex flex-col h-full w-[220px] shrink-0 bg-[#0f0f11]"
         style={{ boxShadow: "4px 0 24px rgba(0,0,0,0.4)" }}
       >
         {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 h-11 shrink-0">
-          <HeartSuitIcon className={cn("h-6 w-6 shrink-0", accent.text)} />
+          <HeartIcon module={module} />
           <span className="text-[15px] font-bold text-white tracking-tight">NexOps</span>
         </div>
 
@@ -323,11 +342,11 @@ export function AppShell({ module, children }: AppShellProps) {
           </div>
         )}
 
-        {/* Nav */}
-        <SidebarNav module={module} />
+        {/* Navegação */}
+        <SidebarNav module={module} activeKey={activeKey} onNavigate={onNavigate} />
 
         {/* Rodapé */}
-        <div className="shrink-0 px-2 pb-3 pt-2 space-y-1">
+        <div className="shrink-0 px-2 pb-3 pt-2">
           <div className="h-px bg-white/[0.07] mb-2" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -376,10 +395,9 @@ export function AppShell({ module, children }: AppShellProps) {
         </div>
       </aside>
 
-      {/* ── Área principal ──────────────────────────────────────────── */}
+      {/* ── Área principal ────────────────────────────────────────── */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-[#0f0f11]">
-        <Topbar module={module} />
-        {/* Conteúdo sobre fundo claro */}
+        <Topbar module={module} activeKey={activeKey} />
         <main className="flex-1 overflow-y-auto bg-background rounded-tl-xl">{children}</main>
       </div>
     </div>
