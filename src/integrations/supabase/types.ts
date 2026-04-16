@@ -929,6 +929,50 @@ export type Database = {
           },
         ]
       }
+      planning_sessao_itens: {
+        Row: {
+          carta: string | null
+          created_at: string | null
+          horas: number | null
+          hu_codigo: string
+          hu_id: string
+          hu_titulo: string | null
+          id: string
+          pontos: number | null
+          session_id: string
+        }
+        Insert: {
+          carta?: string | null
+          created_at?: string | null
+          horas?: number | null
+          hu_codigo: string
+          hu_id: string
+          hu_titulo?: string | null
+          id?: string
+          pontos?: number | null
+          session_id: string
+        }
+        Update: {
+          carta?: string | null
+          created_at?: string | null
+          horas?: number | null
+          hu_codigo?: string
+          hu_id?: string
+          hu_titulo?: string | null
+          id?: string
+          pontos?: number | null
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planning_sessao_itens_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "planning_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planning_sessions: {
         Row: {
           created_at: string
@@ -940,6 +984,8 @@ export type Database = {
           sprint_id: string
           status: string
           team_id: string
+          total_horas: number | null
+          total_hus: number | null
         }
         Insert: {
           created_at?: string
@@ -951,6 +997,8 @@ export type Database = {
           sprint_id: string
           status?: string
           team_id: string
+          total_horas?: number | null
+          total_hus?: number | null
         }
         Update: {
           created_at?: string
@@ -962,6 +1010,8 @@ export type Database = {
           sprint_id?: string
           status?: string
           team_id?: string
+          total_horas?: number | null
+          total_hus?: number | null
         }
         Relationships: [
           {
