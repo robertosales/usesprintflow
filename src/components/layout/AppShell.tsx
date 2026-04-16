@@ -24,7 +24,7 @@ import {
 import {
   LayoutDashboard, Kanban, ListTodo, Layers, GitBranch, Calendar, Users,
   Activity, AlertTriangle, Repeat, BarChart3, History, User, ShieldCheck,
-  Settings, Upload, FileText, Zap, Wrench, Bell, LogOut, type LucideIcon,
+  Settings, Upload, FileText, Zap, Wrench, LogOut, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
