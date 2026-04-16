@@ -397,7 +397,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                     {profile?.display_name ?? "Usuário"}
                   </p>
                   <p className="text-[10px] text-white/40 capitalize truncate leading-none">
-                    {profile?.role ?? "membro"}
+                    {roles[0] ?? "membro"}
                   </p>
                 </div>
                 <ChevronRight className="h-3.5 w-3.5 text-white/30 group-hover:text-white/60 transition-colors shrink-0" />
