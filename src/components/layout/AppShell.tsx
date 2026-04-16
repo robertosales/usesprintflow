@@ -170,7 +170,7 @@ function TeamSwitcher({ module }: { module: ActiveModule }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="w-full flex items-center gap-2.5 px-2 py-2 rounded-md hover:bg-white/[0.05] transition-colors group mb-1">
+        <button className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md hover:bg-white/[0.05] transition-colors group">
           <div className="h-7 w-7 rounded-md bg-white/[0.08] flex items-center justify-center shrink-0">
             <Building2 className="h-3.5 w-3.5 text-white/50" />
           </div>
@@ -183,7 +183,7 @@ function TeamSwitcher({ module }: { module: ActiveModule }) {
           <ChevronsUpDown className="h-3.5 w-3.5 text-white/30 group-hover:text-white/60 transition-colors shrink-0" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="top" className="w-52 mb-1">
+      <DropdownMenuContent align="end" side="right" className="w-52">
         <DropdownMenuLabel className="text-xs text-muted-foreground">Trocar time</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {moduleTeams.map((team) => (
@@ -299,7 +299,7 @@ function SidebarNav({
 function ModuleSwitcher({ module }: { module: ActiveModule }) {
   const navigate = useNavigate();
   return (
-    <div className="mx-2 mb-3 flex items-center gap-1 rounded-lg bg-white/[0.05] p-1">
+    <div className="mx-2 mb-2 flex items-center gap-1 rounded-lg bg-white/[0.05] p-1">
       <button
         onClick={() => navigate("/sala-agil")}
         className={cn(
@@ -388,7 +388,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background" data-module={module}>
-      {/* ── Sidebar ─────────────────────────────────────────────── */}
+      {/* ── Sidebar ───────────────────────────────────────────── */}
       <aside
         className="flex flex-col h-full w-[220px] shrink-0 bg-[#0f0f11]"
         style={{ boxShadow: "4px 0 24px rgba(0,0,0,0.4)" }}
@@ -399,13 +399,13 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
           <span className="text-[15px] font-bold text-white tracking-tight">NexOps</span>
         </div>
 
-        {/* Switcher ou pill fixo */}
+        {/* ① Switcher de módulo (Ágil / Sust.) */}
         {canSwitch ? (
           <ModuleSwitcher module={module} />
         ) : (
           <div
             className={cn(
-              "mx-2 mb-3 flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold",
+              "mx-2 mb-2 flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold",
               accent.bg,
               accent.text,
             )}
@@ -419,17 +419,21 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
           </div>
         )}
 
-        {/* Nav */}
+        {/* ② Time ativo — logo abaixo do switcher */}
+        <div className="px-2 mb-1">
+          <TeamSwitcher module={module} />
+        </div>
+
+        {/* Separador visual entre time e nav */}
+        <div className="h-px bg-white/[0.07] mx-2 mb-1" />
+
+        {/* ③ Nav */}
         <SidebarNav module={module} activeKey={activeKey} onNavigate={onNavigate} />
 
-        {/* Rodapé */}
+        {/* ④ Rodapé — apenas avatar/usuário */}
         <div className="shrink-0 px-2 pb-3 pt-2">
           <div className="h-px bg-white/[0.07] mb-2" />
 
-          {/* Team Switcher — só aparece se houver 2+ times no módulo */}
-          <TeamSwitcher module={module} />
-
-          {/* Avatar + menu do usuário */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="w-full flex items-center gap-2.5 px-2 py-2 rounded-md hover:bg-white/[0.05] transition-colors group">
