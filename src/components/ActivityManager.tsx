@@ -437,8 +437,8 @@ export function ActivityManager() {
           icon={ListTodo}
           title="Nenhum item encontrado"
           description={hasFilters ? "Tente ajustar os filtros" : "Crie atividades para as User Stories da sprint"}
-          actionLabel={!hasFilters && canUpdate ? "Criar novo" : undefined}
-          onAction={!hasFilters && canUpdate ? () => setOpen(true) : undefined}
+          //actionLabel={!hasFilters && canUpdate ? "Criar novo" : undefined}
+          //onAction={!hasFilters && canUpdate ? () => setOpen(true) : undefined}
         />
       )}
 
