@@ -22,7 +22,6 @@ import { RetroManager } from "@/components/RetroManager";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { hasActiveImpediment } from "@/types/sprint";
 import { Building2 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 
@@ -32,11 +31,11 @@ const Index = () => {
   const { activeSprint, userStories } = useSprint();
   const [showTeamModal, setShowTeamModal] = useState(false);
 
-  const moduleTeams = teams.filter(t => t.module === 'sala_agil');
+  const moduleTeams = teams.filter((t) => t.module === "sala_agil");
 
   useEffect(() => {
     if (loading || moduleTeams.length === 0) return;
-    const currentIsValid = currentTeamId && moduleTeams.some(t => t.id === currentTeamId);
+    const currentIsValid = currentTeamId && moduleTeams.some((t) => t.id === currentTeamId);
     if (currentIsValid) return;
     if (moduleTeams.length === 1) {
       setCurrentTeamId(moduleTeams[0].id);
@@ -53,7 +52,11 @@ const Index = () => {
         open={showTeamModal}
         teams={moduleTeams}
         moduleLabel="Sala Ágil"
-        onSelect={(id) => { setCurrentTeamId(id); setShowTeamModal(false); }}
+        onSelect={(id) => {
+          setCurrentTeamId(id);
+          setShowTeamModal(false);
+        }}
+        onClose={() => setShowTeamModal(false)}
       />
       <div className="max-w-7xl mx-auto p-4 md:p-6">
         {loading && (
@@ -65,9 +68,9 @@ const Index = () => {
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <Building2 className="h-14 w-14 text-muted-foreground/30" />
             <p className="text-lg text-muted-foreground font-medium">Selecione ou crie um time para começar</p>
-            {hasPermission('manage_teams') && (
+            {hasPermission("manage_teams") && (
               <Button onClick={() => setActive("times")} size="lg">
-                <Building2 className="h-4 w-4 mr-2" />Ir para Times
+                <Building2 className="h-4 w-4 mr-2" /> Ir para Times
               </Button>
             )}
           </div>
