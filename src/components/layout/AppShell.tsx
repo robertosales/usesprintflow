@@ -108,6 +108,8 @@ const SUSTENTACAO_NAV: NavGroup[] = [
       { key: "times", label: "Times", icon: Users, path: "/sustentacao/times" },
       { key: "membros", label: "Membros", icon: User, path: "/sustentacao/membros" },
       { key: "perfis", label: "Perfis RBAC", icon: ShieldCheck, path: "/sustentacao/perfis" },
+      { key: "equipe", label: "Equipe", icon: Users, path: "/sustentacao/equipe" },
+      { key: "workflow", label: "Fluxo de Trabalho", icon: GitBranch, path: "/sustentacao/workflow" },
       { key: "campos", label: "Campos Custom", icon: Settings, path: "/sustentacao/campos" },
       { key: "automacoes", label: "Automações", icon: Repeat, path: "/sustentacao/automacoes" },
     ],
