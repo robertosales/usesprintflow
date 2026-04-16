@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MoreHorizontal, Plus, Search, ListTodo, LayoutGrid, LayoutList, User, Folder, Tag } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { MoreHorizontal, Plus, Search, ListTodo, LayoutGrid, LayoutList, User, Tag } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +25,6 @@ import { SITUACAO_LABELS, SITUACAO_COLORS, isDemandaIniciada } from "../types/de
 import type { Demanda } from "../types/demanda";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -42,18 +42,18 @@ const SITUACAO_PAPEL_MAP: Record<string, string> = {
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
 
-const TIPO_OPTIONS = ["all", "corretiva", "evolutiva", "melhoria"];
-
 // ─── Fetch responsáveis ───────────────────────────────────────────────────────
 
 async function fetchResponsaveisBatch(
   demandaIds: string[],
 ): Promise<Map<string, { papel: string; display_name: string }[]>> {
-  if (demandaIds.length === 0) return new Map();
+  if (!demandaIds.length) return new Map();
+
   const { data: respData, error } = await supabase
     .from("demanda_responsaveis")
     .select("demanda_id, papel, user_id")
     .in("demanda_id", demandaIds);
+
   if (error || !respData?.length) return new Map();
 
   const userIds = [...new Set(respData.map((r: any) => r.user_id))];
@@ -104,7 +104,6 @@ export function DemandasList() {
     return lista.find((r) => r.papel === papelEsperado)?.display_name || lista[0]?.display_name || null;
   }
 
-  // Situações únicas para o filtro
   const situacoesUnicas = useMemo(() => [...new Set(demandas.map((d) => d.situacao))], [demandas]);
 
   const filtered = useMemo(
@@ -153,6 +152,14 @@ export function DemandasList() {
       </div>
     );
 
+  function handleDelete(d: Demanda) {
+    if (isDemandaIniciada(d)) {
+      toast.error("Demanda já iniciada. Use 'Cancelar Demanda' na tela de detalhes.");
+    } else {
+      setDeleteTarget(d);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* ── Header ──────────────────────────────────────────────── */}
@@ -174,7 +181,6 @@ export function DemandasList() {
 
       {/* ── Filtros ─────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Busca */}
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -185,15 +191,14 @@ export function DemandasList() {
           />
         </div>
 
-        {/* Tipo */}
         <Select value={filterTipo} onValueChange={setFilterTipo}>
-          <SelectTrigger className="h-9 w-[140px]">
+          <SelectTrigger className="h-9 w-[150px]">
             <Tag className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
             <SelectValue placeholder="Tipo" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os tipos</SelectItem>
-            {TIPO_OPTIONS.slice(1).map((t) => (
+            {["corretiva", "evolutiva", "melhoria"].map((t) => (
               <SelectItem key={t} value={t} className="capitalize">
                 {t}
               </SelectItem>
@@ -201,7 +206,6 @@ export function DemandasList() {
           </SelectContent>
         </Select>
 
-        {/* Situação */}
         <Select value={filterSituacao} onValueChange={setFilterSituacao}>
           <SelectTrigger className="h-9 w-[170px]">
             <SelectValue placeholder="Situação" />
@@ -216,7 +220,7 @@ export function DemandasList() {
           </SelectContent>
         </Select>
 
-        {/* Toggle view */}
+        {/* Toggle cards / tabela */}
         <div className="flex items-center border rounded-md overflow-hidden h-9">
           <button
             onClick={() => setViewMode("cards")}
@@ -249,30 +253,18 @@ export function DemandasList() {
               items={paginatedItems}
               getResponsavel={getResponsavel}
               onSelect={setSelected}
-              onDelete={(d) => {
-                if (isDemandaIniciada(d)) {
-                  toast.error("Demanda já iniciada. Use 'Cancelar Demanda' na tela de detalhes.");
-                } else {
-                  setDeleteTarget(d);
-                }
-              }}
+              onDelete={handleDelete}
             />
           ) : (
             <TableView
               items={paginatedItems}
               getResponsavel={getResponsavel}
               onSelect={setSelected}
-              onDelete={(d) => {
-                if (isDemandaIniciada(d)) {
-                  toast.error("Demanda já iniciada. Use 'Cancelar Demanda' na tela de detalhes.");
-                } else {
-                  setDeleteTarget(d);
-                }
-              }}
+              onDelete={handleDelete}
             />
           )}
 
-          {/* Rodapé */}
+          {/* Rodapé paginação */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>Itens por página:</span>
@@ -345,14 +337,12 @@ function CardView({
             onClick={() => onSelect(d)}
             className="group relative flex flex-col gap-3 p-4 rounded-xl border bg-card hover:border-amber-400/50 hover:shadow-md transition-all cursor-pointer"
           >
-            {/* Top row: RHM + menu */}
+            {/* Top: RHM + menu */}
             <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                {/* Indicador lateral amber */}
+              <div className="flex items-center gap-2">
                 <span className="h-5 w-1 rounded-full bg-amber-400 shrink-0" />
                 <span className="font-mono text-sm font-bold text-amber-500">{d.rhm}</span>
               </div>
-
               <DropdownMenu>
                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                   <Button
@@ -385,7 +375,7 @@ function CardView({
               </DropdownMenu>
             </div>
 
-            {/* Título ou fallback */}
+            {/* Título / projeto */}
             <div className="flex-1 min-w-0">
               {titulo ? (
                 <>
@@ -399,7 +389,7 @@ function CardView({
 
             {/* Footer: tipo + situação + responsável */}
             <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
-              <div className="flex items-center gap-1.5 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                 <Badge variant="outline" className="text-[10px] capitalize shrink-0">
                   {d.tipo}
                 </Badge>
@@ -407,9 +397,8 @@ function CardView({
                   {SITUACAO_LABELS[d.situacao] || d.situacao}
                 </Badge>
               </div>
-
               {responsavel && (
-                <div className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0 min-w-0">
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
                   <div className="h-5 w-5 rounded-full bg-amber-400/20 text-amber-600 flex items-center justify-center shrink-0">
                     <User className="h-3 w-3" />
                   </div>
@@ -443,10 +432,11 @@ function TableView({
         <TableHeader>
           <TableRow className="bg-muted/40">
             <TableHead className="w-28">#</TableHead>
-            <TableHead>Projeto / Título</TableHead>
+            <TableHead className="w-40">Projeto</TableHead>
+            <TableHead>Título</TableHead>
             <TableHead className="w-28">Tipo</TableHead>
-            <TableHead>Situação</TableHead>
-            <TableHead>Responsável</TableHead>
+            <TableHead className="w-44">Situação</TableHead>
+            <TableHead className="w-36">Responsável</TableHead>
             <TableHead className="w-10" />
           </TableRow>
         </TableHeader>
@@ -459,26 +449,31 @@ function TableView({
                 <TableCell>
                   <span className="font-mono font-bold text-amber-500 text-sm">{d.rhm}</span>
                 </TableCell>
+
                 <TableCell>
-                  <div className="min-w-0">
-                    {titulo && <p className="text-sm font-medium truncate max-w-[280px]">{titulo}</p>}
-                    <p
-                      className={cn("truncate max-w-[280px]", titulo ? "text-[11px] text-muted-foreground" : "text-sm")}
-                    >
-                      {d.projeto}
-                    </p>
-                  </div>
+                  <span className="text-sm truncate max-w-[140px] block">{d.projeto}</span>
                 </TableCell>
+
+                <TableCell>
+                  {titulo ? (
+                    <span className="text-sm font-medium truncate max-w-[260px] block">{titulo}</span>
+                  ) : (
+                    <span className="text-muted-foreground text-xs">—</span>
+                  )}
+                </TableCell>
+
                 <TableCell>
                   <Badge variant="outline" className="capitalize text-[10px]">
                     {d.tipo}
                   </Badge>
                 </TableCell>
+
                 <TableCell>
                   <Badge className={cn("text-[10px]", SITUACAO_COLORS[d.situacao] || "")}>
                     {SITUACAO_LABELS[d.situacao] || d.situacao}
                   </Badge>
                 </TableCell>
+
                 <TableCell>
                   {responsavel ? (
                     <span className="text-xs">{responsavel}</span>
@@ -486,6 +481,7 @@ function TableView({
                     <span className="text-muted-foreground">—</span>
                   )}
                 </TableCell>
+
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
