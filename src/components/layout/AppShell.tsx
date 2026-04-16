@@ -33,6 +33,9 @@ import {
   Activity,
   ShieldCheck,
   ChevronRight,
+  Building2,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
@@ -152,6 +155,53 @@ function getAccent(module: ActiveModule) {
         dot: "bg-amber-400",
         avatar: "bg-amber-500",
       };
+}
+
+// ─── TeamSwitcher ─────────────────────────────────────────────────────────────
+
+function TeamSwitcher({ module }: { module: ActiveModule }) {
+  const { teams, currentTeamId, setCurrentTeamId } = useAuth();
+
+  const moduleTeams = teams.filter((t) => t.module === module);
+  const activeTeam = moduleTeams.find((t) => t.id === currentTeamId);
+
+  if (moduleTeams.length <= 1) return null;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="w-full flex items-center gap-2.5 px-2 py-2 rounded-md hover:bg-white/[0.05] transition-colors group mb-1">
+          <div className="h-7 w-7 rounded-md bg-white/[0.08] flex items-center justify-center shrink-0">
+            <Building2 className="h-3.5 w-3.5 text-white/50" />
+          </div>
+          <div className="flex-1 text-left min-w-0">
+            <p className="text-[10px] text-white/30 leading-none mb-0.5">Time ativo</p>
+            <p className="text-[12px] font-medium text-white truncate leading-none">
+              {activeTeam?.name ?? "Selecionar time"}
+            </p>
+          </div>
+          <ChevronsUpDown className="h-3.5 w-3.5 text-white/30 group-hover:text-white/60 transition-colors shrink-0" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="top" className="w-52 mb-1">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">Trocar time</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {moduleTeams.map((team) => (
+          <DropdownMenuItem
+            key={team.id}
+            onClick={() => setCurrentTeamId(team.id)}
+            className="text-xs gap-2 justify-between cursor-pointer"
+          >
+            <span className="flex items-center gap-2">
+              <Building2 className="h-3.5 w-3.5" />
+              {team.name}
+            </span>
+            {team.id === currentTeamId && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 // ─── NavItemButton ────────────────────────────────────────────────────────────
@@ -343,11 +393,13 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
         className="flex flex-col h-full w-[220px] shrink-0 bg-[#0f0f11]"
         style={{ boxShadow: "4px 0 24px rgba(0,0,0,0.4)" }}
       >
+        {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 h-11 shrink-0">
           <HeartSuitIcon className={cn("h-6 w-6 shrink-0", accent.text)} />
           <span className="text-[15px] font-bold text-white tracking-tight">NexOps</span>
         </div>
 
+        {/* Switcher ou pill fixo */}
         {canSwitch ? (
           <ModuleSwitcher module={module} />
         ) : (
@@ -367,10 +419,17 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
           </div>
         )}
 
+        {/* Nav */}
         <SidebarNav module={module} activeKey={activeKey} onNavigate={onNavigate} />
 
+        {/* Rodapé */}
         <div className="shrink-0 px-2 pb-3 pt-2">
           <div className="h-px bg-white/[0.07] mb-2" />
+
+          {/* Team Switcher — só aparece se houver 2+ times no módulo */}
+          <TeamSwitcher module={module} />
+
+          {/* Avatar + menu do usuário */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="w-full flex items-center gap-2.5 px-2 py-2 rounded-md hover:bg-white/[0.05] transition-colors group">
