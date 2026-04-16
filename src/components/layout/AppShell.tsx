@@ -1,10 +1,8 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprint } from "@/contexts/SprintContext";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,12 +56,39 @@ interface AppShellProps {
   onNavigate?: (key: string) => void;
 }
 
-// ─── SVG Copas ────────────────────────────────────────────────────────────────
+// ─── SVGs customizados ────────────────────────────────────────────────────────
 
 function HeartSuitIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} xmlns="http://www.w3.org/2000/svg">
       <path d="M12 21.593c-5.63-5.539-11-10.297-11-14.402 0-3.791 3.068-5.191 5.281-5.191 1.312 0 4.151.501 5.719 4.457 1.59-3.968 4.464-4.447 5.726-4.447 2.54 0 5.274 1.621 5.274 5.181 0 4.069-5.136 8.625-11 14.402z" />
+    </svg>
+  );
+}
+
+// Ícone de baralho (carta com naipe) para Planning Poker
+function PlayingCardIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {/* Carta */}
+      <rect x="4" y="2" width="11" height="15" rx="1.5" />
+      {/* Naipe copas pequeno no canto */}
+      <path
+        d="M7 5.5c0-.8.6-1.5 1.4-1.5.4 0 .8.2 1.1.6.3-.4.7-.6 1.1-.6.8 0 1.4.7 1.4 1.5 0 1.2-1.5 2.3-2.5 3C9.5 7.8 7 6.7 7 5.5z"
+        fill="currentColor"
+        stroke="none"
+      />
+      {/* Segunda carta atrás (sombra/profundidade) */}
+      <rect x="9" y="7" width="11" height="15" rx="1.5" />
     </svg>
   );
 }
@@ -81,7 +106,7 @@ const NAV_SALA_AGIL: NavItem[] = [
   { key: "board", label: "Board Kanban", icon: Kanban, path: "/sala-agil/board", group: "main" },
   { key: "backlog", label: "Backlog", icon: ListTodo, path: "/sala-agil/backlog", group: "main" },
   { key: "epicos", label: "Épicos", icon: Layers, path: "/sala-agil/epicos", group: "main" },
-  { key: "planning", label: "Planning", icon: GitBranch, path: "/sala-agil/planning", group: "main" },
+  { key: "planning", label: "Planning Poker", icon: PlayingCardIcon, path: "/sala-agil/planning", group: "main" },
   { key: "calendario", label: "Calendário", icon: Calendar, path: "/sala-agil/calendario", group: "main" },
   { key: "equipe", label: "Equipe", icon: Users, path: "/sala-agil/equipe", group: "main" },
   { key: "atividades", label: "Atividades", icon: Activity, path: "/sala-agil/atividades", group: "main" },
@@ -122,44 +147,18 @@ function getAccent(module: ActiveModule) {
         bg: "bg-[hsl(var(--sidebar-primary)/0.12)]",
         border: "border-[hsl(var(--sidebar-primary)/0.25)]",
         dot: "bg-[hsl(var(--sidebar-primary))]",
+        avatar: "bg-[hsl(var(--sidebar-primary))]",
       }
-    : { text: "text-amber-400", bg: "bg-amber-400/10", border: "border-amber-400/25", dot: "bg-amber-400" };
+    : {
+        text: "text-amber-400",
+        bg: "bg-amber-400/10",
+        border: "border-amber-400/25",
+        dot: "bg-amber-400",
+        avatar: "bg-amber-500",
+      };
 }
 
-// ─── Sub-componentes ──────────────────────────────────────────────────────────
-
-function HeartIcon({ module }: { module: ActiveModule }) {
-  const accent = getAccent(module);
-  return <HeartSuitIcon className={cn("h-6 w-6 shrink-0", accent.text)} />;
-}
-
-function ModuleSwitcher({ module }: { module: ActiveModule }) {
-  const navigate = useNavigate();
-  return (
-    <div className="mx-2 mb-3 flex items-center gap-1 rounded-lg bg-white/[0.05] p-1">
-      <button
-        onClick={() => navigate("/sala-agil")}
-        className={cn(
-          "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-semibold transition-all",
-          module === "sala_agil"
-            ? "bg-[hsl(var(--sidebar-accent))] text-white shadow-sm"
-            : "text-white/40 hover:text-white/70",
-        )}
-      >
-        <Zap className="h-3 w-3" /> Ágil
-      </button>
-      <button
-        onClick={() => navigate("/sustentacao")}
-        className={cn(
-          "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-semibold transition-all",
-          module === "sustentacao" ? "bg-amber-500/80 text-white shadow-sm" : "text-white/40 hover:text-white/70",
-        )}
-      >
-        <Wrench className="h-3 w-3" /> Sust.
-      </button>
-    </div>
-  );
-}
+// ─── NavItemButton ────────────────────────────────────────────────────────────
 
 function NavItemButton({
   item,
@@ -176,12 +175,10 @@ function NavItemButton({
   const accent = getAccent(module);
 
   const handleClick = () => {
-    if (onNavigate) {
-      onNavigate(item.key);
-    } else {
-      navigate(item.path);
-    }
+    onNavigate ? onNavigate(item.key) : navigate(item.path);
   };
+
+  const Icon = item.icon;
 
   return (
     <button
@@ -194,13 +191,17 @@ function NavItemButton({
       )}
     >
       {isActive && (
-        <span className={cn("absolute left-1.5 top-1/2 -translate-y-1/2 h-[5px] w-[5px] rounded-full", accent.dot)} />
+        <span
+          className={cn("absolute left-1.5 top-1/2 -translate-y-1/2 h-[5px] w-[5px] rounded-full shrink-0", accent.dot)}
+        />
       )}
-      <item.icon className={cn("h-4 w-4 shrink-0", isActive ? accent.text : "text-[hsl(var(--sidebar-foreground))]")} />
+      <Icon className={cn("h-4 w-4 shrink-0", isActive ? accent.text : "text-[hsl(var(--sidebar-foreground))]")} />
       <span className="truncate">{item.label}</span>
     </button>
   );
 }
+
+// ─── SidebarNav ───────────────────────────────────────────────────────────────
 
 function SidebarNav({
   module,
@@ -247,6 +248,38 @@ function SidebarNav({
     </nav>
   );
 }
+
+// ─── ModuleSwitcher ───────────────────────────────────────────────────────────
+
+function ModuleSwitcher({ module }: { module: ActiveModule }) {
+  const navigate = useNavigate();
+  return (
+    <div className="mx-2 mb-3 flex items-center gap-1 rounded-lg bg-white/[0.05] p-1">
+      <button
+        onClick={() => navigate("/sala-agil")}
+        className={cn(
+          "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-semibold transition-all",
+          module === "sala_agil"
+            ? "bg-[hsl(var(--sidebar-accent))] text-white shadow-sm"
+            : "text-white/40 hover:text-white/70",
+        )}
+      >
+        <Zap className="h-3 w-3" /> Ágil
+      </button>
+      <button
+        onClick={() => navigate("/sustentacao")}
+        className={cn(
+          "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-semibold transition-all",
+          module === "sustentacao" ? "bg-amber-500/80 text-white shadow-sm" : "text-white/40 hover:text-white/70",
+        )}
+      >
+        <Wrench className="h-3 w-3" /> Sust.
+      </button>
+    </div>
+  );
+}
+
+// ─── Topbar ───────────────────────────────────────────────────────────────────
 
 function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: string }) {
   const { activeSprint } = useSprint();
@@ -310,19 +343,22 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
     .toUpperCase();
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background">
-      {/* ── Sidebar ───────────────────────────────────────────────── */}
+    <div
+      className="flex h-screen w-screen overflow-hidden bg-background"
+      data-module={module} // ← aplica tema âmbar via CSS quando sustentacao
+    >
+      {/* ── Sidebar ─────────────────────────────────────────────── */}
       <aside
         className="flex flex-col h-full w-[220px] shrink-0 bg-[#0f0f11]"
         style={{ boxShadow: "4px 0 24px rgba(0,0,0,0.4)" }}
       >
         {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 h-11 shrink-0">
-          <HeartIcon module={module} />
+          <HeartSuitIcon className={cn("h-6 w-6 shrink-0", accent.text)} />
           <span className="text-[15px] font-bold text-white tracking-tight">NexOps</span>
         </div>
 
-        {/* Module Switcher ou pill fixo */}
+        {/* Switcher ou pill fixo */}
         {canSwitch ? (
           <ModuleSwitcher module={module} />
         ) : (
@@ -342,7 +378,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
           </div>
         )}
 
-        {/* Navegação */}
+        {/* Nav */}
         <SidebarNav module={module} activeKey={activeKey} onNavigate={onNavigate} />
 
         {/* Rodapé */}
@@ -352,12 +388,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             <DropdownMenuTrigger asChild>
               <button className="w-full flex items-center gap-2.5 px-2 py-2 rounded-md hover:bg-white/[0.05] transition-colors group">
                 <Avatar className="h-7 w-7 shrink-0">
-                  <AvatarFallback
-                    className={cn(
-                      "text-[10px] font-bold text-white",
-                      module === "sala_agil" ? "bg-[hsl(var(--sidebar-primary))]" : "bg-amber-500",
-                    )}
-                  >
+                  <AvatarFallback className={cn("text-[10px] font-bold text-white", accent.avatar)}>
                     {initials}
                   </AvatarFallback>
                 </Avatar>
@@ -395,7 +426,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
         </div>
       </aside>
 
-      {/* ── Área principal ────────────────────────────────────────── */}
+      {/* ── Área principal ──────────────────────────────────────── */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-[#0f0f11]">
         <Topbar module={module} activeKey={activeKey} />
         <main className="flex-1 overflow-y-auto bg-background rounded-tl-xl">{children}</main>
