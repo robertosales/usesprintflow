@@ -3,8 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, Plus, Search, ListTodo } from "lucide-react";
+import { MoreHorizontal, Plus, Search, ListTodo, LayoutGrid, LayoutList, User, Folder, Tag } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +23,10 @@ import { DemandaDetail } from "./DemandaDetail";
 import { SITUACAO_LABELS, SITUACAO_COLORS, isDemandaIniciada } from "../types/demanda";
 import type { Demanda } from "../types/demanda";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const SITUACAO_PAPEL_MAP: Record<string, string> = {
   fila_atendimento: "analista",
@@ -37,25 +40,27 @@ const SITUACAO_PAPEL_MAP: Record<string, string> = {
   hom_homologada: "arquiteto",
 };
 
+const PAGE_SIZE_OPTIONS = [20, 50, 100];
+
+const TIPO_OPTIONS = ["all", "corretiva", "evolutiva", "melhoria"];
+
+// ─── Fetch responsáveis ───────────────────────────────────────────────────────
+
 async function fetchResponsaveisBatch(
   demandaIds: string[],
 ): Promise<Map<string, { papel: string; display_name: string }[]>> {
   if (demandaIds.length === 0) return new Map();
-
-  const { data: respData, error: respError } = await supabase
+  const { data: respData, error } = await supabase
     .from("demanda_responsaveis")
     .select("demanda_id, papel, user_id")
     .in("demanda_id", demandaIds);
-
-  if (respError || !respData || respData.length === 0) return new Map();
+  if (error || !respData?.length) return new Map();
 
   const userIds = [...new Set(respData.map((r: any) => r.user_id))];
   const { data: profilesData } = await supabase.from("profiles").select("user_id, display_name").in("user_id", userIds);
 
   const profilesMap = new Map<string, string>();
-  (profilesData || []).forEach((p: any) => {
-    profilesMap.set(p.user_id, p.display_name);
-  });
+  (profilesData || []).forEach((p: any) => profilesMap.set(p.user_id, p.display_name));
 
   const map = new Map<string, { papel: string; display_name: string }[]>();
   respData.forEach((r: any) => {
@@ -65,12 +70,12 @@ async function fetchResponsaveisBatch(
     lista.push({ papel: r.papel, display_name: nome });
     map.set(r.demanda_id, lista);
   });
-
   return map;
 }
 
-// ✅ Opções de itens por página
-const PAGE_SIZE_OPTIONS = [20, 50, 100];
+// ─── DemandasList ─────────────────────────────────────────────────────────────
+
+type ViewMode = "cards" | "table";
 
 export function DemandasList() {
   const { demandas, loading, error, create, update, moveTo, remove, reload } = useDemandas();
@@ -80,47 +85,49 @@ export function DemandasList() {
   const [search, setSearch] = useState("");
   const [filterTipo, setFilterTipo] = useState("all");
   const [filterSituacao, setFilterSituacao] = useState("all");
-  const debouncedSearch = useDebounce(search, 300);
-
-  // ✅ Estado do tamanho da página
+  const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [pageSize, setPageSize] = useState(20);
+  const debouncedSearch = useDebounce(search, 300);
 
   const [responsaveisMap, setResponsaveisMap] = useState<Map<string, { papel: string; display_name: string }[]>>(
     new Map(),
   );
 
   useEffect(() => {
-    if (demandas.length === 0) return;
-    const ids = demandas.map((d) => d.id);
-    fetchResponsaveisBatch(ids).then(setResponsaveisMap);
+    if (!demandas.length) return;
+    fetchResponsaveisBatch(demandas.map((d) => d.id)).then(setResponsaveisMap);
   }, [demandas]);
 
-  function getResponsavelDaLista(d: Demanda): string | null {
+  function getResponsavel(d: Demanda): string | null {
     const papelEsperado = SITUACAO_PAPEL_MAP[d.situacao];
     const lista = responsaveisMap.get(d.id) || [];
-    const match = lista.find((r) => r.papel === papelEsperado);
-    return match?.display_name || lista[0]?.display_name || null;
+    return lista.find((r) => r.papel === papelEsperado)?.display_name || lista[0]?.display_name || null;
   }
 
-  const filtered = useMemo(() => {
-    return demandas.filter((d) => {
-      if (
-        debouncedSearch &&
-        !d.rhm.toLowerCase().includes(debouncedSearch.toLowerCase()) &&
-        !d.projeto.toLowerCase().includes(debouncedSearch.toLowerCase())
-      )
-        return false;
-      if (filterTipo !== "all" && d.tipo !== filterTipo) return false;
-      if (filterSituacao !== "all" && d.situacao !== filterSituacao) return false;
-      return true;
-    });
-  }, [demandas, debouncedSearch, filterTipo, filterSituacao]);
+  // Situações únicas para o filtro
+  const situacoesUnicas = useMemo(() => [...new Set(demandas.map((d) => d.situacao))], [demandas]);
 
-  // ✅ pageSize dinâmico
-  const { paginatedItems, currentPage, setCurrentPage, totalItems } = usePagination(filtered, {
-    pageSize,
-  });
+  const filtered = useMemo(
+    () =>
+      demandas.filter((d) => {
+        const q = debouncedSearch.toLowerCase();
+        if (
+          q &&
+          !d.rhm.toLowerCase().includes(q) &&
+          !d.projeto.toLowerCase().includes(q) &&
+          !((d as any).titulo ?? "").toLowerCase().includes(q)
+        )
+          return false;
+        if (filterTipo !== "all" && d.tipo !== filterTipo) return false;
+        if (filterSituacao !== "all" && d.situacao !== filterSituacao) return false;
+        return true;
+      }),
+    [demandas, debouncedSearch, filterTipo, filterSituacao],
+  );
 
+  const { paginatedItems, currentPage, setCurrentPage, totalItems } = usePagination(filtered, { pageSize });
+
+  // ── Detail view ───────────────────────────────────────────────────────────
   if (selected) {
     const current = demandas.find((d) => d.id === selected.id) || selected;
     return (
@@ -148,103 +155,124 @@ export function DemandasList() {
 
   return (
     <div className="space-y-4">
+      {/* ── Header ──────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Demandas</h2>
-        <Button size="sm" className="bg-info hover:bg-info/90 text-info-foreground" onClick={() => setShowForm(true)}>
-          <Plus className="h-4 w-4 mr-1" />
-          Nova Demanda
+        <div>
+          <h2 className="text-lg font-semibold">Demandas</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {totalItems} demanda{totalItems !== 1 ? "s" : ""} encontrada{totalItems !== 1 ? "s" : ""}
+          </p>
+        </div>
+        <Button
+          size="sm"
+          className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5"
+          onClick={() => setShowForm(true)}
+        >
+          <Plus className="h-4 w-4" /> Nova Demanda
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      {/* ── Filtros ─────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Busca */}
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar..."
+            placeholder="Buscar por RHM, projeto ou título..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 h-9"
           />
         </div>
+
+        {/* Tipo */}
+        <Select value={filterTipo} onValueChange={setFilterTipo}>
+          <SelectTrigger className="h-9 w-[140px]">
+            <Tag className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+            <SelectValue placeholder="Tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os tipos</SelectItem>
+            {TIPO_OPTIONS.slice(1).map((t) => (
+              <SelectItem key={t} value={t} className="capitalize">
+                {t}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Situação */}
+        <Select value={filterSituacao} onValueChange={setFilterSituacao}>
+          <SelectTrigger className="h-9 w-[170px]">
+            <SelectValue placeholder="Situação" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as situações</SelectItem>
+            {situacoesUnicas.map((s) => (
+              <SelectItem key={s} value={s}>
+                {SITUACAO_LABELS[s] || s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Toggle view */}
+        <div className="flex items-center border rounded-md overflow-hidden h-9">
+          <button
+            onClick={() => setViewMode("cards")}
+            className={cn(
+              "px-2.5 h-full flex items-center transition-colors",
+              viewMode === "cards" ? "bg-amber-500/15 text-amber-600" : "text-muted-foreground hover:bg-muted",
+            )}
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setViewMode("table")}
+            className={cn(
+              "px-2.5 h-full flex items-center transition-colors",
+              viewMode === "table" ? "bg-amber-500/15 text-amber-600" : "text-muted-foreground hover:bg-muted",
+            )}
+          >
+            <LayoutList className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
+      {/* ── Conteúdo ─────────────────────────────────────────────── */}
       {filtered.length === 0 ? (
         <EmptyState icon={ListTodo} title="Nenhuma demanda encontrada" />
       ) : (
         <>
-          <div className="border rounded-lg">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>#</TableHead>
-                  <TableHead>Projeto</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Situação</TableHead>
-                  <TableHead>Responsável</TableHead>
-                  <TableHead className="w-10"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedItems.map((d) => (
-                  <TableRow key={d.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelected(d)}>
-                    <TableCell className="font-mono font-bold text-info">{d.rhm}</TableCell>
-                    <TableCell>{d.projeto}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize text-[10px]">
-                        {d.tipo}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={`text-[10px] ${SITUACAO_COLORS[d.situacao] || ""}`}>
-                        {SITUACAO_LABELS[d.situacao] || d.situacao}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-xs">
-                        {getResponsavelDaLista(d) ?? <span className="text-muted-foreground">—</span>}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelected(d);
-                            }}
-                          >
-                            Detalhes
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isDemandaIniciada(d)) {
-                                toast.error(
-                                  "Demanda já iniciada. Use 'Cancelar Demanda' ou 'Bloquear' na tela de detalhes.",
-                                );
-                              } else {
-                                setDeleteTarget(d);
-                              }
-                            }}
-                          >
-                            Excluir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          {viewMode === "cards" ? (
+            <CardView
+              items={paginatedItems}
+              getResponsavel={getResponsavel}
+              onSelect={setSelected}
+              onDelete={(d) => {
+                if (isDemandaIniciada(d)) {
+                  toast.error("Demanda já iniciada. Use 'Cancelar Demanda' na tela de detalhes.");
+                } else {
+                  setDeleteTarget(d);
+                }
+              }}
+            />
+          ) : (
+            <TableView
+              items={paginatedItems}
+              getResponsavel={getResponsavel}
+              onSelect={setSelected}
+              onDelete={(d) => {
+                if (isDemandaIniciada(d)) {
+                  toast.error("Demanda já iniciada. Use 'Cancelar Demanda' na tela de detalhes.");
+                } else {
+                  setDeleteTarget(d);
+                }
+              }}
+            />
+          )}
 
-          {/* ✅ Rodapé com seletor de itens por página + paginação */}
+          {/* Rodapé */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>Itens por página:</span>
@@ -267,7 +295,6 @@ export function DemandasList() {
                 </SelectContent>
               </Select>
             </div>
-
             <PaginationControls
               currentPage={currentPage}
               totalItems={totalItems}
@@ -289,6 +316,209 @@ export function DemandasList() {
           }
         }}
       />
+    </div>
+  );
+}
+
+// ─── CardView ─────────────────────────────────────────────────────────────────
+
+function CardView({
+  items,
+  getResponsavel,
+  onSelect,
+  onDelete,
+}: {
+  items: Demanda[];
+  getResponsavel: (d: Demanda) => string | null;
+  onSelect: (d: Demanda) => void;
+  onDelete: (d: Demanda) => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+      {items.map((d) => {
+        const titulo = (d as any).titulo as string | undefined;
+        const responsavel = getResponsavel(d);
+
+        return (
+          <div
+            key={d.id}
+            onClick={() => onSelect(d)}
+            className="group relative flex flex-col gap-3 p-4 rounded-xl border bg-card hover:border-amber-400/50 hover:shadow-md transition-all cursor-pointer"
+          >
+            {/* Top row: RHM + menu */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                {/* Indicador lateral amber */}
+                <span className="h-5 w-1 rounded-full bg-amber-400 shrink-0" />
+                <span className="font-mono text-sm font-bold text-amber-500">{d.rhm}</span>
+              </div>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelect(d);
+                    }}
+                  >
+                    Detalhes
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(d);
+                    }}
+                  >
+                    Excluir
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            {/* Título ou fallback */}
+            <div className="flex-1 min-w-0">
+              {titulo ? (
+                <>
+                  <p className="text-sm font-semibold leading-snug line-clamp-2">{titulo}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{d.projeto}</p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground truncate">{d.projeto}</p>
+              )}
+            </div>
+
+            {/* Footer: tipo + situação + responsável */}
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Badge variant="outline" className="text-[10px] capitalize shrink-0">
+                  {d.tipo}
+                </Badge>
+                <Badge className={cn("text-[10px] shrink-0", SITUACAO_COLORS[d.situacao] || "")}>
+                  {SITUACAO_LABELS[d.situacao] || d.situacao}
+                </Badge>
+              </div>
+
+              {responsavel && (
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0 min-w-0">
+                  <div className="h-5 w-5 rounded-full bg-amber-400/20 text-amber-600 flex items-center justify-center shrink-0">
+                    <User className="h-3 w-3" />
+                  </div>
+                  <span className="truncate max-w-[80px]">{responsavel}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── TableView ────────────────────────────────────────────────────────────────
+
+function TableView({
+  items,
+  getResponsavel,
+  onSelect,
+  onDelete,
+}: {
+  items: Demanda[];
+  getResponsavel: (d: Demanda) => string | null;
+  onSelect: (d: Demanda) => void;
+  onDelete: (d: Demanda) => void;
+}) {
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/40">
+            <TableHead className="w-28">#</TableHead>
+            <TableHead>Projeto / Título</TableHead>
+            <TableHead className="w-28">Tipo</TableHead>
+            <TableHead>Situação</TableHead>
+            <TableHead>Responsável</TableHead>
+            <TableHead className="w-10" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items.map((d) => {
+            const titulo = (d as any).titulo as string | undefined;
+            const responsavel = getResponsavel(d);
+            return (
+              <TableRow key={d.id} className="cursor-pointer hover:bg-muted/50" onClick={() => onSelect(d)}>
+                <TableCell>
+                  <span className="font-mono font-bold text-amber-500 text-sm">{d.rhm}</span>
+                </TableCell>
+                <TableCell>
+                  <div className="min-w-0">
+                    {titulo && <p className="text-sm font-medium truncate max-w-[280px]">{titulo}</p>}
+                    <p
+                      className={cn("truncate max-w-[280px]", titulo ? "text-[11px] text-muted-foreground" : "text-sm")}
+                    >
+                      {d.projeto}
+                    </p>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="capitalize text-[10px]">
+                    {d.tipo}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge className={cn("text-[10px]", SITUACAO_COLORS[d.situacao] || "")}>
+                    {SITUACAO_LABELS[d.situacao] || d.situacao}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  {responsavel ? (
+                    <span className="text-xs">{responsavel}</span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelect(d);
+                        }}
+                      >
+                        Detalhes
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(d);
+                        }}
+                      >
+                        Excluir
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
     </div>
   );
 }
