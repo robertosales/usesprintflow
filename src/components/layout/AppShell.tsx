@@ -56,7 +56,7 @@ interface AppShellProps {
   onNavigate?: (key: string) => void;
 }
 
-// ─── SVGs customizados ────────────────────────────────────────────────────────
+// ─── SVGs ─────────────────────────────────────────────────────────────────────
 
 function HeartSuitIcon({ className }: { className?: string }) {
   return (
@@ -66,7 +66,6 @@ function HeartSuitIcon({ className }: { className?: string }) {
   );
 }
 
-// Ícone de baralho (carta com naipe) para Planning Poker
 function PlayingCardIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -79,15 +78,12 @@ function PlayingCardIcon({ className }: { className?: string }) {
       className={className}
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* Carta */}
       <rect x="4" y="2" width="11" height="15" rx="1.5" />
-      {/* Naipe copas pequeno no canto */}
       <path
         d="M7 5.5c0-.8.6-1.5 1.4-1.5.4 0 .8.2 1.1.6.3-.4.7-.6 1.1-.6.8 0 1.4.7 1.4 1.5 0 1.2-1.5 2.3-2.5 3C9.5 7.8 7 6.7 7 5.5z"
         fill="currentColor"
         stroke="none"
       />
-      {/* Segunda carta atrás (sombra/profundidade) */}
       <rect x="9" y="7" width="11" height="15" rx="1.5" />
     </svg>
   );
@@ -117,7 +113,7 @@ const NAV_SALA_AGIL: NavItem[] = [
   { key: "times", label: "Times", icon: Users, path: "/sala-agil/times", group: "config" },
   { key: "membros", label: "Membros", icon: User, path: "/sala-agil/membros", group: "config" },
   { key: "perfis", label: "Perfis (RBAC)", icon: ShieldCheck, path: "/sala-agil/perfis", group: "config" },
-  { key: "fluxo", label: "Fluxo de Trabalho", icon: GitBranch, path: "/sala-agil/fluxo", group: "config" },
+  { key: "fluxo", label: "Fluxo", icon: GitBranch, path: "/sala-agil/fluxo", group: "config" },
   { key: "campos", label: "Campos Custom", icon: Settings, path: "/sala-agil/campos", group: "config" },
   { key: "automacoes", label: "Automações", icon: Repeat, path: "/sala-agil/automacoes", group: "config" },
 ];
@@ -173,12 +169,11 @@ function NavItemButton({
 }) {
   const navigate = useNavigate();
   const accent = getAccent(module);
+  const Icon = item.icon;
 
   const handleClick = () => {
     onNavigate ? onNavigate(item.key) : navigate(item.path);
   };
-
-  const Icon = item.icon;
 
   return (
     <button
@@ -303,7 +298,6 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
       style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.06)" }}
     >
       <span className="text-[13px] font-medium text-white">{pageLabel}</span>
-
       <div className="flex items-center gap-2">
         {module === "sala_agil" && activeSprint && (
           <Badge
@@ -343,22 +337,17 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
     .toUpperCase();
 
   return (
-    <div
-      className="flex h-screen w-screen overflow-hidden bg-background"
-      data-module={module} // ← aplica tema âmbar via CSS quando sustentacao
-    >
+    <div className="flex h-screen w-screen overflow-hidden bg-background" data-module={module}>
       {/* ── Sidebar ─────────────────────────────────────────────── */}
       <aside
         className="flex flex-col h-full w-[220px] shrink-0 bg-[#0f0f11]"
         style={{ boxShadow: "4px 0 24px rgba(0,0,0,0.4)" }}
       >
-        {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 h-11 shrink-0">
           <HeartSuitIcon className={cn("h-6 w-6 shrink-0", accent.text)} />
           <span className="text-[15px] font-bold text-white tracking-tight">NexOps</span>
         </div>
 
-        {/* Switcher ou pill fixo */}
         {canSwitch ? (
           <ModuleSwitcher module={module} />
         ) : (
@@ -378,10 +367,8 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
           </div>
         )}
 
-        {/* Nav */}
         <SidebarNav module={module} activeKey={activeKey} onNavigate={onNavigate} />
 
-        {/* Rodapé */}
         <div className="shrink-0 px-2 pb-3 pt-2">
           <div className="h-px bg-white/[0.07] mb-2" />
           <DropdownMenu>
@@ -397,7 +384,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                     {profile?.display_name ?? "Usuário"}
                   </p>
                   <p className="text-[10px] text-white/40 capitalize truncate leading-none">
-                    {profile?.role ?? "membro"}
+                    {profile?.module_access ?? "membro"}
                   </p>
                 </div>
                 <ChevronRight className="h-3.5 w-3.5 text-white/30 group-hover:text-white/60 transition-colors shrink-0" />
@@ -406,7 +393,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             <DropdownMenuContent align="end" side="top" className="w-48 mb-1">
               <DropdownMenuLabel className="text-xs">
                 <p className="font-semibold">{profile?.display_name}</p>
-                <p className="text-muted-foreground font-normal capitalize">{profile?.role}</p>
+                <p className="text-muted-foreground font-normal capitalize">{profile?.module_access}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               {canSwitch && (
