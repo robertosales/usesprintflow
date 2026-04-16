@@ -23,14 +23,12 @@ import {
   Zap,
   Target,
   Activity,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const ALERTA_PAGE_SIZE = 5;
+const SEVERITY_ORDER = ["bloqueada", "aguardando_retorno"] as const;
 
 // ─── SustentacaoDashboard ─────────────────────────────────────────────────────
 
@@ -42,8 +40,6 @@ export function SustentacaoDashboard() {
 
   const [filterProjeto, setFilterProjeto] = useState("all");
   const [filterPeriodo, setFilterPeriodo] = useState("30");
-  const [alertaPage, setAlertaPage] = useState(1);
-  const [slaAlertaPage, setSlaAlertaPage] = useState(1);
 
   const filtered = useMemo(() => {
     let items = demandas;
@@ -68,11 +64,17 @@ export function SustentacaoDashboard() {
     return Object.entries(acc).sort((a, b) => b[1] - a[1]);
   }, [filtered]);
 
-  // Alertas de bloqueio/aguardando — todos, sem slice
-  const alertas = useMemo(
+  const alertasOperacionais = useMemo(
     () =>
       filtered
         .filter((d) => d.situacao === "bloqueada" || d.situacao === "aguardando_retorno")
+        // bloqueadas primeiro, depois por tempo sem atualização (mais antigo = mais urgente)
+        .sort((a, b) => {
+          const oa = SEVERITY_ORDER.indexOf(a.situacao as any);
+          const ob = SEVERITY_ORDER.indexOf(b.situacao as any);
+          if (oa !== ob) return oa - ob;
+          return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+        })
         .map((d) => ({
           id: d.id,
           rhm: d.rhm,
@@ -83,15 +85,12 @@ export function SustentacaoDashboard() {
     [filtered],
   );
 
-  // Alertas de SLA violado/em risco
   const alertasSLA = useMemo(
     () =>
       filtered
-        .filter((d) => {
-          const trans = transitions.filter((t) => t.demanda_id === d.id);
-          // usa campo sla_violado se existir, senão filtra por situacao
-          return (d as any).sla_violado || (d as any).sla_em_risco;
-        })
+        .filter((d) => (d as any).sla_violado || (d as any).sla_em_risco)
+        // mais atrasado primeiro
+        .sort((a, b) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime())
         .map((d) => ({
           id: d.id,
           rhm: d.rhm,
@@ -106,13 +105,6 @@ export function SustentacaoDashboard() {
   if (loading) return <SkeletonList count={4} />;
 
   const maxCount = Math.max(...porSituacao.map(([, c]) => c), 1);
-  const alertasTotais = alertas.length;
-  const alertasVisiveis = alertas.slice(0, alertaPage * ALERTA_PAGE_SIZE);
-  const temMaisAlertas = alertasVisiveis.length < alertasTotais;
-
-  const slaAlertasTotais = alertasSLA.length;
-  const slaAlertasVisiveis = alertasSLA.slice(0, slaAlertaPage * ALERTA_PAGE_SIZE);
-  const temMaisSla = slaAlertasVisiveis.length < slaAlertasTotais;
 
   return (
     <div className="space-y-6">
@@ -219,8 +211,8 @@ export function SustentacaoDashboard() {
         </div>
       </Section>
 
-      {/* ── Situação + Alertas (layout assimétrico) ────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      {/* ── Situação + Alertas ─────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
         {/* Demandas por Situação — 2/5 */}
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -248,93 +240,97 @@ export function SustentacaoDashboard() {
           </CardContent>
         </Card>
 
-        {/* Alertas com abas — 3/5 */}
-        <Card className="lg:col-span-3">
-          <CardHeader className="pb-2">
+        {/* Alertas com abas — 3/5 — altura fixa, scroll interno */}
+        <Card className="lg:col-span-3 flex flex-col" style={{ height: "420px" }}>
+          <CardHeader className="pb-2 shrink-0">
             <CardTitle className="text-sm flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-destructive" />
               Alertas
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <Tabs defaultValue="operacional">
-              <TabsList className="w-full mb-3 h-8">
-                <TabsTrigger value="operacional" className="flex-1 text-xs gap-1">
+
+          <CardContent className="pt-0 flex-1 flex flex-col min-h-0">
+            <Tabs defaultValue="operacional" className="flex flex-col flex-1 min-h-0">
+              {/* Abas */}
+              <TabsList className="w-full h-8 shrink-0 mb-2">
+                <TabsTrigger value="operacional" className="flex-1 text-xs gap-1.5">
                   Operacional
-                  {alertasTotais > 0 && (
-                    <Badge variant="destructive" className="h-4 px-1 text-[10px]">
-                      {alertasTotais}
+                  {alertasOperacionais.length > 0 && (
+                    <Badge variant="destructive" className="h-4 px-1.5 text-[10px] leading-none">
+                      {alertasOperacionais.length}
                     </Badge>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="sla" className="flex-1 text-xs gap-1">
+                <TabsTrigger value="sla" className="flex-1 text-xs gap-1.5">
                   SLA (E8)
-                  {slaAlertasTotais > 0 && (
-                    <Badge variant="destructive" className="h-4 px-1 text-[10px]">
-                      {slaAlertasTotais}
+                  {alertasSLA.length > 0 && (
+                    <Badge variant="destructive" className="h-4 px-1.5 text-[10px] leading-none">
+                      {alertasSLA.length}
                     </Badge>
                   )}
                 </TabsTrigger>
               </TabsList>
 
-              {/* Aba Operacional */}
-              <TabsContent value="operacional" className="mt-0 space-y-2">
-                {alertasVisiveis.length === 0 ? (
+              {/* ── Aba Operacional ── */}
+              <TabsContent
+                value="operacional"
+                className="mt-0 flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-muted"
+              >
+                {alertasOperacionais.length === 0 ? (
                   <EmptyAlerts />
                 ) : (
-                  <>
-                    {alertasVisiveis.map((a) => {
-                      const isBlocked = a.situacao === "bloqueada";
-                      const hoursAgo = Math.round((Date.now() - new Date(a.updatedAt).getTime()) / 3600000);
-                      return (
-                        <AlertRow
-                          key={a.id}
-                          icon={isBlocked ? AlertTriangle : Clock}
-                          iconClass={isBlocked ? "text-destructive" : "text-orange-500"}
-                          borderClass={
-                            isBlocked
-                              ? "border-destructive/30 bg-destructive/5"
-                              : "border-orange-400/30 bg-orange-50 dark:bg-orange-950/20"
-                          }
-                          title={a.rhm}
-                          sub={`${isBlocked ? "Bloqueada" : "Aguardando retorno"} há ${hoursAgo}h · ${a.projeto}`}
-                        />
-                      );
-                    })}
-                    <PaginationFooter
-                      shown={alertasVisiveis.length}
-                      total={alertasTotais}
-                      hasMore={temMaisAlertas}
-                      onMore={() => setAlertaPage((p) => p + 1)}
-                      onLess={() => setAlertaPage(1)}
-                    />
-                  </>
+                  alertasOperacionais.map((a) => {
+                    const isBlocked = a.situacao === "bloqueada";
+                    const hoursAgo = Math.round((Date.now() - new Date(a.updatedAt).getTime()) / 3_600_000);
+                    return (
+                      <AlertRow
+                        key={a.id}
+                        icon={isBlocked ? AlertTriangle : Clock}
+                        iconClass={isBlocked ? "text-destructive" : "text-orange-500"}
+                        borderClass={
+                          isBlocked
+                            ? "border-destructive/30 bg-destructive/5"
+                            : "border-orange-400/30 bg-orange-50 dark:bg-orange-950/20"
+                        }
+                        title={a.rhm}
+                        sub={`${isBlocked ? "Bloqueada" : "Aguardando retorno"} há ${hoursAgo}h · ${a.projeto}`}
+                      />
+                    );
+                  })
                 )}
               </TabsContent>
 
-              {/* Aba SLA E8 */}
-              <TabsContent value="sla" className="mt-0 space-y-2">
-                {slaAlertasVisiveis.length === 0 ? (
+              {/* ── Aba SLA E8 ── */}
+              <TabsContent
+                value="sla"
+                className="mt-0 flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-muted"
+              >
+                {alertasSLA.length === 0 ? (
                   <EmptyAlerts />
                 ) : (
                   <>
-                    {slaAlertasVisiveis.map((a) => (
+                    {/* Resumo rápido no topo */}
+                    <div className="flex items-center justify-between px-1 pb-1 border-b border-border/40">
+                      <span className="text-[11px] text-muted-foreground">
+                        <span className="text-destructive font-semibold">{alertasSLA.length}</span> demanda
+                        {alertasSLA.length > 1 ? "s" : ""} com SLA violado
+                      </span>
+                      <span className="text-[11px] text-destructive font-medium">
+                        Glosa acumulada: {(alertasSLA.length * 0.2).toFixed(1)}%
+                      </span>
+                    </div>
+
+                    {alertasSLA.map((a) => (
                       <AlertRow
                         key={a.id}
                         icon={AlertTriangle}
                         iconClass="text-destructive"
-                        borderClass="border-destructive/30 bg-destructive/5"
+                        borderClass="border-destructive/20 bg-destructive/5"
                         title={`${a.rhm} — ${a.projeto}`}
-                        sub={`${a.diasAtraso} dias de atraso — Glosa 0,2%`}
+                        sub={`${a.diasAtraso} dias de atraso · Glosa 0,2%`}
+                        badge={`${a.diasAtraso}d`}
                       />
                     ))}
-                    <PaginationFooter
-                      shown={slaAlertasVisiveis.length}
-                      total={slaAlertasTotais}
-                      hasMore={temMaisSla}
-                      onMore={() => setSlaAlertaPage((p) => p + 1)}
-                      onLess={() => setSlaAlertaPage(1)}
-                    />
                   </>
                 )}
               </TabsContent>
@@ -367,12 +363,14 @@ function AlertRow({
   borderClass,
   title,
   sub,
+  badge,
 }: {
   icon: any;
   iconClass: string;
   borderClass: string;
   title: string;
   sub: string;
+  badge?: string;
 }) {
   return (
     <div className={`flex items-center gap-3 p-2.5 rounded-lg border ${borderClass}`}>
@@ -381,49 +379,20 @@ function AlertRow({
         <p className="text-xs font-medium truncate">{title}</p>
         <p className="text-[10px] text-muted-foreground">{sub}</p>
       </div>
+      {badge && (
+        <span className="text-[10px] font-bold text-destructive bg-destructive/10 rounded px-1.5 py-0.5 shrink-0">
+          {badge}
+        </span>
+      )}
     </div>
   );
 }
 
 function EmptyAlerts() {
   return (
-    <div className="text-center py-6">
-      <CheckCircle2 className="h-8 w-8 text-info mx-auto mb-2" />
+    <div className="flex flex-col items-center justify-center h-full py-8">
+      <CheckCircle2 className="h-8 w-8 text-info mb-2" />
       <p className="text-sm text-muted-foreground">Nenhum alerta no momento</p>
-    </div>
-  );
-}
-
-function PaginationFooter({
-  shown,
-  total,
-  hasMore,
-  onMore,
-  onLess,
-}: {
-  shown: number;
-  total: number;
-  hasMore: boolean;
-  onMore: () => void;
-  onLess: () => void;
-}) {
-  return (
-    <div className="flex items-center justify-between pt-1">
-      <span className="text-[11px] text-muted-foreground">
-        Exibindo <strong>{shown}</strong> de <strong>{total}</strong>
-      </span>
-      <div className="flex gap-1">
-        {hasMore && (
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={onMore}>
-            Ver mais <ChevronDown className="h-3 w-3" />
-          </Button>
-        )}
-        {shown > ALERTA_PAGE_SIZE && (
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={onLess}>
-            Recolher <ChevronUp className="h-3 w-3" />
-          </Button>
-        )}
-      </div>
     </div>
   );
 }
