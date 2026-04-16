@@ -328,7 +328,7 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
 // ─── AppShell ─────────────────────────────────────────────────────────────────
 
 export function AppShell({ module, children, activeKey, onNavigate }: AppShellProps) {
-  const { profile, isAdmin, signOut } = useAuth();
+  const { profile, isAdmin, signOut, roles } = useAuth();
   const navigate = useNavigate();
 
   const moduleAccess = profile?.module_access ?? "sala_agil";
@@ -397,7 +397,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                     {profile?.display_name ?? "Usuário"}
                   </p>
                   <p className="text-[10px] text-white/40 capitalize truncate leading-none">
-                    {profile?.role ?? "membro"}
+                    {roles[0] ?? "membro"}
                   </p>
                 </div>
                 <ChevronRight className="h-3.5 w-3.5 text-white/30 group-hover:text-white/60 transition-colors shrink-0" />
@@ -406,7 +406,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             <DropdownMenuContent align="end" side="top" className="w-48 mb-1">
               <DropdownMenuLabel className="text-xs">
                 <p className="font-semibold">{profile?.display_name}</p>
-                <p className="text-muted-foreground font-normal capitalize">{profile?.role}</p>
+                <p className="text-muted-foreground font-normal capitalize">{roles[0] ?? "membro"}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               {canSwitch && (
