@@ -328,7 +328,7 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
 // ─── AppShell ─────────────────────────────────────────────────────────────────
 
 export function AppShell({ module, children, activeKey, onNavigate }: AppShellProps) {
-  const { profile, isAdmin, signOut } = useAuth();
+  const { profile, isAdmin, signOut, roles } = useAuth();
   const navigate = useNavigate();
 
   const moduleAccess = profile?.module_access ?? "sala_agil";
