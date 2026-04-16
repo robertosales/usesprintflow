@@ -57,6 +57,8 @@ export function SustentacaoPage() {
             {active === 'times' && <TeamManager moduleFilter="sustentacao" />}
             {active === 'membros' && <TeamMembersManager />}
             {active === 'perfis' && <UserRolesManager />}
+            {active === 'equipe' && <DeveloperManager />}
+            {active === 'workflow' && <SustentacaoWorkflow />}
             {active === 'campos' && <CustomFieldManager />}
             {active === 'automacoes' && <AutomationManager />}
             {active === 'relatorios' && <SustentacaoRelatorios />}
