@@ -1,111 +1,60 @@
-import { useState, useEffect } from "react";
-import { AgileHistory } from "@/components/AgileHistory";
-import { TeamSelectionModal } from "@/shared/components/common/TeamSelectionModal";
-import { SprintManager } from "@/components/SprintManager";
-import { DeveloperManager } from "@/components/DeveloperManager";
-import { UserStoryManager } from "@/components/UserStoryManager";
-import { ActivityManager } from "@/components/ActivityManager";
-import { KanbanBoard } from "@/components/KanbanBoard";
-import { MetricsDashboard } from "@/components/MetricsDashboard";
-import { ImpedimentList } from "@/components/ImpedimentManager";
-import { EpicManager } from "@/components/EpicManager";
-import { WorkflowManager } from "@/components/WorkflowManager";
-import { CustomFieldManager } from "@/components/CustomFieldManager";
-import { AutomationManager } from "@/components/AutomationManager";
-import { TeamManager } from "@/components/TeamManager";
-import { TeamMembersManager } from "@/components/TeamMembersManager";
-import { UserRolesManager } from "@/components/UserRolesManager";
-import { DashboardHome } from "@/components/DashboardHome";
-import { CalendarView } from "@/components/CalendarView";
-import { PlanningPoker } from "@/components/PlanningPoker";
-import { RetroManager } from "@/components/RetroManager";
-import { useSprint } from "@/contexts/SprintContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { hasActiveImpediment } from "@/types/sprint";
 import { Building2 } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
 
-const Index = () => {
-  const [active, setActive] = useState("dashboard");
-  const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission } = useAuth();
-  const { activeSprint, userStories } = useSprint();
-  const [showTeamModal, setShowTeamModal] = useState(false);
+interface TeamSelectionModalProps {
+  open: boolean;
+  teams: { id: string; name: string; module: string }[];
+  onSelect: (teamId: string) => void;
+  onClose?: () => void;
+  moduleLabel: string;
+}
 
-  const moduleTeams = teams.filter((t) => t.module === "sala_agil");
-
-  useEffect(() => {
-    if (loading || moduleTeams.length === 0) return;
-    const currentIsValid = currentTeamId && moduleTeams.some((t) => t.id === currentTeamId);
-    if (currentIsValid) return;
-    if (moduleTeams.length === 1) {
-      setCurrentTeamId(moduleTeams[0].id);
-    } else {
-      setShowTeamModal(true);
-    }
-  }, [loading, teams]);
-
-  const needsTeam = !currentTeamId && active !== "times";
+export function TeamSelectionModal({ open, teams, onSelect, onClose, moduleLabel }: TeamSelectionModalProps) {
+  const [selected, setSelected] = useState<string | null>(null);
 
   return (
-    <AppShell module="sala_agil" activeKey={active} onNavigate={setActive}>
-      <TeamSelectionModal
-        open={showTeamModal}
-        teams={moduleTeams}
-        moduleLabel="Sala Ágil"
-        onSelect={(id) => {
-          setCurrentTeamId(id);
-          setShowTeamModal(false);
-        }}
-        onClose={() => setShowTeamModal(false)}
-      />
-      <div className="max-w-7xl mx-auto p-4 md:p-6">
-        {loading && (
-          <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-success" />
-          </div>
-        )}
-        {!loading && needsTeam && (
-          <div className="flex flex-col items-center justify-center py-20 space-y-4">
-            <Building2 className="h-14 w-14 text-muted-foreground/30" />
-            <p className="text-lg text-muted-foreground font-medium">Selecione ou crie um time para começar</p>
-            {hasPermission("manage_teams") && (
-              <Button onClick={() => setActive("times")} size="lg">
-                <Building2 className="h-4 w-4 mr-2" /> Ir para Times
-              </Button>
-            )}
-          </div>
-        )}
-        {!loading && !needsTeam && (
-          <>
-            {active === "dashboard" && <DashboardHome key={`dash-${currentTeamId}`} />}
-            {active === "times" && <TeamManager moduleFilter="sala_agil" />}
-            {active === "membros" && <TeamMembersManager />}
-            {active === "perfis" && <UserRolesManager />}
-            {active === "backlog" && (
-              <div className="space-y-8">
-                <SprintManager />
-                <UserStoryManager />
+    <Dialog open={open} onOpenChange={(v) => { if (!v && onClose) onClose(); }}>
+      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle>Selecionar Time</DialogTitle>
+          <DialogDescription>
+            Você possui mais de um time no módulo <strong>{moduleLabel}</strong>. Selecione qual deseja utilizar.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          {teams.map((team) => (
+            <button
+              key={team.id}
+              onClick={() => setSelected(team.id)}
+              className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-left ${
+                selected === team.id
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-muted-foreground/30"
+              }`}
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted shrink-0">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
               </div>
-            )}
-            {active === "epicos" && <EpicManager />}
-            {active === "planning" && <PlanningPoker />}
-            {active === "equipe" && <DeveloperManager />}
-            {active === "atividades" && <ActivityManager />}
-            {active === "board" && <KanbanBoard />}
-            {active === "calendario" && <CalendarView />}
-            {active === "impedimentos" && <ImpedimentList />}
-            {active === "retro" && <RetroManager />}
-            {active === "metricas" && <MetricsDashboard />}
-            {active === "historico" && <AgileHistory />}
-            {active === "fluxo" && <WorkflowManager />}
-            {active === "campos" && <CustomFieldManager />}
-            {active === "automacoes" && <AutomationManager />}
-          </>
-        )}
-      </div>
-    </AppShell>
+              <span className="text-sm font-medium">{team.name}</span>
+            </button>
+          ))}
+        </div>
+        <Button
+          disabled={!selected}
+          onClick={() => selected && onSelect(selected)}
+          className="w-full"
+        >
+          Confirmar
+        </Button>
+      </DialogContent>
+    </Dialog>
   );
-};
-
-export default Index;
+}
