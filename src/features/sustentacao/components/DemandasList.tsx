@@ -114,7 +114,7 @@ export function DemandasList() {
           q &&
           !d.rhm.toLowerCase().includes(q) &&
           !d.projeto.toLowerCase().includes(q) &&
-          !((d as any).titulo ?? "").toLowerCase().includes(q)
+          !(d.titulo || d.descricao || "").toLowerCase().includes(q)
         )
           return false;
         if (filterTipo !== "all" && d.tipo !== filterTipo) return false;
@@ -328,7 +328,7 @@ function CardView({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
       {items.map((d) => {
-        const titulo = d.titulo;
+        const titulo = d.titulo || d.descricao;
         const responsavel = getResponsavel(d);
 
         return (
@@ -442,7 +442,7 @@ function TableView({
         </TableHeader>
         <TableBody>
           {items.map((d) => {
-            const titulo = d.titulo;
+            const titulo = d.titulo || d.descricao;
             const responsavel = getResponsavel(d);
             return (
               <TableRow key={d.id} className="cursor-pointer hover:bg-muted/50" onClick={() => onSelect(d)}>
