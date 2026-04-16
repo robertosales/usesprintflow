@@ -328,7 +328,7 @@ function CardView({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
       {items.map((d) => {
-        const titulo = (d as any).titulo as string | undefined;
+        const titulo = d.titulo;
         const responsavel = getResponsavel(d);
 
         return (
@@ -442,7 +442,7 @@ function TableView({
         </TableHeader>
         <TableBody>
           {items.map((d) => {
-            const titulo = (d as any).titulo as string | undefined;
+            const titulo = d.titulo;
             const responsavel = getResponsavel(d);
             return (
               <TableRow key={d.id} className="cursor-pointer hover:bg-muted/50" onClick={() => onSelect(d)}>
