@@ -270,6 +270,8 @@ function Topbar({ module }: { module: ActiveModule }) {
 interface AppShellProps {
   module: ActiveModule;
   children: React.ReactNode;
+  activeKey?: string; // ← ADD
+  onNavigate?: (key: string) => void; // ← ADD
 }
 
 export function AppShell({ module, children }: AppShellProps) {
