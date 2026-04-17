@@ -66,7 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRoles(userRoles);
       const admin = userRoles.includes("admin");
       setIsAdmin(admin);
-      setPermissions(getPermissionsForRoles(userRoles));
+      // ✅ era síncrono, agora busca do banco
+      const perms = await getPermissionsForRoles(userRoles);
+      setPermissions(perms);
       return admin;
     } catch (err) {
       console.error("Error fetching roles:", err);
