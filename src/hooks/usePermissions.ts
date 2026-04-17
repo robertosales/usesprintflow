@@ -1,23 +1,24 @@
+// src/hooks/usePermissions.ts
 import { supabase } from "@/integrations/supabase/client";
 
 export type AppRole = string;
 export type Permission = string;
 
-// ✅ Agora busca do banco — async
+// ✅ Busca permissões do banco — async
 export async function getPermissionsForRoles(roles: AppRole[]): Promise<Set<Permission>> {
   if (!roles.length) return new Set();
   const { data } = await supabase.from("role_permissions").select("permission_key").in("role_name", roles);
   return new Set((data || []).map((r: any) => r.permission_key));
 }
 
-// ✅ Busca roles do banco dinamicamente
+// ✅ Busca roles disponíveis do banco — async
 export async function fetchAllRoles(): Promise<{ name: string; label: string }[]> {
   const { data } = await supabase.from("app_roles").select("name, label").order("sort_order");
   return (data || []) as { name: string; label: string }[];
 }
 
-// Mantido para compatibilidade com componentes que usam síncronamente
-// Remover gradualmente conforme os componentes forem atualizados
+// Mantido para compatibilidade com componentes que ainda usam síncronamente
+// Remover gradualmente conforme os componentes forem migrados
 export const ALL_ROLES: AppRole[] = [
   "admin",
   "scrum_master",
