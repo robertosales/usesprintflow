@@ -22,8 +22,29 @@ import { RetroManager } from "@/components/RetroManager";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Building2 } from "lucide-react";
+import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+
+// ─── AccessDenied ─────────────────────────────────────────────────────────────
+
+function AccessDenied() {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 space-y-3">
+      <ShieldAlert className="h-14 w-14 text-destructive/40" />
+      <p className="text-lg font-semibold text-foreground">Acesso Restrito</p>
+      <p className="text-sm text-muted-foreground">Você não tem permissão para acessar esta seção.</p>
+    </div>
+  );
+}
+
+// ─── SectionGuard ─────────────────────────────────────────────────────────────
+
+function SectionGuard({ permission, children }: { permission: string; children: React.ReactNode }) {
+  const { hasPermission } = useAuth();
+  return hasPermission(permission) ? <>{children}</> : <AccessDenied />;
+}
+
+// ─── Index ────────────────────────────────────────────────────────────────────
 
 const Index = () => {
   const [active, setActive] = useState("dashboard");
@@ -58,12 +79,16 @@ const Index = () => {
         }}
         onClose={() => setShowTeamModal(false)}
       />
+
       <div className="max-w-7xl mx-auto p-4 md:p-6">
+        {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-success" />
           </div>
         )}
+
+        {/* Sem time selecionado */}
         {!loading && needsTeam && (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <Building2 className="h-14 w-14 text-muted-foreground/30" />
@@ -75,31 +100,106 @@ const Index = () => {
             )}
           </div>
         )}
+
+        {/* Conteúdo principal */}
         {!loading && !needsTeam && (
           <>
+            {/* ── Sem restrição ────────────────────────────── */}
             {active === "dashboard" && <DashboardHome key={`dash-${currentTeamId}`} />}
-            {active === "times" && <TeamManager moduleFilter="sala_agil" />}
-            {active === "membros" && <TeamMembersManager />}
-            {active === "perfis" && <UserRolesManager />}
-            {active === "backlog" && (
-              <div className="space-y-8">
-                <SprintManager />
-                <UserStoryManager />
-              </div>
-            )}
-            {active === "epicos" && <EpicManager />}
             {active === "planning" && <PlanningPoker />}
             {active === "equipe" && <DeveloperManager />}
-            {active === "atividades" && <ActivityManager />}
-            {active === "board" && <KanbanBoard />}
             {active === "calendario" && <CalendarView />}
-            {active === "impedimentos" && <ImpedimentList />}
             {active === "retro" && <RetroManager />}
-            {active === "metricas" && <MetricsDashboard />}
-            {active === "historico" && <AgileHistory />}
-            {active === "fluxo" && <WorkflowManager />}
-            {active === "campos" && <CustomFieldManager />}
-            {active === "automacoes" && <AutomationManager />}
+
+            {/* ── Requer view_backlog ──────────────────────── */}
+            {active === "backlog" && (
+              <SectionGuard permission="view_backlog">
+                <div className="space-y-8">
+                  <SprintManager />
+                  <UserStoryManager />
+                </div>
+              </SectionGuard>
+            )}
+            {active === "epicos" && (
+              <SectionGuard permission="view_backlog">
+                <EpicManager />
+              </SectionGuard>
+            )}
+
+            {/* ── Requer view_kanban ───────────────────────── */}
+            {active === "board" && (
+              <SectionGuard permission="view_kanban">
+                <KanbanBoard />
+              </SectionGuard>
+            )}
+
+            {/* ── Requer manage_activities ─────────────────── */}
+            {active === "atividades" && (
+              <SectionGuard permission="manage_activities">
+                <ActivityManager />
+              </SectionGuard>
+            )}
+
+            {/* ── Requer report_impediment ─────────────────── */}
+            {active === "impedimentos" && (
+              <SectionGuard permission="report_impediment">
+                <ImpedimentList />
+              </SectionGuard>
+            )}
+
+            {/* ── Requer view_dashboard ────────────────────── */}
+            {active === "metricas" && (
+              <SectionGuard permission="view_dashboard">
+                <MetricsDashboard />
+              </SectionGuard>
+            )}
+            {active === "historico" && (
+              <SectionGuard permission="view_dashboard">
+                <AgileHistory />
+              </SectionGuard>
+            )}
+
+            {/* ── Config — manage_teams ────────────────────── */}
+            {active === "times" && (
+              <SectionGuard permission="manage_teams">
+                <TeamManager moduleFilter="sala_agil" />
+              </SectionGuard>
+            )}
+
+            {/* ── Config — manage_users ────────────────────── */}
+            {active === "membros" && (
+              <SectionGuard permission="manage_users">
+                <TeamMembersManager />
+              </SectionGuard>
+            )}
+
+            {/* ── Config — manage_roles ────────────────────── */}
+            {active === "perfis" && (
+              <SectionGuard permission="manage_roles">
+                <UserRolesManager />
+              </SectionGuard>
+            )}
+
+            {/* ── Config — manage_workflow ─────────────────── */}
+            {active === "fluxo" && (
+              <SectionGuard permission="manage_workflow">
+                <WorkflowManager />
+              </SectionGuard>
+            )}
+
+            {/* ── Config — manage_custom_fields ────────────── */}
+            {active === "campos" && (
+              <SectionGuard permission="manage_custom_fields">
+                <CustomFieldManager />
+              </SectionGuard>
+            )}
+
+            {/* ── Config — manage_automations ──────────────── */}
+            {active === "automacoes" && (
+              <SectionGuard permission="manage_automations">
+                <AutomationManager />
+              </SectionGuard>
+            )}
           </>
         )}
       </div>
