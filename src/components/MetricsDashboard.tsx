@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +28,8 @@ import { QualityPanel } from "@/components/dashboard/QualityPanel";
 import { ReleasesPanel } from "@/components/dashboard/ReleasesPanel";
 import { ExportButton } from "@/components/dashboard/ExportButton";
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const STATUS_COLORS: Record<string, string> = {
   aguardando_desenvolvimento: "#94a3b8",
   em_desenvolvimento: "#3b82f6",
@@ -37,12 +39,52 @@ const STATUS_COLORS: Record<string, string> = {
   pronto_para_publicacao: "#22c55e",
 };
 
+const STALE_MS = 5 * 60 * 1000; // 5 minutos
+
+// ─── Persistência de filtros ──────────────────────────────────────────────────
+
+function usePersistedState<T>(key: string, defaultValue: T) {
+  const [state, setState] = useState<T>(() => {
+    try {
+      const stored = sessionStorage.getItem(key);
+      return stored ? (JSON.parse(stored) as T) : defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  });
+
+  const setPersisted = useCallback(
+    (value: T | ((prev: T) => T)) => {
+      setState((prev) => {
+        const next = typeof value === "function" ? (value as (p: T) => T)(prev) : value;
+        try {
+          sessionStorage.setItem(key, JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    },
+    [key],
+  );
+
+  return [state, setPersisted] as const;
+}
+
+// ─── MetricsDashboard ─────────────────────────────────────────────────────────
+
 export function MetricsDashboard() {
   const { isAdmin, teams, currentTeamId } = useAuth();
-  const [filters, setFilters] = useState<DashboardFilterState>({
+
+  // ✅ Filtros persistidos no sessionStorage — sobrevivem a troca de aba e foco
+  const [filters, setFilters] = usePersistedState<DashboardFilterState>("metricas:filters", {
     ...INITIAL_FILTERS,
     teamId: currentTeamId || "all",
   });
+
+  // ✅ Aba ativa persistida
+  const [activeTab, setActiveTab] = usePersistedState<string>("metricas:tab", "individual");
+
   const [loading, setLoading] = useState(false);
   const [rawData, setRawData] = useState<{
     sprints: any[];
@@ -53,57 +95,91 @@ export function MetricsDashboard() {
     workflowCols: any[];
   }>({ sprints: [], hus: [], activities: [], impediments: [], developers: [], workflowCols: [] });
 
+  // ✅ Controle de staleTime — evita refetch desnecessário ao voltar ao foco
+  const lastFetchRef = useRef<number>(0);
+  const lastTeamIdRef = useRef<string>("");
+
+  // Sincroniza teamId inicial sem sobrescrever filtros já persistidos
   useEffect(() => {
-    if (currentTeamId) setFilters((f) => ({ ...f, teamId: currentTeamId }));
-  }, [currentTeamId]);
-
-  useEffect(() => {
-    loadData();
-  }, [filters.teamId, teams]);
-
-  const loadData = async () => {
-    setLoading(true);
-    const teamsToLoad =
-      isAdmin && filters.teamId === "all"
-        ? teams
-        : teams.filter((t) => t.id === (filters.teamId === "all" ? currentTeamId : filters.teamId));
-
-    const allSprints: any[] = [];
-    const allHUs: any[] = [];
-    const allActs: any[] = [];
-    const allImps: any[] = [];
-    const allDevs: any[] = [];
-    const allWfCols: any[] = [];
-
-    for (const team of teamsToLoad) {
-      const [sprintRes, huRes, actRes, impRes, devRes, wcRes] = await Promise.all([
-        supabase.from("sprints").select("*").eq("team_id", team.id),
-        supabase.from("user_stories").select("*").eq("team_id", team.id),
-        supabase.from("activities").select("*").eq("team_id", team.id),
-        supabase.from("impediments").select("*").eq("team_id", team.id),
-        supabase.from("developers").select("*").eq("team_id", team.id),
-        supabase.from("workflow_columns").select("*").eq("team_id", team.id).order("sort_order"),
-      ]);
-      allSprints.push(...(sprintRes.data || []));
-      allHUs.push(...(huRes.data || []));
-      allActs.push(...(actRes.data || []));
-      allImps.push(...(impRes.data || []));
-      allDevs.push(...(devRes.data || []));
-      allWfCols.push(...(wcRes.data || []));
+    if (currentTeamId && filters.teamId === "all") {
+      setFilters((f) => ({ ...f, teamId: currentTeamId }));
     }
+  }, [currentTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    setRawData({
-      sprints: allSprints,
-      hus: allHUs,
-      activities: allActs,
-      impediments: allImps,
-      developers: allDevs,
-      workflowCols: allWfCols,
-    });
-    setLoading(false);
-  };
+  // ✅ loadData com useCallback + staleTime + guard de teamId
+  const loadData = useCallback(
+    async (forceTeamId?: string) => {
+      const teamId = forceTeamId ?? filters.teamId;
+      const now = Date.now();
 
-  // Apply filters
+      // Não refaz fetch se os dados são recentes E o teamId não mudou
+      if (now - lastFetchRef.current < STALE_MS && lastTeamIdRef.current === teamId && rawData.sprints.length > 0)
+        return;
+
+      setLoading(true);
+      lastFetchRef.current = now;
+      lastTeamIdRef.current = teamId;
+
+      const teamsToLoad =
+        isAdmin && teamId === "all" ? teams : teams.filter((t) => t.id === (teamId === "all" ? currentTeamId : teamId));
+
+      const allSprints: any[] = [];
+      const allHUs: any[] = [];
+      const allActs: any[] = [];
+      const allImps: any[] = [];
+      const allDevs: any[] = [];
+      const allWfCols: any[] = [];
+
+      for (const team of teamsToLoad) {
+        const [sprintRes, huRes, actRes, impRes, devRes, wcRes] = await Promise.all([
+          supabase.from("sprints").select("*").eq("team_id", team.id),
+          supabase.from("user_stories").select("*").eq("team_id", team.id),
+          supabase.from("activities").select("*").eq("team_id", team.id),
+          supabase.from("impediments").select("*").eq("team_id", team.id),
+          supabase.from("developers").select("*").eq("team_id", team.id),
+          supabase.from("workflow_columns").select("*").eq("team_id", team.id).order("sort_order"),
+        ]);
+        allSprints.push(...(sprintRes.data || []));
+        allHUs.push(...(huRes.data || []));
+        allActs.push(...(actRes.data || []));
+        allImps.push(...(impRes.data || []));
+        allDevs.push(...(devRes.data || []));
+        allWfCols.push(...(wcRes.data || []));
+      }
+
+      setRawData({
+        sprints: allSprints,
+        hus: allHUs,
+        activities: allActs,
+        impediments: allImps,
+        developers: allDevs,
+        workflowCols: allWfCols,
+      });
+      setLoading(false);
+    },
+    [filters.teamId, teams, isAdmin, currentTeamId],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ✅ Só dispara quando teamId realmente muda
+  useEffect(() => {
+    if (teams.length > 0) loadData();
+  }, [filters.teamId, teams]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ✅ Bloqueia refetch ao voltar o foco — Page Visibility API
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        // Só recarrega se dados estiverem stale (> 5 min)
+        if (Date.now() - lastFetchRef.current > STALE_MS) {
+          loadData();
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [loadData]);
+
+  // ─── Filtros aplicados ──────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const { sprints, hus, activities, impediments, developers, workflowCols } = rawData;
 
@@ -117,9 +193,7 @@ export function MetricsDashboard() {
 
     let filteredHUs = filters.sprintId === "all" ? hus : hus.filter((h: any) => sprintIds.has(h.sprint_id));
 
-    if (filters.priority !== "all") {
-      filteredHUs = filteredHUs.filter((h: any) => h.priority === filters.priority);
-    }
+    if (filters.priority !== "all") filteredHUs = filteredHUs.filter((h: any) => h.priority === filters.priority);
 
     const huIds = new Set(filteredHUs.map((h: any) => h.id));
     let filteredActs = activities.filter((a: any) => huIds.has(a.hu_id));
@@ -161,10 +235,9 @@ export function MetricsDashboard() {
     }
 
     const filteredImps = impediments.filter((i: any) => finalHuIds.has(i.hu_id));
-
     const lastCol =
       workflowCols.length > 0
-        ? workflowCols.sort((a: any, b: any) => a.sort_order - b.sort_order)[workflowCols.length - 1]?.key
+        ? [...workflowCols].sort((a: any, b: any) => a.sort_order - b.sort_order).at(-1)?.key
         : "pronto_para_publicacao";
 
     return {
@@ -178,7 +251,7 @@ export function MetricsDashboard() {
     };
   }, [rawData, filters]);
 
-  // Member metrics
+  // ─── Member metrics ─────────────────────────────────────────────────────────
   const memberMetrics = useMemo(() => {
     const { developers, activities, hus, impediments, lastCol } = filtered;
     const today = new Date().toISOString().split("T")[0];
@@ -188,42 +261,30 @@ export function MetricsDashboard() {
       const devActs = activities.filter((a: any) => a.assignee_id === dev.id);
       const devHUIds = new Set(devActs.map((a: any) => a.hu_id));
       const devHUs = hus.filter((h: any) => devHUIds.has(h.id));
-
       const closedActs = devActs.filter((a: any) => a.is_closed);
       const startedActs = devActs.filter((a: any) => !a.is_closed && a.start_date <= today);
       const notStartedCount = devActs.length - startedActs.length - closedActs.length;
-
       const hoursPlanned = devActs.reduce((s: number, a: any) => s + Number(a.hours), 0);
       const hoursCompleted = closedActs.reduce((s: number, a: any) => s + Number(a.hours), 0);
-
       const bugActs = devActs.filter((a: any) => a.activity_type === "bug");
       const bugsClosed = bugActs.filter((a: any) => a.is_closed);
-
       const completedHUs = devHUs.filter((h: any) => h.status === lastCol);
       const spCompleted = completedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
-
       const avgTime = closedActs.length > 0 ? Math.round((hoursCompleted / closedActs.length) * 10) / 10 : 0;
-
-      // WIP = tasks in progress (started but not closed)
       const wip = startedActs.length;
 
-      // Cycle time = avg days from start_date to closed_at for completed tasks
       let cycleTime = 0;
       if (closedActs.length > 0) {
         const totalDays = closedActs.reduce((s: number, a: any) => {
           if (a.closed_at && a.start_date) {
-            const diff = (new Date(a.closed_at).getTime() - new Date(a.start_date).getTime()) / (1000 * 60 * 60 * 24);
-            return s + Math.max(0, diff);
+            return s + Math.max(0, (new Date(a.closed_at).getTime() - new Date(a.start_date).getTime()) / 86400000);
           }
-          // Fallback: use end_date - start_date
-          const diff = (new Date(a.end_date).getTime() - new Date(a.start_date).getTime()) / (1000 * 60 * 60 * 24);
-          return s + Math.max(0, diff);
+          return s + Math.max(0, (new Date(a.end_date).getTime() - new Date(a.start_date).getTime()) / 86400000);
         }, 0);
         cycleTime = Math.round((totalDays / closedActs.length) * 10) / 10;
       }
 
       const devBlockedActs = devActs.filter((a: any) => !a.is_closed && blockedHuIds.has(a.hu_id));
-
       const tasksByStatus = [
         { name: "Concluída", value: closedActs.length, color: "#22c55e" },
         { name: "Em Progresso", value: Math.max(0, startedActs.length - devBlockedActs.length), color: "#3b82f6" },
@@ -264,7 +325,7 @@ export function MetricsDashboard() {
   const progressBySprintData = useMemo(() => {
     const { sprints: allSprints } = rawData;
     if (allSprints.length <= 1) return [];
-    return allSprints
+    return [...allSprints]
       .sort((a: any, b: any) => a.start_date.localeCompare(b.start_date))
       .slice(-5)
       .map((sprint: any) => {
@@ -274,17 +335,17 @@ export function MetricsDashboard() {
         const entry: any = { sprint: sprint.name };
         filtered.developers.forEach((dev: any) => {
           const devActs = sprintActs.filter((a: any) => a.assignee_id === dev.id);
-          const closed = devActs.filter((a: any) => a.is_closed);
-          entry[dev.name.split(" ")[0]] = closed.reduce((s: number, a: any) => s + Number(a.hours), 0);
+          entry[dev.name.split(" ")[0]] = devActs
+            .filter((a: any) => a.is_closed)
+            .reduce((s: number, a: any) => s + Number(a.hours), 0);
         });
         return entry;
       });
   }, [rawData, filtered.developers]);
 
-  // Team overview metrics
+  // ─── Team overview ──────────────────────────────────────────────────────────
   const teamOverview = useMemo(() => {
     const { hus, activities, impediments, lastCol, workflowCols } = filtered;
-
     const completedHUs = hus.filter((h: any) => h.status === lastCol);
     const totalPoints = hus.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
     const completedPoints = completedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
@@ -292,20 +353,15 @@ export function MetricsDashboard() {
     const completedHours = activities
       .filter((a: any) => a.is_closed)
       .reduce((s: number, a: any) => s + Number(a.hours), 0);
-
     const today = new Date().toISOString().split("T")[0];
-    const overdueCount = hus.filter((h: any) => {
-      if (h.status === lastCol) return false;
-      if (h.end_date) return h.end_date < today;
-      return false;
-    }).length;
-
+    const overdueCount = hus.filter((h: any) => h.status !== lastCol && h.end_date && h.end_date < today).length;
     const blockedCount = hus.filter((h: any) =>
       impediments.some((imp: any) => imp.hu_id === h.id && !imp.resolved_at),
     ).length;
 
     const cols = workflowCols.length > 0 ? workflowCols : [{ key: "aguardando_desenvolvimento", label: "Aguardando" }];
-    const statusData = cols
+
+    const statusData = [...cols]
       .sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
       .map((col: any) => ({
         name: col.label,
@@ -314,27 +370,19 @@ export function MetricsDashboard() {
       }))
       .filter((d: any) => d.value > 0);
 
-    // Sprint Commitment Accuracy
     const commitmentAccuracy = hus.length > 0 ? Math.round((completedHUs.length / hus.length) * 100) : 0;
 
-    // Cycle Time Médio (HUs)
     const cycleTimeDays = (() => {
       if (completedHUs.length === 0) return 0;
-      const total = completedHUs.reduce((s: number, h: any) => {
-        if (h.start_date && h.end_date) {
-          const diff = (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / (1000 * 60 * 60 * 24);
-          return s + Math.max(0, diff);
-        }
-        return s;
-      }, 0);
-      const withDates = completedHUs.filter((h: any) => h.start_date && h.end_date).length;
-      return withDates > 0 ? Math.round((total / withDates) * 10) / 10 : 0;
+      const withDates = completedHUs.filter((h: any) => h.start_date && h.end_date);
+      if (!withDates.length) return 0;
+      const total = withDates.reduce(
+        (s: number, h: any) =>
+          s + Math.max(0, (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / 86400000),
+        0,
+      );
+      return Math.round((total / withDates.length) * 10) / 10;
     })();
-
-    // Bug reopen rate (approximation)
-    const bugActs = activities.filter((a: any) => a.activity_type === "bug");
-    const bugsResolved = bugActs.filter((a: any) => a.is_closed).length;
-    const bugReopenRate = 0; // No reopen tracking yet
 
     return {
       totalPoints,
@@ -354,7 +402,6 @@ export function MetricsDashboard() {
       sprintEnd: filtered.sprints[0]?.end_date || "",
       commitmentAccuracy,
       cycleTimeDays,
-      bugReopenRate,
       impedimentHistory: impediments
         .map((imp: any) => {
           const hu = hus.find((h: any) => h.id === imp.hu_id);
@@ -375,49 +422,35 @@ export function MetricsDashboard() {
     };
   }, [filtered]);
 
-  // Trend: compare with previous sprint
+  // ─── Trends ─────────────────────────────────────────────────────────────────
   const trends = useMemo(() => {
     const sorted = [...rawData.sprints].sort((a, b) => a.start_date.localeCompare(b.start_date));
     if (sorted.length < 2 || filtered.sprints.length === 0) return null;
-
     const currentIdx = sorted.findIndex((s) => s.id === filtered.sprints[0].id);
     if (currentIdx <= 0) return null;
-
     const prev = sorted[currentIdx - 1];
     const prevHUs = rawData.hus.filter((h: any) => h.sprint_id === prev.id);
     const prevHuIds = new Set(prevHUs.map((h: any) => h.id));
     const prevActs = rawData.activities.filter((a: any) => prevHuIds.has(a.hu_id));
     const { lastCol } = filtered;
-
     const prevCompletedHUs = prevHUs.filter((h: any) => h.status === lastCol);
     const prevVelocity = prevCompletedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
     const prevCommitment = prevHUs.length > 0 ? Math.round((prevCompletedHUs.length / prevHUs.length) * 100) : 0;
-    const prevCompletedWithDates = prevCompletedHUs.filter((h: any) => h.start_date && h.end_date);
+    const prevWithDates = prevCompletedHUs.filter((h: any) => h.start_date && h.end_date);
     const prevCycleTime =
-      prevCompletedWithDates.length > 0
+      prevWithDates.length > 0
         ? Math.round(
-            (prevCompletedWithDates.reduce(
+            (prevWithDates.reduce(
               (s: number, h: any) =>
-                s +
-                Math.max(
-                  0,
-                  (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / (1000 * 60 * 60 * 24),
-                ),
+                s + Math.max(0, (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / 86400000),
               0,
             ) /
-              prevCompletedWithDates.length) *
+              prevWithDates.length) *
               10,
           ) / 10
         : 0;
-    const prevTotalHrs = prevActs.reduce((s: number, a: any) => s + Number(a.hours), 0);
     const prevDoneHrs = prevActs.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + Number(a.hours), 0);
-
-    return {
-      velocity: prevVelocity,
-      commitment: prevCommitment,
-      cycleTime: prevCycleTime,
-      hours: prevDoneHrs,
-    };
+    return { velocity: prevVelocity, commitment: prevCommitment, cycleTime: prevCycleTime, hours: prevDoneHrs };
   }, [rawData, filtered]);
 
   const getTeamExportData = () => ({
@@ -440,13 +473,12 @@ export function MetricsDashboard() {
     ],
   });
 
-  if (loading) {
+  if (loading)
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
-  }
 
   const memberNames = filtered.developers.map((d: any) => d.name.split(" ")[0]);
   const effectiveTeamId = filters.teamId === "all" ? currentTeamId || "" : filters.teamId;
@@ -477,7 +509,7 @@ export function MetricsDashboard() {
         <ExportButton getData={getTeamExportData} />
       </div>
 
-      {/* Overview KPI Cards with trends */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         <OverviewKPI
           icon={TrendingUp}
@@ -540,8 +572,8 @@ export function MetricsDashboard() {
         />
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="individual" className="space-y-4">
+      {/* ✅ Aba ativa persistida — não reseta ao voltar ao foco */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid grid-cols-5 w-full max-w-2xl">
           <TabsTrigger value="individual" className="text-xs gap-1">
             <User className="h-3.5 w-3.5" /> Individual
@@ -569,7 +601,6 @@ export function MetricsDashboard() {
             memberNames={memberNames}
           />
         </TabsContent>
-
         <TabsContent value="team">
           <TeamPerformance
             sprints={filtered.sprints}
@@ -585,7 +616,6 @@ export function MetricsDashboard() {
             hoursPerMemberData={hoursPerMemberData}
           />
         </TabsContent>
-
         <TabsContent value="quality">
           <QualityPanel
             activities={filtered.activities}
@@ -594,11 +624,9 @@ export function MetricsDashboard() {
             lastCol={filtered.lastCol}
           />
         </TabsContent>
-
         <TabsContent value="impediments">
           <ImpedimentHistoryPanel data={teamOverview.impedimentHistory} />
         </TabsContent>
-
         <TabsContent value="releases">
           <ReleasesPanel
             teamId={effectiveTeamId}
@@ -610,7 +638,7 @@ export function MetricsDashboard() {
   );
 }
 
-// === Helpers ===
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getTrend(
   current: number,
@@ -622,7 +650,7 @@ function getTrend(
   return { direction: "same", isGood: true };
 }
 
-// === Sub-components ===
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function OverviewKPI({
   icon: Icon,
@@ -664,7 +692,7 @@ function OverviewKPI({
 }
 
 function ImpedimentHistoryPanel({ data }: { data: any[] }) {
-  if (data.length === 0) {
+  if (data.length === 0)
     return (
       <Card className="border-dashed border-[#22c55e]/30">
         <CardContent className="py-12 text-center">
@@ -674,7 +702,6 @@ function ImpedimentHistoryPanel({ data }: { data: any[] }) {
         </CardContent>
       </Card>
     );
-  }
 
   return (
     <Card>
@@ -741,13 +768,5 @@ function ImpedimentHistoryPanel({ data }: { data: any[] }) {
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-function EmptyChart() {
-  return (
-    <div className="h-[260px] flex items-center justify-center text-muted-foreground text-sm">
-      Sem dados para exibir
-    </div>
   );
 }
