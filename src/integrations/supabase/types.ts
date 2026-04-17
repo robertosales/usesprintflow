@@ -129,6 +129,42 @@ export type Database = {
           },
         ]
       }
+      app_permissions: {
+        Row: {
+          group_key: string
+          key: string
+          label: string
+        }
+        Insert: {
+          group_key: string
+          key: string
+          label: string
+        }
+        Update: {
+          group_key?: string
+          key?: string
+          label?: string
+        }
+        Relationships: []
+      }
+      app_roles: {
+        Row: {
+          label: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          label: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          label?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       attachments: {
         Row: {
           created_at: string
@@ -1429,6 +1465,36 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "retro_sessions"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_permissions: {
+        Row: {
+          permission_key: string
+          role_name: string
+        }
+        Insert: {
+          permission_key: string
+          role_name: string
+        }
+        Update: {
+          permission_key?: string
+          role_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_permission_key_fkey"
+            columns: ["permission_key"]
+            isOneToOne: false
+            referencedRelation: "app_permissions"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "role_permissions_role_name_fkey"
+            columns: ["role_name"]
+            isOneToOne: false
+            referencedRelation: "app_roles"
+            referencedColumns: ["name"]
           },
         ]
       }
