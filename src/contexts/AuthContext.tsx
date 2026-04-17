@@ -1,3 +1,4 @@
+// src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [permissions, setPermissions] = useState<Set<Permission>>(new Set());
   const [loading, setLoading] = useState(true);
   const [currentTeamId, setCurrentTeamIdState] = useState<string | null>(null);
+  const [teams, setTeams] = useState<{ id: string; name: string; module: string }[]>([]);
 
   const setCurrentTeamId = (id: string | null) => {
     setCurrentTeamIdState(id);
@@ -47,8 +49,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("selectedTeamId");
     }
   };
-
-  const [teams, setTeams] = useState<{ id: string; name: string; module: string }[]>([]);
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -62,13 +62,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchRoles = async (userId: string) => {
     try {
       const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+
       const userRoles = data?.map((r: any) => r.role as AppRole) ?? [];
       setRoles(userRoles);
+
       const admin = userRoles.includes("admin");
       setIsAdmin(admin);
-      // ✅ era síncrono, agora busca do banco
+
+      // ✅ Agora busca permissões do banco — era síncrono antes
       const perms = await getPermissionsForRoles(userRoles);
       setPermissions(perms);
+
       return admin;
     } catch (err) {
       console.error("Error fetching roles:", err);
@@ -93,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const hasPermission = (permission: Permission): boolean => {
-    return permissions.has(permission);
+    return isAdmin || permissions.has(permission);
   };
 
   const loadUserData = async (userId: string) => {
