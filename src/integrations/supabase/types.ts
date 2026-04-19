@@ -504,6 +504,13 @@ export type Database = {
             referencedRelation: "demandas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_demanda_responsaveis_user"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       demanda_transitions: {

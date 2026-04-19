@@ -117,10 +117,10 @@ export function UserRolesManager() {
       const toAdd = pendingRoles.filter((r) => !currentUser.roles.includes(r));
 
       for (const role of toRemove) {
-        await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", role);
+        await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", role as any);
       }
       for (const role of toAdd) {
-        await supabase.from("user_roles").insert({ user_id: userId, role });
+        await supabase.from("user_roles").insert({ user_id: userId, role: role as any });
       }
 
       if (currentUser.module_access !== pendingModule) {
