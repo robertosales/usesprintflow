@@ -1,30 +1,27 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import * as svc from "../services/demandas.service";
-import { fetchResponsaveis } from "../services/responsaveis.service";
 import type { Demanda, DemandaTransition, DemandaHour } from "../types/demanda";
 import { REQUIRES_JUSTIFICATIVA } from "../types/demanda";
 
-// ✅ Injeta os nomes dos responsáveis nas demandas após busca em lote
+// ✅ 1 query com join automático via FK — sem N+1
 async function enrichComResponsaveis(demandas: Demanda[]): Promise<Demanda[]> {
   if (demandas.length === 0) return demandas;
 
-  const resultados = await Promise.all(
-    demandas.map((d) =>
-      fetchResponsaveis(d.id)
-        .then((resp) => ({ id: d.id, resp }))
-        .catch(() => ({ id: d.id, resp: [] })),
-    ),
-  );
+  const ids = demandas.map((d) => d.id);
+
+  const { data } = await supabase
+    .from("demanda_responsaveis")
+    .select("demanda_id, papel, profiles(display_name)")
+    .in("demanda_id", ids);
+
+  const rows = (data || []) as any[];
 
   return demandas.map((d) => {
-    const entry = resultados.find((r) => r.id === d.id);
-    const responsaveis = entry?.resp ?? [];
-
-    const getPorPapel = (papel: string) => responsaveis.find((r) => r.papel === papel)?.profile?.display_name ?? null;
-
+    const resp = rows.filter((r) => r.demanda_id === d.id);
+    const getPorPapel = (papel: string) => resp.find((r) => r.papel === papel)?.profiles?.display_name ?? null;
     return {
       ...d,
       responsavel_dev: getPorPapel("desenvolvedor") ?? d.responsavel_dev,
@@ -41,13 +38,16 @@ export function useDemandas() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ✅ Evita load() duplicado quando realtime e useEffect disparam juntos
+  const loadingRef = useRef(false);
+
   const load = useCallback(async () => {
-    if (!currentTeamId) return;
+    if (!currentTeamId || loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
     try {
       const data = await svc.fetchDemandas(currentTeamId);
-      // ✅ Enriquece as demandas com os responsáveis vinculados
       const enriched = await enrichComResponsaveis(data);
       setDemandas(enriched);
     } catch (err: any) {
@@ -55,6 +55,7 @@ export function useDemandas() {
       toast.error("Erro ao carregar demandas");
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   }, [currentTeamId]);
 
@@ -62,28 +63,54 @@ export function useDemandas() {
     load();
   }, [load]);
 
-  // Realtime subscription
+  // ✅ Realtime — atualiza só o item alterado, sem rebuscar tudo
   useEffect(() => {
     if (!currentTeamId) return;
+
     const channel = supabase
       .channel(`demandas-rt-${currentTeamId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "demandas", filter: `team_id=eq.${currentTeamId}` },
-        () => {
-          load();
+        {
+          event: "*",
+          schema: "public",
+          table: "demandas",
+          filter: `team_id=eq.${currentTeamId}`,
+        },
+        async (payload) => {
+          if (payload.eventType === "DELETE") {
+            setDemandas((prev) => prev.filter((d) => d.id !== payload.old.id));
+            return;
+          }
+          if (payload.eventType === "INSERT") {
+            const nova = payload.new as Demanda;
+            const [enriched] = await enrichComResponsaveis([nova]);
+            setDemandas((prev) => [...prev, enriched]);
+            return;
+          }
+          if (payload.eventType === "UPDATE") {
+            const updated = payload.new as Demanda;
+            const [enriched] = await enrichComResponsaveis([updated]);
+            setDemandas((prev) => prev.map((d) => (d.id === enriched.id ? enriched : d)));
+            return;
+          }
         },
       )
       .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentTeamId, load]);
+  }, [currentTeamId]);
 
   const create = async (d: Partial<Demanda>) => {
     if (!currentTeamId) return;
     try {
-      const created = await svc.createDemanda({ ...d, team_id: currentTeamId, rhm: d.rhm! });
+      const created = await svc.createDemanda({
+        ...d,
+        team_id: currentTeamId,
+        rhm: d.rhm!,
+      });
       if (user) {
         await svc.addTransition({
           demanda_id: created.id,
