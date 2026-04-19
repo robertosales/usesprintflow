@@ -34,51 +34,25 @@ export function DemandaCard({ demanda, onOpen, onDelete, draggable, onDragStart 
 
   return (
     <Card
-      className="p-3 cursor-pointer hover:shadow-md transition-shadow group border border-border/60"
+      className="cursor-pointer hover:shadow-md transition-shadow group border border-border/60 flex flex-col gap-0 p-0 overflow-hidden"
       draggable={draggable}
       onDragStart={(e) => onDragStart?.(e, demanda)}
       onClick={() => onOpen(demanda)}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="space-y-1.5 min-w-0 flex-1">
-          {/* RHM + badges */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-mono font-bold text-info">{demanda.rhm}</span>
-            {demanda.sla === "24x7" && (
-              <Badge variant="destructive" className="text-[10px] h-4 px-1">
-                24x7
-              </Badge>
-            )}
-            {demanda.situacao === "bloqueada" && (
-              <Badge className="text-[10px] h-4 px-1 bg-destructive/10 text-destructive border-destructive/20">
-                Bloqueada
-              </Badge>
-            )}
-          </div>
-
-          {/* Projeto */}
-          <p className="text-xs text-muted-foreground truncate">{demanda.projeto}</p>
-
-          {/* Responsável — só renderiza se existir, sem fallback de texto */}
-          {responsavel && (
-            <div className="flex items-center gap-1.5">
-              <div
-                className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[9px] font-bold flex items-center justify-center shrink-0"
-                title={responsavel}
-              >
-                {getInitials(responsavel)}
-              </div>
-              <span className="text-[10px] text-muted-foreground truncate max-w-[140px]">{responsavel}</span>
-            </div>
+      {/* ── TOPO: RHM + menu ── */}
+      <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-1">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs font-mono font-bold text-info">{demanda.rhm}</span>
+          {demanda.sla === "24x7" && (
+            <Badge variant="destructive" className="text-[10px] h-4 px-1">
+              24x7
+            </Badge>
           )}
-
-          {/* Título */}
-          {demanda.descricao && <p className="text-xs font-medium leading-tight line-clamp-2">{demanda.descricao}</p>}
-
-          {/* Tipo */}
-          <Badge variant="outline" className="text-[10px] h-4 px-1.5 capitalize">
-            {demanda.tipo}
-          </Badge>
+          {demanda.situacao === "bloqueada" && (
+            <Badge className="text-[10px] h-4 px-1 bg-destructive/10 text-destructive border-destructive/20">
+              Bloqueada
+            </Badge>
+          )}
         </div>
 
         <DropdownMenu>
@@ -110,6 +84,32 @@ export function DemandaCard({ demanda, onOpen, onDelete, draggable, onDragStart 
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* ── MEIO: tipo + projeto ── */}
+      <div className="flex items-center gap-1.5 flex-wrap px-3 py-1.5">
+        <Badge variant="outline" className="text-[10px] h-4 px-1.5 capitalize">
+          {demanda.tipo}
+        </Badge>
+        <span className="text-[10px] text-muted-foreground truncate">{demanda.projeto}</span>
+      </div>
+
+      {/* ── TÍTULO ── */}
+      {demanda.descricao && (
+        <p className="text-xs font-medium leading-snug line-clamp-2 px-3 pb-2">{demanda.descricao}</p>
+      )}
+
+      {/* ── RODAPÉ: responsável ── */}
+      {responsavel && (
+        <div className="flex items-center gap-1.5 px-3 py-2 mt-auto border-t border-border/40">
+          <div
+            className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[9px] font-bold flex items-center justify-center shrink-0"
+            title={responsavel}
+          >
+            {getInitials(responsavel)}
+          </div>
+          <span className="text-[10px] text-muted-foreground truncate max-w-[160px]">{responsavel}</span>
+        </div>
+      )}
     </Card>
   );
 }
