@@ -80,7 +80,7 @@ export function RetroPhaseHeader({
         {/* meio: facilitador + participantes */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs">
-            <Crown className="h-3.5 w-3.5 text-amber-500" />
+            <Crown className="h-3.5 w-3.5 text-warning" />
             <span className="text-muted-foreground">Facilitador:</span>
             <span className="font-semibold">
               {facilitator ? profiles[facilitator.userId] ?? "—" : "—"}

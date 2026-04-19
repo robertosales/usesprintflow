@@ -28,10 +28,10 @@ export function RetroVotingPhase({ model, cards, votes, profiles, userId, onTogg
   return (
     <div className="space-y-4">
       {/* Top 3 */}
-      <Card className="border-amber-300 bg-amber-50/30 dark:bg-amber-950/10">
+      <Card className="border-warning/30 bg-warning/5">
         <CardHeader className="pb-2 pt-3 px-4">
           <CardTitle className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-2">
-            <Trophy className="h-3.5 w-3.5 text-amber-500" /> Top 3 mais votados
+            <Trophy className="h-3.5 w-3.5 text-warning" /> Top 3 mais votados
           </CardTitle>
         </CardHeader>
         <CardContent className="px-4 pb-3 space-y-2">
