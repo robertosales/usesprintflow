@@ -1303,6 +1303,7 @@ export type Database = {
           author_id: string
           column_key: string
           created_at: string
+          hidden: boolean
           id: string
           is_action: boolean
           session_id: string
@@ -1315,6 +1316,7 @@ export type Database = {
           author_id: string
           column_key: string
           created_at?: string
+          hidden?: boolean
           id?: string
           is_action?: boolean
           session_id: string
@@ -1327,6 +1329,7 @@ export type Database = {
           author_id?: string
           column_key?: string
           created_at?: string
+          hidden?: boolean
           id?: string
           is_action?: boolean
           session_id?: string
@@ -1392,6 +1395,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
+          current_phase: string
           finished_at: string | null
           id: string
           model: string
@@ -1402,6 +1406,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by: string
+          current_phase?: string
           finished_at?: string | null
           id?: string
           model?: string
@@ -1412,6 +1417,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string
+          current_phase?: string
           finished_at?: string | null
           id?: string
           model?: string
