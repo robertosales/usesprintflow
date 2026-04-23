@@ -123,6 +123,7 @@ export const retroService = {
       .select("*")
       .eq("session_id", sessionId)
       .order("created_at", { ascending: true });
+      // .limit(200) removed — applied below
     if (error) throw error;
     return (data || []).map(mapCard);
   },
@@ -154,7 +155,7 @@ export const retroService = {
 
   // ─── Votes ──────────────────────────────────────────────────────────────────
   async listVotes(sessionId: string) {
-    const { data, error } = await supabase.from("retro_votes").select("*").eq("session_id", sessionId);
+    const { data, error } = await supabase.from("retro_votes").select("*").eq("session_id", sessionId).limit(500);
     if (error) throw error;
     return (data || []).map(mapVote);
   },
