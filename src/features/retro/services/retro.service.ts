@@ -122,8 +122,8 @@ export const retroService = {
       .from("retro_cards")
       .select("*")
       .eq("session_id", sessionId)
-      .order("created_at", { ascending: true });
-      // .limit(200) removed — applied below
+      .order("created_at", { ascending: true })
+      .limit(200);
     if (error) throw error;
     return (data || []).map(mapCard);
   },
