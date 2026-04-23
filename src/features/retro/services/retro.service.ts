@@ -189,8 +189,7 @@ export const retroService = {
 
   // ─── Participants ───────────────────────────────────────────────────────────
   async listParticipants(sessionId: string) {
-    const { data, error } = await supabase.from("retro_participants").select("*").eq("session_id", sessionId);
-    // limit applied above via .limit(100) — wait, need to add it
+    const { data, error } = await supabase.from("retro_participants").select("*").eq("session_id", sessionId).limit(100);
     if (error) throw error;
     return (data || []).map(mapParticipant);
   },
