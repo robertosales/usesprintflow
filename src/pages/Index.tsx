@@ -19,6 +19,7 @@ import { DashboardHome } from "@/components/DashboardHome";
 import { CalendarView } from "@/components/CalendarView";
 import { PlanningPoker } from "@/components/PlanningPoker";
 import { RetroManager } from "@/components/RetroManager";
+import { ApfGeneratorPage } from "@/features/apf/components/ApfGeneratorPage";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -110,6 +111,11 @@ const Index = () => {
             {active === "equipe" && <DeveloperManager />}
             {active === "calendario" && <CalendarView />}
             {active === "retro" && <RetroManager />}
+            {active === "gerador-apf" && (
+              <SectionGuard permission="view_backlog">
+                <ApfGeneratorPage />
+              </SectionGuard>
+            )}
 
             {/* ── Requer view_backlog ──────────────────────── */}
             {active === "backlog" && (

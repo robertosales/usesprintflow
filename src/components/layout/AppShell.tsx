@@ -50,6 +50,7 @@ interface NavItem {
   icon: React.ElementType;
   path: string;
   group: "main" | "org" | "config";
+  roles?: string[];
 }
 
 interface AppShellProps {
@@ -111,6 +112,7 @@ const NAV_SALA_AGIL: NavItem[] = [
   { key: "atividades", label: "Atividades", icon: Activity, path: "/sala-agil/atividades", group: "main" },
   { key: "impedimentos", label: "Impedimentos", icon: AlertTriangle, path: "/sala-agil/impedimentos", group: "main" },
   { key: "retro", label: "Retrospectiva", icon: Repeat, path: "/sala-agil/retro", group: "main" },
+  { key: "gerador-apf", label: "Gerador APF", icon: FileText, path: "/sala-agil/gerador-apf", group: "main", roles: ["scrum_master", "analyst"] },
   { key: "metricas", label: "Métricas", icon: BarChart3, path: "/sala-agil/metricas", group: "org" },
   { key: "historico", label: "Histórico", icon: History, path: "/sala-agil/historico", group: "org" },
   { key: "times", label: "Times", icon: Users, path: "/sala-agil/times", group: "config" },
@@ -258,7 +260,13 @@ function SidebarNav({
   onNavigate?: (key: string) => void;
 }) {
   const location = useLocation();
-  const items = module === "sala_agil" ? NAV_SALA_AGIL : NAV_SUSTENTACAO;
+  const { roles, isAdmin } = useAuth();
+  const allItems = module === "sala_agil" ? NAV_SALA_AGIL : NAV_SUSTENTACAO;
+  const items = allItems.filter((item) => {
+    if (!item.roles) return true;
+    if (isAdmin) return true;
+    return item.roles.some((r) => roles.includes(r));
+  });
   const groups: NavItem["group"][] = ["main", "org", "config"];
 
   const isActive = (item: NavItem): boolean => {

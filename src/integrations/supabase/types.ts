@@ -129,6 +129,137 @@ export type Database = {
           },
         ]
       }
+      apf_generations: {
+        Row: {
+          baseline_file: string | null
+          created_at: string
+          error_message: string | null
+          generated_by: string | null
+          hu_file: string | null
+          id: string
+          model_file: string | null
+          output_filename: string | null
+          sprint_id: string | null
+          status: string
+          team_id: string
+          template_id: string | null
+        }
+        Insert: {
+          baseline_file?: string | null
+          created_at?: string
+          error_message?: string | null
+          generated_by?: string | null
+          hu_file?: string | null
+          id?: string
+          model_file?: string | null
+          output_filename?: string | null
+          sprint_id?: string | null
+          status?: string
+          team_id: string
+          template_id?: string | null
+        }
+        Update: {
+          baseline_file?: string | null
+          created_at?: string
+          error_message?: string | null
+          generated_by?: string | null
+          hu_file?: string | null
+          id?: string
+          model_file?: string | null
+          output_filename?: string | null
+          sprint_id?: string | null
+          status?: string
+          team_id?: string
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_generations_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "apf_generations_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_generations_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_generations_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "apf_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          output_type: string
+          prompt_content: string
+          team_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          output_type: string
+          prompt_content: string
+          team_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          output_type?: string
+          prompt_content?: string
+          team_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "apf_templates_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_permissions: {
         Row: {
           group_key: string
