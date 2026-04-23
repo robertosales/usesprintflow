@@ -112,8 +112,10 @@ export const retroService = {
   },
 
   async transferFacilitator(sessionId: string, fromUserId: string, toUserId: string) {
-    await supabase.from("retro_participants").update({ is_facilitator: false }).eq("session_id", sessionId).eq("user_id", fromUserId);
-    await supabase.from("retro_participants").update({ is_facilitator: true }).eq("session_id", sessionId).eq("user_id", toUserId);
+    await Promise.all([
+      supabase.from("retro_participants").update({ is_facilitator: false }).eq("session_id", sessionId).eq("user_id", fromUserId),
+      supabase.from("retro_participants").update({ is_facilitator: true }).eq("session_id", sessionId).eq("user_id", toUserId),
+    ]);
   },
 
   // ─── Cards ──────────────────────────────────────────────────────────────────
@@ -122,7 +124,8 @@ export const retroService = {
       .from("retro_cards")
       .select("*")
       .eq("session_id", sessionId)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: true })
+      .limit(200);
     if (error) throw error;
     return (data || []).map(mapCard);
   },
@@ -154,7 +157,7 @@ export const retroService = {
 
   // ─── Votes ──────────────────────────────────────────────────────────────────
   async listVotes(sessionId: string) {
-    const { data, error } = await supabase.from("retro_votes").select("*").eq("session_id", sessionId);
+    const { data, error } = await supabase.from("retro_votes").select("*").eq("session_id", sessionId).limit(500);
     if (error) throw error;
     return (data || []).map(mapVote);
   },
@@ -186,7 +189,7 @@ export const retroService = {
 
   // ─── Participants ───────────────────────────────────────────────────────────
   async listParticipants(sessionId: string) {
-    const { data, error } = await supabase.from("retro_participants").select("*").eq("session_id", sessionId);
+    const { data, error } = await supabase.from("retro_participants").select("*").eq("session_id", sessionId).limit(100);
     if (error) throw error;
     return (data || []).map(mapParticipant);
   },

@@ -131,7 +131,7 @@ export function PlanningPoker() {
 
   useEffect(() => {
     const loadProfiles = async () => {
-      const { data } = await supabase.from("profiles").select("user_id, display_name");
+      const { data } = await supabase.from("profiles").select("user_id, display_name").limit(500);
       if (data) {
         const map: Record<string, string> = {};
         data.forEach((p) => {
@@ -169,7 +169,7 @@ export function PlanningPoker() {
 
   const loadParticipants = useCallback(async () => {
     if (!session) return;
-    const { data } = await supabase.from("planning_participants").select("*").eq("session_id", session.id);
+    const { data } = await supabase.from("planning_participants").select("*").eq("session_id", session.id).limit(100);
     if (data) {
       setParticipants(
         data.map((p: any) => ({
@@ -189,7 +189,8 @@ export function PlanningPoker() {
       .from("planning_votes")
       .select("*")
       .eq("session_id", session.id)
-      .eq("hu_id", currentHuId);
+      .eq("hu_id", currentHuId)
+      .limit(500);
     if (data) {
       setVotes(
         data.map((v: any) => ({
@@ -222,7 +223,7 @@ export function PlanningPoker() {
   useEffect(() => {
     if (!session) return;
     const channel = supabase
-      .channel(`planning-${session.id}`)
+      .channel(`planning-session-${session.id}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "planning_votes", filter: `session_id=eq.${session.id}` },

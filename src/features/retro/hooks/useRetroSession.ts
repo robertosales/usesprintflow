@@ -69,7 +69,7 @@ export function useRetroSession({ teamId, sprintId, userId }: Options) {
   // ─── Profiles cache ─────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("profiles").select("user_id, display_name");
+      const { data } = await supabase.from("profiles").select("user_id, display_name").limit(500);
       const map: Record<string, string> = {};
       (data || []).forEach((p: any) => (map[p.user_id] = p.display_name));
       setProfiles(map);
@@ -82,7 +82,7 @@ export function useRetroSession({ teamId, sprintId, userId }: Options) {
     const sId = session.id;
 
     const channel = supabase
-      .channel(`retro-${sId}`)
+      .channel(`retro-session-${sId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "retro_sessions", filter: `id=eq.${sId}` }, () => {
         loadSession();
       })

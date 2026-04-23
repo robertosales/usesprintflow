@@ -110,15 +110,15 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       const [devRes, sprintRes, epicRes, huRes, actRes, impRes, cfRes, arRes, wcRes] = await Promise.all([
-        supabase.from("developers").select("*").eq("team_id", teamId),
-        supabase.from("sprints").select("*").eq("team_id", teamId),
-        supabase.from("epics").select("*").eq("team_id", teamId),
-        supabase.from("user_stories").select("*").eq("team_id", teamId),
-        supabase.from("activities").select("*").eq("team_id", teamId),
-        supabase.from("impediments").select("*").eq("team_id", teamId),
-        supabase.from("custom_field_definitions").select("*").eq("team_id", teamId),
-        supabase.from("automation_rules").select("*").eq("team_id", teamId),
-        supabase.from("workflow_columns").select("*").eq("team_id", teamId).order("sort_order"),
+        supabase.from("developers").select("*").eq("team_id", teamId).limit(200),
+        supabase.from("sprints").select("*").eq("team_id", teamId).limit(100),
+        supabase.from("epics").select("*").eq("team_id", teamId).limit(100),
+        supabase.from("user_stories").select("*").eq("team_id", teamId).limit(500),
+        supabase.from("activities").select("*").eq("team_id", teamId).limit(500),
+        supabase.from("impediments").select("*").eq("team_id", teamId).limit(200),
+        supabase.from("custom_field_definitions").select("*").eq("team_id", teamId).limit(50),
+        supabase.from("automation_rules").select("*").eq("team_id", teamId).limit(50),
+        supabase.from("workflow_columns").select("*").eq("team_id", teamId).order("sort_order").limit(50),
       ]);
 
       setDevelopers(
