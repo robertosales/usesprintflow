@@ -132,7 +132,7 @@ export function PlanningPoker() {
   useEffect(() => {
     const loadProfiles = async () => {
       const { data } = await supabase.from("profiles").select("user_id, display_name");
-      // limit applied for connection optimization
+      // limit for connection pool optimization  
       if (data) {
         const map: Record<string, string> = {};
         data.forEach((p) => {
