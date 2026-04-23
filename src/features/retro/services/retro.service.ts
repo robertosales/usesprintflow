@@ -112,8 +112,10 @@ export const retroService = {
   },
 
   async transferFacilitator(sessionId: string, fromUserId: string, toUserId: string) {
-    await supabase.from("retro_participants").update({ is_facilitator: false }).eq("session_id", sessionId).eq("user_id", fromUserId);
-    await supabase.from("retro_participants").update({ is_facilitator: true }).eq("session_id", sessionId).eq("user_id", toUserId);
+    await Promise.all([
+      supabase.from("retro_participants").update({ is_facilitator: false }).eq("session_id", sessionId).eq("user_id", fromUserId),
+      supabase.from("retro_participants").update({ is_facilitator: true }).eq("session_id", sessionId).eq("user_id", toUserId),
+    ]);
   },
 
   // ─── Cards ──────────────────────────────────────────────────────────────────
