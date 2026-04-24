@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FileSpreadsheet, FileText, File, Upload, X, Download, Loader2, Sparkles, KeyRound } from "lucide-react";
+import { FileSpreadsheet, FileText, File, Upload, X, Download, Loader2, Sparkles, KeyRound, Plus } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprint } from "@/contexts/SprintContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,11 +26,9 @@ interface FileField {
   icon: React.ElementType;
 }
 
-const FILE_FIELDS: FileField[] = [
-  { label: "Baseline", description: "Planilha com colunas Item e Tipo", accept: ".xlsx", icon: FileSpreadsheet },
-  { label: "HUs da Sprint", description: "Lista de HUs com código, título e descrição", accept: ".docx,.pdf,.md", icon: FileText },
-  { label: "Modelo de Contagem", description: "Template do documento de saída", accept: ".docx,.xlsx", icon: File },
-];
+const BASELINE_FIELD: FileField = { label: "Baseline", description: "Planilha com colunas Item e Tipo", accept: ".xlsx", icon: FileSpreadsheet };
+const HU_FIELD: FileField = { label: "HUs da Sprint", description: "Lista de HUs (pode anexar várias)", accept: ".docx,.pdf,.md,.txt", icon: FileText };
+const MODEL_FIELD: FileField = { label: "Modelo de Contagem", description: "Template do documento de saída", accept: ".docx,.xlsx", icon: File };
 
 type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
 
@@ -126,7 +124,9 @@ export function ApfGenerateTab() {
   const [selectedSprintId, setSelectedSprintId] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templates, setTemplates] = useState<ApfTemplate[]>([]);
-  const [files, setFiles] = useState<(File | null)[]>([null, null, null]);
+  const [baselineFile, setBaselineFile] = useState<File | null>(null);
+  const [huFiles, setHuFiles] = useState<File[]>([]);
+  const [modelFile, setModelFile] = useState<File | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generations, setGenerations] = useState<(ApfGeneration & { template_name?: string })[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -157,7 +157,13 @@ export function ApfGenerateTab() {
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
   const providerCfg = PROVIDERS.find((p) => p.value === provider)!;
   const apiKeyOk = !providerCfg.needsKey || apiKey.trim().length > 0;
-  const canGenerate = selectedSprintId && selectedTemplateId && files.every(Boolean) && apiKeyOk;
+  const canGenerate =
+    !!selectedSprintId &&
+    !!selectedTemplateId &&
+    !!baselineFile &&
+    huFiles.length > 0 &&
+    !!modelFile &&
+    apiKeyOk;
 
   const handleGenerate = async () => {
     if (!canGenerate || !currentTeamId || !user) return;
@@ -166,11 +172,12 @@ export function ApfGenerateTab() {
       const sprint = sprints.find((s) => s.id === selectedSprintId);
       const filename = `APF_${(sprint?.name ?? "Sprint").replace(/\s+/g, "_")}_${Date.now()}.docx`;
 
-      // Lê arquivos como texto para enviar como contexto
+      // Lê todos os arquivos como texto para enviar como contexto (Baseline + várias HUs + Modelo)
+      const allFiles: File[] = [baselineFile!, ...huFiles, modelFile!];
       const filePayload = await Promise.all(
-        files.map(async (f) => ({
-          name: f!.name,
-          content: await readFileAsText(f!),
+        allFiles.map(async (f) => ({
+          name: f.name,
+          content: await readFileAsText(f),
         })),
       );
 
@@ -197,9 +204,9 @@ export function ApfGenerateTab() {
         template_id: selectedTemplateId,
         sprint_id: selectedSprintId,
         generated_by: user.id,
-        baseline_file: files[0]!.name,
-        hu_file: files[1]!.name,
-        model_file: files[2]!.name,
+        baseline_file: baselineFile!.name,
+        hu_file: huFiles.map((f) => f.name).join(", "),
+        model_file: modelFile!.name,
         output_filename: filename,
         status: "success",
       });
@@ -314,15 +321,79 @@ export function ApfGenerateTab() {
             <CardTitle className="text-sm">Arquivos de Entrada</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {FILE_FIELDS.map((field, i) => (
-              <FileUploadField
-                key={field.label}
-                field={field}
-                file={files[i]}
-                onSelect={(f) => setFiles((prev) => { const n = [...prev]; n[i] = f; return n; })}
-                onRemove={() => setFiles((prev) => { const n = [...prev]; n[i] = null; return n; })}
-              />
-            ))}
+            <FileUploadField
+              field={BASELINE_FIELD}
+              file={baselineFile}
+              onSelect={setBaselineFile}
+              onRemove={() => setBaselineFile(null)}
+            />
+
+            {/* HUs — múltiplos arquivos */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">
+                {HU_FIELD.label} <span className="text-muted-foreground">({huFiles.length} anexada{huFiles.length === 1 ? "" : "s"})</span>
+              </Label>
+
+              {huFiles.length > 0 && (
+                <div className="space-y-1.5">
+                  {huFiles.map((f, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
+                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-xs text-foreground truncate flex-1">{f.name}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => setHuFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <label
+                className="flex flex-col items-center justify-center gap-1.5 rounded-md border-2 border-dashed border-border hover:border-primary/50 transition-colors cursor-pointer py-4"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const dropped = Array.from(e.dataTransfer.files);
+                  if (dropped.length) setHuFiles((prev) => [...prev, ...dropped]);
+                }}
+              >
+                {huFiles.length === 0 ? (
+                  <>
+                    <Upload className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">{HU_FIELD.description}</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Adicionar mais HUs</span>
+                  </>
+                )}
+                <span className="text-[10px] text-muted-foreground/60">{HU_FIELD.accept}</span>
+                <input
+                  type="file"
+                  multiple
+                  accept={HU_FIELD.accept}
+                  className="hidden"
+                  onChange={(e) => {
+                    const selected = Array.from(e.target.files ?? []);
+                    if (selected.length) setHuFiles((prev) => [...prev, ...selected]);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+
+            <FileUploadField
+              field={MODEL_FIELD}
+              file={modelFile}
+              onSelect={setModelFile}
+              onRemove={() => setModelFile(null)}
+            />
           </CardContent>
         </Card>
 
