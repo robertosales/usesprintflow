@@ -607,6 +607,106 @@ export function ApfGenerateTab() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal de perguntas interativas */}
+      <Dialog open={showQuestions} onOpenChange={setShowQuestions}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HelpCircle className="h-5 w-5 text-primary" />
+              Responda antes de gerar
+            </DialogTitle>
+            <DialogDescription>
+              O template selecionado contém perguntas. Suas respostas serão enviadas à IA para gerar o documento — as perguntas <strong>não</strong> aparecerão no arquivo final.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 max-h-[55vh] overflow-y-auto pr-1">
+            {questions.map((q) => {
+              const a = answers[q.id];
+              if (q.kind === "yesno") {
+                return (
+                  <div key={q.id} className="space-y-2">
+                    <Label className="text-xs font-medium leading-relaxed">
+                      {q.text.replace(YESNO_REGEX, "").replace(/\?$/, "?").trim()}
+                    </Label>
+                    <RadioGroup
+                      value={a?.value ?? ""}
+                      onValueChange={(v) =>
+                        setAnswers((prev) => ({
+                          ...prev,
+                          [q.id]: { value: v, detail: prev[q.id]?.detail ?? "" },
+                        }))
+                      }
+                      className="flex gap-4"
+                    >
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <RadioGroupItem value="sim" id={`${q.id}-sim`} />
+                        <span className="text-sm">Sim</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <RadioGroupItem value="nao" id={`${q.id}-nao`} />
+                        <span className="text-sm">Não</span>
+                      </label>
+                    </RadioGroup>
+
+                    {a?.value === "sim" && (
+                      <div className="space-y-1.5 pl-1 pt-1 border-l-2 border-primary/40 pl-3">
+                        <Label className="text-[11px] text-muted-foreground">
+                          {q.followUp ?? "Descreva os detalhes"} <span className="text-destructive">*</span>
+                        </Label>
+                        <Textarea
+                          rows={3}
+                          placeholder="Informe aqui o que foi alterado..."
+                          value={a.detail ?? ""}
+                          onChange={(e) =>
+                            setAnswers((prev) => ({
+                              ...prev,
+                              [q.id]: { value: "sim", detail: e.target.value },
+                            }))
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              // Pergunta aberta
+              return (
+                <div key={q.id} className="space-y-1.5">
+                  <Label className="text-xs font-medium">{q.text}</Label>
+                  <Textarea
+                    rows={3}
+                    value={a?.value ?? ""}
+                    onChange={(e) =>
+                      setAnswers((prev) => ({
+                        ...prev,
+                        [q.id]: { value: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowQuestions(false)} disabled={generating}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={runGeneration}
+              disabled={!allQuestionsAnswered || generating}
+            >
+              {generating ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando...</>
+              ) : (
+                "Confirmar e gerar"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
