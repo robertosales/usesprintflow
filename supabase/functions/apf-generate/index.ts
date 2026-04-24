@@ -42,6 +42,10 @@ function buildFullPrompt(prompt: string, files: FileInput[] = []) {
 Siga estritamente as instruções abaixo. A resposta deve ser apenas o conteúdo do documento, em texto puro, sem comentários adicionais, sem prefácio e sem markdown de bloco de código.
 
 Use parágrafos separados por linhas em branco. Para títulos use linhas iniciadas com "# " (H1) ou "## " (H2). Para listas use "- " no início da linha.
+
+REGRA CRÍTICA — PERGUNTAS NO PROMPT:
+- NÃO inclua perguntas literais (ex.: "Houve alteração em banco de dados? (Sim/Não)") no documento gerado.
+- Se houver uma seção "=== RESPOSTAS DO USUÁRIO ===" abaixo, considere essas respostas como dados já confirmados e incorpore-as naturalmente ao texto do documento (em parágrafos descritivos), em vez de listar perguntas e respostas.
 ${ctx}
 === INSTRUÇÕES DO USUÁRIO ===
 ${prompt}`;
