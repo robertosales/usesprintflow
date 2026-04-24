@@ -425,8 +425,8 @@ export function KanbanBoard() {
           onDragEnd={handleDragEnd}
         >
           <div
-            className="grid gap-3 overflow-x-auto pb-4 scrollbar-thin items-start"
-            style={{ gridTemplateColumns: gridTemplate }}
+            className="grid gap-3 overflow-x-auto overflow-y-auto pb-4 scrollbar-thin items-start"
+            style={{ gridTemplateColumns: gridTemplate, maxHeight: "calc(100vh - 280px)" }}
           >
             {workflowColumns.map((col) => {
               const colHUs = sprintStories.filter((hu) => (hu.status || workflowColumns[0]?.key) === col.key);

@@ -306,7 +306,10 @@ export function SustentacaoBoard() {
 
       {/* ── Board ── */}
       {/* ✅ CORRIGIDO: altura baseada em conteúdo, não fixa */}
-      <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: 500 }}>
+      <div
+        className="flex gap-3 overflow-x-auto overflow-y-auto pb-4"
+        style={{ minHeight: 500, maxHeight: "calc(100vh - 280px)" }}
+      >
         {columns.map((status) => {
           const items = filtered.filter((d) => d.situacao === status);
           const isCollapsed = collapsedColumns.has(status);
