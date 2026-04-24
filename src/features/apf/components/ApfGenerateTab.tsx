@@ -6,7 +6,17 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FileSpreadsheet, FileText, File, Upload, X, Download, Loader2, Sparkles, KeyRound, Plus } from "lucide-react";
+import { FileSpreadsheet, FileText, File, Upload, X, Download, Loader2, Sparkles, KeyRound, Plus, HelpCircle } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprint } from "@/contexts/SprintContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +49,93 @@ const PROVIDERS: { value: Provider; label: string; needsKey: boolean; placeholde
   { value: "anthropic", label: "Anthropic (Claude)", needsKey: true, placeholder: "sk-ant-..." },
   { value: "perplexity", label: "Perplexity", needsKey: true, placeholder: "pplx-..." },
 ];
+
+// ============================================================
+// Detector de perguntas interativas dentro do prompt do template
+// Suporta os padrões mais comuns:
+//   - "Houve alteração em banco de dados? (Sim/Não)"
+//   - "Algo mudou? (S/N)"
+//   - "Pergunta? [Sim/Não]"
+// Também trata perguntas abertas marcadas como "{{pergunta: ...}}"
+// ============================================================
+type InteractiveQuestion = {
+  id: string;            // chave única (linha exata da pergunta)
+  text: string;          // texto da pergunta a exibir
+  kind: "yesno" | "open";
+  followUp?: string;     // ex.: "Informe o que foi alterado"
+};
+
+const YESNO_REGEX = /\(\s*(sim|s)\s*\/\s*(n[ãa]o|n)\s*\)|\[\s*(sim|s)\s*\/\s*(n[ãa]o|n)\s*\]/i;
+
+function detectInteractiveQuestions(prompt: string): InteractiveQuestion[] {
+  if (!prompt) return [];
+  const lines = prompt.split(/\r?\n/);
+  const questions: InteractiveQuestion[] = [];
+
+  lines.forEach((rawLine, idx) => {
+    const line = rawLine.trim();
+    if (!line) return;
+
+    // Padrão 1: pergunta Sim/Não
+    if (YESNO_REGEX.test(line) && /\?/.test(line)) {
+      // tenta capturar uma instrução de follow-up logo abaixo (ex.: "Se sim, descreva...")
+      const next = (lines[idx + 1] ?? "").trim();
+      const followUp =
+        /^se\s+sim/i.test(next) || /descreva|informe|detalhe/i.test(next)
+          ? next
+          : "Descreva o que foi alterado";
+      questions.push({
+        id: `q_${idx}`,
+        text: line,
+        kind: "yesno",
+        followUp,
+      });
+      return;
+    }
+
+    // Padrão 2: marcador {{pergunta: ...}}
+    const open = line.match(/\{\{\s*pergunta\s*:\s*(.+?)\s*\}\}/i);
+    if (open) {
+      questions.push({
+        id: `q_${idx}`,
+        text: open[1],
+        kind: "open",
+      });
+    }
+  });
+
+  return questions;
+}
+
+function applyAnswersToPrompt(
+  prompt: string,
+  questions: InteractiveQuestion[],
+  answers: Record<string, { value: string; detail?: string }>,
+): string {
+  if (questions.length === 0) return prompt;
+
+  const summary = questions
+    .map((q) => {
+      const a = answers[q.id];
+      if (!a) return `- ${q.text}\n  Resposta: (não informada)`;
+      if (q.kind === "yesno") {
+        const isYes = a.value === "sim";
+        const detail = isYes && a.detail?.trim() ? `\n  Detalhes: ${a.detail.trim()}` : "";
+        return `- ${q.text}\n  Resposta: ${isYes ? "Sim" : "Não"}${detail}`;
+      }
+      return `- ${q.text}\n  Resposta: ${a.value || "(vazio)"}`;
+    })
+    .join("\n");
+
+  // Remove as linhas das perguntas Sim/Não originais para evitar duplicidade no documento
+  const stripped = prompt
+    .split(/\r?\n/)
+    .filter((l) => !YESNO_REGEX.test(l) && !/\{\{\s*pergunta\s*:/i.test(l))
+    .join("\n");
+
+  return `${stripped}\n\n=== RESPOSTAS DO USUÁRIO ===\n${summary}\n=== FIM DAS RESPOSTAS ===\n\nIMPORTANTE: Use as respostas acima como dados confirmados pelo usuário. NÃO repita as perguntas no documento — incorpore as respostas naturalmente no conteúdo gerado.`;
+}
+// ============================================================
 
 // Lê arquivo como texto bruto (UTF-8). Bons resultados para .md, .txt, .docx (XML interno) e .xlsx limitado.
 async function readFileAsText(file: File): Promise<string> {
@@ -135,6 +232,11 @@ export function ApfGenerateTab() {
   // Cache do último DOCX gerado para download via histórico (in-memory por sessão)
   const [lastDocx, setLastDocx] = useState<{ base64: string; filename: string } | null>(null);
 
+  // Perguntas interativas detectadas no prompt + modal de respostas
+  const [questions, setQuestions] = useState<InteractiveQuestion[]>([]);
+  const [answers, setAnswers] = useState<Record<string, { value: string; detail?: string }>>({});
+  const [showQuestions, setShowQuestions] = useState(false);
+
   // Load templates
   useEffect(() => {
     if (!currentTeamId) return;
@@ -155,6 +257,19 @@ export function ApfGenerateTab() {
   }, [currentTeamId, selectedSprintId]);
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
+
+  // Re-detecta perguntas sempre que o template mudar
+  useEffect(() => {
+    if (!selectedTemplate) {
+      setQuestions([]);
+      setAnswers({});
+      return;
+    }
+    const detected = detectInteractiveQuestions(selectedTemplate.prompt_content);
+    setQuestions(detected);
+    setAnswers({});
+  }, [selectedTemplateId]);
+
   const providerCfg = PROVIDERS.find((p) => p.value === provider)!;
   const apiKeyOk = !providerCfg.needsKey || apiKey.trim().length > 0;
   const canGenerate =
@@ -165,7 +280,24 @@ export function ApfGenerateTab() {
     !!modelFile &&
     apiKeyOk;
 
-  const handleGenerate = async () => {
+  const allQuestionsAnswered = questions.every((q) => {
+    const a = answers[q.id];
+    if (!a || !a.value) return false;
+    if (q.kind === "yesno" && a.value === "sim" && !a.detail?.trim()) return false;
+    return true;
+  });
+
+  // Quando o usuário clica em "Gerar": se houver perguntas, abre o modal antes
+  const handleGenerateClick = () => {
+    if (!canGenerate) return;
+    if (questions.length > 0 && !allQuestionsAnswered) {
+      setShowQuestions(true);
+      return;
+    }
+    void runGeneration();
+  };
+
+  const runGeneration = async () => {
     if (!canGenerate || !currentTeamId || !user) return;
     setGenerating(true);
     try {
@@ -181,9 +313,16 @@ export function ApfGenerateTab() {
         })),
       );
 
+      // Aplica as respostas das perguntas interativas ao prompt final
+      const finalPrompt = applyAnswersToPrompt(
+        selectedTemplate!.prompt_content,
+        questions,
+        answers,
+      );
+
       const { data, error } = await supabase.functions.invoke("apf-generate", {
         body: {
-          prompt: selectedTemplate!.prompt_content,
+          prompt: finalPrompt,
           provider,
           apiKey: providerCfg.needsKey ? apiKey.trim() : undefined,
           files: filePayload,
@@ -219,6 +358,7 @@ export function ApfGenerateTab() {
       toast.error(e?.message ?? "Erro ao gerar documento");
     } finally {
       setGenerating(false);
+      setShowQuestions(false);
     }
   };
 
