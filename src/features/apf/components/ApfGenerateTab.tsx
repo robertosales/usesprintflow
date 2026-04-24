@@ -3,12 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { FileSpreadsheet, FileText, File, Upload, X, Download, Loader2 } from "lucide-react";
+import { FileSpreadsheet, FileText, File, Upload, X, Download, Loader2, Sparkles, KeyRound } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprint } from "@/contexts/SprintContext";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   fetchActiveTemplates,
@@ -30,6 +31,43 @@ const FILE_FIELDS: FileField[] = [
   { label: "HUs da Sprint", description: "Lista de HUs com código, título e descrição", accept: ".docx,.pdf,.md", icon: FileText },
   { label: "Modelo de Contagem", description: "Template do documento de saída", accept: ".docx,.xlsx", icon: File },
 ];
+
+type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
+
+const PROVIDERS: { value: Provider; label: string; needsKey: boolean; placeholder: string }[] = [
+  { value: "lovable", label: "Lovable AI (Gemini/GPT) — recomendado", needsKey: false, placeholder: "" },
+  { value: "openai", label: "OpenAI (GPT)", needsKey: true, placeholder: "sk-..." },
+  { value: "gemini", label: "Google Gemini", needsKey: true, placeholder: "AIza..." },
+  { value: "anthropic", label: "Anthropic (Claude)", needsKey: true, placeholder: "sk-ant-..." },
+  { value: "perplexity", label: "Perplexity", needsKey: true, placeholder: "pplx-..." },
+];
+
+// Lê arquivo como texto bruto (UTF-8). Bons resultados para .md, .txt, .docx (XML interno) e .xlsx limitado.
+async function readFileAsText(file: File): Promise<string> {
+  try {
+    const text = await file.text();
+    return text.length > 50000 ? text.slice(0, 50000) + "\n[... conteúdo truncado ...]" : text;
+  } catch {
+    return `[Não foi possível ler o conteúdo de ${file.name}]`;
+  }
+}
+
+function downloadDocxFromBase64(base64: string, filename: string) {
+  const byteChars = atob(base64);
+  const byteArr = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+  const blob = new Blob([byteArr], {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 function FileUploadField({
   field,
@@ -92,6 +130,10 @@ export function ApfGenerateTab() {
   const [generating, setGenerating] = useState(false);
   const [generations, setGenerations] = useState<(ApfGeneration & { template_name?: string })[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [provider, setProvider] = useState<Provider>("lovable");
+  const [apiKey, setApiKey] = useState("");
+  // Cache do último DOCX gerado para download via histórico (in-memory por sessão)
+  const [lastDocx, setLastDocx] = useState<{ base64: string; filename: string } | null>(null);
 
   // Load templates
   useEffect(() => {
@@ -113,15 +155,43 @@ export function ApfGenerateTab() {
   }, [currentTeamId, selectedSprintId]);
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
-  const canGenerate = selectedSprintId && selectedTemplateId && files.every(Boolean);
+  const providerCfg = PROVIDERS.find((p) => p.value === provider)!;
+  const apiKeyOk = !providerCfg.needsKey || apiKey.trim().length > 0;
+  const canGenerate = selectedSprintId && selectedTemplateId && files.every(Boolean) && apiKeyOk;
 
   const handleGenerate = async () => {
     if (!canGenerate || !currentTeamId || !user) return;
     setGenerating(true);
     try {
-      // Simulate 2s processing
-      await new Promise((r) => setTimeout(r, 2000));
       const sprint = sprints.find((s) => s.id === selectedSprintId);
+      const filename = `APF_${(sprint?.name ?? "Sprint").replace(/\s+/g, "_")}_${Date.now()}.docx`;
+
+      // Lê arquivos como texto para enviar como contexto
+      const filePayload = await Promise.all(
+        files.map(async (f) => ({
+          name: f!.name,
+          content: await readFileAsText(f!),
+        })),
+      );
+
+      const { data, error } = await supabase.functions.invoke("apf-generate", {
+        body: {
+          prompt: selectedTemplate!.prompt_content,
+          provider,
+          apiKey: providerCfg.needsKey ? apiKey.trim() : undefined,
+          files: filePayload,
+        },
+      });
+
+      if (error) throw new Error(error.message ?? "Erro ao chamar a IA");
+      if (!data?.success || !data?.docxBase64) {
+        throw new Error(data?.error ?? "A IA não retornou conteúdo");
+      }
+
+      // Faz download imediato
+      downloadDocxFromBase64(data.docxBase64, filename);
+      setLastDocx({ base64: data.docxBase64, filename });
+
       await createGeneration({
         team_id: currentTeamId,
         template_id: selectedTemplateId,
@@ -130,15 +200,16 @@ export function ApfGenerateTab() {
         baseline_file: files[0]!.name,
         hu_file: files[1]!.name,
         model_file: files[2]!.name,
-        output_filename: `APF_${sprint?.name ?? "Sprint"}_${Date.now()}.${selectedTemplate?.output_type ?? "docx"}`,
+        output_filename: filename,
         status: "success",
       });
-      toast.success("Documento gerado com sucesso!");
+      toast.success("Documento gerado e baixado com sucesso!");
       // Refresh history
       const updated = await fetchGenerations(currentTeamId, selectedSprintId);
       setGenerations(updated);
-    } catch {
-      toast.error("Erro ao gerar documento");
+    } catch (e: any) {
+      console.error("Erro ao gerar APF:", e);
+      toast.error(e?.message ?? "Erro ao gerar documento");
     } finally {
       setGenerating(false);
     }
@@ -197,6 +268,49 @@ export function ApfGenerateTab() {
 
         <Card>
           <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" /> Provedor de IA
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Escolha qual IA gerará o documento <span className="text-destructive">*</span></Label>
+              <Select value={provider} onValueChange={(v) => setProvider(v as Provider)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PROVIDERS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {providerCfg.needsKey ? (
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1.5">
+                  <KeyRound className="h-3.5 w-3.5" /> Sua API Key <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={providerCfg.placeholder}
+                  autoComplete="off"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  A chave é usada apenas para esta requisição e <strong>não é armazenada</strong>.
+                </p>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                ✅ Lovable AI já está configurado — sem necessidade de chave própria.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
             <CardTitle className="text-sm">Arquivos de Entrada</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -219,9 +333,9 @@ export function ApfGenerateTab() {
           onClick={handleGenerate}
         >
           {generating ? (
-            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando...</>
+            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando com IA...</>
           ) : (
-            "Gerar Documento"
+            "Gerar Documento DOCX"
           )}
         </Button>
       </div>
@@ -253,9 +367,14 @@ export function ApfGenerateTab() {
                       <p className="text-[10px] text-muted-foreground">
                         {new Date(g.created_at).toLocaleString("pt-BR")}
                       </p>
-                      {g.status === "success" && (
-                        <Button variant="outline" size="sm" className="h-7 text-xs w-full mt-1" disabled>
-                          <Download className="h-3 w-3 mr-1" /> Baixar
+                      {g.status === "success" && lastDocx?.filename === g.output_filename && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs w-full mt-1"
+                          onClick={() => downloadDocxFromBase64(lastDocx.base64, lastDocx.filename)}
+                        >
+                          <Download className="h-3 w-3 mr-1" /> Baixar novamente
                         </Button>
                       )}
                       {g.status === "error" && g.error_message && (
