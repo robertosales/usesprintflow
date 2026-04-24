@@ -5,19 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import type { ApfTemplate } from "../services/apf.service";
-
-const VARIABLES = [
-  { key: "{{hu_codigo}}", label: "Código da HU" },
-  { key: "{{hu_titulo}}", label: "Título da HU" },
-  { key: "{{hu_descricao}}", label: "Descrição da HU" },
-  { key: "{{baseline_item}}", label: "Item do baseline" },
-  { key: "{{tipo}}", label: "Tipo do item" },
-  { key: "{{sprint_nome}}", label: "Nome da sprint" },
-  { key: "{{data_geracao}}", label: "Data de geração" },
-  { key: "{{total_pf}}", label: "Total de Pontos de Função" },
-];
 
 interface Props {
   open: boolean;
@@ -42,19 +30,6 @@ export function ApfTemplateModal({ open, onClose, onSave, template }: Props) {
       setPromptContent(template?.prompt_content ?? "");
     }
   }, [open, template]);
-
-  const insertVariable = (varKey: string) => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const newVal = promptContent.substring(0, start) + varKey + promptContent.substring(end);
-    setPromptContent(newVal);
-    setTimeout(() => {
-      ta.focus();
-      ta.setSelectionRange(start + varKey.length, start + varKey.length);
-    }, 0);
-  };
 
   const handleSubmit = async () => {
     if (!name.trim() || !outputType || !promptContent.trim()) return;
@@ -101,7 +76,6 @@ export function ApfTemplateModal({ open, onClose, onSave, template }: Props) {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="docx">DOCX</SelectItem>
-                <SelectItem value="xlsx">XLSX</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -112,21 +86,12 @@ export function ApfTemplateModal({ open, onClose, onSave, template }: Props) {
               ref={textareaRef}
               value={promptContent}
               onChange={(e) => setPromptContent(e.target.value)}
-              placeholder="Descreva as instruções para geração do documento. Use {{hu_codigo}}, {{hu_titulo}}, {{baseline_item}}, {{tipo}} como variáveis substituídas automaticamente."
+              placeholder="Descreva as instruções para a IA gerar o documento. Você pode descrever o formato, seções, tópicos esperados, etc. Para títulos use '# Título' (H1) ou '## Subtítulo' (H2). Para listas, use '- item'."
               className="min-h-[280px] font-mono text-xs"
             />
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {VARIABLES.map((v) => (
-                <Badge
-                  key={v.key}
-                  variant="outline"
-                  className="cursor-pointer hover:bg-accent transition-colors text-xs"
-                  onClick={() => insertVariable(v.key)}
-                >
-                  {v.key}
-                </Badge>
-              ))}
-            </div>
+            <p className="text-[11px] text-muted-foreground pt-1">
+              💡 Dica: o conteúdo dos arquivos enviados (Baseline, HUs, Modelo) é injetado automaticamente como contexto antes do seu prompt.
+            </p>
           </div>
         </div>
 
