@@ -541,14 +541,22 @@ export function ApfGenerateTab() {
           className="w-full"
           size="lg"
           disabled={!canGenerate || generating}
-          onClick={handleGenerate}
+          onClick={handleGenerateClick}
         >
           {generating ? (
             <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando com IA...</>
+          ) : questions.length > 0 && !allQuestionsAnswered ? (
+            <><HelpCircle className="h-4 w-4 mr-2" /> Responder {questions.length} pergunta{questions.length > 1 ? "s" : ""} e gerar</>
           ) : (
             "Gerar Documento DOCX"
           )}
         </Button>
+
+        {questions.length > 0 && (
+          <p className="text-[11px] text-muted-foreground -mt-3 px-1">
+            ⓘ Este template contém {questions.length} pergunta{questions.length > 1 ? "s" : ""} interativa{questions.length > 1 ? "s" : ""} que você precisa responder antes da geração.
+          </p>
+        )}
       </div>
 
       {/* Right Panel - History */}
