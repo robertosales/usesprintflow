@@ -231,6 +231,30 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
     await moveTo(demanda, status);
   };
 
+  // Reuso da mesma validação para o "Mover para" do menu de contexto (botão direito).
+  const handleContextMove = async (demanda: Demanda, status: string) => {
+    if (demanda.situacao === status) return;
+    const validation = validateDrop(demanda, status);
+    if (validation.error) {
+      toast.error(validation.error);
+      return;
+    }
+    if (validation.evidenceMissing) {
+      setEvidenceTarget({ demanda, status, missing: validation.evidenceMissing });
+      return;
+    }
+    if ((REQUIRES_JUSTIFICATIVA as readonly string[]).includes(status)) {
+      setJustTarget({ demanda, status });
+      return;
+    }
+    await moveTo(demanda, status);
+  };
+
+  const moveOptions = useMemo(
+    () => columns.map((c) => ({ key: c, label: resolveLabel(c) })),
+    [columns],
+  );
+
   if (loading || wfLoading) return <SkeletonList count={6} />;
   if (error)
     return (
@@ -404,6 +428,8 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
                             onDelete={setDeleteTarget}
                             draggable
                             onDragStart={(e, dem) => e.dataTransfer.setData("demanda-id", dem.id)}
+                            moveOptions={moveOptions}
+                            onMove={handleContextMove}
                           />
                         ))
                       )}

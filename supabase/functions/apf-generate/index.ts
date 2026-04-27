@@ -6,6 +6,12 @@ import {
   TextRun,
   HeadingLevel,
   AlignmentType,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  BorderStyle,
+  ShadingType,
 } from "https://esm.sh/docx@8.5.0";
 
 const corsHeaders = {
@@ -42,6 +48,14 @@ function buildFullPrompt(prompt: string, files: FileInput[] = []) {
 Siga estritamente as instruções abaixo. A resposta deve ser apenas o conteúdo do documento, em texto puro, sem comentários adicionais, sem prefácio e sem markdown de bloco de código.
 
 Use parágrafos separados por linhas em branco. Para títulos use linhas iniciadas com "# " (H1) ou "## " (H2). Para listas use "- " no início da linha.
+
+REGRA — TABELAS:
+- Sempre que precisar apresentar dados estruturados (Dados do atendimento, Funcionalidades Impactadas, Banco de Dados, etc.), use tabelas em formato Markdown padrão com pipes e linha separadora:
+  | Cabeçalho 1 | Cabeçalho 2 | Cabeçalho 3 |
+  | --- | --- | --- |
+  | valor | valor | valor |
+- A primeira linha é sempre o cabeçalho. NÃO inclua a tabela dentro de bloco de código.
+- Para tabelas verticais "chave/valor" (como "Dados do atendimento"), use duas colunas: a primeira com o rótulo (Nº do REDMINE, Sistema, Release, Sprint, Tipo de Manutenção, Analista) e a segunda com o valor (pode ficar vazia se não houver informação).
 
 REGRA CRÍTICA — PERGUNTAS NO PROMPT:
 - NÃO inclua perguntas literais (ex.: "Houve alteração em banco de dados? (Sim/Não)") no documento gerado.
@@ -118,18 +132,125 @@ async function callPerplexity(fullPrompt: string, apiKey: string, model = "sonar
   return data.choices?.[0]?.message?.content ?? "";
 }
 
-function textToDocxParagraphs(text: string): Paragraph[] {
-  const lines = text.split(/\r?\n/);
-  const paragraphs: Paragraph[] = [];
+// ── Estilo das tabelas (alinhado às imagens de referência) ──
+// Cabeçalho azul escuro com texto branco; primeira coluna (vertical key/value) cinza claro.
+const HEADER_FILL = "1F4E78"; // azul corporativo
+const KEY_FILL = "D9D9D9"; // cinza claro
+const BORDER_COLOR = "9DB2BF";
 
-  for (const raw of lines) {
+const cellBorder = { style: BorderStyle.SINGLE, size: 6, color: BORDER_COLOR };
+const cellBorders = {
+  top: cellBorder,
+  bottom: cellBorder,
+  left: cellBorder,
+  right: cellBorder,
+};
+
+function makeCell(
+  text: string,
+  opts: { header?: boolean; keyCol?: boolean; width: number } = { width: 4680 },
+): TableCell {
+  const isBold = !!opts.header || !!opts.keyCol;
+  const fill = opts.header ? HEADER_FILL : opts.keyCol ? KEY_FILL : undefined;
+  const color = opts.header ? "FFFFFF" : "000000";
+  return new TableCell({
+    borders: cellBorders,
+    width: { size: opts.width, type: WidthType.DXA },
+    shading: fill ? { fill, type: ShadingType.CLEAR, color: "auto" } : undefined,
+    margins: { top: 80, bottom: 80, left: 120, right: 120 },
+    children: [
+      new Paragraph({
+        children: [
+          new TextRun({ text: text || "", bold: isBold, color, size: 20 }),
+        ],
+      }),
+    ],
+  });
+}
+
+function parseMarkdownRow(line: string): string[] {
+  // Remove pipes externas e divide em colunas, preservando texto
+  const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  return trimmed.split("|").map((c) => c.trim());
+}
+
+function isSeparatorRow(line: string): boolean {
+  // Linha tipo: | --- | :---: | ---: |
+  return /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(line);
+}
+
+function buildTable(headerCells: string[], rows: string[][]): Table {
+  const TOTAL_WIDTH = 9360; // US Letter content width with 1" margins
+  const colCount = Math.max(headerCells.length, ...rows.map((r) => r.length), 1);
+  const colWidth = Math.floor(TOTAL_WIDTH / colCount);
+  const columnWidths = Array(colCount).fill(colWidth);
+
+  // Detecta se é tabela "chave/valor" (2 colunas, cabeçalho vazio ou genérico)
+  const isKeyValue =
+    colCount === 2 &&
+    headerCells.every((h) => !h || /^(campo|chave|item|atributo)$/i.test(h));
+
+  const trs: TableRow[] = [];
+
+  if (!isKeyValue) {
+    trs.push(
+      new TableRow({
+        tableHeader: true,
+        children: headerCells
+          .concat(Array(colCount - headerCells.length).fill(""))
+          .map((h) => makeCell(h, { header: true, width: colWidth })),
+      }),
+    );
+  }
+
+  for (const r of rows) {
+    const padded = r.concat(Array(colCount - r.length).fill(""));
+    trs.push(
+      new TableRow({
+        children: padded.map((cellText, idx) =>
+          makeCell(cellText, { keyCol: isKeyValue && idx === 0, width: colWidth }),
+        ),
+      }),
+    );
+  }
+
+  return new Table({
+    width: { size: TOTAL_WIDTH, type: WidthType.DXA },
+    columnWidths,
+    rows: trs,
+  });
+}
+
+function textToDocxBlocks(text: string): (Paragraph | Table)[] {
+  const lines = text.split(/\r?\n/);
+  const blocks: (Paragraph | Table)[] = [];
+  let i = 0;
+
+  const pushParagraph = (p: Paragraph) => blocks.push(p);
+
+  while (i < lines.length) {
+    const raw = lines[i];
     const line = raw.trimEnd();
-    if (!line.trim()) {
-      paragraphs.push(new Paragraph({ children: [new TextRun("")] }));
+
+    // ── Detecta tabela markdown ──
+    if (line.trim().startsWith("|") && i + 1 < lines.length && isSeparatorRow(lines[i + 1])) {
+      const header = parseMarkdownRow(line);
+      i += 2; // pula header + separator
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        rows.push(parseMarkdownRow(lines[i]));
+        i++;
+      }
+      blocks.push(buildTable(header, rows));
+      // Espaço após a tabela
+      blocks.push(new Paragraph({ children: [new TextRun("")] }));
       continue;
     }
-    if (line.startsWith("# ")) {
-      paragraphs.push(
+
+    if (!line.trim()) {
+      pushParagraph(new Paragraph({ children: [new TextRun("")] }));
+    } else if (line.startsWith("# ")) {
+      pushParagraph(
         new Paragraph({
           heading: HeadingLevel.HEADING_1,
           children: [new TextRun({ text: line.slice(2), bold: true, size: 32 })],
@@ -137,7 +258,7 @@ function textToDocxParagraphs(text: string): Paragraph[] {
         }),
       );
     } else if (line.startsWith("## ")) {
-      paragraphs.push(
+      pushParagraph(
         new Paragraph({
           heading: HeadingLevel.HEADING_2,
           children: [new TextRun({ text: line.slice(3), bold: true, size: 28 })],
@@ -145,7 +266,7 @@ function textToDocxParagraphs(text: string): Paragraph[] {
         }),
       );
     } else if (line.startsWith("### ")) {
-      paragraphs.push(
+      pushParagraph(
         new Paragraph({
           heading: HeadingLevel.HEADING_3,
           children: [new TextRun({ text: line.slice(4), bold: true, size: 24 })],
@@ -153,14 +274,14 @@ function textToDocxParagraphs(text: string): Paragraph[] {
         }),
       );
     } else if (line.startsWith("- ") || line.startsWith("* ")) {
-      paragraphs.push(
+      pushParagraph(
         new Paragraph({
           children: [new TextRun(line.slice(2))],
           bullet: { level: 0 },
         }),
       );
     } else {
-      paragraphs.push(
+      pushParagraph(
         new Paragraph({
           alignment: AlignmentType.JUSTIFIED,
           children: [new TextRun(line)],
@@ -168,9 +289,10 @@ function textToDocxParagraphs(text: string): Paragraph[] {
         }),
       );
     }
+    i++;
   }
 
-  return paragraphs;
+  return blocks;
 }
 
 async function generateDocxBase64(text: string): Promise<string> {
@@ -182,7 +304,7 @@ async function generateDocxBase64(text: string): Promise<string> {
             margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
           },
         },
-        children: textToDocxParagraphs(text),
+        children: textToDocxBlocks(text),
       },
     ],
   });

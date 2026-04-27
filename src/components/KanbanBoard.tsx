@@ -21,10 +21,20 @@ import {
   X,
   Plus,
   Bug,
+  ArrowRightLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ImpedimentDialog } from "@/components/ImpedimentManager";
 import { QuickActivityDialog } from "@/components/QuickActivityDialog";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
   DndContext,
   DragOverlay,
@@ -502,6 +512,17 @@ export function KanbanBoard() {
                                     toast.success("Impedimento resolvido!");
                                   }}
                                   onAddTask={() => setQuickTaskHU(hu.id)}
+                                  moveOptions={workflowColumns.map((c) => ({ key: c.key, label: c.label }))}
+                                  onMove={(targetKey) => {
+                                    if (!canMove) {
+                                      toast.error("Você não tem permissão para mover HUs.");
+                                      return;
+                                    }
+                                    if (hu.status === targetKey) return;
+                                    updateUserStoryStatus(hu.id, targetKey);
+                                    const col = workflowColumns.find((c) => c.key === targetKey);
+                                    toast.success(`HU movida para ${col?.label ?? targetKey}`);
+                                  }}
                                 />
                               </DraggableCard>
                             ))}
@@ -564,6 +585,8 @@ function HUCard({
   onImpediment,
   onResolveImpediment,
   onAddTask,
+  moveOptions,
+  onMove,
 }: {
   hu: UserStory;
   expanded: boolean;
@@ -571,6 +594,8 @@ function HUCard({
   onImpediment: () => void;
   onResolveImpediment: (impId: string) => void;
   onAddTask: () => void;
+  moveOptions?: { key: string; label: string }[];
+  onMove?: (targetKey: string) => void;
 }) {
   const { activities, developers, epics } = useSprint();
   const huActivities = activities.filter((a) => a.huId === hu.id);
@@ -591,7 +616,9 @@ function HUCard({
   const hasOpenBug = huActivities.some((a) => a.activityType === "bug" && !a.isClosed);
 
   return (
-    <Card
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <Card
       className={`
         shadow-sm hover:shadow-md transition-all duration-150 cursor-grab active:cursor-grabbing
         ${isBugStatus ? "border-destructive border-2 bg-destructive/10" : overdue ? "border-destructive border-2 bg-destructive/5" : "border-border/60"}
@@ -783,6 +810,37 @@ function HUCard({
           </div>
         )}
       </CardContent>
-    </Card>
+        </Card>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-56">
+        <ContextMenuItem onClick={onToggleExpand}>
+          {expanded ? "Recolher tarefas" : "Expandir tarefas"}
+        </ContextMenuItem>
+        <ContextMenuItem onClick={onAddTask}>Adicionar tarefa</ContextMenuItem>
+        <ContextMenuItem onClick={onImpediment}>Reportar impedimento</ContextMenuItem>
+        {moveOptions && onMove && moveOptions.length > 0 && (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />
+              Mover para
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="max-h-[60vh] overflow-y-auto">
+              {moveOptions.map((opt) => (
+                <ContextMenuItem
+                  key={opt.key}
+                  disabled={opt.key === hu.status}
+                  onClick={() => onMove(opt.key)}
+                >
+                  {opt.label}
+                  {opt.key === hu.status && (
+                    <span className="ml-auto text-[10px] text-muted-foreground">(atual)</span>
+                  )}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
