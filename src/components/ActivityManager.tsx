@@ -347,6 +347,19 @@ export function ActivityManager() {
                     {errors.startDate && <p className="text-xs text-destructive mt-1">{errors.startDate}</p>}
                   </div>
                 </div>
+                {activityType === "bug" && editId && currentTeamId && (
+                  <div className="border-t pt-3 space-y-2">
+                    <Label className="text-xs font-semibold text-destructive flex items-center gap-1.5">
+                      🐛 Prints / Evidências do Bug
+                    </Label>
+                    <FileUploader entityType="activity" entityId={editId} teamId={currentTeamId} />
+                  </div>
+                )}
+                {activityType === "bug" && !editId && (
+                  <div className="text-xs bg-destructive/10 border border-destructive/30 text-destructive rounded p-2">
+                    🐛 Após salvar, edite a atividade para anexar prints. A HU será movida para a coluna <b>Bug</b>.
+                  </div>
+                )}
                 <Button type="submit" className="w-full gap-2" disabled={submitting}>
                   {submitting ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" />
