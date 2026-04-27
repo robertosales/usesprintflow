@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { MoreHorizontal, User } from "lucide-react";
+import { MoreHorizontal, User, ArrowRightLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -8,6 +8,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import type { Demanda } from "../types/demanda";
 import { getResponsavelAtivo } from "../types/demanda";
 
@@ -17,6 +27,9 @@ interface Props {
   onDelete?: (d: Demanda) => void;
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent, d: Demanda) => void;
+  /** Colunas disponíveis para mover via menu de contexto (botão direito). */
+  moveOptions?: { key: string; label: string }[];
+  onMove?: (d: Demanda, targetKey: string) => void;
 }
 
 function getInitials(name: string): string {
@@ -29,11 +42,21 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
-export function DemandaCard({ demanda, onOpen, onDelete, draggable, onDragStart }: Props) {
+export function DemandaCard({
+  demanda,
+  onOpen,
+  onDelete,
+  draggable,
+  onDragStart,
+  moveOptions,
+  onMove,
+}: Props) {
   const responsavel = getResponsavelAtivo(demanda);
 
   return (
-    <Card
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <Card
       className="p-3 cursor-pointer hover:shadow-md transition-shadow group border border-border/60 flex flex-col gap-2"
       draggable={draggable}
       onDragStart={(e) => onDragStart?.(e, demanda)}
@@ -116,6 +139,41 @@ export function DemandaCard({ demanda, onOpen, onDelete, draggable, onDragStart 
           </div>
         )}
       </div>
-    </Card>
+        </Card>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-56">
+        <ContextMenuItem onClick={() => onOpen(demanda)}>Abrir detalhes</ContextMenuItem>
+        {moveOptions && onMove && moveOptions.length > 0 && (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />
+              Mover para
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="max-h-[60vh] overflow-y-auto">
+              {moveOptions.map((opt) => (
+                <ContextMenuItem
+                  key={opt.key}
+                  disabled={opt.key === demanda.situacao}
+                  onClick={() => onMove(demanda, opt.key)}
+                >
+                  {opt.label}
+                  {opt.key === demanda.situacao && (
+                    <span className="ml-auto text-[10px] text-muted-foreground">(atual)</span>
+                  )}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        )}
+        {onDelete && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem className="text-destructive" onClick={() => onDelete(demanda)}>
+              Excluir
+            </ContextMenuItem>
+          </>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
