@@ -19,9 +19,12 @@ import {
   ChevronLeft,
   Search,
   X,
+  Plus,
+  Bug,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ImpedimentDialog } from "@/components/ImpedimentManager";
+import { QuickActivityDialog } from "@/components/QuickActivityDialog";
 import {
   DndContext,
   DragOverlay,
@@ -278,6 +281,8 @@ export function KanbanBoard() {
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
   // ✅ NOVO: rastreia coluna sendo hovereada no drag
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  // ✅ NOVO: HU alvo para criação rápida de tarefa
+  const [quickTaskHU, setQuickTaskHU] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("all");
