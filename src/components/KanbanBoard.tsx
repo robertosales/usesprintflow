@@ -21,10 +21,20 @@ import {
   X,
   Plus,
   Bug,
+  ArrowRightLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ImpedimentDialog } from "@/components/ImpedimentManager";
 import { QuickActivityDialog } from "@/components/QuickActivityDialog";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
   DndContext,
   DragOverlay,
