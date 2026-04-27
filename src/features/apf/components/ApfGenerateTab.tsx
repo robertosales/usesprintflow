@@ -612,16 +612,30 @@ export function ApfGenerateTab() {
                       <p className="text-[10px] text-muted-foreground">
                         {new Date(g.created_at).toLocaleString("pt-BR")}
                       </p>
-                      {g.status === "success" && lastDocx?.filename === g.output_filename && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs w-full mt-1"
-                          onClick={() => downloadDocxFromBase64(lastDocx.base64, lastDocx.filename)}
-                        >
-                          <Download className="h-3 w-3 mr-1" /> Baixar novamente
-                        </Button>
-                      )}
+                      {g.status === "success" &&
+                        lastResult &&
+                        g.output_filename.startsWith(lastResult.baseFilename) && (
+                          <div className="flex gap-1.5 mt-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs flex-1"
+                              onClick={() => setShowPreview(true)}
+                            >
+                              <Eye className="h-3 w-3 mr-1" /> Visualizar
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs flex-1"
+                              onClick={() =>
+                                downloadDocxFromBase64(lastResult.base64, `${lastResult.baseFilename}.docx`)
+                              }
+                            >
+                              <Download className="h-3 w-3 mr-1" /> DOCX
+                            </Button>
+                          </div>
+                        )}
                       {g.status === "error" && g.error_message && (
                         <p className="text-[10px] text-destructive">{g.error_message}</p>
                       )}
