@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FileSpreadsheet, FileText, File, Upload, X, Download, Loader2, Sparkles, KeyRound, Plus, HelpCircle } from "lucide-react";
+import { FileSpreadsheet, FileText, File, Upload, X, Download, Loader2, Sparkles, KeyRound, Plus, HelpCircle, Eye } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -17,6 +17,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprint } from "@/contexts/SprintContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,6 +43,7 @@ const HU_FIELD: FileField = { label: "HUs da Sprint", description: "Lista de HUs
 const MODEL_FIELD: FileField = { label: "Modelo de Contagem", description: "Template do documento de saída", accept: ".docx,.xlsx", icon: File };
 
 type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
+type OutputFormat = "docx" | "markdown";
 
 const PROVIDERS: { value: Provider; label: string; needsKey: boolean; placeholder: string }[] = [
   { value: "lovable", label: "Lovable AI (Gemini/GPT) — recomendado", needsKey: false, placeholder: "" },
@@ -154,6 +157,18 @@ function downloadDocxFromBase64(base64: string, filename: string) {
   const blob = new Blob([byteArr], {
     type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadMarkdown(content: string, filename: string) {
+  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
