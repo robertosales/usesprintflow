@@ -30,13 +30,31 @@ import {
 } from "../types/imr";
 import { supabase } from "@/integrations/supabase/client";
 
+// Labels amigáveis para exibir a situação pré-selecionada no título do dialog
+const SITUACAO_LABELS: Record<string, string> = {
+  fila_atendimento: "Fila Atendimento",
+  planejamento_elaboracao: "Em Elaboração",
+  planejamento_ag_aprovacao: "Ag. Aprovação",
+  planejamento_aprovada: "Aprovada p/ Exec",
+  em_execucao: "Em Execução",
+  bloqueada: "Bloqueada",
+  hom_ag_homologacao: "Ag. Homologação",
+  hom_homologada: "Homologada",
+  rejeitada: "Rejeitada",
+  fila_producao: "Fila Produção",
+  ag_aceite_final: "Ag. Aceite Final",
+  cancelada: "Cancelada",
+};
+
 interface Props {
   open: boolean;
   onClose: () => void;
   onSubmit: (data: Record<string, any>) => Promise<void>;
+  /** Situação pré-selecionada quando o form é aberto pelo botão + de uma coluna do board */
+  situacaoInicial?: string;
 }
 
-export function DemandaForm({ open, onClose, onSubmit }: Props) {
+export function DemandaForm({ open, onClose, onSubmit, situacaoInicial }: Props) {
   const { projetos, loading: loadingProjetos } = useProjetos();
   const [form, setForm] = useState({
     rhm: "",
@@ -127,8 +145,11 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
     const regime = isCorretiva ? form.sla : "padrao";
     const defeito = isCorretiva ? form.tipo_defeito : undefined;
 
+    // Usa a situação pré-selecionada pela coluna do board, ou "fila_atendimento" como padrão
+    const situacao = situacaoInicial || "fila_atendimento";
+
     await onSubmit({
-      situacao: "fila_atendimento", // ← adicionar esta linha
+      situacao,
       rhm: form.rhm,
       projeto: form.projeto,
       tipo: form.tipo,
@@ -160,12 +181,24 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
     onClose();
   };
 
+  // Label da situação para exibir no subtítulo quando vier do board
+  const situacaoLabel = situacaoInicial ? SITUACAO_LABELS[situacaoInicial] : null;
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-base">Nova Demanda</DialogTitle>
-          <DialogDescription>Preencha os dados para cadastrar uma nova demanda de sustentação.</DialogDescription>
+          <DialogDescription>
+            {situacaoLabel ? (
+              <>
+                Preencha os dados para cadastrar uma nova demanda.{" "}
+                <span className="font-medium text-foreground">Situação inicial: {situacaoLabel}</span>
+              </>
+            ) : (
+              "Preencha os dados para cadastrar uma nova demanda de sustentação."
+            )}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
           {/* LINHA 1: # + Projeto */}
@@ -198,14 +231,12 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
                   markTouched("projeto");
                 }}
               >
-                <SelectTrigger
-                  className={cn("h-8 text-sm", projetoError && "border-destructive focus-visible:ring-destructive")}
-                >
-                  <SelectValue placeholder="Selecione" />
+                <SelectTrigger className={cn("h-8 text-sm", projetoError && "border-destructive")}>
+                  <SelectValue placeholder="Selecione..." />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none" disabled>
-                    Selecione
+                    Selecione...
                   </SelectItem>
                   {projetos.map((p) => (
                     <SelectItem key={p.id} value={p.nome}>
@@ -218,30 +249,15 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
             </div>
           </div>
 
-          {/* LINHA 2: Criado em */}
+          {/* LINHA 2: Tipo + Demandante */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-xs flex items-center gap-1">
-                Criado em
-                <span className="text-[9px] font-normal px-1 py-0.5 rounded bg-[#e8f2fa] text-[#1a6fa8]">
-                  automático
-                </span>
-              </Label>
-              <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border bg-[#f5f8fb] text-xs">
-                <Clock className="h-3 w-3 text-[#4a6278]" />
-                <span className="font-medium text-[#0f1e2d]">{format(dataInicio, "dd/MM/yyyy HH:mm")}</span>
-              </div>
-            </div>
-            <div>
               <Label className="text-xs">Tipo</Label>
-              <Select
-                value={form.tipo}
-                onValueChange={(v) => setForm((p) => ({ ...p, tipo: v, data_previsao_encerramento: null }))}
-              >
+              <Select value={form.tipo} onValueChange={(v) => setForm((p) => ({ ...p, tipo: v }))}>
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="max-h-60">
+                <SelectContent>
                   {TIPOS_DEMANDA_IMR.map((t) => (
                     <SelectItem key={t.value} value={t.value}>
                       {t.label}
@@ -250,46 +266,38 @@ export function DemandaForm({ open, onClose, onSubmit }: Props) {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          {/* LINHA 3: Autor */}
-          <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-xs">
                 Autor <span className="text-destructive">*</span>
               </Label>
               {selectedDemandante ? (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-medium bg-muted px-2 py-1 rounded">
-                    {selectedDemandante.display_name}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 text-xs px-1.5"
+                <div className="flex items-center gap-1 h-8 px-2 border rounded-md bg-muted/30">
+                  <span className="text-sm flex-1 truncate">{selectedDemandante.display_name}</span>
+                  <button
                     onClick={() => {
                       setSelectedDemandante(null);
                       setForm((p) => ({ ...p, demandante: "" }));
                     }}
+                    className="text-muted-foreground hover:text-foreground text-xs ml-1"
                   >
-                    Alterar
-                  </Button>
+                    ✕
+                  </button>
                 </div>
               ) : (
                 <div className="relative">
-                  <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Search className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Buscar por nome..."
                     value={demandanteSearch}
                     onChange={(e) => searchDemandante(e.target.value)}
                     onBlur={() => markTouched("demandante")}
+                    placeholder="Buscar..."
                     className={cn(
                       "pl-7 h-8 text-sm",
                       demandanteError && "border-destructive focus-visible:ring-destructive",
                     )}
                   />
                   {demandanteResults.length > 0 && (
-                    <div className="absolute z-50 w-full mt-0.5 bg-popover border rounded-md shadow-md max-h-28 overflow-y-auto">
+                    <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-md max-h-40 overflow-auto">
                       {demandanteResults.map((r) => (
                         <button
                           key={r.id}
