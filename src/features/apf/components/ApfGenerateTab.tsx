@@ -244,8 +244,14 @@ export function ApfGenerateTab() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [provider, setProvider] = useState<Provider>("lovable");
   const [apiKey, setApiKey] = useState("");
-  // Cache do último DOCX gerado para download via histórico (in-memory por sessão)
-  const [lastDocx, setLastDocx] = useState<{ base64: string; filename: string } | null>(null);
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>("docx");
+  // Cache do último resultado gerado (in-memory por sessão) — usado pelo preview e pelo histórico
+  const [lastResult, setLastResult] = useState<{
+    base64: string;
+    markdown: string;
+    baseFilename: string; // sem extensão
+  } | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Perguntas interativas detectadas no prompt + modal de respostas
   const [questions, setQuestions] = useState<InteractiveQuestion[]>([]);
@@ -317,7 +323,8 @@ export function ApfGenerateTab() {
     setGenerating(true);
     try {
       const sprint = sprints.find((s) => s.id === selectedSprintId);
-      const filename = `APF_${(sprint?.name ?? "Sprint").replace(/\s+/g, "_")}_${Date.now()}.docx`;
+      const baseFilename = `APF_${(sprint?.name ?? "Sprint").replace(/\s+/g, "_")}_${Date.now()}`;
+      const filename = `${baseFilename}.${outputFormat === "docx" ? "docx" : "md"}`;
 
       // Lê todos os arquivos como texto para enviar como contexto (Baseline + várias HUs + Modelo)
       const allFiles: File[] = [baselineFile!, ...huFiles, modelFile!];
@@ -349,9 +356,13 @@ export function ApfGenerateTab() {
         throw new Error(data?.error ?? "A IA não retornou conteúdo");
       }
 
-      // Faz download imediato
-      downloadDocxFromBase64(data.docxBase64, filename);
-      setLastDocx({ base64: data.docxBase64, filename });
+      // Guarda resultado e abre o preview — o usuário decide quando baixar
+      setLastResult({
+        base64: data.docxBase64,
+        markdown: data.markdown ?? "",
+        baseFilename,
+      });
+      setShowPreview(true);
 
       await createGeneration({
         team_id: currentTeamId,
@@ -364,7 +375,7 @@ export function ApfGenerateTab() {
         output_filename: filename,
         status: "success",
       });
-      toast.success("Documento gerado e baixado com sucesso!");
+      toast.success("Documento gerado! Visualize e baixe no formato desejado.");
       // Refresh history
       const updated = await fetchGenerations(currentTeamId, selectedSprintId);
       setGenerations(updated);
