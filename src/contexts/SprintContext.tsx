@@ -430,6 +430,17 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       toast.error("Erro ao criar atividade");
       return;
     }
+
+    // ✅ NOVO: Se a atividade criada é do tipo "bug", move a HU para a coluna "bug".
+    if (act.activityType === "bug") {
+      const hu = userStories.find((h) => h.id === act.huId);
+      const bugCol = workflowColumns.find((c) => c.key === "bug");
+      if (hu && bugCol && hu.status !== "bug") {
+        await supabase.from("user_stories").update({ status: "bug" }).eq("id", act.huId);
+        toast.info(`🐛 HU movida para "${bugCol.label}"`);
+      }
+    }
+
     await refreshAll();
   };
 
@@ -478,6 +489,25 @@ export function SprintProvider({ children }: { children: ReactNode }) {
               `🎉 Todas as atividades concluídas! HU movida para "${workflowColumns[workflowColumns.length - 1]?.label}"`,
             );
             await refreshAll();
+          }
+        }
+      }
+
+      // ✅ NOVO: ao fechar uma tarefa de bug, se a HU está na coluna "bug" e
+      // não há mais bugs abertos, move HU de volta para "em_teste".
+      if (act.activityType === "bug") {
+        const hu = userStories.find((h) => h.id === act.huId);
+        if (hu && hu.status === "bug") {
+          const remainingOpenBugs = huActs.filter(
+            (a) => a.id !== id && a.activityType === "bug" && !a.isClosed,
+          );
+          if (remainingOpenBugs.length === 0) {
+            const targetCol = workflowColumns.find((c) => c.key === "em_teste");
+            if (targetCol) {
+              await supabase.from("user_stories").update({ status: "em_teste" }).eq("id", act.huId);
+              toast.success(`✅ Bug resolvido! HU retornou para "${targetCol.label}"`);
+              await refreshAll();
+            }
           }
         }
       }
