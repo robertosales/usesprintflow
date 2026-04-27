@@ -430,6 +430,17 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       toast.error("Erro ao criar atividade");
       return;
     }
+
+    // ✅ NOVO: Se a atividade criada é do tipo "bug", move a HU para a coluna "bug".
+    if (act.activityType === "bug") {
+      const hu = userStories.find((h) => h.id === act.huId);
+      const bugCol = workflowColumns.find((c) => c.key === "bug");
+      if (hu && bugCol && hu.status !== "bug") {
+        await supabase.from("user_stories").update({ status: "bug" }).eq("id", act.huId);
+        toast.info(`🐛 HU movida para "${bugCol.label}"`);
+      }
+    }
+
     await refreshAll();
   };
 
