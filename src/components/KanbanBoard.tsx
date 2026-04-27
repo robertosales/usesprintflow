@@ -565,12 +565,14 @@ function HUCard({
   onToggleExpand,
   onImpediment,
   onResolveImpediment,
+  onAddTask,
 }: {
   hu: UserStory;
   expanded: boolean;
   onToggleExpand: () => void;
   onImpediment: () => void;
   onResolveImpediment: (impId: string) => void;
+  onAddTask: () => void;
 }) {
   const { activities, developers, epics } = useSprint();
   const huActivities = activities.filter((a) => a.huId === hu.id);
@@ -587,18 +589,26 @@ function HUCard({
   const estimated = hu.estimatedHours ?? 0;
   const progressPct = estimated > 0 ? Math.min(Math.round((totalHours / estimated) * 100), 100) : 0;
   const isOver = estimated > 0 && totalHours > estimated;
+  // ✅ NOVO: detecta se a HU está em estado "Bug" (visual destacado)
+  const isBugStatus = hu.status === "bug";
+  const hasOpenBug = huActivities.some((a) => a.activityType === "bug" && !a.isClosed);
 
   return (
-    // ✅ NOVO: sombra mais pronunciada + transição suave
+    // ✅ NOVO: card destacado em vermelho quando HU está em "Bug"
     <Card
       className={`
       shadow-sm hover:shadow-md transition-all duration-150 cursor-grab active:cursor-grabbing
-      ${overdue ? "border-destructive border-2 bg-destructive/5" : "border-border/60"}
+      ${isBugStatus ? "border-destructive border-2 bg-destructive/10" : overdue ? "border-destructive border-2 bg-destructive/5" : "border-border/60"}
       ${blocked ? "ring-2 ring-warning" : ""}
     `}
     >
       <CardContent className="p-3 space-y-2">
         <div className="flex items-center gap-1.5 flex-wrap">
+          {isBugStatus && (
+            <Badge className="text-[10px] px-1.5 gap-0.5 bg-destructive text-destructive-foreground">
+              <Bug className="h-2.5 w-2.5" /> BUG
+            </Badge>
+          )}
           <Badge variant="outline" className="font-mono text-[10px] px-1.5 font-bold">
             {hu.code}
           </Badge>
