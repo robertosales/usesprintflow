@@ -335,7 +335,23 @@ export function ApfGenerateTab() {
   };
 
   const runGeneration = async () => {
-    if (!canGenerate || !currentTeamId || !user) return;
+    if (!currentTeamId || !user) {
+      toast.error("Sessão inválida. Faça login novamente.");
+      return;
+    }
+    // Validação explícita por arquivo — evita a mensagem genérica anterior
+    // quando o usuário anexa baseline/modelo/HU em ordem diferente.
+    const missing: string[] = [];
+    if (!selectedSprintId) missing.push("Sprint");
+    if (!selectedTemplateId) missing.push("Template");
+    if (!baselineFile) missing.push("Baseline");
+    if (huFiles.length === 0) missing.push("HUs da Sprint");
+    if (!modelFile) missing.push("Modelo de Contagem");
+    if (!apiKeyOk) missing.push("API Key do provedor");
+    if (missing.length > 0) {
+      toast.error(`Preencha antes de gerar: ${missing.join(", ")}`);
+      return;
+    }
     setGenerating(true);
     try {
       const sprint = sprints.find((s) => s.id === selectedSprintId);
