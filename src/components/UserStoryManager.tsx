@@ -21,6 +21,7 @@ import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { SIZE_REFERENCES, getSizeByKey } from "@/lib/sizeReference";
+import { QuickActivityDialog } from "@/components/QuickActivityDialog";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
   baixa: { label: "Baixa", color: "bg-muted text-muted-foreground" },
@@ -66,6 +67,8 @@ export function UserStoryManager() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [sprintId, setSprintId] = useState<string>("");
   const [statusField, setStatusField] = useState<string>("");
+  // ✅ NOVO: HU alvo para criação rápida de tarefa
+  const [quickTaskHU, setQuickTaskHU] = useState<string | null>(null);
 
   // Filters
   const [searchFilter, setSearchFilter] = useState("");
@@ -820,6 +823,17 @@ export function UserStoryManager() {
 
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-primary"
+                        title="Adicionar tarefa"
+                        onClick={() => setQuickTaskHU(hu.id)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {canEdit && (
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(hu.id)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -854,6 +868,13 @@ export function UserStoryManager() {
         onOpenChange={(o) => !o && setDeleteTarget(null)}
         onConfirm={handleConfirmRemove}
       />
+      {quickTaskHU && (
+        <QuickActivityDialog
+          open={!!quickTaskHU}
+          onClose={() => setQuickTaskHU(null)}
+          huId={quickTaskHU}
+        />
+      )}
     </div>
   );
 }
