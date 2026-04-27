@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Columns3, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Columns3, AlertCircle, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { useDemandas } from "../hooks/useDemandas";
 import { useWorkflowSteps } from "../hooks/useWorkflowSteps";
@@ -64,7 +64,6 @@ const COL_COLORS: Record<string, string> = {
   cancelada: "bg-gray-200 text-gray-700 border-gray-300",
 };
 
-// ✅ Cores de borda superior para visual moderno por coluna
 const COL_ACCENT: Record<string, string> = {
   fila_atendimento: "border-t-slate-400",
   planejamento_elaboracao: "border-t-blue-400",
@@ -111,7 +110,16 @@ function isForwardMove(demanda: Demanda, targetStatus: string): boolean {
   return targetIdx > currentIdx;
 }
 
-export function SustentacaoBoard() {
+// ── Props ──────────────────────────────────────────────────────────────────
+interface SustentacaoBoardProps {
+  /**
+   * Callback chamado quando o usuário clica em "+" em uma coluna.
+   * Recebe a situação da coluna para que o pai possa pré-popular o form.
+   */
+  onCreateDemanda?: (situacaoInicial?: string) => void;
+}
+
+export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
   const { demandas, loading, error, moveTo, update, remove, reload } = useDemandas();
   const { steps: workflowSteps, loading: wfLoading } = useWorkflowSteps();
 
@@ -304,12 +312,11 @@ export function SustentacaoBoard() {
         />
       )}
 
-      {/* ── Board ── */}
-      {/* ✅ CORRIGIDO: altura baseada em conteúdo, não fixa */}
-      <div
-        className="flex gap-3 overflow-x-auto overflow-y-auto pb-4"
-        style={{ minHeight: 500, maxHeight: "calc(100vh - 280px)" }}
-      >
+      {/* ── Board ─────────────────────────────────────────────────────────────
+          Rolagem horizontal no board. Cada coluna tem scroll vertical próprio,
+          então o board em si não precisa de overflow-y.
+      ──────────────────────────────────────────────────────────────────────── */}
+      <div className="flex gap-3 pb-4 overflow-x-auto" style={{ minHeight: 120 }}>
         {columns.map((status) => {
           const items = filtered.filter((d) => d.situacao === status);
           const isCollapsed = collapsedColumns.has(status);
@@ -320,7 +327,9 @@ export function SustentacaoBoard() {
           return (
             <div
               key={status}
-              className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out ${isCollapsed ? "w-[44px]" : "w-[240px]"}`}
+              className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out ${
+                isCollapsed ? "w-[44px]" : "w-[240px]"
+              }`}
               onDragOver={(e) => {
                 e.preventDefault();
                 setDragOverColumn(status);
@@ -328,7 +337,6 @@ export function SustentacaoBoard() {
               onDragLeave={() => setDragOverColumn(null)}
               onDrop={(e) => handleDrop(e, status)}
             >
-              {/* ✅ CORRIGIDO: flex flex-col sem h-full fixo, cresce com conteúdo */}
               <div
                 className={`
                   flex flex-col rounded-xl border bg-muted/30 transition-all duration-200 shadow-sm
@@ -372,20 +380,34 @@ export function SustentacaoBoard() {
                           {resolveLabel(status)}
                         </span>
                       </div>
-                      <Badge className="text-[10px] h-5 min-w-[20px] flex items-center justify-center bg-background border shadow-sm text-foreground shrink-0">
-                        {items.length}
-                      </Badge>
+
+                      {/* Contador + botão "+" estilo GitLab */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => onCreateDemanda?.(status)}
+                          className="p-0.5 rounded hover:bg-muted transition-colors"
+                          title={`Nova demanda em "${resolveLabel(status)}"`}
+                        >
+                          <Plus className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+                        </button>
+                        <Badge className="text-[10px] h-5 min-w-[20px] flex items-center justify-center bg-background border shadow-sm text-foreground">
+                          {items.length}
+                        </Badge>
+                      </div>
                     </div>
 
-                    {/* ✅ CORRIGIDO: sem max-h fixo — a coluna cresce com os cards */}
-                    <div className="flex flex-col gap-2">
+                    {/* Lista de cards com scroll vertical interno por coluna */}
+                    <div
+                      className="flex flex-col gap-2 overflow-y-auto pr-0.5"
+                      style={{ maxHeight: "calc(100vh - 260px)" }}
+                    >
                       {items.length === 0 ? (
                         <div
                           className={`
-                          flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-xs text-muted-foreground
-                          transition-colors duration-150
-                          ${isDragOver ? "border-info/50 bg-info/5 text-info" : "border-border/50"}
-                        `}
+                            flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-xs text-muted-foreground
+                            transition-colors duration-150
+                            ${isDragOver ? "border-info/50 bg-info/5 text-info" : "border-border/50"}
+                          `}
                         >
                           {isDragOver ? "Soltar aqui" : "Vazio"}
                         </div>
