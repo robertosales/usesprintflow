@@ -38,9 +38,9 @@ interface FileField {
   icon: React.ElementType;
 }
 
-const BASELINE_FIELD: FileField = { label: "Baseline", description: "Planilha com colunas Item e Tipo", accept: ".xlsx", icon: FileSpreadsheet };
+const BASELINE_FIELD: FileField = { label: "Baseline", description: "Planilha com colunas Item e Tipo", accept: ".xlsx,.xls,.csv,.pdf", icon: FileSpreadsheet };
 const HU_FIELD: FileField = { label: "HUs da Sprint", description: "Lista de HUs (pode anexar várias)", accept: ".docx,.pdf,.md,.txt", icon: FileText };
-const MODEL_FIELD: FileField = { label: "Modelo de Contagem", description: "Template do documento de saída", accept: ".docx,.xlsx", icon: File };
+const MODEL_FIELD: FileField = { label: "Modelo de Contagem", description: "Template do documento de saída", accept: ".docx,.xlsx,.pdf", icon: File };
 
 type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
 type OutputFormat = "docx" | "markdown";
@@ -140,8 +140,24 @@ function applyAnswersToPrompt(
 }
 // ============================================================
 
-// Lê arquivo como texto bruto (UTF-8). Bons resultados para .md, .txt, .docx (XML interno) e .xlsx limitado.
+// Lê arquivo como texto bruto (UTF-8). Bons resultados para .md, .txt.
+// Para arquivos binários (.pdf, .xlsx, .docx) o conteúdo bruto é binário e
+// não deve ser enviado como texto — nesse caso devolvemos apenas metadados
+// para que a IA saiba que o anexo existe (evita estouro do payload JSON e
+// caracteres inválidos que quebravam a geração quando a baseline era .xlsx).
+const TEXT_EXTENSIONS = [".md", ".txt", ".csv", ".json", ".xml", ".html", ".htm"];
+
+function isTextFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  if (TEXT_EXTENSIONS.some((ext) => name.endsWith(ext))) return true;
+  if (file.type.startsWith("text/")) return true;
+  return false;
+}
+
 async function readFileAsText(file: File): Promise<string> {
+  if (!isTextFile(file)) {
+    return `[Arquivo binário anexado: ${file.name} — tipo ${file.type || "desconhecido"}, ${(file.size / 1024).toFixed(1)} KB. Considere o conteúdo deste arquivo como parte do contexto fornecido pelo usuário.]`;
+  }
   try {
     const text = await file.text();
     return text.length > 50000 ? text.slice(0, 50000) + "\n[... conteúdo truncado ...]" : text;
@@ -319,7 +335,23 @@ export function ApfGenerateTab() {
   };
 
   const runGeneration = async () => {
-    if (!canGenerate || !currentTeamId || !user) return;
+    if (!currentTeamId || !user) {
+      toast.error("Sessão inválida. Faça login novamente.");
+      return;
+    }
+    // Validação explícita por arquivo — evita a mensagem genérica anterior
+    // quando o usuário anexa baseline/modelo/HU em ordem diferente.
+    const missing: string[] = [];
+    if (!selectedSprintId) missing.push("Sprint");
+    if (!selectedTemplateId) missing.push("Template");
+    if (!baselineFile) missing.push("Baseline");
+    if (huFiles.length === 0) missing.push("HUs da Sprint");
+    if (!modelFile) missing.push("Modelo de Contagem");
+    if (!apiKeyOk) missing.push("API Key do provedor");
+    if (missing.length > 0) {
+      toast.error(`Preencha antes de gerar: ${missing.join(", ")}`);
+      return;
+    }
     setGenerating(true);
     try {
       const sprint = sprints.find((s) => s.id === selectedSprintId);
