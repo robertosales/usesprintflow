@@ -512,6 +512,17 @@ export function KanbanBoard() {
                                     toast.success("Impedimento resolvido!");
                                   }}
                                   onAddTask={() => setQuickTaskHU(hu.id)}
+                                  moveOptions={workflowColumns.map((c) => ({ key: c.key, label: c.label }))}
+                                  onMove={(targetKey) => {
+                                    if (!canMove) {
+                                      toast.error("Você não tem permissão para mover HUs.");
+                                      return;
+                                    }
+                                    if (hu.status === targetKey) return;
+                                    updateUserStoryStatus(hu.id, targetKey);
+                                    const col = workflowColumns.find((c) => c.key === targetKey);
+                                    toast.success(`HU movida para ${col?.label ?? targetKey}`);
+                                  }}
                                 />
                               </DraggableCard>
                             ))}
