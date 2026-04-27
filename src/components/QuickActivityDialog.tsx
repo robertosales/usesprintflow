@@ -83,15 +83,7 @@ export function QuickActivityDialog({ open, onClose, huId, defaultType = "task" 
         startDate,
       });
 
-      // Auto-move HU para coluna "bug" se a tarefa criada for do tipo bug
-      if (activityType === "bug" && hu) {
-        const bugCol = workflowColumns.find((c) => c.key === "bug");
-        if (bugCol && hu.status !== "bug") {
-          await updateUserStoryStatus(huId, "bug");
-          toast.info(`🐛 HU movida para "${bugCol.label}"`);
-        }
-      }
-
+      // Auto-move já é feito centralmente em SprintContext.addActivity.
       // Recupera o id da atividade recém-criada para permitir upload de prints
       if (activityType === "bug" && currentTeamId) {
         const { data: latest } = await supabase
