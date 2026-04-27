@@ -772,6 +772,67 @@ export function ApfGenerateTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Modal de pré-visualização do documento gerado ── */}
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5 text-primary" />
+              Pré-visualização do documento
+            </DialogTitle>
+            <DialogDescription>
+              Confira o conteúdo gerado pela IA antes de baixar. Você pode escolher o formato de download abaixo.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-md border border-border bg-background p-5 max-h-[60vh] overflow-y-auto">
+            {lastResult?.markdown ? (
+              <article
+                className="
+                  prose prose-sm max-w-none dark:prose-invert
+                  prose-headings:font-semibold
+                  prose-h1:text-xl prose-h1:mt-4 prose-h1:mb-3
+                  prose-h2:text-lg prose-h2:mt-4 prose-h2:mb-2
+                  prose-h3:text-base
+                  prose-p:text-sm prose-p:leading-relaxed
+                  prose-li:text-sm
+                  prose-table:text-xs prose-table:border prose-table:border-border
+                  prose-th:bg-[#1F4E78] prose-th:text-white prose-th:p-2 prose-th:text-left prose-th:font-semibold
+                  prose-td:p-2 prose-td:border prose-td:border-border
+                "
+              >
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{lastResult.markdown}</ReactMarkdown>
+              </article>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-8">Nenhum conteúdo para exibir.</p>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setShowPreview(false)}>
+              Fechar
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!lastResult}
+              onClick={() =>
+                lastResult && downloadMarkdown(lastResult.markdown, `${lastResult.baseFilename}.md`)
+              }
+            >
+              <Download className="h-4 w-4 mr-2" /> Baixar Markdown (.md)
+            </Button>
+            <Button
+              disabled={!lastResult}
+              onClick={() =>
+                lastResult && downloadDocxFromBase64(lastResult.base64, `${lastResult.baseFilename}.docx`)
+              }
+            >
+              <Download className="h-4 w-4 mr-2" /> Baixar Word (.docx)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
