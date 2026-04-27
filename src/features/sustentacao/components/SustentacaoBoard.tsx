@@ -272,27 +272,7 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
             ))}
           </SelectContent>
         </Select>
-        <Select value={filterTipo} onValueChange={setFilterTipo}>
-          <SelectTrigger className="w-[150px] h-8 text-xs bg-background">
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos tipos</SelectItem>
-            <SelectItem value="corretiva">Corretiva</SelectItem>
-            <SelectItem value="evolutiva">Evolutiva</SelectItem>
-            <SelectItem value="manutencao_corretiva">Manutenção Corretiva</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filterSla} onValueChange={setFilterSla}>
-          <SelectTrigger className="w-[110px] h-8 text-xs bg-background">
-            <SelectValue placeholder="SLA" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos SLA</SelectItem>
-            <SelectItem value="24x7">24x7</SelectItem>
-            <SelectItem value="padrao">Padrão</SelectItem>
-          </SelectContent>
-        </Select>
+
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-2 h-4 w-4 text-muted-foreground" />
           <Input
