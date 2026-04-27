@@ -300,10 +300,6 @@ export function KanbanBoard() {
     });
   };
 
-  const gridTemplate = workflowColumns
-    .map((col) => (collapsedColumns.has(col.key) ? "48px" : "minmax(260px, 1fr)"))
-    .join(" ");
-
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const sprintStories = useMemo(() => {
