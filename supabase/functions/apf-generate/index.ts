@@ -373,7 +373,7 @@ Deno.serve(async (req) => {
     const docxBase64 = await generateDocxBase64(aiText);
 
     return new Response(
-      JSON.stringify({ success: true, docxBase64, charCount: aiText.length }),
+      JSON.stringify({ success: true, docxBase64, markdown: aiText, charCount: aiText.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e: any) {

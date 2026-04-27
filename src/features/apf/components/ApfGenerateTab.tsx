@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FileSpreadsheet, FileText, File, Upload, X, Download, Loader2, Sparkles, KeyRound, Plus, HelpCircle } from "lucide-react";
+import { FileSpreadsheet, FileText, File, Upload, X, Download, Loader2, Sparkles, KeyRound, Plus, HelpCircle, Eye } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -17,6 +17,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprint } from "@/contexts/SprintContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,6 +43,7 @@ const HU_FIELD: FileField = { label: "HUs da Sprint", description: "Lista de HUs
 const MODEL_FIELD: FileField = { label: "Modelo de Contagem", description: "Template do documento de saída", accept: ".docx,.xlsx", icon: File };
 
 type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
+type OutputFormat = "docx" | "markdown";
 
 const PROVIDERS: { value: Provider; label: string; needsKey: boolean; placeholder: string }[] = [
   { value: "lovable", label: "Lovable AI (Gemini/GPT) — recomendado", needsKey: false, placeholder: "" },
@@ -164,6 +167,18 @@ function downloadDocxFromBase64(base64: string, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function downloadMarkdown(content: string, filename: string) {
+  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function FileUploadField({
   field,
   file,
@@ -229,8 +244,14 @@ export function ApfGenerateTab() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [provider, setProvider] = useState<Provider>("lovable");
   const [apiKey, setApiKey] = useState("");
-  // Cache do último DOCX gerado para download via histórico (in-memory por sessão)
-  const [lastDocx, setLastDocx] = useState<{ base64: string; filename: string } | null>(null);
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>("docx");
+  // Cache do último resultado gerado (in-memory por sessão) — usado pelo preview e pelo histórico
+  const [lastResult, setLastResult] = useState<{
+    base64: string;
+    markdown: string;
+    baseFilename: string; // sem extensão
+  } | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Perguntas interativas detectadas no prompt + modal de respostas
   const [questions, setQuestions] = useState<InteractiveQuestion[]>([]);
@@ -302,7 +323,8 @@ export function ApfGenerateTab() {
     setGenerating(true);
     try {
       const sprint = sprints.find((s) => s.id === selectedSprintId);
-      const filename = `APF_${(sprint?.name ?? "Sprint").replace(/\s+/g, "_")}_${Date.now()}.docx`;
+      const baseFilename = `APF_${(sprint?.name ?? "Sprint").replace(/\s+/g, "_")}_${Date.now()}`;
+      const filename = `${baseFilename}.${outputFormat === "docx" ? "docx" : "md"}`;
 
       // Lê todos os arquivos como texto para enviar como contexto (Baseline + várias HUs + Modelo)
       const allFiles: File[] = [baselineFile!, ...huFiles, modelFile!];
@@ -334,9 +356,13 @@ export function ApfGenerateTab() {
         throw new Error(data?.error ?? "A IA não retornou conteúdo");
       }
 
-      // Faz download imediato
-      downloadDocxFromBase64(data.docxBase64, filename);
-      setLastDocx({ base64: data.docxBase64, filename });
+      // Guarda resultado e abre o preview — o usuário decide quando baixar
+      setLastResult({
+        base64: data.docxBase64,
+        markdown: data.markdown ?? "",
+        baseFilename,
+      });
+      setShowPreview(true);
 
       await createGeneration({
         team_id: currentTeamId,
@@ -349,7 +375,7 @@ export function ApfGenerateTab() {
         output_filename: filename,
         status: "success",
       });
-      toast.success("Documento gerado e baixado com sucesso!");
+      toast.success("Documento gerado! Visualize e baixe no formato desejado.");
       // Refresh history
       const updated = await fetchGenerations(currentTeamId, selectedSprintId);
       setGenerations(updated);
@@ -453,6 +479,31 @@ export function ApfGenerateTab() {
                 ✅ Lovable AI já está configurado — sem necessidade de chave própria.
               </p>
             )}
+
+            <div className="space-y-1.5 pt-2 border-t border-border/60">
+              <Label className="text-xs">Formato de saída <span className="text-destructive">*</span></Label>
+              <RadioGroup
+                value={outputFormat}
+                onValueChange={(v) => setOutputFormat(v as OutputFormat)}
+                className="flex gap-4"
+              >
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <RadioGroupItem value="docx" id="fmt-docx" />
+                  <span className="text-sm flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5" /> Word (.docx)
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <RadioGroupItem value="markdown" id="fmt-md" />
+                  <span className="text-sm flex items-center gap-1.5">
+                    <File className="h-3.5 w-3.5" /> Markdown (.md)
+                  </span>
+                </label>
+              </RadioGroup>
+              <p className="text-[11px] text-muted-foreground">
+                Você poderá visualizar antes de baixar e escolher qualquer formato no preview.
+              </p>
+            </div>
           </CardContent>
         </Card>
 
@@ -548,7 +599,7 @@ export function ApfGenerateTab() {
           ) : questions.length > 0 && !allQuestionsAnswered ? (
             <><HelpCircle className="h-4 w-4 mr-2" /> Responder {questions.length} pergunta{questions.length > 1 ? "s" : ""} e gerar</>
           ) : (
-            "Gerar Documento DOCX"
+            <><Eye className="h-4 w-4 mr-2" /> Gerar e visualizar documento</>
           )}
         </Button>
 
@@ -586,16 +637,30 @@ export function ApfGenerateTab() {
                       <p className="text-[10px] text-muted-foreground">
                         {new Date(g.created_at).toLocaleString("pt-BR")}
                       </p>
-                      {g.status === "success" && lastDocx?.filename === g.output_filename && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs w-full mt-1"
-                          onClick={() => downloadDocxFromBase64(lastDocx.base64, lastDocx.filename)}
-                        >
-                          <Download className="h-3 w-3 mr-1" /> Baixar novamente
-                        </Button>
-                      )}
+                      {g.status === "success" &&
+                        lastResult &&
+                        g.output_filename.startsWith(lastResult.baseFilename) && (
+                          <div className="flex gap-1.5 mt-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs flex-1"
+                              onClick={() => setShowPreview(true)}
+                            >
+                              <Eye className="h-3 w-3 mr-1" /> Visualizar
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs flex-1"
+                              onClick={() =>
+                                downloadDocxFromBase64(lastResult.base64, `${lastResult.baseFilename}.docx`)
+                              }
+                            >
+                              <Download className="h-3 w-3 mr-1" /> DOCX
+                            </Button>
+                          </div>
+                        )}
                       {g.status === "error" && g.error_message && (
                         <p className="text-[10px] text-destructive">{g.error_message}</p>
                       )}
@@ -703,6 +768,67 @@ export function ApfGenerateTab() {
               ) : (
                 "Confirmar e gerar"
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal de pré-visualização do documento gerado ── */}
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5 text-primary" />
+              Pré-visualização do documento
+            </DialogTitle>
+            <DialogDescription>
+              Confira o conteúdo gerado pela IA antes de baixar. Você pode escolher o formato de download abaixo.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-md border border-border bg-background p-5 max-h-[60vh] overflow-y-auto">
+            {lastResult?.markdown ? (
+              <article
+                className="
+                  prose prose-sm max-w-none dark:prose-invert
+                  prose-headings:font-semibold
+                  prose-h1:text-xl prose-h1:mt-4 prose-h1:mb-3
+                  prose-h2:text-lg prose-h2:mt-4 prose-h2:mb-2
+                  prose-h3:text-base
+                  prose-p:text-sm prose-p:leading-relaxed
+                  prose-li:text-sm
+                  prose-table:text-xs prose-table:border prose-table:border-border
+                  prose-th:bg-[#1F4E78] prose-th:text-white prose-th:p-2 prose-th:text-left prose-th:font-semibold
+                  prose-td:p-2 prose-td:border prose-td:border-border
+                "
+              >
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{lastResult.markdown}</ReactMarkdown>
+              </article>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-8">Nenhum conteúdo para exibir.</p>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setShowPreview(false)}>
+              Fechar
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!lastResult}
+              onClick={() =>
+                lastResult && downloadMarkdown(lastResult.markdown, `${lastResult.baseFilename}.md`)
+              }
+            >
+              <Download className="h-4 w-4 mr-2" /> Baixar Markdown (.md)
+            </Button>
+            <Button
+              disabled={!lastResult}
+              onClick={() =>
+                lastResult && downloadDocxFromBase64(lastResult.base64, `${lastResult.baseFilename}.docx`)
+              }
+            >
+              <Download className="h-4 w-4 mr-2" /> Baixar Word (.docx)
             </Button>
           </DialogFooter>
         </DialogContent>
