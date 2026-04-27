@@ -599,7 +599,7 @@ export function ApfGenerateTab() {
           ) : questions.length > 0 && !allQuestionsAnswered ? (
             <><HelpCircle className="h-4 w-4 mr-2" /> Responder {questions.length} pergunta{questions.length > 1 ? "s" : ""} e gerar</>
           ) : (
-            "Gerar Documento DOCX"
+            <><Eye className="h-4 w-4 mr-2" /> Gerar e visualizar documento</>
           )}
         </Button>
 
