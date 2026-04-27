@@ -378,8 +378,18 @@ Deno.serve(async (req) => {
     );
   } catch (e: any) {
     console.error("apf-generate error:", e);
+    const raw = e?.message ?? "Erro desconhecido";
+    let friendly = raw;
+    if (/credit balance is too low/i.test(raw)) {
+      friendly =
+        "A conta Anthropic (Claude) associada à chave informada está sem créditos. Adicione créditos em https://console.anthropic.com/settings/billing ou selecione 'Lovable AI' como provedor.";
+    } else if (/invalid x-api-key|invalid api key|incorrect api key/i.test(raw)) {
+      friendly = "Chave de API inválida para o provedor selecionado. Verifique e tente novamente.";
+    } else if (/rate limit|429/i.test(raw)) {
+      friendly = "Limite de requisições atingido no provedor. Aguarde alguns segundos e tente novamente.";
+    }
     return new Response(
-      JSON.stringify({ error: e?.message ?? "Erro desconhecido" }),
+      JSON.stringify({ error: friendly, raw }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
