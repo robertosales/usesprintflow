@@ -48,7 +48,6 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-// ✅ NOVO: borda superior colorida por coluna (usa dotColor como referência)
 function getAccentBorder(dotColor: string): string {
   if (dotColor.includes("slate")) return "border-t-slate-400";
   if (dotColor.includes("blue")) return "border-t-blue-400";
@@ -67,7 +66,6 @@ function getAccentBorder(dotColor: string): string {
   return "border-t-primary";
 }
 
-// ✅ Padrão Sustentação: lista de cards sem container próprio (o pai já é o container)
 function DroppableColumn({
   id,
   children,
@@ -82,11 +80,11 @@ function DroppableColumn({
   const { setNodeRef, isOver: dndIsOver } = useDroppable({ id });
   const over = isOver || dndIsOver;
   return (
-    <div ref={setNodeRef} className="flex flex-col gap-2">
+    <div ref={setNodeRef} className="flex flex-col gap-3">
       {isEmpty ? (
         <div
           className={`
-            flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-xs
+            flex items-center justify-center h-20 rounded-lg border-2 border-dashed text-sm
             transition-colors duration-150
             ${over ? "border-primary/50 bg-primary/5 text-primary" : "border-border/50 text-muted-foreground"}
           `}
@@ -209,7 +207,6 @@ function BoardFilters({
   clearFilters: () => void;
 }) {
   return (
-    // ✅ NOVO: filtros agrupados em container visual (igual ao Sustentação)
     <div className="flex items-center gap-2 flex-wrap p-3 bg-muted/30 rounded-lg border border-border/60">
       <div className="relative flex-1 min-w-[180px] max-w-[280px]">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -274,9 +271,7 @@ export function KanbanBoard() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [expandedHU, setExpandedHU] = useState<string | null>(null);
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
-  // ✅ NOVO: rastreia coluna sendo hovereada no drag
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
-  // ✅ NOVO: HU alvo para criação rápida de tarefa
   const [quickTaskHU, setQuickTaskHU] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
@@ -365,7 +360,7 @@ export function KanbanBoard() {
 
   return (
     <div className="space-y-4">
-      {/* ── Cabeçalho (padrão Sustentação) ── */}
+      {/* ── Cabeçalho ── */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-lg font-semibold">Board — User Stories</h2>
@@ -382,7 +377,6 @@ export function KanbanBoard() {
 
       {/* ── Time + carga ── */}
       {activeSprint && developers.length > 0 && (
-        // ✅ NOVO: container visual para o time (consistência com filtros)
         <div className="flex items-start gap-3 flex-wrap p-3 bg-muted/20 rounded-lg border border-border/40">
           <span className="text-xs text-muted-foreground mt-2 shrink-0 font-medium">Time:</span>
           <TeamAvatarFilter
@@ -423,11 +417,8 @@ export function KanbanBoard() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          {/* ✅ Padrão Sustentação: flex com larguras fixas (240px) e altura limitada */}
-          <div
-            className="flex gap-3 overflow-x-auto overflow-y-auto pb-4"
-            style={{ minHeight: 500, maxHeight: "calc(100vh - 280px)" }}
-          >
+          {/* ── Board: rolagem horizontal, scroll vertical interno por coluna ── */}
+          <div className="flex gap-3 pb-4 overflow-x-auto" style={{ minHeight: 120 }}>
             {workflowColumns.map((col) => {
               const colHUs = sprintStories.filter((hu) => (hu.status || workflowColumns[0]?.key) === col.key);
               const isCollapsed = collapsedColumns.has(col.key);
@@ -438,16 +429,15 @@ export function KanbanBoard() {
                 <div
                   key={col.key}
                   className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out ${
-                    isCollapsed ? "w-[44px]" : "w-[240px]"
+                    isCollapsed ? "w-[56px]" : "w-[300px]"
                   }`}
                 >
-                  {/* Container único da coluna (header + corpo) — padrão Sustentação */}
                   <div
                     className={`
                       flex flex-col rounded-xl border bg-muted/30 transition-all duration-200 shadow-sm
                       border-t-2 ${accentBorder}
                       ${isDragOver ? "ring-2 ring-primary/40 bg-primary/5" : ""}
-                      ${isCollapsed ? "p-1 items-center" : "p-2"}
+                      ${isCollapsed ? "p-1 items-center" : "p-3"}
                     `}
                   >
                     {isCollapsed ? (
@@ -458,11 +448,11 @@ export function KanbanBoard() {
                         title={`Expandir: ${col.label}`}
                       >
                         <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <Badge className="text-[10px] h-5 min-w-5 flex items-center justify-center bg-primary/10 text-primary border-primary/20">
+                        <Badge className="text-[11px] h-5 min-w-5 flex items-center justify-center bg-primary/10 text-primary border-primary/20">
                           {colHUs.length}
                         </Badge>
                         <span
-                          className="text-[10px] font-semibold text-muted-foreground mt-1"
+                          className="text-[11px] font-semibold text-muted-foreground mt-1"
                           style={{ writingMode: "vertical-lr", textOrientation: "mixed", whiteSpace: "nowrap" }}
                         >
                           {col.label}
@@ -471,49 +461,52 @@ export function KanbanBoard() {
                     ) : (
                       /* ── Coluna expandida ── */
                       <>
-                        {/* Cabeçalho compacto da coluna */}
-                        <div className="flex items-center justify-between mb-2.5 px-0.5 gap-1">
-                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        {/* Cabeçalho da coluna */}
+                        <div className="flex items-center justify-between mb-3 px-0.5 gap-1">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
                             <button
                               onClick={() => toggleColumn(col.key)}
                               className="p-0.5 rounded hover:bg-muted transition-colors shrink-0"
                               title="Retrair coluna"
                             >
-                              <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
+                              <ChevronLeft className="h-4 w-4 text-muted-foreground" />
                             </button>
-                            <div className={`h-2 w-2 rounded-full shrink-0 ${col.dotColor}`} />
+                            <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${col.dotColor}`} />
                             <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border truncate ${col.colorClass}`}
+                              className={`text-xs font-bold px-2.5 py-1 rounded-full border truncate ${col.colorClass}`}
                             >
                               {col.label}
                             </span>
                           </div>
-                          <Badge className="text-[10px] h-5 min-w-[20px] flex items-center justify-center bg-background border shadow-sm text-foreground shrink-0">
+                          <Badge className="text-xs h-5 min-w-[22px] flex items-center justify-center bg-background border shadow-sm text-foreground shrink-0">
                             {colHUs.length}
                           </Badge>
                         </div>
 
-                        <DroppableColumn
-                          id={col.key}
-                          isEmpty={colHUs.length === 0}
-                          isOver={dragOverColumn === col.key}
-                        >
-                          {colHUs.map((hu) => (
-                            <DraggableCard key={hu.id} id={hu.id}>
-                              <HUCard
-                                hu={hu}
-                                expanded={expandedHU === hu.id}
-                                onToggleExpand={() => setExpandedHU(expandedHU === hu.id ? null : hu.id)}
-                                onImpediment={() => setImpedimentDialog(hu.id)}
-                                onResolveImpediment={(impId) => {
-                                  resolveImpediment(hu.id, impId);
-                                  toast.success("Impedimento resolvido!");
-                                }}
-                                onAddTask={() => setQuickTaskHU(hu.id)}
-                              />
-                            </DraggableCard>
-                          ))}
-                        </DroppableColumn>
+                        {/* Cards com scroll vertical interno */}
+                        <div className="overflow-y-auto pr-0.5" style={{ maxHeight: "calc(100vh - 320px)" }}>
+                          <DroppableColumn
+                            id={col.key}
+                            isEmpty={colHUs.length === 0}
+                            isOver={dragOverColumn === col.key}
+                          >
+                            {colHUs.map((hu) => (
+                              <DraggableCard key={hu.id} id={hu.id}>
+                                <HUCard
+                                  hu={hu}
+                                  expanded={expandedHU === hu.id}
+                                  onToggleExpand={() => setExpandedHU(expandedHU === hu.id ? null : hu.id)}
+                                  onImpediment={() => setImpedimentDialog(hu.id)}
+                                  onResolveImpediment={(impId) => {
+                                    resolveImpediment(hu.id, impId);
+                                    toast.success("Impedimento resolvido!");
+                                  }}
+                                  onAddTask={() => setQuickTaskHU(hu.id)}
+                                />
+                              </DraggableCard>
+                            ))}
+                          </DroppableColumn>
+                        </div>
                       </>
                     )}
                   </div>
@@ -545,11 +538,7 @@ export function KanbanBoard() {
 
       <ImpedimentDialog huId={impedimentDialog} open={!!impedimentDialog} onClose={() => setImpedimentDialog(null)} />
       {quickTaskHU && (
-        <QuickActivityDialog
-          open={!!quickTaskHU}
-          onClose={() => setQuickTaskHU(null)}
-          huId={quickTaskHU}
-        />
+        <QuickActivityDialog open={!!quickTaskHU} onClose={() => setQuickTaskHU(null)} huId={quickTaskHU} />
       )}
     </div>
   );
@@ -598,20 +587,19 @@ function HUCard({
   const estimated = hu.estimatedHours ?? 0;
   const progressPct = estimated > 0 ? Math.min(Math.round((totalHours / estimated) * 100), 100) : 0;
   const isOver = estimated > 0 && totalHours > estimated;
-  // ✅ NOVO: detecta se a HU está em estado "Bug" (visual destacado)
   const isBugStatus = hu.status === "bug";
   const hasOpenBug = huActivities.some((a) => a.activityType === "bug" && !a.isClosed);
 
   return (
-    // ✅ NOVO: card destacado em vermelho quando HU está em "Bug"
     <Card
       className={`
-      shadow-sm hover:shadow-md transition-all duration-150 cursor-grab active:cursor-grabbing
-      ${isBugStatus ? "border-destructive border-2 bg-destructive/10" : overdue ? "border-destructive border-2 bg-destructive/5" : "border-border/60"}
-      ${blocked ? "ring-2 ring-warning" : ""}
-    `}
+        shadow-sm hover:shadow-md transition-all duration-150 cursor-grab active:cursor-grabbing
+        ${isBugStatus ? "border-destructive border-2 bg-destructive/10" : overdue ? "border-destructive border-2 bg-destructive/5" : "border-border/60"}
+        ${blocked ? "ring-2 ring-warning" : ""}
+      `}
     >
-      <CardContent className="p-3 space-y-2">
+      <CardContent className="p-4 space-y-2.5">
+        {/* Badges de status */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {isBugStatus && (
             <Badge className="text-[10px] px-1.5 gap-0.5 bg-destructive text-destructive-foreground">
@@ -623,7 +611,7 @@ function HUCard({
           </Badge>
           {epic && (
             <Badge
-              className="text-[8px] px-1 gap-0.5"
+              className="text-[9px] px-1.5 gap-0.5"
               style={{ backgroundColor: epic.color + "22", color: epic.color }}
             >
               <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: epic.color }} />
@@ -644,37 +632,40 @@ function HUCard({
           )}
         </div>
 
-        <p className="text-sm font-medium leading-tight">{hu.title}</p>
+        {/* Título com fonte maior */}
+        <p className="text-sm font-semibold leading-snug">{hu.title}</p>
 
+        {/* Responsável */}
         {assignee && (
           <div className="flex items-center gap-1.5">
             <div
-              className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[9px] font-bold flex items-center justify-center shrink-0"
+              className="h-6 w-6 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0"
               title={assignee.name}
             >
               {getInitials(assignee.name)}
             </div>
-            <span className="text-[10px] text-muted-foreground truncate">{assignee.name}</span>
+            <span className="text-xs text-muted-foreground truncate">{assignee.name}</span>
           </div>
         )}
 
+        {/* Impedimentos ativos */}
         {activeImpediments.length > 0 && (
           <div className="space-y-1">
             {activeImpediments.slice(0, 2).map((imp) => (
               <div
                 key={imp.id}
-                className="flex items-start gap-1 text-[10px] bg-warning/10 rounded p-1.5 border border-warning/20"
+                className="flex items-start gap-1.5 text-[11px] bg-warning/10 rounded p-2 border border-warning/20"
               >
-                <ShieldAlert className="h-3 w-3 text-warning shrink-0 mt-0.5" />
-                <div className="flex-1 space-y-0.5">
+                <ShieldAlert className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
+                <div className="flex-1 space-y-1">
                   <span className="block line-clamp-1">{imp.reason}</span>
                   <div className="flex items-center gap-1 flex-wrap">
-                    <Badge className={`text-[8px] px-1 ${IMPEDIMENT_CRITICALITY_LABELS[imp.criticality].color}`}>
+                    <Badge className={`text-[9px] px-1.5 ${IMPEDIMENT_CRITICALITY_LABELS[imp.criticality].color}`}>
                       {IMPEDIMENT_CRITICALITY_LABELS[imp.criticality].label}
                     </Badge>
                     {imp.hasTicket && imp.ticketId && (
-                      <Badge variant="outline" className="text-[8px] px-1 gap-0.5">
-                        <Link2 className="h-2 w-2" />
+                      <Badge variant="outline" className="text-[9px] px-1.5 gap-0.5">
+                        <Link2 className="h-2.5 w-2.5" />
                         {imp.ticketId}
                       </Badge>
                     )}
@@ -683,52 +674,53 @@ function HUCard({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-5 w-5 text-success hover:bg-success/10"
+                  className="h-6 w-6 text-success hover:bg-success/10"
                   onClick={(e) => {
                     e.stopPropagation();
                     onResolveImpediment(imp.id);
                   }}
                 >
-                  <CheckCircle2 className="h-3 w-3" />
+                  <CheckCircle2 className="h-3.5 w-3.5" />
                 </Button>
               </div>
             ))}
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-1 border-t border-border/50">
-          <div className="flex items-center gap-2">
+        {/* Rodapé: tarefas + horas + avatares + ações */}
+        <div className="flex items-center justify-between pt-1.5 border-t border-border/50">
+          <div className="flex items-center gap-2.5">
             <button
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleExpand();
               }}
             >
-              {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               {huActivities.length} tarefa{huActivities.length !== 1 ? "s" : ""}
             </button>
             <span
-              className={`text-[11px] flex items-center gap-0.5 ${isOver ? "text-destructive font-semibold" : "text-muted-foreground"}`}
+              className={`text-xs flex items-center gap-1 ${isOver ? "text-destructive font-semibold" : "text-muted-foreground"}`}
               title={`${totalHours}h realizadas / ${estimated}h estimadas`}
             >
-              <Clock className="h-3 w-3" />
+              <Clock className="h-3.5 w-3.5" />
               {totalHours}h{estimated > 0 ? `/${estimated}h` : ""}
             </span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <div className="flex -space-x-1.5">
               {activityAssignees.slice(0, 3).map((dev) => (
                 <div
                   key={dev!.id}
-                  className="h-5 w-5 rounded-full bg-primary/10 border-2 border-card flex items-center justify-center text-[7px] font-bold text-primary"
+                  className="h-5 w-5 rounded-full bg-primary/10 border-2 border-card flex items-center justify-center text-[8px] font-bold text-primary"
                   title={dev!.name}
                 >
                   {getInitials(dev!.name)}
                 </div>
               ))}
               {activityAssignees.length > 3 && (
-                <div className="h-5 w-5 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[7px] font-bold text-muted-foreground">
+                <div className="h-5 w-5 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[8px] font-bold text-muted-foreground">
                   +{activityAssignees.length - 3}
                 </div>
               )}
@@ -736,32 +728,33 @@ function HUCard({
             <Button
               variant="ghost"
               size="icon"
-              className="h-5 w-5 text-primary hover:bg-primary/10"
+              className="h-6 w-6 text-primary hover:bg-primary/10"
               title="Adicionar tarefa"
               onClick={(e) => {
                 e.stopPropagation();
                 onAddTask();
               }}
             >
-              <Plus className="h-3 w-3" />
+              <Plus className="h-3.5 w-3.5" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="h-5 w-5 text-warning hover:bg-warning/10"
+              className="h-6 w-6 text-warning hover:bg-warning/10"
               title="Reportar Impedimento"
               onClick={(e) => {
                 e.stopPropagation();
                 onImpediment();
               }}
             >
-              <ShieldAlert className="h-3 w-3" />
+              <ShieldAlert className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>
 
+        {/* Barra de progresso */}
         {estimated > 0 && (
-          <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-500 ${isOver ? "bg-destructive" : progressPct > 80 ? "bg-warning" : "bg-success"}`}
               style={{ width: `${progressPct}%` }}
@@ -769,17 +762,18 @@ function HUCard({
           </div>
         )}
 
+        {/* Tarefas expandidas */}
         {expanded && huActivities.length > 0 && (
-          <div className="space-y-1 pt-1">
+          <div className="space-y-1.5 pt-1">
             {huActivities.map((act) => {
               const dev = developers.find((d) => d.id === act.assigneeId);
               return (
-                <div key={act.id} className="flex items-center gap-2 text-[11px] bg-muted/50 rounded px-2 py-1.5">
-                  <Badge variant="outline" className="text-[8px] px-1">
+                <div key={act.id} className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2.5 py-2">
+                  <Badge variant="outline" className="text-[9px] px-1.5">
                     {act.activityType === "bug" ? "🐛" : act.activityType === "architecture" ? "🏗️" : "📋"}
                   </Badge>
                   <span className="flex-1 truncate">{act.title}</span>
-                  <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary text-[7px] font-bold shrink-0">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-[8px] font-bold shrink-0">
                     {dev?.name ? getInitials(dev.name) : "?"}
                   </div>
                   <span className="text-muted-foreground shrink-0">{act.hours}h</span>
