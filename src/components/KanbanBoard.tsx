@@ -505,6 +505,7 @@ export function KanbanBoard() {
                                 resolveImpediment(hu.id, impId);
                                 toast.success("Impedimento resolvido!");
                               }}
+                              onAddTask={() => setQuickTaskHU(hu.id)}
                             />
                           </DraggableCard>
                         ))}
@@ -525,6 +526,7 @@ export function KanbanBoard() {
                   onToggleExpand={() => {}}
                   onImpediment={() => {}}
                   onResolveImpediment={() => {}}
+                  onAddTask={() => {}}
                 />
               </div>
             )}
@@ -533,6 +535,13 @@ export function KanbanBoard() {
       )}
 
       <ImpedimentDialog huId={impedimentDialog} open={!!impedimentDialog} onClose={() => setImpedimentDialog(null)} />
+      {quickTaskHU && (
+        <QuickActivityDialog
+          open={!!quickTaskHU}
+          onClose={() => setQuickTaskHU(null)}
+          huId={quickTaskHU}
+        />
+      )}
     </div>
   );
 }
