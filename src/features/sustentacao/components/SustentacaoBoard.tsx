@@ -328,7 +328,7 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
             <div
               key={status}
               className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out ${
-                isCollapsed ? "w-[44px]" : "w-[240px]"
+                isCollapsed ? "w-[56px]" : "w-[300px]"
               }`}
               onDragOver={(e) => {
                 e.preventDefault();
@@ -342,7 +342,7 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
                   flex flex-col rounded-xl border bg-muted/30 transition-all duration-200 shadow-sm
                   border-t-2 ${accentBorder}
                   ${isDragOver ? "ring-2 ring-info/40 bg-info/5" : ""}
-                  ${isCollapsed ? "p-1 items-center" : "p-2"}
+                  ${isCollapsed ? "p-1 items-center" : "p-3"}
                 `}
               >
                 {isCollapsed ? (
@@ -353,11 +353,11 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
                     title={`Expandir: ${resolveLabel(status)}`}
                   >
                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <Badge className="text-[10px] h-5 min-w-5 flex items-center justify-center bg-info/10 text-info border-info/20">
+                    <Badge className="text-[11px] h-5 min-w-5 flex items-center justify-center bg-info/10 text-info border-info/20">
                       {items.length}
                     </Badge>
                     <span
-                      className="text-[10px] font-semibold text-muted-foreground mt-1"
+                      className="text-[11px] font-semibold text-muted-foreground mt-1"
                       style={{ writingMode: "vertical-lr", textOrientation: "mixed", whiteSpace: "nowrap" }}
                     >
                       {resolveLabel(status)}
@@ -367,30 +367,30 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
                   /* ── Coluna expandida ── */
                   <>
                     {/* Cabeçalho da coluna */}
-                    <div className="flex items-center justify-between mb-2.5 px-0.5 gap-1">
-                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <div className="flex items-center justify-between mb-3 px-0.5 gap-1">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <button
                           onClick={() => toggleColumn(status)}
                           className="p-0.5 rounded hover:bg-muted transition-colors shrink-0"
                           title="Retrair coluna"
                         >
-                          <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
+                          <ChevronLeft className="h-4 w-4 text-muted-foreground" />
                         </button>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border truncate ${colColor}`}>
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border truncate ${colColor}`}>
                           {resolveLabel(status)}
                         </span>
                       </div>
 
                       {/* Contador + botão "+" estilo GitLab */}
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           onClick={() => onCreateDemanda?.(status)}
-                          className="p-0.5 rounded hover:bg-muted transition-colors"
+                          className="p-1 rounded hover:bg-muted transition-colors"
                           title={`Nova demanda em "${resolveLabel(status)}"`}
                         >
-                          <Plus className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+                          <Plus className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
                         </button>
-                        <Badge className="text-[10px] h-5 min-w-[20px] flex items-center justify-center bg-background border shadow-sm text-foreground">
+                        <Badge className="text-xs h-5 min-w-[22px] flex items-center justify-center bg-background border shadow-sm text-foreground">
                           {items.length}
                         </Badge>
                       </div>
@@ -398,13 +398,13 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
 
                     {/* Lista de cards com scroll vertical interno por coluna */}
                     <div
-                      className="flex flex-col gap-2 overflow-y-auto pr-0.5"
+                      className="flex flex-col gap-3 overflow-y-auto pr-0.5"
                       style={{ maxHeight: "calc(100vh - 260px)" }}
                     >
                       {items.length === 0 ? (
                         <div
                           className={`
-                            flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-xs text-muted-foreground
+                            flex items-center justify-center h-20 rounded-lg border-2 border-dashed text-sm text-muted-foreground
                             transition-colors duration-150
                             ${isDragOver ? "border-info/50 bg-info/5 text-info" : "border-border/50"}
                           `}
