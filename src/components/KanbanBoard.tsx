@@ -67,7 +67,7 @@ function getAccentBorder(dotColor: string): string {
   return "border-t-primary";
 }
 
-// ✅ MELHORADO: feedback visual de "isOver" passado como prop
+// ✅ Padrão Sustentação: lista de cards sem container próprio (o pai já é o container)
 function DroppableColumn({
   id,
   children,
@@ -82,19 +82,14 @@ function DroppableColumn({
   const { setNodeRef, isOver: dndIsOver } = useDroppable({ id });
   const over = isOver || dndIsOver;
   return (
-    <div
-      ref={setNodeRef}
-      className={`
-        rounded-b-xl border border-t-0 min-h-[120px] p-2 space-y-2 transition-all duration-150
-        ${over ? "bg-primary/5 border-primary/40 ring-1 ring-primary/20" : "bg-muted/30 border-border/60"}
-      `}
-    >
+    <div ref={setNodeRef} className="flex flex-col gap-2">
       {isEmpty ? (
         <div
           className={`
-          flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-xs transition-colors
-          ${over ? "border-primary/50 text-primary bg-primary/5" : "border-border/40 text-muted-foreground"}
-        `}
+            flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-xs
+            transition-colors duration-150
+            ${over ? "border-primary/50 bg-primary/5 text-primary" : "border-border/50 text-muted-foreground"}
+          `}
         >
           {over ? "Soltar aqui" : "Vazio"}
         </div>
@@ -305,10 +300,6 @@ export function KanbanBoard() {
     });
   };
 
-  const gridTemplate = workflowColumns
-    .map((col) => (collapsedColumns.has(col.key) ? "48px" : "minmax(260px, 1fr)"))
-    .join(" ");
-
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const sprintStories = useMemo(() => {
@@ -374,16 +365,19 @@ export function KanbanBoard() {
 
   return (
     <div className="space-y-4">
-      {/* ── Cabeçalho ── */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-bold tracking-tight">Board — User Stories</h2>
-          {activeSprint && (
-            <Badge variant="outline" className="text-xs font-mono">
-              {activeSprint.name} • {sprintStories.length} HUs
-            </Badge>
-          )}
+      {/* ── Cabeçalho (padrão Sustentação) ── */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-lg font-semibold">Board — User Stories</h2>
+          <p className="text-xs text-muted-foreground">
+            Clique no ícone do cabeçalho para retrair/expandir colunas. Arraste para mover HUs.
+          </p>
         </div>
+        {activeSprint && (
+          <Badge variant="outline" className="text-xs">
+            {activeSprint.name} • {sprintStories.length} HU{sprintStories.length !== 1 ? "s" : ""}
+          </Badge>
+        )}
       </div>
 
       {/* ── Time + carga ── */}
@@ -429,93 +423,108 @@ export function KanbanBoard() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
+          {/* ✅ Padrão Sustentação: flex com larguras fixas (240px) e altura limitada */}
           <div
-            className="grid gap-3 overflow-x-auto overflow-y-auto pb-4 scrollbar-thin items-start"
-            style={{ gridTemplateColumns: gridTemplate, maxHeight: "calc(100vh - 280px)" }}
+            className="flex gap-3 overflow-x-auto overflow-y-auto pb-4"
+            style={{ minHeight: 500, maxHeight: "calc(100vh - 280px)" }}
           >
             {workflowColumns.map((col) => {
               const colHUs = sprintStories.filter((hu) => (hu.status || workflowColumns[0]?.key) === col.key);
               const isCollapsed = collapsedColumns.has(col.key);
-              // ✅ NOVO: borda superior colorida derivada do dotColor da coluna
               const accentBorder = getAccentBorder(col.dotColor || "");
+              const isDragOver = dragOverColumn === col.key;
 
               return (
-                <div key={col.key} className="transition-all duration-300 ease-in-out overflow-hidden">
-                  {isCollapsed ? (
-                    // ── Coluna retraída ──
-                    <div
-                      className={`
-                        rounded-xl border-2 ${accentBorder} cursor-pointer shadow-sm
-                        ${col.colorClass} flex flex-col items-center gap-2 pt-3 pb-2 px-1
-                        min-h-[120px] hover:shadow-md transition-shadow
-                      `}
-                      onClick={() => toggleColumn(col.key)}
-                      title={`Expandir: ${col.label}`}
-                    >
-                      <ChevronRight className="h-4 w-4 shrink-0" />
-                      <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${col.dotColor}`} />
-                      <span className="text-xs font-bold bg-background/80 rounded-full h-5 min-w-5 flex items-center justify-center px-1.5 shadow-sm">
-                        {colHUs.length}
-                      </span>
-                      <span
-                        className="text-[11px] font-semibold uppercase tracking-wider mt-1"
-                        style={{ writingMode: "vertical-lr", textOrientation: "mixed", whiteSpace: "nowrap" }}
-                      >
-                        {col.label}
-                      </span>
-                    </div>
-                  ) : (
-                    // ── Coluna expandida ──
-                    <>
-                      {/* ✅ NOVO: cabeçalho com border-t-2 colorida + rounded-t-xl */}
+                <div
+                  key={col.key}
+                  className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out ${
+                    isCollapsed ? "w-[44px]" : "w-[240px]"
+                  }`}
+                >
+                  {/* Container único da coluna (header + corpo) — padrão Sustentação */}
+                  <div
+                    className={`
+                      flex flex-col rounded-xl border bg-muted/30 transition-all duration-200 shadow-sm
+                      border-t-2 ${accentBorder}
+                      ${isDragOver ? "ring-2 ring-primary/40 bg-primary/5" : ""}
+                      ${isCollapsed ? "p-1 items-center" : "p-2"}
+                    `}
+                  >
+                    {isCollapsed ? (
+                      /* ── Coluna retraída ── */
                       <div
-                        className={`
-                        rounded-t-xl px-3 py-2.5 shadow-sm
-                        ${col.colorClass} border border-b-0 border-t-2 ${accentBorder}
-                      `}
+                        className="flex flex-col items-center gap-2 cursor-pointer py-3"
+                        onClick={() => toggleColumn(col.key)}
+                        title={`Expandir: ${col.label}`}
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <Badge className="text-[10px] h-5 min-w-5 flex items-center justify-center bg-primary/10 text-primary border-primary/20">
+                          {colHUs.length}
+                        </Badge>
+                        <span
+                          className="text-[10px] font-semibold text-muted-foreground mt-1"
+                          style={{ writingMode: "vertical-lr", textOrientation: "mixed", whiteSpace: "nowrap" }}
+                        >
+                          {col.label}
+                        </span>
+                      </div>
+                    ) : (
+                      /* ── Coluna expandida ── */
+                      <>
+                        {/* Cabeçalho compacto da coluna */}
+                        <div className="flex items-center justify-between mb-2.5 px-0.5 gap-1">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
                             <button
                               onClick={() => toggleColumn(col.key)}
-                              className="p-0.5 rounded hover:bg-background/30 transition-colors shrink-0"
+                              className="p-0.5 rounded hover:bg-muted transition-colors shrink-0"
                               title="Retrair coluna"
                             >
-                              <ChevronLeft className="h-3.5 w-3.5" />
+                              <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
                             </button>
-                            <div className={`h-2.5 w-2.5 rounded-full ${col.dotColor}`} />
-                            <span className="text-xs font-semibold uppercase tracking-wider">{col.label}</span>
+                            <div className={`h-2 w-2 rounded-full shrink-0 ${col.dotColor}`} />
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border truncate ${col.colorClass}`}
+                            >
+                              {col.label}
+                            </span>
                           </div>
-                          {/* ✅ NOVO: badge do contador com fundo neutro (consistência) */}
-                          <span className="text-xs font-bold bg-background/80 rounded-full h-5 min-w-5 flex items-center justify-center px-1.5 shadow-sm">
+                          <Badge className="text-[10px] h-5 min-w-[20px] flex items-center justify-center bg-background border shadow-sm text-foreground shrink-0">
                             {colHUs.length}
-                          </span>
+                          </Badge>
                         </div>
-                      </div>
-                      {/* ✅ MELHORADO: DroppableColumn agora recebe isEmpty e isOver para o placeholder */}
-                      <DroppableColumn id={col.key} isEmpty={colHUs.length === 0} isOver={dragOverColumn === col.key}>
-                        {colHUs.map((hu) => (
-                          <DraggableCard key={hu.id} id={hu.id}>
-                            <HUCard
-                              hu={hu}
-                              expanded={expandedHU === hu.id}
-                              onToggleExpand={() => setExpandedHU(expandedHU === hu.id ? null : hu.id)}
-                              onImpediment={() => setImpedimentDialog(hu.id)}
-                              onResolveImpediment={(impId) => {
-                                resolveImpediment(hu.id, impId);
-                                toast.success("Impedimento resolvido!");
-                              }}
-                              onAddTask={() => setQuickTaskHU(hu.id)}
-                            />
-                          </DraggableCard>
-                        ))}
-                      </DroppableColumn>
-                    </>
-                  )}
+
+                        <DroppableColumn
+                          id={col.key}
+                          isEmpty={colHUs.length === 0}
+                          isOver={dragOverColumn === col.key}
+                        >
+                          {colHUs.map((hu) => (
+                            <DraggableCard key={hu.id} id={hu.id}>
+                              <HUCard
+                                hu={hu}
+                                expanded={expandedHU === hu.id}
+                                onToggleExpand={() => setExpandedHU(expandedHU === hu.id ? null : hu.id)}
+                                onImpediment={() => setImpedimentDialog(hu.id)}
+                                onResolveImpediment={(impId) => {
+                                  resolveImpediment(hu.id, impId);
+                                  toast.success("Impedimento resolvido!");
+                                }}
+                                onAddTask={() => setQuickTaskHU(hu.id)}
+                              />
+                            </DraggableCard>
+                          ))}
+                        </DroppableColumn>
+                      </>
+                    )}
+                  </div>
                 </div>
               );
             })}
           </div>
+
+          <p className="text-[10px] text-muted-foreground text-center pb-2">
+            Arraste os cards para alterar o status. As colunas seguem o fluxo de trabalho configurado para a Sala Ágil.
+          </p>
 
           <DragOverlay>
             {activeHU && (
