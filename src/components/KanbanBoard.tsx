@@ -369,16 +369,19 @@ export function KanbanBoard() {
 
   return (
     <div className="space-y-4">
-      {/* ── Cabeçalho ── */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-bold tracking-tight">Board — User Stories</h2>
-          {activeSprint && (
-            <Badge variant="outline" className="text-xs font-mono">
-              {activeSprint.name} • {sprintStories.length} HUs
-            </Badge>
-          )}
+      {/* ── Cabeçalho (padrão Sustentação) ── */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-lg font-semibold">Board — User Stories</h2>
+          <p className="text-xs text-muted-foreground">
+            Clique no ícone do cabeçalho para retrair/expandir colunas. Arraste para mover HUs.
+          </p>
         </div>
+        {activeSprint && (
+          <Badge variant="outline" className="text-xs">
+            {activeSprint.name} • {sprintStories.length} HU{sprintStories.length !== 1 ? "s" : ""}
+          </Badge>
+        )}
       </div>
 
       {/* ── Time + carga ── */}
