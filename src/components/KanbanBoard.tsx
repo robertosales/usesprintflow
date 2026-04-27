@@ -727,6 +727,18 @@ function HUCard({
             <Button
               variant="ghost"
               size="icon"
+              className="h-5 w-5 text-primary hover:bg-primary/10"
+              title="Adicionar tarefa"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddTask();
+              }}
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               className="h-5 w-5 text-warning hover:bg-warning/10"
               title="Reportar Impedimento"
               onClick={(e) => {
