@@ -481,6 +481,25 @@ export function SprintProvider({ children }: { children: ReactNode }) {
           }
         }
       }
+
+      // ✅ NOVO: ao fechar uma tarefa de bug, se a HU está na coluna "bug" e
+      // não há mais bugs abertos, move HU de volta para "em_teste".
+      if (act.activityType === "bug") {
+        const hu = userStories.find((h) => h.id === act.huId);
+        if (hu && hu.status === "bug") {
+          const remainingOpenBugs = huActs.filter(
+            (a) => a.id !== id && a.activityType === "bug" && !a.isClosed,
+          );
+          if (remainingOpenBugs.length === 0) {
+            const targetCol = workflowColumns.find((c) => c.key === "em_teste");
+            if (targetCol) {
+              await supabase.from("user_stories").update({ status: "em_teste" }).eq("id", act.huId);
+              toast.success(`✅ Bug resolvido! HU retornou para "${targetCol.label}"`);
+              await refreshAll();
+            }
+          }
+        }
+      }
     }
   };
 
