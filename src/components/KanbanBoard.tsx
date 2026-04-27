@@ -67,7 +67,7 @@ function getAccentBorder(dotColor: string): string {
   return "border-t-primary";
 }
 
-// ✅ MELHORADO: feedback visual de "isOver" passado como prop
+// ✅ Padrão Sustentação: lista de cards sem container próprio (o pai já é o container)
 function DroppableColumn({
   id,
   children,
@@ -82,19 +82,14 @@ function DroppableColumn({
   const { setNodeRef, isOver: dndIsOver } = useDroppable({ id });
   const over = isOver || dndIsOver;
   return (
-    <div
-      ref={setNodeRef}
-      className={`
-        rounded-b-xl border border-t-0 min-h-[120px] p-2 space-y-2 transition-all duration-150
-        ${over ? "bg-primary/5 border-primary/40 ring-1 ring-primary/20" : "bg-muted/30 border-border/60"}
-      `}
-    >
+    <div ref={setNodeRef} className="flex flex-col gap-2">
       {isEmpty ? (
         <div
           className={`
-          flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-xs transition-colors
-          ${over ? "border-primary/50 text-primary bg-primary/5" : "border-border/40 text-muted-foreground"}
-        `}
+            flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-xs
+            transition-colors duration-150
+            ${over ? "border-primary/50 bg-primary/5 text-primary" : "border-border/50 text-muted-foreground"}
+          `}
         >
           {over ? "Soltar aqui" : "Vazio"}
         </div>
