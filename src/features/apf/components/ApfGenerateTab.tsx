@@ -479,6 +479,31 @@ export function ApfGenerateTab() {
                 ✅ Lovable AI já está configurado — sem necessidade de chave própria.
               </p>
             )}
+
+            <div className="space-y-1.5 pt-2 border-t border-border/60">
+              <Label className="text-xs">Formato de saída <span className="text-destructive">*</span></Label>
+              <RadioGroup
+                value={outputFormat}
+                onValueChange={(v) => setOutputFormat(v as OutputFormat)}
+                className="flex gap-4"
+              >
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <RadioGroupItem value="docx" id="fmt-docx" />
+                  <span className="text-sm flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5" /> Word (.docx)
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <RadioGroupItem value="markdown" id="fmt-md" />
+                  <span className="text-sm flex items-center gap-1.5">
+                    <File className="h-3.5 w-3.5" /> Markdown (.md)
+                  </span>
+                </label>
+              </RadioGroup>
+              <p className="text-[11px] text-muted-foreground">
+                Você poderá visualizar antes de baixar e escolher qualquer formato no preview.
+              </p>
+            </div>
           </CardContent>
         </Card>
 
