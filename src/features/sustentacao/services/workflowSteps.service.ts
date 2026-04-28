@@ -1,32 +1,45 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export interface WorkflowStepRow {
-  id?: string;
-  team_id?: string;
-  key: string;
-  label: string;
+  id: string;
+  team_id: string;
+  nome: string;
+  cor: string;
   ordem: number;
+  ativo: boolean;
 }
 
-export async function fetchWorkflowSteps(): Promise<WorkflowStepRow[]> {
+/** Fetch all active steps globally (no team filter — workflow is shared). */
+export async function fetchActiveWorkflowSteps(): Promise<WorkflowStepRow[]> {
   const { data, error } = await supabase
     .from("sustentacao_workflow_steps" as any)
     .select("*")
+    .eq("ativo", true)
     .order("ordem");
   if (error) throw error;
   return (data ?? []) as unknown as WorkflowStepRow[];
 }
 
+/**
+ * Globally replace all workflow steps. Used by the workflow manager —
+ * deletes everything and inserts the new ordered list.
+ */
 export async function replaceWorkflowSteps(
   teamId: string,
-  steps: { key: string; label: string; ordem: number }[],
+  steps: { label: string; hex: string }[],
 ): Promise<void> {
   const { error: delErr } = await supabase
     .from("sustentacao_workflow_steps" as any)
     .delete()
     .neq("id", "00000000-0000-0000-0000-000000000000");
   if (delErr) throw delErr;
-  const rows = steps.map((s) => ({ ...s, team_id: teamId }));
+  const rows = steps.map((s, idx) => ({
+    team_id: teamId,
+    nome: s.label,
+    cor: s.hex,
+    ordem: idx,
+    ativo: true,
+  }));
   const { error: insErr } = await supabase
     .from("sustentacao_workflow_steps" as any)
     .insert(rows as any);
