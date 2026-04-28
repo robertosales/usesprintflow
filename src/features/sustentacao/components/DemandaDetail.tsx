@@ -50,9 +50,19 @@ import {
 import { getTipoLabel, getSLAStatusDemanda, TIPOS_DEMANDA_IMR } from "../types/imr";
 import { useTransitions, useHours } from "../hooks/useDemandas";
 import { useProjetos } from "../hooks/useProjetos";
+import { useFases } from "../hooks/useFases";
 import * as respSvc from "../services/responsaveis.service";
 import * as evidSvc from "../services/evidencias.service";
 import * as eventosSvc from "../services/eventos.service";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Settings2 } from "lucide-react";
 import type { DemandaResponsavel } from "../services/responsaveis.service";
 import type { DemandaEvidencia } from "../services/evidencias.service";
 
@@ -243,7 +253,13 @@ export function DemandaDetail({
   pendingMoveTarget,
 }: Props) {
   const demanda = rawDemanda as DemandaExt | null;
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
+  const { fases, create: createFase, remove: removeFase } = useFases();
+  const fasesMap = useMemo(() => {
+    const m: Record<string, string> = { ...FASE_LABELS };
+    fases.forEach((f) => { m[f.key] = f.label; });
+    return m;
+  }, [fases]);
   const { transitions, loading: tLoading, reload: reloadTransitions } = useTransitions(demanda?.id ?? null);
   const {
     hours,
@@ -276,7 +292,15 @@ export function DemandaDetail({
   const [showSuspensaoModal, setShowSuspensaoModal] = useState(false);
   const [showEncerramentoModal, setShowEncerramentoModal] = useState(false);
 
-  const [hourForm, setHourForm] = useState({ horas: "", fase: "em_execucao", descricao: "" });
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const [hourForm, setHourForm] = useState({
+    horas: "",
+    fase: "execucao",
+    descricao: "",
+    data: todayISO(),
+  });
+  const [showFasesManager, setShowFasesManager] = useState(false);
+  const [newFaseLabel, setNewFaseLabel] = useState("");
   const [deleteHourId, setDeleteHourId] = useState<string | null>(null);
 
   const [responsaveis, setResponsaveis] = useState<DemandaResponsavel[]>([]);
