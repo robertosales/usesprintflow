@@ -590,8 +590,16 @@ export function DemandaDetail({
   const handleAddHour = async () => {
     const h = parseFloat(hourForm.horas);
     if (!h || h <= 0) return;
-    await addHour({ horas: h, fase: hourForm.fase, descricao: hourForm.descricao });
-    setHourForm({ horas: "", fase: "em_execucao", descricao: "" });
+    const created_at = hourForm.data
+      ? new Date(hourForm.data + "T12:00:00").toISOString()
+      : undefined;
+    await addHour({
+      horas: h,
+      fase: hourForm.fase,
+      descricao: hourForm.descricao,
+      created_at,
+    });
+    setHourForm({ horas: "", fase: "execucao", descricao: "", data: todayISO() });
   };
 
   const handleSearch = async (q: string) => {
