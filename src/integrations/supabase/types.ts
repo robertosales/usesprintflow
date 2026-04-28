@@ -567,6 +567,36 @@ export type Database = {
           },
         ]
       }
+      demanda_fases: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          key: string
+          label: string
+          ordem: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          key: string
+          label: string
+          ordem?: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          key?: string
+          label?: string
+          ordem?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       demanda_hours: {
         Row: {
           created_at: string

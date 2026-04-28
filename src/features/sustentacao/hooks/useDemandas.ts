@@ -210,7 +210,7 @@ export function useHours(demandaId: string | null) {
     load();
   }, [load]);
 
-  const add = async (h: { horas: number; fase: string; descricao: string }) => {
+  const add = async (h: { horas: number; fase: string; descricao: string; created_at?: string }) => {
     if (!demandaId || !user) return;
     try {
       await svc.addHours({ demanda_id: demandaId, user_id: user.id, ...h });

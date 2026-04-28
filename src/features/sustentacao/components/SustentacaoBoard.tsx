@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Columns3, AlertCircle, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Search, Columns3, AlertCircle, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { useDemandas } from "../hooks/useDemandas";
 import { useWorkflowSteps } from "../hooks/useWorkflowSteps";
@@ -139,6 +139,8 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
   const [filterTipo, setFilterTipo] = useState("all");
   const [filterSla, setFilterSla] = useState("all");
   const [filterProjeto, setFilterProjeto] = useState("all");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [profilesMap, setProfilesMap] = useState<Map<string, string>>(new Map());
   const debouncedSearch = useDebounce(search, 300);
 
   useEffect(() => {
@@ -158,6 +160,49 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
       });
   }, [demandas]);
 
+  // Coleta todos os responsáveis (qualquer papel) das demandas exibidas
+  const teamMembers = useMemo(() => {
+    const ids = new Set<string>();
+    demandas.forEach((d: any) => {
+      ["responsavel_dev", "responsavel_requisitos", "responsavel_teste", "responsavel_arquiteto"].forEach((k) => {
+        if (d[k]) ids.add(d[k]);
+      });
+    });
+    return Array.from(ids);
+  }, [demandas]);
+
+  useEffect(() => {
+    const missing = teamMembers.filter((id) => !profilesMap.has(id));
+    if (missing.length === 0) return;
+    supabase
+      .from("profiles")
+      .select("user_id, display_name")
+      .in("user_id", missing)
+      .then(({ data }) => {
+        if (!data) return;
+        setProfilesMap((prev) => {
+          const next = new Map(prev);
+          data.forEach((p: any) => next.set(p.user_id, p.display_name));
+          return next;
+        });
+      });
+  }, [teamMembers]);
+
+  const getInitials = (name: string) =>
+    name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+
+  const memberCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    demandas.forEach((d: any) => {
+      const set = new Set<string>();
+      ["responsavel_dev", "responsavel_requisitos", "responsavel_teste", "responsavel_arquiteto"].forEach((k) => {
+        if (d[k]) set.add(d[k]);
+      });
+      set.forEach((id) => { counts[id] = (counts[id] || 0) + 1; });
+    });
+    return counts;
+  }, [demandas]);
+
   const projetos = useMemo(() => [...new Set(demandas.map((d) => d.projeto).filter(Boolean))], [demandas]);
 
   const filtered = useMemo(
@@ -172,9 +217,14 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
         if (filterTipo !== "all" && d.tipo !== filterTipo) return false;
         if (filterSla !== "all" && d.sla !== filterSla) return false;
         if (filterProjeto !== "all" && d.projeto !== filterProjeto) return false;
+        if (assigneeFilter !== "all") {
+          const da = d as any;
+          const ids = [da.responsavel_dev, da.responsavel_requisitos, da.responsavel_teste, da.responsavel_arquiteto];
+          if (!ids.includes(assigneeFilter)) return false;
+        }
         return true;
       }),
-    [demandas, debouncedSearch, filterTipo, filterSla, filterProjeto],
+    [demandas, debouncedSearch, filterTipo, filterSla, filterProjeto, assigneeFilter],
   );
 
   const columns = useMemo(() => {
@@ -307,6 +357,48 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
           />
         </div>
       </div>
+
+      {/* ── Time (filtro por responsável) ── */}
+      {teamMembers.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap p-3 bg-muted/20 rounded-lg border border-border/40">
+          <span className="text-xs text-muted-foreground shrink-0 font-medium">Time:</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {teamMembers.map((id) => {
+              const name = profilesMap.get(id) || "...";
+              const isActive = assigneeFilter === id;
+              const count = memberCounts[id] || 0;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setAssigneeFilter(isActive ? "all" : id)}
+                  title={`${name} — ${count} demanda${count !== 1 ? "s" : ""}`}
+                  className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-lg transition-all border
+                    ${isActive ? "bg-primary/10 border-primary shadow-sm scale-105" : "border-transparent hover:bg-muted hover:border-border"}`}
+                >
+                  <div
+                    className={`h-7 w-7 rounded-full text-[11px] font-bold flex items-center justify-center transition-all
+                    ${isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                  >
+                    {getInitials(name)}
+                  </div>
+                  <span className="text-[9px] font-medium leading-none text-muted-foreground">
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+            {assigneeFilter !== "all" && (
+              <button
+                onClick={() => setAssigneeFilter("all")}
+                className="h-6 w-6 rounded-full bg-muted/80 text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
+                title="Limpar filtro de responsável"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {demandas.length === 0 && !loading && (
         <EmptyState

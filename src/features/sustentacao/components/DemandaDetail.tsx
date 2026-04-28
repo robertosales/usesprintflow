@@ -50,9 +50,19 @@ import {
 import { getTipoLabel, getSLAStatusDemanda, TIPOS_DEMANDA_IMR } from "../types/imr";
 import { useTransitions, useHours } from "../hooks/useDemandas";
 import { useProjetos } from "../hooks/useProjetos";
+import { useFases } from "../hooks/useFases";
 import * as respSvc from "../services/responsaveis.service";
 import * as evidSvc from "../services/evidencias.service";
 import * as eventosSvc from "../services/eventos.service";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Settings2 } from "lucide-react";
 import type { DemandaResponsavel } from "../services/responsaveis.service";
 import type { DemandaEvidencia } from "../services/evidencias.service";
 
@@ -243,7 +253,13 @@ export function DemandaDetail({
   pendingMoveTarget,
 }: Props) {
   const demanda = rawDemanda as DemandaExt | null;
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
+  const { fases, create: createFase, remove: removeFase } = useFases();
+  const fasesMap = useMemo(() => {
+    const m: Record<string, string> = { ...FASE_LABELS };
+    fases.forEach((f) => { m[f.key] = f.label; });
+    return m;
+  }, [fases]);
   const { transitions, loading: tLoading, reload: reloadTransitions } = useTransitions(demanda?.id ?? null);
   const {
     hours,
@@ -276,7 +292,15 @@ export function DemandaDetail({
   const [showSuspensaoModal, setShowSuspensaoModal] = useState(false);
   const [showEncerramentoModal, setShowEncerramentoModal] = useState(false);
 
-  const [hourForm, setHourForm] = useState({ horas: "", fase: "em_execucao", descricao: "" });
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const [hourForm, setHourForm] = useState({
+    horas: "",
+    fase: "execucao",
+    descricao: "",
+    data: todayISO(),
+  });
+  const [showFasesManager, setShowFasesManager] = useState(false);
+  const [newFaseLabel, setNewFaseLabel] = useState("");
   const [deleteHourId, setDeleteHourId] = useState<string | null>(null);
 
   const [responsaveis, setResponsaveis] = useState<DemandaResponsavel[]>([]);
@@ -566,8 +590,16 @@ export function DemandaDetail({
   const handleAddHour = async () => {
     const h = parseFloat(hourForm.horas);
     if (!h || h <= 0) return;
-    await addHour({ horas: h, fase: hourForm.fase, descricao: hourForm.descricao });
-    setHourForm({ horas: "", fase: "em_execucao", descricao: "" });
+    const created_at = hourForm.data
+      ? new Date(hourForm.data + "T12:00:00").toISOString()
+      : undefined;
+    await addHour({
+      horas: h,
+      fase: hourForm.fase,
+      descricao: hourForm.descricao,
+      created_at,
+    });
+    setHourForm({ horas: "", fase: "execucao", descricao: "", data: todayISO() });
   };
 
   const handleSearch = async (q: string) => {
@@ -1270,10 +1302,34 @@ export function DemandaDetail({
                 </div>
                 <Card>
                   <CardHeader className="pb-2 pt-4 px-4">
-                    <CardTitle className="text-sm">Lançar Horas</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm">Lançar Horas</CardTitle>
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1.5 text-xs"
+                          onClick={() => setShowFasesManager(true)}
+                          title="Gerenciar fases"
+                        >
+                          <Settings2 className="h-3.5 w-3.5" />
+                          Gerenciar Fases
+                        </Button>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent className="px-4 pb-4">
                     <div className="flex flex-wrap gap-3 items-end">
+                      <div>
+                        <Label className="text-xs">Data</Label>
+                        <Input
+                          type="date"
+                          value={hourForm.data}
+                          max={todayISO()}
+                          onChange={(e) => setHourForm((p) => ({ ...p, data: e.target.value }))}
+                          className="w-40 mt-1"
+                        />
+                      </div>
                       <div>
                         <Label className="text-xs">Horas</Label>
                         <Input
@@ -1292,9 +1348,9 @@ export function DemandaDetail({
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {FASES.map((f) => (
-                              <SelectItem key={f} value={f}>
-                                {FASE_LABELS[f]}
+                            {fases.map((f) => (
+                              <SelectItem key={f.key} value={f.key}>
+                                {f.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -1335,7 +1391,7 @@ export function DemandaDetail({
                         {hours.map((h) => (
                           <tr key={h.id} className="hover:bg-muted/30 transition-colors">
                             <td className="px-3 py-2 text-xs">{new Date(h.created_at).toLocaleDateString("pt-BR")}</td>
-                            <td className="px-3 py-2 text-xs">{FASE_LABELS[h.fase] || h.fase}</td>
+                            <td className="px-3 py-2 text-xs">{fasesMap[h.fase] || h.fase}</td>
                             <td className="px-3 py-2 text-xs max-w-[200px] truncate">{h.descricao || "-"}</td>
                             <td className="px-3 py-2 text-xs">{profilesMap.get(h.user_id) || "..."}</td>
                             <td className="px-3 py-2 text-xs text-right font-mono font-medium">{h.horas}h</td>
@@ -1670,6 +1726,83 @@ export function DemandaDetail({
         onConfirm={handleRemoveEvidencia}
         onOpenChange={() => setDeleteEvidId(null)}
       />
+      <Dialog open={showFasesManager} onOpenChange={setShowFasesManager}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Gerenciar Fases</DialogTitle>
+            <DialogDescription>
+              Cadastre as fases utilizadas no lançamento de horas das demandas. Mudanças aparecem
+              em tempo real para todos os usuários.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Label className="text-xs">Nova fase</Label>
+                <Input
+                  value={newFaseLabel}
+                  onChange={(e) => setNewFaseLabel(e.target.value)}
+                  placeholder="Ex.: Reunião de Negócio"
+                  className="mt-1"
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  if (!newFaseLabel.trim()) return;
+                  try {
+                    await createFase(newFaseLabel.trim());
+                    setNewFaseLabel("");
+                    toast.success("Fase criada");
+                  } catch (e: any) {
+                    toast.error(e?.message?.includes("duplicate") ? "Fase já existe" : "Erro ao criar fase");
+                  }
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                Adicionar
+              </Button>
+            </div>
+            <div className="rounded-lg border max-h-[300px] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 sticky top-0">
+                  <tr>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Fase</th>
+                    <th className="px-3 py-2" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {fases.map((f) => (
+                    <tr key={f.id} className="hover:bg-muted/30">
+                      <td className="px-3 py-2 text-xs">{f.label}</td>
+                      <td className="px-3 py-2 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={async () => {
+                            try {
+                              await removeFase(f.id);
+                              toast.success("Fase removida");
+                            } catch {
+                              toast.error("Erro ao remover");
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFasesManager(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
