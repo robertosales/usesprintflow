@@ -60,3 +60,23 @@ export async function fetchEvidenciasByDemandaIds(
   });
   return map;
 }
+
+/**
+ * Returns a count of evidences keyed by `${demanda_id}:${fase}`.
+ * Used by the Sustentação board cache.
+ */
+export async function fetchEvidenceCountsByDemandaAndFase(
+  demandaIds: string[],
+): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {};
+  if (demandaIds.length === 0) return counts;
+  const { data } = await supabase
+    .from("demanda_evidencias" as any)
+    .select("demanda_id, fase")
+    .in("demanda_id", demandaIds);
+  (data ?? []).forEach((row: any) => {
+    const key = `${row.demanda_id}:${row.fase}`;
+    counts[key] = (counts[key] ?? 0) + 1;
+  });
+  return counts;
+}
