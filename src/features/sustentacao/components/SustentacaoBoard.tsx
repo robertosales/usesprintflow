@@ -401,14 +401,12 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
       </div>
 
       {/* ── Time (filtro por responsável) ── */}
-      {teamMembers.length > 0 && (
+      {assigneeOptions.length > 0 && (
         <div className="flex items-center gap-3 flex-wrap p-3 bg-muted/20 rounded-lg border border-border/40">
           <span className="text-xs text-muted-foreground shrink-0 font-medium">Time:</span>
           <div className="flex items-center gap-2 flex-wrap">
-            {teamMembers.map((id) => {
-              const name = profilesMap.get(id) || "Usuário";
+            {assigneeOptions.map(({ id, name, count, unassigned }) => {
               const isActive = assigneeFilter === id;
-              const count = memberCounts[id] || 0;
               return (
                 <button
                   key={id}
@@ -421,7 +419,7 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
                     className={`h-7 w-7 rounded-full text-[11px] font-bold flex items-center justify-center transition-all
                     ${isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
                   >
-                    {getInitials(name)}
+                    {unassigned ? "?" : getInitials(name)}
                   </div>
                   <span className="text-[9px] font-medium leading-none text-muted-foreground">
                     {count}
