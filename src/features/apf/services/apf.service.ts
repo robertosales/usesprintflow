@@ -134,3 +134,21 @@ export async function createGeneration(payload: {
   if (error) throw error;
   return data as ApfGeneration;
 }
+
+/**
+ * Invokes the `apf-generate` edge function. Encapsulates the Supabase call
+ * so UI components don't depend on the supabase client directly.
+ */
+export async function invokeApfGeneration(body: {
+  prompt: string;
+  provider: string;
+  apiKey?: string;
+  files: Array<{ name: string; content: string }>;
+}): Promise<{ docxBase64: string; markdown: string }> {
+  const { data, error } = await supabase.functions.invoke("apf-generate", { body });
+  if (error) throw new Error(error.message ?? "Erro ao chamar a IA");
+  if (!data?.success || !data?.docxBase64) {
+    throw new Error(data?.error ?? "A IA não retornou conteúdo");
+  }
+  return { docxBase64: data.docxBase64, markdown: data.markdown ?? "" };
+}
