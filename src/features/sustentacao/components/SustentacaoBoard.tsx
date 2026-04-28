@@ -174,22 +174,41 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
   useEffect(() => {
     const missing = teamMembers.filter((id) => !profilesMap.has(id));
     if (missing.length === 0) return;
-    supabase
-      .from("profiles")
-      .select("user_id, display_name")
-      .in("user_id", missing)
-      .then(({ data }) => {
-        if (!data) return;
-        setProfilesMap((prev) => {
-          const next = new Map(prev);
-          data.forEach((p: any) => next.set(p.user_id, p.display_name));
-          return next;
-        });
+    (async () => {
+      const next = new Map(profilesMap);
+      // 1) Profiles (display_name) — pode estar bloqueado por RLS para usuários de outros times
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("user_id, display_name")
+        .in("user_id", missing);
+      profs?.forEach((p: any) => {
+        if (p.display_name) next.set(p.user_id, p.display_name);
       });
+      // 2) Fallback: developers (name) — cobre IDs que não estão em profiles ou que o RLS escondeu
+      const stillMissing = missing.filter((id) => !next.has(id));
+      if (stillMissing.length > 0) {
+        const { data: devs } = await supabase
+          .from("developers")
+          .select("user_id, id, name")
+          .or(`user_id.in.(${stillMissing.join(",")}),id.in.(${stillMissing.join(",")})`);
+        devs?.forEach((d: any) => {
+          if (d.name) {
+            if (d.user_id) next.set(d.user_id, d.name);
+            if (d.id) next.set(d.id, d.name);
+          }
+        });
+      }
+      setProfilesMap(next);
+    })();
   }, [teamMembers]);
 
-  const getInitials = (name: string) =>
-    name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+  const getInitials = (name: string) => {
+    if (!name || name === "...") return "?";
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
 
   const memberCounts = useMemo(() => {
     const counts: Record<string, number> = {};
