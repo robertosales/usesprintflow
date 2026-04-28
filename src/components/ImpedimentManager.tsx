@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { createNotifications } from "@/features/notifications/services/notifications.service";
 import { Impediment, IMPEDIMENT_TYPE_LABELS, IMPEDIMENT_CRITICALITY_LABELS, ImpedimentType, ImpedimentCriticality, hasActiveImpediment } from "@/types/sprint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -68,7 +69,7 @@ export function ImpedimentDialog({ huId, open, onClose }: ImpedimentDialogProps)
           link_type: "user_story",
           link_id: huId,
         }));
-        await supabase.from("notifications").insert(notifications);
+        await createNotifications(notifications);
       }
     }
 
