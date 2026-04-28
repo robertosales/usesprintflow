@@ -56,7 +56,7 @@ export async function fetchTransitions(demandaId: string): Promise<DemandaTransi
   return (data || []) as unknown as DemandaTransition[];
 }
 
-export async function addHours(h: Omit<DemandaHour, "id" | "created_at">) {
+export async function addHours(h: Omit<DemandaHour, "id" | "created_at"> & { created_at?: string }) {
   const { error } = await supabase.from("demanda_hours" as any).insert(h as any);
   if (error) throw error;
 }
