@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,30 +5,24 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FileSpreadsheet, FileText, File, Upload, X, Download, Loader2, Sparkles, KeyRound, Plus, HelpCircle, Eye } from "lucide-react";
+import {
+  FileSpreadsheet, FileText, File, Upload, X, Download, Loader2,
+  Sparkles, KeyRound, Plus, HelpCircle, Eye,
+} from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useAuth } from "@/contexts/AuthContext";
-import { useSprint } from "@/contexts/SprintContext";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 import {
-  fetchActiveTemplates,
-  fetchGenerations,
-  createGeneration,
-  type ApfTemplate,
-  type ApfGeneration,
-} from "../services/apf.service";
+  useApfGenerate,
+  PROVIDERS,
+  YESNO_REGEX,
+  type Provider,
+  type OutputFormat,
+} from "../hooks/useApfGenerate";
 
 interface FileField {
   label: string;
@@ -41,130 +34,6 @@ interface FileField {
 const BASELINE_FIELD: FileField = { label: "Baseline", description: "Planilha com colunas Item e Tipo", accept: ".xlsx,.xls,.csv,.pdf", icon: FileSpreadsheet };
 const HU_FIELD: FileField = { label: "HUs da Sprint", description: "Lista de HUs (pode anexar várias)", accept: ".docx,.pdf,.md,.txt", icon: FileText };
 const MODEL_FIELD: FileField = { label: "Modelo de Contagem", description: "Template do documento de saída", accept: ".docx,.xlsx,.pdf", icon: File };
-
-type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
-type OutputFormat = "docx" | "markdown";
-
-const PROVIDERS: { value: Provider; label: string; needsKey: boolean; placeholder: string }[] = [
-  { value: "lovable", label: "Lovable AI (Gemini/GPT) — recomendado", needsKey: false, placeholder: "" },
-  { value: "openai", label: "OpenAI (GPT)", needsKey: true, placeholder: "sk-..." },
-  { value: "gemini", label: "Google Gemini", needsKey: true, placeholder: "AIza..." },
-  { value: "anthropic", label: "Anthropic (Claude)", needsKey: true, placeholder: "sk-ant-..." },
-  { value: "perplexity", label: "Perplexity", needsKey: true, placeholder: "pplx-..." },
-];
-
-// ============================================================
-// Detector de perguntas interativas dentro do prompt do template
-// Suporta os padrões mais comuns:
-//   - "Houve alteração em banco de dados? (Sim/Não)"
-//   - "Algo mudou? (S/N)"
-//   - "Pergunta? [Sim/Não]"
-// Também trata perguntas abertas marcadas como "{{pergunta: ...}}"
-// ============================================================
-type InteractiveQuestion = {
-  id: string;            // chave única (linha exata da pergunta)
-  text: string;          // texto da pergunta a exibir
-  kind: "yesno" | "open";
-  followUp?: string;     // ex.: "Informe o que foi alterado"
-};
-
-const YESNO_REGEX = /\(\s*(sim|s)\s*\/\s*(n[ãa]o|n)\s*\)|\[\s*(sim|s)\s*\/\s*(n[ãa]o|n)\s*\]/i;
-
-function detectInteractiveQuestions(prompt: string): InteractiveQuestion[] {
-  if (!prompt) return [];
-  const lines = prompt.split(/\r?\n/);
-  const questions: InteractiveQuestion[] = [];
-
-  lines.forEach((rawLine, idx) => {
-    const line = rawLine.trim();
-    if (!line) return;
-
-    // Padrão 1: pergunta Sim/Não
-    if (YESNO_REGEX.test(line) && /\?/.test(line)) {
-      // tenta capturar uma instrução de follow-up logo abaixo (ex.: "Se sim, descreva...")
-      const next = (lines[idx + 1] ?? "").trim();
-      const followUp =
-        /^se\s+sim/i.test(next) || /descreva|informe|detalhe/i.test(next)
-          ? next
-          : "Descreva o que foi alterado";
-      questions.push({
-        id: `q_${idx}`,
-        text: line,
-        kind: "yesno",
-        followUp,
-      });
-      return;
-    }
-
-    // Padrão 2: marcador {{pergunta: ...}}
-    const open = line.match(/\{\{\s*pergunta\s*:\s*(.+?)\s*\}\}/i);
-    if (open) {
-      questions.push({
-        id: `q_${idx}`,
-        text: open[1],
-        kind: "open",
-      });
-    }
-  });
-
-  return questions;
-}
-
-function applyAnswersToPrompt(
-  prompt: string,
-  questions: InteractiveQuestion[],
-  answers: Record<string, { value: string; detail?: string }>,
-): string {
-  if (questions.length === 0) return prompt;
-
-  const summary = questions
-    .map((q) => {
-      const a = answers[q.id];
-      if (!a) return `- ${q.text}\n  Resposta: (não informada)`;
-      if (q.kind === "yesno") {
-        const isYes = a.value === "sim";
-        const detail = isYes && a.detail?.trim() ? `\n  Detalhes: ${a.detail.trim()}` : "";
-        return `- ${q.text}\n  Resposta: ${isYes ? "Sim" : "Não"}${detail}`;
-      }
-      return `- ${q.text}\n  Resposta: ${a.value || "(vazio)"}`;
-    })
-    .join("\n");
-
-  // Remove as linhas das perguntas Sim/Não originais para evitar duplicidade no documento
-  const stripped = prompt
-    .split(/\r?\n/)
-    .filter((l) => !YESNO_REGEX.test(l) && !/\{\{\s*pergunta\s*:/i.test(l))
-    .join("\n");
-
-  return `${stripped}\n\n=== RESPOSTAS DO USUÁRIO ===\n${summary}\n=== FIM DAS RESPOSTAS ===\n\nIMPORTANTE: Use as respostas acima como dados confirmados pelo usuário. NÃO repita as perguntas no documento — incorpore as respostas naturalmente no conteúdo gerado.`;
-}
-// ============================================================
-
-// Lê arquivo como texto bruto (UTF-8). Bons resultados para .md, .txt.
-// Para arquivos binários (.pdf, .xlsx, .docx) o conteúdo bruto é binário e
-// não deve ser enviado como texto — nesse caso devolvemos apenas metadados
-// para que a IA saiba que o anexo existe (evita estouro do payload JSON e
-// caracteres inválidos que quebravam a geração quando a baseline era .xlsx).
-const TEXT_EXTENSIONS = [".md", ".txt", ".csv", ".json", ".xml", ".html", ".htm"];
-
-function isTextFile(file: File): boolean {
-  const name = file.name.toLowerCase();
-  if (TEXT_EXTENSIONS.some((ext) => name.endsWith(ext))) return true;
-  if (file.type.startsWith("text/")) return true;
-  return false;
-}
-
-async function readFileAsText(file: File): Promise<string> {
-  if (!isTextFile(file)) {
-    return `[Arquivo binário anexado: ${file.name} — tipo ${file.type || "desconhecido"}, ${(file.size / 1024).toFixed(1)} KB. Considere o conteúdo deste arquivo como parte do contexto fornecido pelo usuário.]`;
-  }
-  try {
-    const text = await file.text();
-    return text.length > 50000 ? text.slice(0, 50000) + "\n[... conteúdo truncado ...]" : text;
-  } catch {
-    return `[Não foi possível ler o conteúdo de ${file.name}]`;
-  }
-}
 
 function downloadDocxFromBase64(base64: string, filename: string) {
   const byteChars = atob(base64);
@@ -196,10 +65,7 @@ function downloadMarkdown(content: string, filename: string) {
 }
 
 function FileUploadField({
-  field,
-  file,
-  onSelect,
-  onRemove,
+  field, file, onSelect, onRemove,
 }: {
   field: FileField;
   file: File | null;
@@ -207,13 +73,11 @@ function FileUploadField({
   onRemove: () => void;
 }) {
   const Icon = field.icon;
-
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
     if (f) onSelect(f);
   };
-
   return (
     <div className="space-y-1.5">
       <Label className="text-xs font-medium">{field.label}</Label>
@@ -247,178 +111,25 @@ function FileUploadField({
 }
 
 export function ApfGenerateTab() {
-  const { currentTeamId, user } = useAuth();
-  const { sprints } = useSprint();
-  const [selectedSprintId, setSelectedSprintId] = useState("");
-  const [selectedTemplateId, setSelectedTemplateId] = useState("");
-  const [templates, setTemplates] = useState<ApfTemplate[]>([]);
-  const [baselineFile, setBaselineFile] = useState<File | null>(null);
-  const [huFiles, setHuFiles] = useState<File[]>([]);
-  const [modelFile, setModelFile] = useState<File | null>(null);
-  const [generating, setGenerating] = useState(false);
-  const [generations, setGenerations] = useState<(ApfGeneration & { template_name?: string })[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [provider, setProvider] = useState<Provider>("lovable");
-  const [apiKey, setApiKey] = useState("");
-  const [outputFormat, setOutputFormat] = useState<OutputFormat>("docx");
-  // Cache do último resultado gerado (in-memory por sessão) — usado pelo preview e pelo histórico
-  const [lastResult, setLastResult] = useState<{
-    base64: string;
-    markdown: string;
-    baseFilename: string; // sem extensão
-  } | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
-
-  // Perguntas interativas detectadas no prompt + modal de respostas
-  const [questions, setQuestions] = useState<InteractiveQuestion[]>([]);
-  const [answers, setAnswers] = useState<Record<string, { value: string; detail?: string }>>({});
-  const [showQuestions, setShowQuestions] = useState(false);
-
-  // Load templates
-  useEffect(() => {
-    if (!currentTeamId) return;
-    fetchActiveTemplates(currentTeamId).then(setTemplates).catch(() => {});
-  }, [currentTeamId]);
-
-  // Load history when sprint changes
-  useEffect(() => {
-    if (!currentTeamId || !selectedSprintId) {
-      setGenerations([]);
-      return;
-    }
-    setLoadingHistory(true);
-    fetchGenerations(currentTeamId, selectedSprintId)
-      .then(setGenerations)
-      .catch(() => {})
-      .finally(() => setLoadingHistory(false));
-  }, [currentTeamId, selectedSprintId]);
-
-  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
-
-  // Re-detecta perguntas sempre que o template mudar
-  useEffect(() => {
-    if (!selectedTemplate) {
-      setQuestions([]);
-      setAnswers({});
-      return;
-    }
-    const detected = detectInteractiveQuestions(selectedTemplate.prompt_content);
-    setQuestions(detected);
-    setAnswers({});
-  }, [selectedTemplateId]);
-
-  const providerCfg = PROVIDERS.find((p) => p.value === provider)!;
-  const apiKeyOk = !providerCfg.needsKey || apiKey.trim().length > 0;
-  const canGenerate =
-    !!selectedSprintId &&
-    !!selectedTemplateId &&
-    !!baselineFile &&
-    huFiles.length > 0 &&
-    !!modelFile &&
-    apiKeyOk;
-
-  const allQuestionsAnswered = questions.every((q) => {
-    const a = answers[q.id];
-    if (!a || !a.value) return false;
-    if (q.kind === "yesno" && a.value === "sim" && !a.detail?.trim()) return false;
-    return true;
-  });
-
-  // Quando o usuário clica em "Gerar": se houver perguntas, abre o modal antes
-  const handleGenerateClick = () => {
-    if (!canGenerate) return;
-    if (questions.length > 0 && !allQuestionsAnswered) {
-      setShowQuestions(true);
-      return;
-    }
-    void runGeneration();
-  };
-
-  const runGeneration = async () => {
-    if (!currentTeamId || !user) {
-      toast.error("Sessão inválida. Faça login novamente.");
-      return;
-    }
-    // Validação explícita por arquivo — evita a mensagem genérica anterior
-    // quando o usuário anexa baseline/modelo/HU em ordem diferente.
-    const missing: string[] = [];
-    if (!selectedSprintId) missing.push("Sprint");
-    if (!selectedTemplateId) missing.push("Template");
-    if (!baselineFile) missing.push("Baseline");
-    if (huFiles.length === 0) missing.push("HUs da Sprint");
-    if (!modelFile) missing.push("Modelo de Contagem");
-    if (!apiKeyOk) missing.push("API Key do provedor");
-    if (missing.length > 0) {
-      toast.error(`Preencha antes de gerar: ${missing.join(", ")}`);
-      return;
-    }
-    setGenerating(true);
-    try {
-      const sprint = sprints.find((s) => s.id === selectedSprintId);
-      const baseFilename = `APF_${(sprint?.name ?? "Sprint").replace(/\s+/g, "_")}_${Date.now()}`;
-      const filename = `${baseFilename}.${outputFormat === "docx" ? "docx" : "md"}`;
-
-      // Lê todos os arquivos como texto para enviar como contexto (Baseline + várias HUs + Modelo)
-      const allFiles: File[] = [baselineFile!, ...huFiles, modelFile!];
-      const filePayload = await Promise.all(
-        allFiles.map(async (f) => ({
-          name: f.name,
-          content: await readFileAsText(f),
-        })),
-      );
-
-      // Aplica as respostas das perguntas interativas ao prompt final
-      const finalPrompt = applyAnswersToPrompt(
-        selectedTemplate!.prompt_content,
-        questions,
-        answers,
-      );
-
-      const { data, error } = await supabase.functions.invoke("apf-generate", {
-        body: {
-          prompt: finalPrompt,
-          provider,
-          apiKey: providerCfg.needsKey ? apiKey.trim() : undefined,
-          files: filePayload,
-        },
-      });
-
-      if (error) throw new Error(error.message ?? "Erro ao chamar a IA");
-      if (!data?.success || !data?.docxBase64) {
-        throw new Error(data?.error ?? "A IA não retornou conteúdo");
-      }
-
-      // Guarda resultado e abre o preview — o usuário decide quando baixar
-      setLastResult({
-        base64: data.docxBase64,
-        markdown: data.markdown ?? "",
-        baseFilename,
-      });
-      setShowPreview(true);
-
-      await createGeneration({
-        team_id: currentTeamId,
-        template_id: selectedTemplateId,
-        sprint_id: selectedSprintId,
-        generated_by: user.id,
-        baseline_file: baselineFile!.name,
-        hu_file: huFiles.map((f) => f.name).join(", "),
-        model_file: modelFile!.name,
-        output_filename: filename,
-        status: "success",
-      });
-      toast.success("Documento gerado! Visualize e baixe no formato desejado.");
-      // Refresh history
-      const updated = await fetchGenerations(currentTeamId, selectedSprintId);
-      setGenerations(updated);
-    } catch (e: any) {
-      console.error("Erro ao gerar APF:", e);
-      toast.error(e?.message ?? "Erro ao gerar documento");
-    } finally {
-      setGenerating(false);
-      setShowQuestions(false);
-    }
-  };
+  const {
+    sprints,
+    selectedSprintId, setSelectedSprintId,
+    selectedTemplateId, setSelectedTemplateId,
+    templates, selectedTemplate,
+    baselineFile, setBaselineFile,
+    huFiles, setHuFiles,
+    modelFile, setModelFile,
+    provider, setProvider, providerCfg,
+    apiKey, setApiKey,
+    outputFormat, setOutputFormat,
+    generating, canGenerate,
+    handleGenerateClick, runGeneration,
+    generations, loadingHistory,
+    lastResult, showPreview, setShowPreview,
+    questions, answers, setAnswers,
+    showQuestions, setShowQuestions,
+    allQuestionsAnswered,
+  } = useApfGenerate();
 
   const statusBadge = (status: string) => {
     switch (status) {
@@ -551,7 +262,6 @@ export function ApfGenerateTab() {
               onRemove={() => setBaselineFile(null)}
             />
 
-            {/* HUs — múltiplos arquivos */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">
                 {HU_FIELD.label} <span className="text-muted-foreground">({huFiles.length} anexada{huFiles.length === 1 ? "" : "s"})</span>
@@ -671,7 +381,7 @@ export function ApfGenerateTab() {
                       </p>
                       {g.status === "success" &&
                         lastResult &&
-                        g.output_filename.startsWith(lastResult.baseFilename) && (
+                        g.output_filename?.startsWith(lastResult.baseFilename) && (
                           <div className="flex gap-1.5 mt-1">
                             <Button
                               variant="outline"
@@ -748,7 +458,7 @@ export function ApfGenerateTab() {
                     </RadioGroup>
 
                     {a?.value === "sim" && (
-                      <div className="space-y-1.5 pl-1 pt-1 border-l-2 border-primary/40 pl-3">
+                      <div className="space-y-1.5 pt-1 border-l-2 border-primary/40 pl-3">
                         <Label className="text-[11px] text-muted-foreground">
                           {q.followUp ?? "Descreva os detalhes"} <span className="text-destructive">*</span>
                         </Label>
@@ -768,7 +478,6 @@ export function ApfGenerateTab() {
                   </div>
                 );
               }
-              // Pergunta aberta
               return (
                 <div key={q.id} className="space-y-1.5">
                   <Label className="text-xs font-medium">{q.text}</Label>
@@ -805,7 +514,7 @@ export function ApfGenerateTab() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Modal de pré-visualização do documento gerado ── */}
+      {/* Modal de pré-visualização */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
