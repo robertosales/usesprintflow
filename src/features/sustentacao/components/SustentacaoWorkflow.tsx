@@ -8,7 +8,10 @@ import { toast } from "sonner";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { ALL_SITUACOES, SITUACAO_LABELS } from "../types/demanda";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  fetchActiveWorkflowSteps,
+  replaceWorkflowSteps,
+} from "../services/workflowSteps.service";
 
 interface SustentacaoStep {
   id?: string;
@@ -60,16 +63,11 @@ export function SustentacaoWorkflow() {
   const loadFromDb = useCallback(async () => {
     setLoadingDb(true);
     try {
-      const { data, error } = await supabase
-        .from("sustentacao_workflow_steps" as any)
-        .select("*")
-        .eq("ativo", true)
-        .order("ordem");
-      if (error) throw error;
-      if (data && (data as any[]).length > 0) {
+      const data = await fetchActiveWorkflowSteps();
+      if (data && data.length > 0) {
         // Deduplicate by nome
         const seen = new Set<string>();
-        const unique = (data as any[]).filter((d: any) => {
+        const unique = data.filter((d: any) => {
           const key = d.nome;
           if (seen.has(key)) return false;
           seen.add(key);
@@ -134,18 +132,10 @@ export function SustentacaoWorkflow() {
     if (!currentTeamId) return;
     setSaving(true);
     try {
-      // Delete ALL workflow steps (global cleanup)
-      await supabase.from("sustentacao_workflow_steps" as any).delete().neq("id", "00000000-0000-0000-0000-000000000000");
-      // Insert new steps with current team_id (required by schema)
-      const rows = draft.map((s, idx) => ({
-        team_id: currentTeamId,
-        nome: s.label,
-        cor: s.hex,
-        ordem: idx,
-        ativo: true,
-      }));
-      const { error } = await supabase.from("sustentacao_workflow_steps" as any).insert(rows as any);
-      if (error) throw error;
+      await replaceWorkflowSteps(
+        currentTeamId,
+        draft.map((s) => ({ label: s.label, hex: s.hex })),
+      );
       setHasChanges(false);
       toast.success("Fluxo de sustentação salvo com sucesso!");
       await loadFromDb();
@@ -159,12 +149,11 @@ export function SustentacaoWorkflow() {
     if (!currentTeamId) return;
     setSaving(true);
     try {
-      await supabase.from("sustentacao_workflow_steps" as any).delete().neq("id", "00000000-0000-0000-0000-000000000000");
       const defaults = buildDefaultSteps();
-      const rows = defaults.map((s, idx) => ({
-        team_id: currentTeamId, nome: s.label, cor: s.hex, ordem: idx, ativo: true,
-      }));
-      await supabase.from("sustentacao_workflow_steps" as any).insert(rows as any);
+      await replaceWorkflowSteps(
+        currentTeamId,
+        defaults.map((s) => ({ label: s.label, hex: s.hex })),
+      );
       setDraft(defaults);
       setHasChanges(false);
       toast.success("Padrão restaurado e salvo.");
