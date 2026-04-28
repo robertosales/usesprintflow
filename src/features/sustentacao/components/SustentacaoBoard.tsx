@@ -383,7 +383,7 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
           <span className="text-xs text-muted-foreground shrink-0 font-medium">Time:</span>
           <div className="flex items-center gap-2 flex-wrap">
             {teamMembers.map((id) => {
-              const name = profilesMap.get(id) || "...";
+              const name = profilesMap.get(id) || "Usuário";
               const isActive = assigneeFilter === id;
               const count = memberCounts[id] || 0;
               return (
