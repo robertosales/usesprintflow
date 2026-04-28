@@ -358,6 +358,48 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
         </div>
       </div>
 
+      {/* ── Time (filtro por responsável) ── */}
+      {teamMembers.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap p-3 bg-muted/20 rounded-lg border border-border/40">
+          <span className="text-xs text-muted-foreground shrink-0 font-medium">Time:</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {teamMembers.map((id) => {
+              const name = profilesMap.get(id) || "...";
+              const isActive = assigneeFilter === id;
+              const count = memberCounts[id] || 0;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setAssigneeFilter(isActive ? "all" : id)}
+                  title={`${name} — ${count} demanda${count !== 1 ? "s" : ""}`}
+                  className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-lg transition-all border
+                    ${isActive ? "bg-primary/10 border-primary shadow-sm scale-105" : "border-transparent hover:bg-muted hover:border-border"}`}
+                >
+                  <div
+                    className={`h-7 w-7 rounded-full text-[11px] font-bold flex items-center justify-center transition-all
+                    ${isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                  >
+                    {getInitials(name)}
+                  </div>
+                  <span className="text-[9px] font-medium leading-none text-muted-foreground">
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+            {assigneeFilter !== "all" && (
+              <button
+                onClick={() => setAssigneeFilter("all")}
+                className="h-6 w-6 rounded-full bg-muted/80 text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
+                title="Limpar filtro de responsável"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {demandas.length === 0 && !loading && (
         <EmptyState
           icon={Columns3}
