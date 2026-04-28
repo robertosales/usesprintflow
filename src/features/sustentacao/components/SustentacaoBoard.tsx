@@ -17,6 +17,7 @@ import {
   FLOW_PRINCIPAL,
   REQUIRES_JUSTIFICATIVA,
   isDemandaIniciada,
+  getResponsavelAtivo,
 } from "../types/demanda";
 import type { Demanda } from "../types/demanda";
 import { useDebounce } from "@/shared/hooks/useDebounce";
@@ -94,6 +95,13 @@ const COL_LABELS: Record<string, string> = {
   cancelada: "Cancelada",
 };
 
+const SEM_RESPONSAVEL = "__sem_responsavel__";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(value: string | null | undefined): value is string {
+  return Boolean(value && UUID_RE.test(value));
+}
+
 function resolveLabel(status: string): string {
   return COL_LABELS[status] || SITUACAO_LABELS[status] || status;
 }
@@ -160,19 +168,18 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
       });
   }, [demandas]);
 
-  // Coleta todos os responsáveis (qualquer papel) das demandas exibidas
+  // Coleta somente o responsável ativo/principal de cada demanda.
   const teamMembers = useMemo(() => {
-    const ids = new Set<string>();
-    demandas.forEach((d: any) => {
-      ["responsavel_dev", "responsavel_requisitos", "responsavel_teste", "responsavel_arquiteto"].forEach((k) => {
-        if (d[k]) ids.add(d[k]);
-      });
+    const keys = new Set<string>();
+    demandas.forEach((d) => {
+      const responsavel = getResponsavelAtivo(d);
+      if (responsavel) keys.add(responsavel);
     });
-    return Array.from(ids);
+    return Array.from(keys);
   }, [demandas]);
 
   useEffect(() => {
-    const missing = teamMembers.filter((id) => !profilesMap.has(id));
+    const missing = teamMembers.filter((id) => isUuid(id) && !profilesMap.has(id));
     if (missing.length === 0) return;
     (async () => {
       const next = new Map(profilesMap);
@@ -212,15 +219,32 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
 
   const memberCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    demandas.forEach((d: any) => {
-      const set = new Set<string>();
-      ["responsavel_dev", "responsavel_requisitos", "responsavel_teste", "responsavel_arquiteto"].forEach((k) => {
-        if (d[k]) set.add(d[k]);
-      });
-      set.forEach((id) => { counts[id] = (counts[id] || 0) + 1; });
+    demandas.forEach((d) => {
+      const responsavel = getResponsavelAtivo(d) || SEM_RESPONSAVEL;
+      counts[responsavel] = (counts[responsavel] || 0) + 1;
     });
     return counts;
   }, [demandas]);
+
+  const assigneeOptions = useMemo(() => {
+    const options = teamMembers.map((id) => ({
+      id,
+      name: profilesMap.get(id) || id,
+      count: memberCounts[id] || 0,
+      unassigned: false,
+    }));
+
+    if (memberCounts[SEM_RESPONSAVEL]) {
+      options.push({
+        id: SEM_RESPONSAVEL,
+        name: "Sem responsável",
+        count: memberCounts[SEM_RESPONSAVEL],
+        unassigned: true,
+      });
+    }
+
+    return options.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [teamMembers, profilesMap, memberCounts]);
 
   const projetos = useMemo(() => [...new Set(demandas.map((d) => d.projeto).filter(Boolean))], [demandas]);
 
@@ -237,9 +261,8 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
         if (filterSla !== "all" && d.sla !== filterSla) return false;
         if (filterProjeto !== "all" && d.projeto !== filterProjeto) return false;
         if (assigneeFilter !== "all") {
-          const da = d as any;
-          const ids = [da.responsavel_dev, da.responsavel_requisitos, da.responsavel_teste, da.responsavel_arquiteto];
-          if (!ids.includes(assigneeFilter)) return false;
+          const responsavel = getResponsavelAtivo(d) || SEM_RESPONSAVEL;
+          if (responsavel !== assigneeFilter) return false;
         }
         return true;
       }),
@@ -378,14 +401,12 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
       </div>
 
       {/* ── Time (filtro por responsável) ── */}
-      {teamMembers.length > 0 && (
+      {assigneeOptions.length > 0 && (
         <div className="flex items-center gap-3 flex-wrap p-3 bg-muted/20 rounded-lg border border-border/40">
           <span className="text-xs text-muted-foreground shrink-0 font-medium">Time:</span>
           <div className="flex items-center gap-2 flex-wrap">
-            {teamMembers.map((id) => {
-              const name = profilesMap.get(id) || "Usuário";
+            {assigneeOptions.map(({ id, name, count, unassigned }) => {
               const isActive = assigneeFilter === id;
-              const count = memberCounts[id] || 0;
               return (
                 <button
                   key={id}
@@ -398,7 +419,7 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
                     className={`h-7 w-7 rounded-full text-[11px] font-bold flex items-center justify-center transition-all
                     ${isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
                   >
-                    {getInitials(name)}
+                    {unassigned ? "?" : getInitials(name)}
                   </div>
                   <span className="text-[9px] font-medium leading-none text-muted-foreground">
                     {count}
