@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  fetchActivityComments,
+  fetchTeamMembersForMentions,
+  createComment,
+  updateComment,
+  deleteComment,
+  type CommentWithAuthor,
+} from "@/features/comments/services/comments.service";
+import { createNotifications } from "@/features/notifications/services/notifications.service";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,41 +42,13 @@ export function ActivityComments({ activityId, teamId }: { activityId: string; t
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const fetchComments = async () => {
-    const { data } = await supabase
-      .from("activity_comments")
-      .select("*")
-      .eq("activity_id", activityId)
-      .order("created_at", { ascending: true });
-
-    if (data) {
-      const userIds = [...new Set((data as any[]).map((c) => c.user_id))];
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, display_name")
-        .in("user_id", userIds);
-
-      const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p.display_name]));
-      setComments(
-        (data as any[]).map((c) => ({
-          ...c,
-          user_name: profileMap.get(c.user_id) || "Usuário",
-        }))
-      );
-    }
+    const list = await fetchActivityComments(activityId);
+    setComments(list);
   };
 
   const fetchTeamMembers = async () => {
-    const { data: members } = await supabase
-      .from("team_members")
-      .select("user_id")
-      .eq("team_id", teamId);
-    if (!members || members.length === 0) return;
-    const userIds = members.map((m: any) => m.user_id);
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("user_id, display_name")
-      .in("user_id", userIds);
-    setAllMembers((profiles || []).map((p: any) => ({ user_id: p.user_id, display_name: p.display_name })));
+    const members = await fetchTeamMembersForMentions(teamId);
+    setAllMembers(members);
   };
 
   useEffect(() => {
@@ -132,38 +112,38 @@ export function ActivityComments({ activityId, teamId }: { activityId: string; t
       link_type: "activity",
       link_id: activityId,
     }));
-    await supabase.from("notifications").insert(notifications);
+    await createNotifications(notifications);
   };
 
   const handleSubmit = async () => {
     if (!content.trim() || !user) return;
     setLoading(true);
-    const { error } = await supabase.from("activity_comments").insert({
-      activity_id: activityId,
-      team_id: teamId,
-      user_id: user.id,
-      content: content.trim(),
-    });
-    if (error) {
-      toast.error("Erro ao adicionar comentário");
-    } else {
+    try {
+      await createComment({
+        activity_id: activityId,
+        team_id: teamId,
+        user_id: user.id,
+        content: content.trim(),
+      });
       await createMentionNotifications(content.trim());
       setContent("");
       await fetchComments();
+    } catch {
+      toast.error("Erro ao adicionar comentário");
     }
     setLoading(false);
   };
 
   const handleUpdate = async (id: string) => {
     if (!editContent.trim()) return;
-    await supabase.from("activity_comments").update({ content: editContent.trim() }).eq("id", id);
+    await updateComment(id, editContent.trim());
     setEditId(null);
     setEditContent("");
     await fetchComments();
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from("activity_comments").delete().eq("id", id);
+    await deleteComment(id);
     await fetchComments();
     toast.info("Comentário removido");
   };

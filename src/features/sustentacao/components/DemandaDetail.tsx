@@ -55,6 +55,10 @@ import * as respSvc from "../services/responsaveis.service";
 import * as evidSvc from "../services/evidencias.service";
 import * as eventosSvc from "../services/eventos.service";
 import {
+  fetchProfileDisplayNameById,
+  fetchProfilesByUserIds,
+} from "../services/profiles.service";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -357,14 +361,7 @@ export function DemandaDetail({
       setDemandanteProfile(null);
       return;
     }
-    import("@/integrations/supabase/client").then(({ supabase }) => {
-      supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("id", demanda.demandante!)
-        .single()
-        .then(({ data }) => setDemandanteProfile((data as any)?.display_name || null));
-    });
+    fetchProfileDisplayNameById(demanda.demandante!).then(setDemandanteProfile);
   }, [demanda?.demandante]);
 
   useEffect(() => {
@@ -372,19 +369,13 @@ export function DemandaDetail({
     const ids = [...new Set(hours.map((h) => h.user_id))];
     const missing = ids.filter((id) => !profilesMap.has(id));
     if (missing.length === 0) return;
-    import("@/integrations/supabase/client").then(({ supabase }) => {
-      supabase
-        .from("profiles")
-        .select("user_id, display_name")
-        .in("user_id", missing)
-        .then(({ data }) => {
-          if (data)
-            setProfilesMap((prev) => {
-              const next = new Map(prev);
-              data.forEach((p) => next.set(p.user_id, p.display_name));
-              return next;
-            });
-        });
+    fetchProfilesByUserIds(missing).then((map) => {
+      if (map.size === 0) return;
+      setProfilesMap((prev) => {
+        const next = new Map(prev);
+        map.forEach((p, id) => next.set(id, p.display_name));
+        return next;
+      });
     });
   }, [hours]);
 

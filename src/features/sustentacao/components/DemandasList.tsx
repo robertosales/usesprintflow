@@ -23,7 +23,7 @@ import { DemandaForm } from "./DemandaForm";
 import { DemandaDetail } from "./DemandaDetail";
 import { SITUACAO_LABELS, SITUACAO_COLORS, isDemandaIniciada } from "../types/demanda";
 import type { Demanda } from "../types/demanda";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchResponsaveisWithPapelByDemandaIds } from "../services/profiles.service";
 import { cn } from "@/lib/utils";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -44,34 +44,7 @@ const PAGE_SIZE_OPTIONS = [20, 50, 100];
 
 // ─── Fetch responsáveis ───────────────────────────────────────────────────────
 
-async function fetchResponsaveisBatch(
-  demandaIds: string[],
-): Promise<Map<string, { papel: string; display_name: string }[]>> {
-  if (!demandaIds.length) return new Map();
-
-  const { data: respData, error } = await supabase
-    .from("demanda_responsaveis")
-    .select("demanda_id, papel, user_id")
-    .in("demanda_id", demandaIds);
-
-  if (error || !respData?.length) return new Map();
-
-  const userIds = [...new Set(respData.map((r: any) => r.user_id))];
-  const { data: profilesData } = await supabase.from("profiles").select("user_id, display_name").in("user_id", userIds);
-
-  const profilesMap = new Map<string, string>();
-  (profilesData || []).forEach((p: any) => profilesMap.set(p.user_id, p.display_name));
-
-  const map = new Map<string, { papel: string; display_name: string }[]>();
-  respData.forEach((r: any) => {
-    const nome = profilesMap.get(r.user_id);
-    if (!nome) return;
-    const lista = map.get(r.demanda_id) || [];
-    lista.push({ papel: r.papel, display_name: nome });
-    map.set(r.demanda_id, lista);
-  });
-  return map;
-}
+const fetchResponsaveisBatch = fetchResponsaveisWithPapelByDemandaIds;
 
 // ─── DemandasList ─────────────────────────────────────────────────────────────
 

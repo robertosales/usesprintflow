@@ -28,7 +28,7 @@ import {
   calcPrazoSolucao,
   isSolucaoDefinidaNaOS,
 } from "../types/imr";
-import { supabase } from "@/integrations/supabase/client";
+import { searchProfilesByName } from "../services/profiles.service";
 
 // Labels amigáveis para exibir a situação pré-selecionada no título do dialog
 const SITUACAO_LABELS: Record<string, string> = {
@@ -116,12 +116,8 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial }: Props)
       setDemandanteResults([]);
       return;
     }
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, user_id, display_name")
-      .ilike("display_name", `%${q}%`)
-      .limit(5);
-    setDemandanteResults((data || []) as any[]);
+    const results = await searchProfilesByName(q, 5);
+    setDemandanteResults(results as any[]);
   };
 
   const rhmError = touched.rhm && (!form.rhm.trim() || !/^\d+$/.test(form.rhm.trim()));

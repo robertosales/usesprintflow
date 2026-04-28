@@ -23,7 +23,11 @@ import type { Demanda } from "../types/demanda";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { EmptyState } from "@/shared/components/common/EmptyState";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  fetchProfilesByUserIds,
+  fetchDevelopersFallback,
+} from "../services/profiles.service";
+import { fetchEvidenceCountsByDemandaAndFase } from "../services/workflowSteps.service";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -154,18 +158,7 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
   useEffect(() => {
     if (demandas.length === 0) return;
     const ids = demandas.map((d) => d.id);
-    supabase
-      .from("demanda_evidencias" as any)
-      .select("demanda_id, fase")
-      .in("demanda_id", ids)
-      .then(({ data }) => {
-        const counts: Record<string, number> = {};
-        (data || []).forEach((row: any) => {
-          const key = `${row.demanda_id}:${row.fase}`;
-          counts[key] = (counts[key] || 0) + 1;
-        });
-        setEvidenceCache(counts);
-      });
+    fetchEvidenceCountsByDemandaAndFase(ids).then(setEvidenceCache);
   }, [demandas]);
 
   // Coleta somente o responsável ativo/principal de cada demanda.
@@ -183,27 +176,16 @@ export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
     if (missing.length === 0) return;
     (async () => {
       const next = new Map(profilesMap);
-      // 1) Profiles (display_name) — pode estar bloqueado por RLS para usuários de outros times
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("user_id, display_name")
-        .in("user_id", missing);
-      profs?.forEach((p: any) => {
-        if (p.display_name) next.set(p.user_id, p.display_name);
+      // 1) Profiles — pode estar bloqueado por RLS para usuários de outros times
+      const profMap = await fetchProfilesByUserIds(missing);
+      profMap.forEach((p, id) => {
+        if (p.display_name) next.set(id, p.display_name);
       });
-      // 2) Fallback: developers (name) — cobre IDs que não estão em profiles ou que o RLS escondeu
+      // 2) Fallback: developers — cobre IDs ocultos pelo RLS
       const stillMissing = missing.filter((id) => !next.has(id));
       if (stillMissing.length > 0) {
-        const { data: devs } = await supabase
-          .from("developers")
-          .select("user_id, id, name")
-          .or(`user_id.in.(${stillMissing.join(",")}),id.in.(${stillMissing.join(",")})`);
-        devs?.forEach((d: any) => {
-          if (d.name) {
-            if (d.user_id) next.set(d.user_id, d.name);
-            if (d.id) next.set(d.id, d.name);
-          }
-        });
+        const devMap = await fetchDevelopersFallback(stillMissing);
+        devMap.forEach((name, id) => next.set(id, name));
       }
       setProfilesMap(next);
     })();
