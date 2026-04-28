@@ -1726,6 +1726,83 @@ export function DemandaDetail({
         onConfirm={handleRemoveEvidencia}
         onOpenChange={() => setDeleteEvidId(null)}
       />
+      <Dialog open={showFasesManager} onOpenChange={setShowFasesManager}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Gerenciar Fases</DialogTitle>
+            <DialogDescription>
+              Cadastre as fases utilizadas no lançamento de horas das demandas. Mudanças aparecem
+              em tempo real para todos os usuários.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Label className="text-xs">Nova fase</Label>
+                <Input
+                  value={newFaseLabel}
+                  onChange={(e) => setNewFaseLabel(e.target.value)}
+                  placeholder="Ex.: Reunião de Negócio"
+                  className="mt-1"
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  if (!newFaseLabel.trim()) return;
+                  try {
+                    await createFase(newFaseLabel.trim());
+                    setNewFaseLabel("");
+                    toast.success("Fase criada");
+                  } catch (e: any) {
+                    toast.error(e?.message?.includes("duplicate") ? "Fase já existe" : "Erro ao criar fase");
+                  }
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                Adicionar
+              </Button>
+            </div>
+            <div className="rounded-lg border max-h-[300px] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 sticky top-0">
+                  <tr>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Fase</th>
+                    <th className="px-3 py-2" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {fases.map((f) => (
+                    <tr key={f.id} className="hover:bg-muted/30">
+                      <td className="px-3 py-2 text-xs">{f.label}</td>
+                      <td className="px-3 py-2 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={async () => {
+                            try {
+                              await removeFase(f.id);
+                              toast.success("Fase removida");
+                            } catch {
+                              toast.error("Erro ao remover");
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFasesManager(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
