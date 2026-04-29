@@ -1,7 +1,7 @@
 // src/features/sustentacao/components/reports/RelatorioProdutividade.tsx
 
-import { useState, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useMemo, useEffect } from "react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,26 +11,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useDemandas } from "../../hooks/useDemandas";
 import { useAllTransitions, useAllHours, useProfiles } from "../../hooks/useAllTransitions";
+import { useFases } from "../../hooks/useFases";
 import { ReportHeader, ReportLegend } from "./ReportHeader";
 import { ExportButton } from "@/components/dashboard/ExportButton";
 import { getReportConfig } from "../../utils/reportConfig";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect } from "react";
 import { ChevronDown, ChevronRight, ClipboardList, CheckCircle2, Clock, AlertTriangle, FileText } from "lucide-react";
 
 // ── hook local para demanda_responsaveis ──────────────────────────────────────
 
 function useDemandaResponsaveis() {
   const [responsaveis, setResponsaveis] = useState<Array<{ demanda_id: string; user_id: string; papel: string }>>([]);
-
   useEffect(() => {
     supabase
       .from("demanda_responsaveis")
       .select("demanda_id, user_id, papel")
       .then(({ data }) => setResponsaveis(data || []));
   }, []);
-
   return { responsaveis };
 }
 
@@ -44,39 +42,54 @@ function fmtDate(d?: string | null) {
 function today() {
   return new Date().toISOString().split("T")[0];
 }
-
 function daysAgo(n: number) {
   const d = new Date();
   d.setDate(d.getDate() - n);
   return d.toISOString().split("T")[0];
 }
 
+// ✅ Mapa de situações legíveis — sem underscores no relatório/export
 const SITUACAO_LABEL: Record<string, { label: string; cls: string }> = {
   concluido: { label: "Concluído", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
   resolvido: { label: "Resolvido", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  aceite_final: { label: "Aceite", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  em_andamento: { label: "Em andamento", cls: "bg-blue-100 text-blue-700 border-blue-200" },
-  em_analise: { label: "Em análise", cls: "bg-blue-100 text-blue-700 border-blue-200" },
-  em_execucao: { label: "Em execução", cls: "bg-blue-100 text-blue-700 border-blue-200" },
-  planejamento_ag_aprovacao: { label: "Ag. aprovação", cls: "bg-purple-100 text-purple-700 border-purple-200" },
-  planejamento_aprovada: { label: "Aprovada", cls: "bg-purple-100 text-purple-700 border-purple-200" },
+  aceite_final: { label: "Aceite Final", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  ag_aceite_final: { label: "Ag. Aceite Final", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  em_andamento: { label: "Em Andamento", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  em_analise: { label: "Em Análise", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  em_execucao: { label: "Em Execução", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  fila_atendimento: { label: "Fila Atendimento", cls: "bg-slate-100 text-slate-700 border-slate-200" },
+  planejamento_elaboracao: { label: "Em Elaboração", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  planejamento_ag_aprovacao: { label: "Ag. Aprovação", cls: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+  planejamento_aprovada: { label: "Aprovada p/ Exec", cls: "bg-violet-100 text-violet-700 border-violet-200" },
+  bloqueada: { label: "Bloqueada", cls: "bg-red-100 text-red-700 border-red-200" },
+  hom_ag_homologacao: { label: "Ag. Homologação", cls: "bg-cyan-100 text-cyan-700 border-cyan-200" },
+  hom_homologada: { label: "Homologada", cls: "bg-teal-100 text-teal-700 border-teal-200" },
+  fila_producao: { label: "Fila Produção", cls: "bg-orange-100 text-orange-700 border-orange-200" },
   aberto: { label: "Aberto", cls: "bg-orange-100 text-orange-700 border-orange-200" },
   nova: { label: "Nova", cls: "bg-orange-100 text-orange-700 border-orange-200" },
   cancelado: { label: "Cancelado", cls: "bg-gray-100 text-gray-500 border-gray-200" },
+  cancelada: { label: "Cancelada", cls: "bg-gray-100 text-gray-500 border-gray-200" },
   rejeitado: { label: "Rejeitado", cls: "bg-red-100 text-red-700 border-red-200" },
+  rejeitada: { label: "Rejeitada", cls: "bg-red-100 text-red-700 border-red-200" },
 };
+
+// ✅ Converte status snake_case em label legível (export/PDF)
+function situacaoLabel(s?: string | null) {
+  if (!s) return "—";
+  return SITUACAO_LABEL[s.toLowerCase()]?.label ?? s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 function SituacaoBadge({ situacao }: { situacao?: string | null }) {
   const s = SITUACAO_LABEL[situacao?.toLowerCase() ?? ""];
   return (
-    <Badge className={`text-[10px] ${s?.cls ?? "bg-muted text-muted-foreground"}`}>
-      {s?.label ?? situacao?.replace(/_/g, " ") ?? "—"}
+    <Badge className={`text-[10px] whitespace-nowrap ${s?.cls ?? "bg-muted text-muted-foreground"}`}>
+      {situacaoLabel(situacao)}
     </Badge>
   );
 }
 
 function isResolvido(s?: string | null) {
-  return ["concluido", "resolvido", "aceite_final"].includes(s?.toLowerCase() ?? "");
+  return ["concluido", "resolvido", "aceite_final", "ag_aceite_final"].includes(s?.toLowerCase() ?? "");
 }
 
 function rateColor(rate: number) {
@@ -96,15 +109,24 @@ function getInitials(nome: string) {
 
 // ── tipos internos ────────────────────────────────────────────────────────────
 
+interface HoraLancada {
+  id: string;
+  data: string;
+  fase: string;
+  descricao: string;
+  horas: number;
+}
+
 interface AtividadeRow {
   demandaId: string;
   rhm: string;
-  titulo: string;
+  projeto: string;
   situacao: string;
   dataInicio: string;
   dataFim: string;
   horasAnalista: number;
   outrosAnalistas: string[];
+  horasDetalhadas: HoraLancada[];
 }
 
 interface AnalistaGroup {
@@ -117,15 +139,120 @@ interface AnalistaGroup {
   taxaResolucao: number;
 }
 
-// ── componente ────────────────────────────────────────────────────────────────
+// ── sub-componente: linha RHM expansível ─────────────────────────────────────
+
+function AtividadeExpandivel({ atividade }: { atividade: AtividadeRow }) {
+  const [open, setOpen] = useState(false);
+  const temDetalhe = atividade.horasDetalhadas.length > 0;
+
+  return (
+    <>
+      <TableRow
+        className={`hover:bg-muted/20 ${temDetalhe ? "cursor-pointer select-none" : ""}`}
+        onClick={() => temDetalhe && setOpen((v) => !v)}
+      >
+        <TableCell className="text-xs font-mono pl-4 w-[90px]">
+          <div className="flex items-center gap-1">
+            {temDetalhe ? (
+              open ? (
+                <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+              ) : (
+                <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+              )
+            ) : (
+              <span className="w-3 inline-block" />
+            )}
+            {atividade.rhm}
+          </div>
+        </TableCell>
+        <TableCell className="text-xs max-w-[180px]">
+          <span className="line-clamp-2" title={atividade.projeto}>
+            {atividade.projeto}
+          </span>
+        </TableCell>
+        <TableCell className="text-xs">
+          <SituacaoBadge situacao={atividade.situacao} />
+        </TableCell>
+        <TableCell className="text-right text-xs tabular-nums">{atividade.dataInicio}</TableCell>
+        <TableCell className="text-right text-xs tabular-nums">{atividade.dataFim}</TableCell>
+        <TableCell className="text-right text-xs tabular-nums font-medium">
+          {atividade.horasAnalista > 0 ? `${atividade.horasAnalista.toFixed(1)}h` : "—"}
+        </TableCell>
+        <TableCell className="text-xs pr-4">
+          {atividade.outrosAnalistas.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {atividade.outrosAnalistas.map((n) => (
+                <Badge key={n} variant="secondary" className="text-[10px] font-normal">
+                  {n}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </TableCell>
+      </TableRow>
+
+      {/* ✅ Sub-tabela de horas detalhadas */}
+      {open && temDetalhe && (
+        <TableRow className="bg-muted/10 hover:bg-muted/10">
+          <TableCell colSpan={7} className="py-0 pl-10 pr-4">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b border-muted/40">
+                  <TableHead className="text-[10px] font-semibold text-muted-foreground py-1.5 w-[110px]">
+                    Data
+                  </TableHead>
+                  <TableHead className="text-[10px] font-semibold text-muted-foreground py-1.5 w-[160px]">
+                    Fase
+                  </TableHead>
+                  <TableHead className="text-[10px] font-semibold text-muted-foreground py-1.5">Descrição</TableHead>
+                  <TableHead className="text-[10px] font-semibold text-muted-foreground py-1.5 text-right w-[70px]">
+                    Horas
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {atividade.horasDetalhadas.map((h) => (
+                  <TableRow key={h.id} className="border-b border-muted/20 last:border-0">
+                    <TableCell className="text-[11px] py-1.5 tabular-nums">{h.data}</TableCell>
+                    <TableCell className="text-[11px] py-1.5">{h.fase}</TableCell>
+                    <TableCell className="text-[11px] py-1.5 max-w-[300px]">
+                      <span className="line-clamp-2">{h.descricao}</span>
+                    </TableCell>
+                    <TableCell className="text-[11px] py-1.5 text-right tabular-nums font-medium">
+                      {h.horas.toFixed(1)}h
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableCell>
+        </TableRow>
+      )}
+    </>
+  );
+}
+
+// ── componente principal ──────────────────────────────────────────────────────
 
 export function RelatorioProdutividade() {
   const { demandas } = useDemandas();
   const { transitions } = useAllTransitions();
   const { hours } = useAllHours();
   const profiles = useProfiles();
-  const { responsaveis } = useDemandaResponsaveis(); // ✅ tabela relacional
+  const { responsaveis } = useDemandaResponsaveis();
   const { teams } = useAuth();
+
+  // ✅ useFases — para resolver label da fase no detalhe de horas
+  const { fases } = useFases();
+  const fasesMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    fases.forEach((f) => {
+      m[f.key] = f.label;
+    });
+    return m;
+  }, [fases]);
 
   const [teamId, setTeamId] = useState("all");
   const [analista, setAnalista] = useState("all");
@@ -133,23 +260,22 @@ export function RelatorioProdutividade() {
   const [dataFim, setDataFim] = useState(today());
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
+  // ✅ Apenas times do módulo sustentacao
   const sustTeams = teams.filter((t) => t.module === "sustentacao");
 
   // ✅ Set de IDs com perfil válido — bloqueia UUIDs órfãos
   const profileIds = useMemo(() => new Set(profiles.map((p) => p.user_id)), [profiles]);
 
-  // mapa user_id → nome (apenas perfis válidos)
+  // mapa user_id → nome
   const nomeMap = useMemo(() => {
     const m = new Map<string, string>();
     profiles.forEach((p) => m.set(p.user_id, p.display_name || p.email || p.user_id.slice(0, 8)));
     return m;
   }, [profiles]);
 
-  // ✅ mapa demanda_id → Set<user_id> — inclui demanda_responsaveis
+  // ✅ mapa demanda_id → Set<user_id> (colunas diretas + tabela relacional)
   const responsaveisPorDemanda = useMemo(() => {
     const m = new Map<string, Set<string>>();
-
-    // 1. colunas diretas da tabela demandas
     demandas.forEach((d) => {
       const ids = new Set<string>();
       if (d.responsavel_dev) ids.add(d.responsavel_dev);
@@ -158,17 +284,14 @@ export function RelatorioProdutividade() {
       if (d.responsavel_arquiteto) ids.add(d.responsavel_arquiteto);
       m.set(d.id, ids);
     });
-
-    // 2. tabela relacional demanda_responsaveis
     responsaveis.forEach((r) => {
       if (!m.has(r.demanda_id)) m.set(r.demanda_id, new Set());
       m.get(r.demanda_id)!.add(r.user_id);
     });
-
     return m;
   }, [demandas, responsaveis]);
 
-  // mapa demanda_id → Map<user_id, horas>
+  // mapa demanda_id → Map<user_id, horas totais>
   const horasPorDemandaUser = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
     hours.forEach((h) => {
@@ -180,25 +303,46 @@ export function RelatorioProdutividade() {
     return m;
   }, [hours]);
 
-  // analistas do time — apenas com perfil válido
+  // ✅ mapa demanda_id::user_id → HoraLancada[] com campos corretos do banco
+  const horasDetalhadasMap = useMemo(() => {
+    const m = new Map<string, HoraLancada[]>();
+    hours.forEach((h) => {
+      if (!h.demanda_id || !h.user_id) return;
+      const key = `${h.demanda_id}::${h.user_id}`;
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push({
+        id: h.id || `${key}-${Math.random()}`,
+        // ✅ data vem de created_at (campo correto conforme useHours)
+        data: fmtDate(h.created_at),
+        // ✅ fase resolvida via fasesMap (tabela dinâmica do banco)
+        fase: fasesMap[h.fase] || h.fase || "—",
+        // ✅ descricao é o campo correto
+        descricao: h.descricao || "—",
+        horas: Number(h.horas ?? 0),
+      });
+    });
+    // Ordena por data mais recente primeiro
+    m.forEach((list) =>
+      list.sort(
+        (a, b) =>
+          new Date(b.data.split("/").reverse().join("-")).getTime() -
+          new Date(a.data.split("/").reverse().join("-")).getTime(),
+      ),
+    );
+    return m;
+  }, [hours, fasesMap]);
+
+  // Lista de analistas filtrada pelo time (apenas com perfil válido)
   const analistasList = useMemo(() => {
     const idSet = new Set<string>();
-    const demandasDoTime = demandas.filter((d) => teamId === "all" || d.team_id === teamId);
-
-    demandasDoTime.forEach((d) => {
-      // colunas diretas
-      if (d.responsavel_dev) idSet.add(d.responsavel_dev);
-      if (d.responsavel_requisitos) idSet.add(d.responsavel_requisitos);
-      if (d.responsavel_teste) idSet.add(d.responsavel_teste);
-      if (d.responsavel_arquiteto) idSet.add(d.responsavel_arquiteto);
-      // tabela relacional
-      responsaveisPorDemanda.get(d.id)?.forEach((uid) => idSet.add(uid));
-      // quem lançou horas
-      horasPorDemandaUser.get(d.id)?.forEach((_, uid) => idSet.add(uid));
-    });
-
+    demandas
+      .filter((d) => teamId === "all" || d.team_id === teamId)
+      .forEach((d) => {
+        responsaveisPorDemanda.get(d.id)?.forEach((uid) => idSet.add(uid));
+        horasPorDemandaUser.get(d.id)?.forEach((_, uid) => idSet.add(uid));
+      });
     return profiles
-      .filter((p) => idSet.has(p.user_id)) // ✅ apenas perfis válidos
+      .filter((p) => idSet.has(p.user_id))
       .map((p) => ({
         user_id: p.user_id,
         display_name: p.display_name || p.email || p.user_id.slice(0, 8),
@@ -206,7 +350,7 @@ export function RelatorioProdutividade() {
       .sort((a, b) => a.display_name.localeCompare(b.display_name));
   }, [demandas, responsaveisPorDemanda, horasPorDemandaUser, profiles, teamId]);
 
-  // demandas filtradas por período e time
+  // Demandas filtradas por período e time
   const demandasFiltradas = useMemo(() => {
     const inicio = new Date(dataInicio + "T00:00:00");
     const fim = new Date(dataFim + "T23:59:59");
@@ -217,22 +361,20 @@ export function RelatorioProdutividade() {
     });
   }, [demandas, teamId, dataInicio, dataFim]);
 
-  // agrupamento por analista → atividades
+  // Agrupamento por analista → atividades
   const grupos = useMemo(() => {
-    // ✅ Coleta todos os IDs: colunas + demanda_responsaveis + demanda_hours
     const todosIds = new Set<string>();
     demandasFiltradas.forEach((d) => {
       responsaveisPorDemanda.get(d.id)?.forEach((uid) => todosIds.add(uid));
       horasPorDemandaUser.get(d.id)?.forEach((_, uid) => todosIds.add(uid));
     });
 
-    // ✅ Filtra apenas IDs com perfil válido — remove órfãos
+    // ✅ Apenas IDs com perfil válido — bloqueia órfãos
     const ids = analista !== "all" ? [analista] : [...todosIds].filter((id) => profileIds.has(id));
 
     const result: AnalistaGroup[] = ids.map((userId) => {
       const atividades: AtividadeRow[] = demandasFiltradas
         .filter((d) => {
-          // ✅ verifica responsabilidade via mapa unificado (colunas + relacional)
           const eResponsavel = responsaveisPorDemanda.get(d.id)?.has(userId) ?? false;
           const lancouHora = horasPorDemandaUser.get(d.id)?.has(userId) ?? false;
           return eResponsavel || lancouHora;
@@ -240,7 +382,6 @@ export function RelatorioProdutividade() {
         .map((d) => {
           const horasAnalista = horasPorDemandaUser.get(d.id)?.get(userId) ?? 0;
 
-          // Outros analistas da mesma demanda (exceto o atual)
           const outrosIds = new Set<string>();
           responsaveisPorDemanda.get(d.id)?.forEach((uid) => {
             if (uid !== userId) outrosIds.add(uid);
@@ -249,24 +390,25 @@ export function RelatorioProdutividade() {
             if (uid !== userId) outrosIds.add(uid);
           });
 
-          // Data fim via aceite ou última transição de conclusão
           const conclusao = transitions
             .filter((t) => t.demanda_id === d.id)
             .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-            .find((t) => ["aceite_final", "concluido", "resolvido"].includes(t.to_status ?? ""));
+            .find((t) => ["aceite_final", "ag_aceite_final", "concluido", "resolvido"].includes(t.to_status ?? ""));
 
           return {
             demandaId: d.id,
             rhm: d.rhm || "—",
-            titulo: d.projeto || d.titulo || "—",
+            projeto: d.projeto || d.titulo || "—",
             situacao: d.situacao || "—",
             dataInicio: fmtDate(d.created_at),
             dataFim: fmtDate(d.aceite_data ?? conclusao?.created_at ?? null),
             horasAnalista,
-            // ✅ filtra órfãos nos "Outros Analistas"
+            // ✅ filtra órfãos em "Outros Analistas"
             outrosAnalistas: [...outrosIds]
               .filter((id) => profileIds.has(id))
               .map((id) => nomeMap.get(id) || id.slice(0, 8)),
+            // ✅ horas detalhadas para expansão da linha
+            horasDetalhadas: horasDetalhadasMap.get(`${d.id}::${userId}`) ?? [],
           };
         });
 
@@ -287,7 +429,16 @@ export function RelatorioProdutividade() {
     });
 
     return result.filter((g) => g.atividades.length > 0).sort((a, b) => b.resolvidos - a.resolvidos);
-  }, [demandasFiltradas, responsaveisPorDemanda, horasPorDemandaUser, transitions, nomeMap, analista, profileIds]);
+  }, [
+    demandasFiltradas,
+    responsaveisPorDemanda,
+    horasPorDemandaUser,
+    horasDetalhadasMap,
+    transitions,
+    nomeMap,
+    analista,
+    profileIds,
+  ]);
 
   // KPIs globais
   const kpis = useMemo(
@@ -302,32 +453,63 @@ export function RelatorioProdutividade() {
 
   const toggleGroup = (id: string) =>
     setOpenGroups((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
     });
-
   const expandAll = () => setOpenGroups(new Set(grupos.map((g) => g.userId)));
   const collapseAll = () => setOpenGroups(new Set());
 
   const reportCfg = getReportConfig("produtividade");
 
-  const getExportData = () => ({
-    title: `Relatório de Produtividade — ${fmtDate(dataInicio)} a ${fmtDate(dataFim)}`,
-    headers: ["Analista", "RHM", "Atividade", "Situação", "Data Início", "Data Fim", "Horas", "Outros Analistas"],
-    rows: grupos.flatMap((g) =>
-      g.atividades.map((a) => [
-        g.nome,
-        a.rhm,
-        a.titulo,
-        a.situacao,
-        a.dataInicio,
-        a.dataFim,
-        a.horasAnalista.toFixed(1),
-        a.outrosAnalistas.join(", ") || "—",
-      ]),
-    ),
-  });
+  // ✅ Export com situação legível + nome do analista em relatório individual
+  const getExportData = () => {
+    const isIndividual = analista !== "all";
+    const nomeAnalista = isIndividual ? nomeMap.get(analista) || analista : null;
+
+    return {
+      title: isIndividual
+        ? `Produtividade — ${nomeAnalista} | ${fmtDate(dataInicio)} a ${fmtDate(dataFim)}`
+        : `Relatório de Produtividade — ${fmtDate(dataInicio)} a ${fmtDate(dataFim)}`,
+      analista: nomeAnalista,
+      headers: [
+        ...(isIndividual ? [] : ["Analista"]),
+        "RHM",
+        "Projeto",
+        "Situação",
+        "Data Início",
+        "Data Fim",
+        "Horas",
+        "Outros Analistas",
+      ],
+      rows: grupos.flatMap((g) =>
+        g.atividades.flatMap((a) => {
+          const linhaResumo = [
+            ...(isIndividual ? [] : [g.nome]),
+            a.rhm,
+            a.projeto,
+            situacaoLabel(a.situacao), // ✅ label legível
+            a.dataInicio,
+            a.dataFim,
+            a.horasAnalista.toFixed(1),
+            a.outrosAnalistas.join(", ") || "—",
+          ];
+          // Detalhe das horas no export (indentado)
+          const linhasDetalhe = a.horasDetalhadas.map((h) => [
+            ...(isIndividual ? [] : [""]),
+            "",
+            "",
+            `  ↳ ${h.fase}`,
+            h.data,
+            "",
+            h.horas.toFixed(1),
+            h.descricao,
+          ]);
+          return [linhaResumo, ...linhasDetalhe];
+        }),
+      ),
+    };
+  };
 
   return (
     <div className="space-y-5">
@@ -343,10 +525,14 @@ export function RelatorioProdutividade() {
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
             Produtividade por Analista
+            {/* ✅ Nome do analista no título quando filtro individual */}
+            {analista !== "all" && (
+              <Badge variant="secondary" className="ml-1 text-xs font-normal">
+                {nomeMap.get(analista) || analista}
+              </Badge>
+            )}
           </h2>
-          <p className="text-sm text-muted-foreground">
-            Atividades individuais com RHM, situação e datas — uma atividade pode ter múltiplos analistas
-          </p>
+          <p className="text-sm text-muted-foreground">Clique na linha do RHM para ver o detalhe das horas lançadas</p>
         </div>
         <ExportButton getData={getExportData} />
       </div>
@@ -355,6 +541,7 @@ export function RelatorioProdutividade() {
       <Card>
         <CardContent className="pt-4 pb-3">
           <div className="flex flex-wrap gap-4 items-end">
+            {/* ✅ Filtro de time funcionando */}
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Time</Label>
               <Select
@@ -364,7 +551,7 @@ export function RelatorioProdutividade() {
                   setAnalista("all");
                 }}
               >
-                <SelectTrigger className="w-[160px] h-8 text-xs">
+                <SelectTrigger className="w-[180px] h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -378,10 +565,11 @@ export function RelatorioProdutividade() {
               </Select>
             </div>
 
+            {/* Filtro de analista (atualiza conforme time) */}
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Analista</Label>
               <Select value={analista} onValueChange={setAnalista}>
-                <SelectTrigger className="w-[200px] h-8 text-xs">
+                <SelectTrigger className="w-[210px] h-8 text-xs">
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
@@ -553,7 +741,7 @@ export function RelatorioProdutividade() {
                           <TableHeader>
                             <TableRow className="bg-muted/30">
                               <TableHead className="font-semibold text-xs pl-4 w-[90px]">RHM</TableHead>
-                              <TableHead className="font-semibold text-xs">Atividade</TableHead>
+                              <TableHead className="font-semibold text-xs">Projeto</TableHead>
                               <TableHead className="font-semibold text-xs">Situação</TableHead>
                               <TableHead className="font-semibold text-xs text-right">Dt. Início</TableHead>
                               <TableHead className="font-semibold text-xs text-right">Dt. Fim</TableHead>
@@ -563,36 +751,9 @@ export function RelatorioProdutividade() {
                           </TableHeader>
                           <TableBody>
                             {grupo.atividades.map((a) => (
-                              <TableRow key={`${grupo.userId}-${a.demandaId}`} className="hover:bg-muted/20">
-                                <TableCell className="text-xs font-mono pl-4">{a.rhm}</TableCell>
-                                <TableCell className="text-xs max-w-[200px]">
-                                  <span className="line-clamp-2" title={a.titulo}>
-                                    {a.titulo}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-xs">
-                                  <SituacaoBadge situacao={a.situacao} />
-                                </TableCell>
-                                <TableCell className="text-right text-xs tabular-nums">{a.dataInicio}</TableCell>
-                                <TableCell className="text-right text-xs tabular-nums">{a.dataFim}</TableCell>
-                                <TableCell className="text-right text-xs tabular-nums font-medium">
-                                  {a.horasAnalista > 0 ? `${a.horasAnalista.toFixed(1)}h` : "—"}
-                                </TableCell>
-                                <TableCell className="text-xs pr-4">
-                                  {a.outrosAnalistas.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                      {a.outrosAnalistas.map((n) => (
-                                        <Badge key={n} variant="secondary" className="text-[10px] font-normal">
-                                          {n}
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <span className="text-muted-foreground">—</span>
-                                  )}
-                                </TableCell>
-                              </TableRow>
+                              <AtividadeExpandivel key={`${grupo.userId}-${a.demandaId}`} atividade={a} />
                             ))}
+                            {/* Subtotal */}
                             <TableRow className="bg-muted/20 border-t font-semibold">
                               <TableCell colSpan={5} className="text-xs pl-4 text-muted-foreground">
                                 Subtotal — {grupo.nome}
@@ -616,9 +777,13 @@ export function RelatorioProdutividade() {
 
       <ReportLegend
         items={[
-          { sigla: "RHM", descricao: "Identificador único da atividade no sistema" },
-          { sigla: "Horas", descricao: "Horas lançadas pelo analista nesta atividade" },
-          { sigla: "Outros Analistas", descricao: "Demais pessoas que também participaram da mesma atividade" },
+          {
+            sigla: "RHM",
+            descricao: "Clique na linha para ver o detalhe das horas lançadas (Data, Fase, Descrição, Horas)",
+          },
+          { sigla: "Projeto", descricao: "Nome do projeto vinculado à atividade" },
+          { sigla: "Horas", descricao: "Total de horas lançadas pelo analista nesta atividade" },
+          { sigla: "Outros Analistas", descricao: "Demais pessoas vinculadas à mesma atividade" },
           { sigla: "Taxa Resolução", descricao: "Atividades resolvidas ÷ total × 100 — por analista" },
           { sigla: "Data Fim", descricao: "Data de aceite ou da última transição de conclusão" },
         ]}
