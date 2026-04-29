@@ -1,202 +1,427 @@
 import { useState, useMemo } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDemandas } from "../../hooks/useDemandas";
 import { useAllTransitions, useAllHours, useProfiles } from "../../hooks/useAllTransitions";
 import { calcProdutividade, formatHours } from "../../utils/kpiCalculations";
-import { ReportFilters } from "./ReportFilters";
 import { ReportHeader, ReportLegend } from "./ReportHeader";
 import { ExportButton } from "@/components/dashboard/ExportButton";
 import { getReportConfig } from "../../utils/reportConfig";
-import { Users, Trophy, Zap, AlertTriangle } from "lucide-react";
-import { buildAnalistasDedup, analistaMatches } from "../../utils/analistasDedup";
+import { useAuth } from "@/contexts/AuthContext";
+import { User, Calendar, ClipboardList, CheckCircle2, Clock, AlertTriangle, FileText } from "lucide-react";
 
-export function RelatorioProdutividade() {
+// ── Helpers ───────────────────────────────────────────────────────────────
+const SITUACAO_COLORS: Record<string, string> = {
+  concluido: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  resolvido: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  em_andamento: "bg-blue-100 text-blue-700 border-blue-200",
+  aberto: "bg-orange-100 text-orange-700 border-orange-200",
+  cancelado: "bg-gray-100 text-gray-500 border-gray-200",
+  rejeitado: "bg-red-100 text-red-700 border-red-200",
+};
+
+function situacaoBadge(situacao: string) {
+  const cls = SITUACAO_COLORS[situacao?.toLowerCase()] ?? "bg-muted text-muted-foreground";
+  return <Badge className={`text-[10px] capitalize ${cls}`}>{situacao?.replace(/_/g, " ") || "—"}</Badge>;
+}
+
+function fmtDate(d?: string | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("pt-BR");
+}
+
+function today() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function daysAgo(n: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().split("T")[0];
+}
+
+// ── Componente ─────────────────────────────────────────────────────────────
+export function RelatorioIndividual() {
   const { demandas } = useDemandas();
   const { transitions } = useAllTransitions();
   const { hours } = useAllHours();
   const profiles = useProfiles();
-  const [periodo, setPeriodo] = useState('30');
-  const [analista, setAnalista] = useState('all');
-  const [teamId, setTeamId] = useState('all');
+  const { teams } = useAuth();
 
-  const filtered = useMemo(() => {
-    let items = demandas;
-    if (teamId !== 'all') items = items.filter(d => d.team_id === teamId);
-    if (periodo !== 'all') {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - parseInt(periodo));
-      items = items.filter(d => new Date(d.created_at) >= cutoff);
-    }
-    return items;
-  }, [demandas, periodo, teamId]);
+  // ── Filtros ───────────────────────────────────────────────────────────
+  const [teamId, setTeamId] = useState("all");
+  const [analista, setAnalista] = useState("all");
+  const [dataInicio, setDataInicio] = useState(daysAgo(30));
+  const [dataFim, setDataFim] = useState(today());
+  const [sortKey, setSortKey] = useState("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const filteredHours = useMemo(() => {
-    if (periodo === 'all') return hours;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - parseInt(periodo));
-    return hours.filter(h => new Date(h.created_at) >= cutoff);
-  }, [hours, periodo]);
+  const sustTeams = teams.filter((t) => t.module === "sustentacao");
 
-  const stats = useMemo(() => {
-    let result = calcProdutividade(filtered, transitions, filteredHours, profiles);
-    if (analista !== 'all') result = result.filter(a => analistaMatches(analista, a.userId));
-    return result;
-  }, [filtered, transitions, filteredHours, profiles, analista]);
-
-  const highlights = useMemo(() => {
-    if (stats.length === 0) return { maiorVolume: '-', melhorMTTR: '-', maiorBacklog: '-' };
-    const sorted = [...stats];
-    return {
-      maiorVolume: sorted.sort((a, b) => b.resolvidos - a.resolvidos)[0]?.nome || '-',
-      melhorMTTR: sorted.sort((a, b) => (a.mttrIndividual || Infinity) - (b.mttrIndividual || Infinity))[0]?.nome || '-',
-      maiorBacklog: sorted.sort((a, b) => b.emAberto - a.emAberto)[0]?.nome || '-',
-    };
-  }, [stats]);
-
+  // ── Analistas do time selecionado ─────────────────────────────────────
   const analistasList = useMemo(() => {
+    // Pega membros do time selecionado a partir dos perfis que aparecem
+    // nas demandas desse time — garante que só aparecem quem tem atividade
     const idSet = new Set<string>();
-    demandas.forEach(d => { if (d.responsavel_dev) idSet.add(d.responsavel_dev); });
-    transitions.forEach(t => { if (demandas.some(d => d.id === t.demanda_id)) idSet.add(t.user_id); });
-    hours.forEach(h => idSet.add(h.user_id));
-    return buildAnalistasDedup([...idSet], profiles);
-  }, [demandas, transitions, hours, profiles]);
+    demandas
+      .filter((d) => teamId === "all" || d.team_id === teamId)
+      .forEach((d) => {
+        if (d.responsavel_dev) idSet.add(d.responsavel_dev);
+        if (d.responsavel_requisitos) idSet.add(d.responsavel_requisitos);
+        if (d.responsavel_teste) idSet.add(d.responsavel_teste);
+        if (d.responsavel_arquiteto) idSet.add(d.responsavel_arquiteto);
+      });
 
-  const [sortKey, setSortKey] = useState<string>('resolvidos');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+    return profiles
+      .filter((p) => idSet.has(p.user_id))
+      .map((p) => ({ user_id: p.user_id, display_name: p.display_name || p.email || p.user_id }))
+      .sort((a, b) => a.display_name.localeCompare(b.display_name));
+  }, [demandas, profiles, teamId]);
 
-  const sorted = useMemo(() => {
-    return [...stats].sort((a, b) => {
-      const va = (a as any)[sortKey] ?? 0;
-      const vb = (b as any)[sortKey] ?? 0;
-      return sortDir === 'desc' ? vb - va : va - vb;
+  // ── Demandas filtradas ────────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    const inicio = new Date(dataInicio + "T00:00:00");
+    const fim = new Date(dataFim + "T23:59:59");
+
+    return demandas.filter((d) => {
+      const criado = new Date(d.created_at);
+      if (teamId !== "all" && d.team_id !== teamId) return false;
+      if (criado < inicio || criado > fim) return false;
+      if (analista !== "all") {
+        const cols = [d.responsavel_dev, d.responsavel_requisitos, d.responsavel_teste, d.responsavel_arquiteto];
+        if (!cols.includes(analista)) return false;
+      }
+      return true;
     });
-  }, [stats, sortKey, sortDir]);
+  }, [demandas, teamId, analista, dataInicio, dataFim]);
 
+  // ── KPIs individuais ──────────────────────────────────────────────────
+  const kpis = useMemo(() => {
+    const total = filtered.length;
+    const resolvidos = filtered.filter((d) =>
+      ["concluido", "resolvido"].includes(d.situacao?.toLowerCase() ?? ""),
+    ).length;
+    const emAberto = filtered.filter((d) =>
+      ["aberto", "em_andamento"].includes(d.situacao?.toLowerCase() ?? ""),
+    ).length;
+    const taxa = total > 0 ? (resolvidos / total) * 100 : 0;
+
+    const horasAnalista = hours
+      .filter((h) => {
+        if (analista !== "all" && h.user_id !== analista) return false;
+        const d = new Date(h.created_at);
+        return d >= new Date(dataInicio) && d <= new Date(dataFim + "T23:59:59");
+      })
+      .reduce((s, h) => s + (h.hours ?? 0), 0);
+
+    return { total, resolvidos, emAberto, taxa, horasAnalista };
+  }, [filtered, hours, analista, dataInicio, dataFim]);
+
+  // ── Ordenação da tabela ───────────────────────────────────────────────
   const toggleSort = (key: string) => {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortKey(key); setSortDir('desc'); }
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
   };
 
-  // Totals
-  const totals = useMemo(() => {
-    if (sorted.length === 0) return null;
-    return {
-      atribuidos: sorted.reduce((s, a) => s + a.atribuidos, 0),
-      resolvidos: sorted.reduce((s, a) => s + a.resolvidos, 0),
-      horasLancadas: sorted.reduce((s, a) => s + a.horasLancadas, 0),
-      emAberto: sorted.reduce((s, a) => s + a.emAberto, 0),
-      taxaResolucao: sorted.reduce((s, a) => s + a.atribuidos, 0) > 0
-        ? (sorted.reduce((s, a) => s + a.resolvidos, 0) / sorted.reduce((s, a) => s + a.atribuidos, 0)) * 100 : 0,
-    };
-  }, [sorted]);
+  const sortedDemandas = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const va = (a as any)[sortKey] ?? "";
+      const vb = (b as any)[sortKey] ?? "";
+      if (va < vb) return sortDir === "asc" ? -1 : 1;
+      if (va > vb) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filtered, sortKey, sortDir]);
 
-  const reportCfg = getReportConfig('produtividade');
+  // ── Export ────────────────────────────────────────────────────────────
+  const analistaNome =
+    analista === "all" ? "Todos" : (analistasList.find((a) => a.user_id === analista)?.display_name ?? analista);
 
   const getExportData = () => ({
-    title: reportCfg.tituloExportacao,
-    headers: ['Analista', 'Atribuídos', 'Resolvidos', 'Taxa Resolução', 'Horas Lançadas', 'Em Aberto'],
-    rows: sorted.map(a => [a.nome, a.atribuidos, a.resolvidos, `${a.taxaResolucao.toFixed(1)}%`, a.horasLancadas.toFixed(1), a.emAberto]),
+    title: `Relatório Individual de Produtividade — ${analistaNome}`,
+    headers: ["RHM", "Projeto", "Tipo", "Situação", "Data Início", "Data Fim", "Horas Lançadas"],
+    rows: sortedDemandas.map((d) => [
+      d.rhm || "—",
+      d.projeto || "—",
+      d.tipo || "—",
+      d.situacao || "—",
+      fmtDate(d.created_at),
+      fmtDate(d.data_previsao_encerramento ?? d.aceite_data),
+      hours
+        .filter((h) => h.demanda_id === d.id)
+        .reduce((s, h) => s + (h.hours ?? 0), 0)
+        .toFixed(1),
+    ]),
   });
 
-  const SortableHead = ({ label, field }: { label: string; field: string }) => (
-    <TableHead className="text-right cursor-pointer hover:text-foreground select-none font-semibold" onClick={() => toggleSort(field)}>
-      {label} {sortKey === field ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+  // ── Helpers render ────────────────────────────────────────────────────
+  const SortableHead = ({ label, field, align = "right" }: { label: string; field: string; align?: string }) => (
+    <TableHead
+      className={`text-${align} cursor-pointer hover:text-foreground select-none font-semibold whitespace-nowrap`}
+      onClick={() => toggleSort(field)}
+    >
+      {label} {sortKey === field ? (sortDir === "desc" ? "↓" : "↑") : ""}
     </TableHead>
   );
 
   const rateColor = (rate: number) =>
-    rate >= 80 ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
-    rate >= 40 ? 'bg-orange-100 text-orange-700 border-orange-200' :
-    'bg-destructive/10 text-destructive border-destructive/20';
+    rate >= 80
+      ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+      : rate >= 40
+        ? "bg-orange-100 text-orange-700 border-orange-200"
+        : "bg-destructive/10 text-destructive border-destructive/20";
 
+  // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
-      <ReportHeader tipoRelatorio={reportCfg.titulo} periodo={periodo} modulo={reportCfg.modulo} />
+      <ReportHeader
+        tipoRelatorio="Relatório Individual de Produtividade"
+        periodo={`${fmtDate(dataInicio)} a ${fmtDate(dataFim)}`}
+        modulo="sustentacao"
+      />
 
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      {/* Título + ações */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-semibold">{reportCfg.titulo.replace('Relatório — ', '')}</h2>
-          <p className="text-sm text-muted-foreground">{reportCfg.subtitulo}</p>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <FileText className="h-5 w-5 text-primary" />
+            Produtividade Individual
+          </h2>
+          <p className="text-sm text-muted-foreground">Atividades por analista com RHM, situação e datas</p>
         </div>
-        <div className="flex items-center gap-2">
-          <ReportFilters periodo={periodo} setPeriodo={setPeriodo} analista={analista} setAnalista={setAnalista} analistas={analistasList} teamId={teamId} setTeamId={setTeamId} />
-          <ExportButton getData={getExportData} />
-        </div>
+        <ExportButton getData={getExportData} />
       </div>
 
-      {/* Highlights */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-info/10 flex items-center justify-center"><Trophy className="h-4 w-4 text-info" /></div>
-            <div><p className="text-[10px] text-muted-foreground">Maior Volume</p><p className="text-sm font-bold">{highlights.maiorVolume}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-info/10 flex items-center justify-center"><Zap className="h-4 w-4 text-info" /></div>
-            <div><p className="text-[10px] text-muted-foreground">Melhor MTTR</p><p className="text-sm font-bold">{highlights.melhorMTTR}</p></div>
-          </CardContent>
-        </Card>
-        <Card className={stats.some(s => s.emAberto > 5) ? 'border-destructive/30' : ''}>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${stats.some(s => s.emAberto > 5) ? 'bg-destructive/10' : 'bg-muted'}`}>
-              <AlertTriangle className={`h-4 w-4 ${stats.some(s => s.emAberto > 5) ? 'text-destructive' : 'text-muted-foreground'}`} />
-            </div>
-            <div><p className="text-[10px] text-muted-foreground">Maior Backlog</p><p className="text-sm font-bold">{highlights.maiorBacklog}</p></div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Table */}
+      {/* ── Filtros ── */}
       <Card>
-        <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4 text-info" />Ranking de Analistas</CardTitle></CardHeader>
+        <CardContent className="pt-4 pb-3">
+          <div className="flex flex-wrap gap-4 items-end">
+            {/* Time */}
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Time</Label>
+              <Select
+                value={teamId}
+                onValueChange={(v) => {
+                  setTeamId(v);
+                  setAnalista("all");
+                }}
+              >
+                <SelectTrigger className="w-[160px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os times</SelectItem>
+                  {sustTeams.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Analista — apenas membros do time */}
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Analista</Label>
+              <Select value={analista} onValueChange={setAnalista}>
+                <SelectTrigger className="w-[200px] h-8 text-xs">
+                  <SelectValue placeholder="Todos analistas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos analistas</SelectItem>
+                  {analistasList.map((a) => (
+                    <SelectItem key={a.user_id} value={a.user_id}>
+                      {a.display_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Data Início */}
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Data Início</Label>
+              <Input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="h-8 text-xs w-[140px]"
+              />
+            </div>
+
+            {/* Data Fim */}
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Data Fim</Label>
+              <Input
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="h-8 text-xs w-[140px]"
+              />
+            </div>
+
+            {/* Atalhos de período */}
+            <div className="flex gap-1 items-end pb-0.5">
+              {[
+                { label: "7d", days: 7 },
+                { label: "30d", days: 30 },
+                { label: "90d", days: 90 },
+              ].map(({ label, days }) => (
+                <Button
+                  key={label}
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs px-2"
+                  onClick={() => {
+                    setDataInicio(daysAgo(days));
+                    setDataFim(today());
+                  }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── KPI Cards ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-blue-100 dark:bg-blue-950/30 flex items-center justify-center">
+              <ClipboardList className="h-4 w-4 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Total Atividades</p>
+              <p className="text-xl font-bold">{kpis.total}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-emerald-100 dark:bg-emerald-950/30 flex items-center justify-center">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Resolvidos</p>
+              <p className="text-xl font-bold">{kpis.resolvidos}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+              <User className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Taxa Resolução</p>
+              <p className="text-xl font-bold">{kpis.taxa.toFixed(1)}%</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div
+              className={`h-9 w-9 rounded-lg flex items-center justify-center ${kpis.emAberto > 5 ? "bg-destructive/10" : "bg-muted"}`}
+            >
+              <AlertTriangle
+                className={`h-4 w-4 ${kpis.emAberto > 5 ? "text-destructive" : "text-muted-foreground"}`}
+              />
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Em Aberto</p>
+              <p className={`text-xl font-bold ${kpis.emAberto > 5 ? "text-destructive" : ""}`}>{kpis.emAberto}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Tabela de atividades ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <ClipboardList className="h-4 w-4 text-primary" />
+            Atividades — {analistaNome}
+            <Badge variant="secondary" className="ml-auto text-xs">
+              {filtered.length} registros
+            </Badge>
+          </CardTitle>
+        </CardHeader>
         <CardContent>
-          {sorted.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">Nenhum dado disponível</p>
+          {sortedDemandas.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Nenhuma atividade encontrada para o período e filtros selecionados.
+            </p>
           ) : (
             <div className="overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
-                    <TableHead className="font-semibold">Analista</TableHead>
-                    <SortableHead label="Atribuídos" field="atribuidos" />
-                    <SortableHead label="Resolvidos" field="resolvidos" />
-                    <SortableHead label="Taxa Resolução" field="taxaResolucao" />
-                    <SortableHead label="Horas" field="horasLancadas" />
-                    <SortableHead label="Em Aberto" field="emAberto" />
+                    <SortableHead label="RHM" field="rhm" align="left" />
+                    <SortableHead label="Projeto" field="projeto" align="left" />
+                    <SortableHead label="Tipo" field="tipo" align="left" />
+                    <SortableHead label="Situação" field="situacao" align="left" />
+                    <SortableHead label="Data Início" field="created_at" align="right" />
+                    <SortableHead label="Data Fim" field="data_previsao_encerramento" align="right" />
+                    <SortableHead label="Horas" field="horasLancadas" align="right" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sorted.map(a => (
-                    <TableRow key={a.userId}>
-                      <TableCell className="font-medium text-xs">{a.nome}</TableCell>
-                      <TableCell className="text-right text-xs">{a.atribuidos}</TableCell>
-                      <TableCell className="text-right text-xs">{a.resolvidos}</TableCell>
-                      <TableCell className="text-right text-xs">
-                        <Badge className={`text-[10px] ${rateColor(a.taxaResolucao)}`}>{a.taxaResolucao.toFixed(1)}%</Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-xs">{a.horasLancadas.toFixed(1)}h</TableCell>
-                      <TableCell className="text-right text-xs">
-                        {a.emAberto > 5 ? <span className="text-destructive font-semibold">{a.emAberto}</span> : a.emAberto}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {/* Totals */}
-                  {totals && (
-                    <TableRow className="bg-muted/30 font-semibold border-t-2">
-                      <TableCell className="text-xs">Total / Média</TableCell>
-                      <TableCell className="text-right text-xs">{totals.atribuidos}</TableCell>
-                      <TableCell className="text-right text-xs">{totals.resolvidos}</TableCell>
-                      <TableCell className="text-right text-xs">
-                        <Badge className={`text-[10px] ${rateColor(totals.taxaResolucao)}`}>{totals.taxaResolucao.toFixed(1)}%</Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-xs">{totals.horasLancadas.toFixed(1)}h</TableCell>
-                      <TableCell className="text-right text-xs">{totals.emAberto}</TableCell>
-                    </TableRow>
-                  )}
+                  {sortedDemandas.map((d) => {
+                    const horasDemanda = hours
+                      .filter((h) => h.demanda_id === d.id)
+                      .reduce((s, h) => s + (h.hours ?? 0), 0);
+
+                    return (
+                      <TableRow key={d.id} className="hover:bg-muted/30">
+                        <TableCell className="text-xs font-mono font-medium">{d.rhm || "—"}</TableCell>
+                        <TableCell className="text-xs max-w-[180px] truncate" title={d.projeto}>
+                          {d.projeto || "—"}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {d.tipo ? (
+                            <Badge variant="outline" className="text-[10px]">
+                              {d.tipo}
+                            </Badge>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs">{situacaoBadge(d.situacao)}</TableCell>
+                        <TableCell className="text-right text-xs tabular-nums">{fmtDate(d.created_at)}</TableCell>
+                        <TableCell className="text-right text-xs tabular-nums">
+                          {fmtDate(d.data_previsao_encerramento ?? d.aceite_data)}
+                        </TableCell>
+                        <TableCell className="text-right text-xs tabular-nums">
+                          {horasDemanda > 0 ? `${horasDemanda.toFixed(1)}h` : "—"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+
+                  {/* Linha de totais */}
+                  <TableRow className="bg-muted/30 font-semibold border-t-2">
+                    <TableCell colSpan={4} className="text-xs">
+                      Total
+                    </TableCell>
+                    <TableCell colSpan={2} className="text-right text-xs">
+                      <Badge className={`text-[10px] ${rateColor(kpis.taxa)}`}>{kpis.taxa.toFixed(1)}% resolução</Badge>
+                    </TableCell>
+                    <TableCell className="text-right text-xs tabular-nums">{kpis.horasAnalista.toFixed(1)}h</TableCell>
+                  </TableRow>
                 </TableBody>
               </Table>
             </div>
@@ -204,35 +429,51 @@ export function RelatorioProdutividade() {
         </CardContent>
       </Card>
 
-      {/* Bar chart */}
-      {sorted.length > 0 && (
+      {/* ── Gráfico de barras por situação ── */}
+      {sortedDemandas.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-sm">Comparativo — Chamados Resolvidos</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-sm">Distribuição por Situação</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-2">
-            {sorted.map(a => {
-              const max = Math.max(...sorted.map(s => s.resolvidos), 1);
-              return (
-                <div key={a.userId} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">{a.nome}</span>
-                    <span className="font-medium">{a.resolvidos}</span>
+            {Object.entries(
+              sortedDemandas.reduce<Record<string, number>>((acc, d) => {
+                const s = d.situacao || "sem_situacao";
+                acc[s] = (acc[s] ?? 0) + 1;
+                return acc;
+              }, {}),
+            )
+              .sort((a, b) => b[1] - a[1])
+              .map(([sit, count]) => {
+                const max = sortedDemandas.length;
+                return (
+                  <div key={sit} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground capitalize">{sit.replace(/_/g, " ")}</span>
+                      <span className="font-medium">{count}</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all"
+                        style={{ width: `${(count / max) * 100}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full bg-info transition-all" style={{ width: `${(a.resolvidos / max) * 100}%` }} />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </CardContent>
         </Card>
       )}
 
-      <ReportLegend items={[
-        { sigla: 'Taxa Resolução', descricao: 'Chamados resolvidos ÷ atribuídos × 100' },
-        { sigla: 'MTTR', descricao: 'Tempo Médio de Resolução individual' },
-        { sigla: 'FCR', descricao: 'Resolução no Primeiro Contato — sem reabertura' },
-        { sigla: 'Backlog', descricao: 'Chamados ainda em aberto atribuídos ao analista' },
-      ]} />
+      <ReportLegend
+        items={[
+          { sigla: "RHM", descricao: "Identificador único da demanda no sistema" },
+          { sigla: "Taxa Resolução", descricao: "Demandas resolvidas ÷ total atribuídas × 100" },
+          { sigla: "Data Início", descricao: "Data de criação da demanda" },
+          { sigla: "Data Fim", descricao: "Previsão de encerramento ou data de aceite" },
+          { sigla: "Horas", descricao: "Total de horas lançadas na demanda" },
+        ]}
+      />
     </div>
   );
 }
