@@ -15,18 +15,9 @@ import { ReportHeader, ReportLegend } from "./ReportHeader";
 import { ExportButton } from "@/components/dashboard/ExportButton";
 import { getReportConfig } from "../../utils/reportConfig";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  ChevronDown,
-  ChevronRight,
-  Users,
-  ClipboardList,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  FileText,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, ClipboardList, CheckCircle2, Clock, AlertTriangle, FileText } from "lucide-react";
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 function fmtDate(d?: string | null) {
   if (!d) return "—";
@@ -36,6 +27,7 @@ function fmtDate(d?: string | null) {
 function today() {
   return new Date().toISOString().split("T")[0];
 }
+
 function daysAgo(n: number) {
   const d = new Date();
   d.setDate(d.getDate() - n);
@@ -48,6 +40,7 @@ const SITUACAO_LABEL: Record<string, { label: string; cls: string }> = {
   aceite_final: { label: "Aceite", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
   em_andamento: { label: "Em andamento", cls: "bg-blue-100 text-blue-700 border-blue-200" },
   em_analise: { label: "Em análise", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  em_execucao: { label: "Em execução", cls: "bg-blue-100 text-blue-700 border-blue-200" },
   aberto: { label: "Aberto", cls: "bg-orange-100 text-orange-700 border-orange-200" },
   nova: { label: "Nova", cls: "bg-orange-100 text-orange-700 border-orange-200" },
   cancelado: { label: "Cancelado", cls: "bg-gray-100 text-gray-500 border-gray-200" },
@@ -73,6 +66,13 @@ function rateColor(rate: number) {
       : "bg-destructive/10 text-destructive border-destructive/20";
 }
 
+function getInitials(nome: string) {
+  const parts = nome.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "U";
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 // ── tipos internos ────────────────────────────────────────────────────────────
 
 interface AtividadeRow {
@@ -81,9 +81,8 @@ interface AtividadeRow {
   titulo: string;
   situacao: string;
   dataInicio: string;
-  dataFim: string | null;
+  dataFim: string;
   horasAnalista: number;
-  // outros analistas da mesma demanda
   outrosAnalistas: string[];
 }
 
@@ -114,7 +113,17 @@ export function RelatorioProdutividade() {
 
   const sustTeams = teams.filter((t) => t.module === "sustentacao");
 
-  // analistas do time selecionado
+  // ✅ Set de IDs com perfil válido — usado para filtrar órfãos em todo o componente
+  const profileIds = useMemo(() => new Set(profiles.map((p) => p.user_id)), [profiles]);
+
+  // mapa user_id → nome (apenas perfis válidos)
+  const nomeMap = useMemo(() => {
+    const m = new Map<string, string>();
+    profiles.forEach((p) => m.set(p.user_id, p.display_name || p.email || p.user_id.slice(0, 8)));
+    return m;
+  }, [profiles]);
+
+  // analistas do time — apenas com perfil válido
   const analistasList = useMemo(() => {
     const idSet = new Set<string>();
     demandas
@@ -133,19 +142,15 @@ export function RelatorioProdutividade() {
       .forEach((h) => idSet.add(h.user_id));
 
     return profiles
-      .filter((p) => idSet.has(p.user_id))
-      .map((p) => ({ user_id: p.user_id, display_name: p.display_name || p.user_id.slice(0, 8) }))
+      .filter((p) => idSet.has(p.user_id)) // ✅ garante perfil válido
+      .map((p) => ({
+        user_id: p.user_id,
+        display_name: p.display_name || p.email || p.user_id.slice(0, 8),
+      }))
       .sort((a, b) => a.display_name.localeCompare(b.display_name));
   }, [demandas, hours, profiles, teamId]);
 
-  // mapa user_id → nome
-  const nomeMap = useMemo(() => {
-    const m = new Map<string, string>();
-    profiles.forEach((p) => m.set(p.user_id, p.display_name || p.user_id.slice(0, 8)));
-    return m;
-  }, [profiles]);
-
-  // demandas filtradas pelo período e time
+  // demandas filtradas por período e time
   const demandasFiltradas = useMemo(() => {
     const inicio = new Date(dataInicio + "T00:00:00");
     const fim = new Date(dataFim + "T23:59:59");
@@ -156,7 +161,7 @@ export function RelatorioProdutividade() {
     });
   }, [demandas, teamId, dataInicio, dataFim]);
 
-  // mapa demanda_id → horas por user
+  // mapa demanda_id → Map<user_id, horas>
   const horasPorDemandaUser = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
     hours.forEach((h) => {
@@ -168,9 +173,9 @@ export function RelatorioProdutividade() {
     return m;
   }, [hours]);
 
-  // agrupamento principal: por analista → atividades
+  // agrupamento por analista → atividades
   const grupos = useMemo(() => {
-    // Coleta todos os user_ids relevantes
+    // Coleta todos os user_ids participantes
     const todosIds = new Set<string>();
     demandasFiltradas.forEach((d) => {
       if (d.responsavel_dev) todosIds.add(d.responsavel_dev);
@@ -180,11 +185,10 @@ export function RelatorioProdutividade() {
       horasPorDemandaUser.get(d.id)?.forEach((_, uid) => todosIds.add(uid));
     });
 
-    // Filtra pelo analista selecionado
-    const ids = analista !== "all" ? [analista] : [...todosIds];
+    // ✅ Filtra apenas IDs com perfil válido — remove qualquer UUID órfão
+    const ids = analista !== "all" ? [analista] : [...todosIds].filter((id) => profileIds.has(id));
 
     const result: AnalistaGroup[] = ids.map((userId) => {
-      // Demandas onde participou
       const atividades: AtividadeRow[] = demandasFiltradas
         .filter((d) => {
           const eResponsavel =
@@ -198,7 +202,7 @@ export function RelatorioProdutividade() {
         .map((d) => {
           const horasAnalista = horasPorDemandaUser.get(d.id)?.get(userId) ?? 0;
 
-          // outros analistas da mesma demanda
+          // Outros analistas da mesma demanda
           const outrosIds = new Set<string>();
           if (d.responsavel_dev && d.responsavel_dev !== userId) outrosIds.add(d.responsavel_dev);
           if (d.responsavel_requisitos && d.responsavel_requisitos !== userId) outrosIds.add(d.responsavel_requisitos);
@@ -208,13 +212,11 @@ export function RelatorioProdutividade() {
             if (uid !== userId) outrosIds.add(uid);
           });
 
-          // data fim: aceite_data ou última transição de conclusão
-          const transicoesDemanda = transitions
+          // Data fim via aceite ou última transição de conclusão
+          const conclusao = transitions
             .filter((t) => t.demanda_id === d.id)
-            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-          const conclusao = transicoesDemanda.find((t) =>
-            ["aceite_final", "concluido", "resolvido"].includes(t.to_status ?? ""),
-          );
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            .find((t) => ["aceite_final", "concluido", "resolvido"].includes(t.to_status ?? ""));
 
           return {
             demandaId: d.id,
@@ -224,7 +226,10 @@ export function RelatorioProdutividade() {
             dataInicio: fmtDate(d.created_at),
             dataFim: fmtDate(d.aceite_data ?? conclusao?.created_at ?? null),
             horasAnalista,
-            outrosAnalistas: [...outrosIds].map((id) => nomeMap.get(id) || id.slice(0, 8)),
+            // ✅ filtra órfãos também nos "Outros Analistas"
+            outrosAnalistas: [...outrosIds]
+              .filter((id) => profileIds.has(id))
+              .map((id) => nomeMap.get(id) || id.slice(0, 8)),
           };
         });
 
@@ -245,7 +250,7 @@ export function RelatorioProdutividade() {
     });
 
     return result.filter((g) => g.atividades.length > 0).sort((a, b) => b.resolvidos - a.resolvidos);
-  }, [demandasFiltradas, horasPorDemandaUser, transitions, nomeMap, analista]);
+  }, [demandasFiltradas, horasPorDemandaUser, transitions, nomeMap, analista, profileIds]);
 
   // KPIs globais
   const kpis = useMemo(
@@ -258,13 +263,12 @@ export function RelatorioProdutividade() {
     [grupos],
   );
 
-  const toggleGroup = (id: string) => {
+  const toggleGroup = (id: string) =>
     setOpenGroups((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
 
   const expandAll = () => setOpenGroups(new Set(grupos.map((g) => g.userId)));
   const collapseAll = () => setOpenGroups(new Set());
@@ -281,7 +285,7 @@ export function RelatorioProdutividade() {
         a.titulo,
         a.situacao,
         a.dataInicio,
-        a.dataFim ?? "—",
+        a.dataFim,
         a.horasAnalista.toFixed(1),
         a.outrosAnalistas.join(", ") || "—",
       ]),
@@ -467,23 +471,16 @@ export function RelatorioProdutividade() {
             const isOpen = openGroups.has(grupo.userId);
             return (
               <Card key={grupo.userId} className="overflow-hidden">
-                {/* Cabeçalho do grupo — clicável */}
                 <Collapsible open={isOpen} onOpenChange={() => toggleGroup(grupo.userId)}>
                   <CollapsibleTrigger asChild>
                     <CardHeader className="pb-3 cursor-pointer hover:bg-muted/40 transition-colors">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          {/* Avatar iniciais */}
                           <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 font-bold text-sm">
-                            {(() => {
-                              const parts = grupo.nome.trim().split(/\s+/).filter(Boolean);
-                              if (parts.length === 0) return "U";
-                              if (parts.length === 1) return parts[0][0].toUpperCase();
-                              return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-                            })()}
+                            {getInitials(grupo.nome)}
                           </div>
                           <div>
-                            <CardTitle className="text-sm font-semibold">{grupo.nome}</CardTitle>
+                            <p className="text-sm font-semibold">{grupo.nome}</p>
                             <p className="text-xs text-muted-foreground">
                               {grupo.atividades.length} atividade{grupo.atividades.length !== 1 ? "s" : ""} ·{" "}
                               {grupo.totalHoras.toFixed(1)}h lançadas
@@ -541,7 +538,7 @@ export function RelatorioProdutividade() {
                                   <SituacaoBadge situacao={a.situacao} />
                                 </TableCell>
                                 <TableCell className="text-right text-xs tabular-nums">{a.dataInicio}</TableCell>
-                                <TableCell className="text-right text-xs tabular-nums">{a.dataFim ?? "—"}</TableCell>
+                                <TableCell className="text-right text-xs tabular-nums">{a.dataFim}</TableCell>
                                 <TableCell className="text-right text-xs tabular-nums font-medium">
                                   {a.horasAnalista > 0 ? `${a.horasAnalista.toFixed(1)}h` : "—"}
                                 </TableCell>
@@ -560,7 +557,8 @@ export function RelatorioProdutividade() {
                                 </TableCell>
                               </TableRow>
                             ))}
-                            {/* Sub-total do analista */}
+
+                            {/* Subtotal */}
                             <TableRow className="bg-muted/20 border-t font-semibold">
                               <TableCell colSpan={5} className="text-xs pl-4 text-muted-foreground">
                                 Subtotal — {grupo.nome}
@@ -585,7 +583,7 @@ export function RelatorioProdutividade() {
       <ReportLegend
         items={[
           { sigla: "RHM", descricao: "Identificador único da atividade no sistema" },
-          { sigla: "Horas", descricao: "Horas lançadas pelo analista nesta atividade especificamente" },
+          { sigla: "Horas", descricao: "Horas lançadas pelo analista nesta atividade" },
           { sigla: "Outros Analistas", descricao: "Demais pessoas que também participaram da mesma atividade" },
           { sigla: "Taxa Resolução", descricao: "Atividades resolvidas ÷ total × 100 — por analista" },
           { sigla: "Data Fim", descricao: "Data de aceite ou da última transição de conclusão" },
