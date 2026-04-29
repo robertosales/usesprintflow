@@ -29,7 +29,7 @@ export function RelatorioSLA() {
       cutoff.setDate(cutoff.getDate() - parseInt(periodo));
       items = items.filter(d => new Date(d.created_at) >= cutoff);
     }
-    if (analista !== 'all') items = items.filter(d => d.responsavel_dev === analista);
+    if (analista !== 'all') items = items.filter(d => analistaMatches(analista, d.responsavel_dev));
     return items;
   }, [demandas, periodo, analista, teamId]);
 
@@ -37,10 +37,7 @@ export function RelatorioSLA() {
 
   const analistas = useMemo(() => {
     const ids = [...new Set(demandas.map(d => d.responsavel_dev).filter(Boolean))] as string[];
-    return ids.map(id => {
-      const p = profiles.find(pr => pr.user_id === id);
-      return { user_id: id, display_name: p?.display_name || id.slice(0, 8) };
-    });
+    return buildAnalistasDedup(ids, profiles);
   }, [demandas, profiles]);
 
   const maiorViolacao = useMemo(() => {
