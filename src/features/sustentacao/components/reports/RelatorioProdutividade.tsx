@@ -10,6 +10,7 @@ import { ReportHeader, ReportLegend } from "./ReportHeader";
 import { ExportButton } from "@/components/dashboard/ExportButton";
 import { getReportConfig } from "../../utils/reportConfig";
 import { Users, Trophy, Zap, AlertTriangle } from "lucide-react";
+import { buildAnalistasDedup, analistaMatches } from "../../utils/analistasDedup";
 
 export function RelatorioProdutividade() {
   const { demandas } = useDemandas();
@@ -40,7 +41,7 @@ export function RelatorioProdutividade() {
 
   const stats = useMemo(() => {
     let result = calcProdutividade(filtered, transitions, filteredHours, profiles);
-    if (analista !== 'all') result = result.filter(a => a.userId === analista);
+    if (analista !== 'all') result = result.filter(a => analistaMatches(analista, a.userId));
     return result;
   }, [filtered, transitions, filteredHours, profiles, analista]);
 
@@ -59,10 +60,7 @@ export function RelatorioProdutividade() {
     demandas.forEach(d => { if (d.responsavel_dev) idSet.add(d.responsavel_dev); });
     transitions.forEach(t => { if (demandas.some(d => d.id === t.demanda_id)) idSet.add(t.user_id); });
     hours.forEach(h => idSet.add(h.user_id));
-    return [...idSet].map(id => {
-      const p = profiles.find(pr => pr.user_id === id);
-      return { user_id: id, display_name: p?.display_name || id.slice(0, 8) };
-    });
+    return buildAnalistasDedup([...idSet], profiles);
   }, [demandas, transitions, hours, profiles]);
 
   const [sortKey, setSortKey] = useState<string>('resolvidos');
