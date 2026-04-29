@@ -10,6 +10,7 @@ import { ReportHeader, ReportLegend } from "./ReportHeader";
 import { ExportButton } from "@/components/dashboard/ExportButton";
 import { getReportConfig } from "../../utils/reportConfig";
 import { Shield, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { buildAnalistasDedup, analistaMatches } from "../../utils/analistasDedup";
 
 const META_SLA = 95; // %
 
