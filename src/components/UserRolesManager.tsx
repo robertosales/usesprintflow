@@ -6,9 +6,17 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ShieldCheck, Save, Search } from "lucide-react";
+import { ShieldCheck, Save, Search, Trash2, AlertTriangle, ArrowRightLeft } from "lucide-react";
 import { fetchAllRoles, getRoleLabel, type AppRole } from "@/hooks/usePermissions";
 import { PaginationControls } from "@/shared/components/common/Pagination";
 import { usePagination } from "@/shared/hooks/usePagination";
@@ -27,11 +35,32 @@ interface RoleOption {
   label: string;
 }
 
+// ✅ Estado do fluxo de exclusão
+interface DeleteState {
+  user: UserWithRoles | null;
+  affectedCount: number; // qtd de demandas atribuídas
+  reassignToId: string; // usuário destino para reassociação
+  checking: boolean;
+  deleting: boolean;
+}
+
+const DELETE_INITIAL: DeleteState = {
+  user: null,
+  affectedCount: 0,
+  reassignToId: "",
+  checking: false,
+  deleting: false,
+};
+
 const MODULE_LABELS: Record<string, string> = {
   sala_agil: "Sala Ágil",
   sustentacao: "Sustentação",
   admin: "Administrador (ambos)",
 };
+
+// ✅ Ajuste aqui se o nome da tabela/coluna for diferente no seu banco
+const DEMANDAS_TABLE = "demandas"; // nome da tabela de demandas
+const DEMANDAS_USER_COL = "responsavel_id"; // coluna com o ID do usuário responsável
 
 export function UserRolesManager() {
   const [users, setUsers] = useState<UserWithRoles[]>([]);
@@ -39,12 +68,14 @@ export function UserRolesManager() {
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [pendingRoles, setPendingRoles] = useState<AppRole[]>([]);
   const [pendingModule, setPendingModule] = useState<string>("sala_agil");
-  // ✅ NOVO: estado para edição do nome
   const [pendingName, setPendingName] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [searchFilter, setSearchFilter] = useState("");
   const debouncedSearch = useDebounce(searchFilter);
+
+  // ✅ Estado do fluxo de exclusão
+  const [deleteState, setDeleteState] = useState<DeleteState>(DELETE_INITIAL);
 
   // ── Carrega usuários + roles disponíveis ──────────────────────────────────
   const fetchUsers = useCallback(async () => {
@@ -97,14 +128,12 @@ export function UserRolesManager() {
     setEditingUser(user.user_id);
     setPendingRoles([...user.roles]);
     setPendingModule(user.module_access);
-    // ✅ NOVO: popula o nome atual
     setPendingName(user.display_name === "—" ? "" : user.display_name);
   }
 
   function cancelEditing() {
     setEditingUser(null);
     setPendingRoles([]);
-    // ✅ NOVO: reseta o nome
     setPendingName("");
   }
 
@@ -117,7 +146,6 @@ export function UserRolesManager() {
     const currentUser = users.find((u) => u.user_id === userId);
     if (!currentUser) return;
 
-    // ✅ NOVO: valida que o nome não está vazio
     const trimmedName = pendingName.trim();
     if (!trimmedName) {
       toast.error("O nome não pode estar vazio");
@@ -140,7 +168,6 @@ export function UserRolesManager() {
         await supabase.from("user_roles").insert({ user_id: userId, role: role as any });
       }
 
-      // ✅ NOVO: atualiza nome e/ou módulo se mudaram
       const nameChanged = trimmedName !== currentUser.display_name && trimmedName !== "—";
       const moduleChanged = currentUser.module_access !== pendingModule;
 
@@ -164,6 +191,79 @@ export function UserRolesManager() {
       setSaving(false);
     }
   }
+
+  // ── Exclusão: abre modal e verifica demandas ──────────────────────────────
+  async function handleDeleteClick(user: UserWithRoles) {
+    setDeleteState({ ...DELETE_INITIAL, user, checking: true });
+
+    try {
+      const { count, error } = await supabase
+        .from(DEMANDAS_TABLE)
+        .select("*", { count: "exact", head: true })
+        .eq(DEMANDAS_USER_COL, user.user_id);
+
+      if (error) throw error;
+
+      setDeleteState((prev) => ({
+        ...prev,
+        affectedCount: count ?? 0,
+        checking: false,
+      }));
+    } catch {
+      toast.error("Erro ao verificar demandas do usuário");
+      setDeleteState(DELETE_INITIAL);
+    }
+  }
+
+  // ── Exclusão: confirma (com ou sem reassociação) ──────────────────────────
+  async function confirmDelete() {
+    const { user, affectedCount, reassignToId } = deleteState;
+    if (!user) return;
+
+    // Se há demandas, reassignToId é obrigatório
+    if (affectedCount > 0 && !reassignToId) {
+      toast.error("Selecione um usuário para transferir as demandas");
+      return;
+    }
+
+    setDeleteState((prev) => ({ ...prev, deleting: true }));
+
+    try {
+      // 1. Transfere demandas (se houver)
+      if (affectedCount > 0 && reassignToId) {
+        const { error } = await supabase
+          .from(DEMANDAS_TABLE)
+          .update({ [DEMANDAS_USER_COL]: reassignToId })
+          .eq(DEMANDAS_USER_COL, user.user_id);
+
+        if (error) throw error;
+      }
+
+      // 2. Remove todos os roles do usuário
+      await supabase.from("user_roles").delete().eq("user_id", user.user_id);
+
+      // 3. Remove o perfil
+      await supabase.from("profiles").delete().eq("user_id", user.user_id);
+
+      toast.success(
+        affectedCount > 0
+          ? `Usuário excluído e ${affectedCount} demanda(s) transferida(s) com sucesso!`
+          : "Usuário excluído com sucesso!",
+      );
+
+      setDeleteState(DELETE_INITIAL);
+      await fetchUsers();
+    } catch {
+      toast.error("Erro ao excluir usuário");
+      setDeleteState((prev) => ({ ...prev, deleting: false }));
+    }
+  }
+
+  // ── Usuários disponíveis para reassociação (exclui o que será deletado) ───
+  const reassignOptions = useMemo(
+    () => users.filter((u) => u.user_id !== deleteState.user?.user_id),
+    [users, deleteState.user],
+  );
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -215,6 +315,7 @@ export function UserRolesManager() {
                     <Badge variant="outline" className="text-[10px]">
                       {MODULE_LABELS[user.module_access] || user.module_access}
                     </Badge>
+
                     {isEditing ? (
                       <div className="flex gap-1.5">
                         <Button size="sm" variant="ghost" className="text-xs" onClick={cancelEditing} disabled={saving}>
@@ -230,9 +331,20 @@ export function UserRolesManager() {
                         </Button>
                       </div>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => startEditing(user)}>
-                        Editar Perfis
-                      </Button>
+                      <div className="flex gap-1.5">
+                        <Button size="sm" variant="outline" onClick={() => startEditing(user)}>
+                          Editar
+                        </Button>
+                        {/* ✅ Botão de exclusão */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+                          onClick={() => handleDeleteClick(user)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </CardHeader>
@@ -240,7 +352,7 @@ export function UserRolesManager() {
                 <CardContent className="pt-0">
                   {isEditing ? (
                     <div className="space-y-4 mt-2">
-                      {/* ✅ NOVO: Campo de edição de nome */}
+                      {/* Nome de Exibição */}
                       <div className="max-w-xs">
                         <Label className="text-xs font-semibold">Nome de Exibição</Label>
                         <Input
@@ -267,7 +379,7 @@ export function UserRolesManager() {
                         </Select>
                       </div>
 
-                      {/* Perfis — dinâmicos do banco */}
+                      {/* Perfis */}
                       <div>
                         <Label className="text-xs font-semibold">Perfis</Label>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
@@ -315,6 +427,126 @@ export function UserRolesManager() {
         pageSize={pageSize}
         onPageChange={setCurrentPage}
       />
+
+      {/* ✅ Modal de exclusão / reassociação */}
+      <Dialog
+        open={!!deleteState.user}
+        onOpenChange={(open) => {
+          if (!open && !deleteState.deleting) setDeleteState(DELETE_INITIAL);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          {deleteState.checking ? (
+            // Verificando demandas...
+            <div className="flex flex-col items-center gap-3 py-6">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+              <p className="text-sm text-muted-foreground">Verificando demandas atribuídas...</p>
+            </div>
+          ) : deleteState.affectedCount > 0 ? (
+            // Há demandas → pede reassociação
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-destructive">
+                  <ArrowRightLeft className="h-4 w-4" />
+                  Transferir demandas antes de excluir
+                </DialogTitle>
+                <DialogDescription asChild>
+                  <div className="space-y-3 pt-1">
+                    {/* Alerta */}
+                    <div className="flex items-start gap-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-800 dark:text-amber-300">
+                        O usuário <span className="font-semibold">{deleteState.user?.display_name}</span> possui{" "}
+                        <span className="font-semibold">{deleteState.affectedCount} demanda(s)</span> atribuída(s).
+                        Selecione um novo responsável antes de excluir.
+                      </p>
+                    </div>
+
+                    {/* Seletor de usuário destino */}
+                    <div>
+                      <Label className="text-xs font-semibold">Transferir demandas para</Label>
+                      <Select
+                        value={deleteState.reassignToId}
+                        onValueChange={(v) => setDeleteState((prev) => ({ ...prev, reassignToId: v }))}
+                      >
+                        <SelectTrigger className="h-8 mt-1 text-xs">
+                          <SelectValue placeholder="Selecione um usuário..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {reassignOptions.map((u) => (
+                            <SelectItem key={u.user_id} value={u.user_id}>
+                              {u.display_name}
+                              {u.email ? ` — ${u.email}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </DialogDescription>
+              </DialogHeader>
+
+              <DialogFooter className="gap-2 pt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDeleteState(DELETE_INITIAL)}
+                  disabled={deleteState.deleting}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={confirmDelete}
+                  disabled={deleteState.deleting || !deleteState.reassignToId}
+                >
+                  {deleteState.deleting ? (
+                    <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  Transferir e Excluir
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            // Sem demandas → confirmação simples
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-destructive">
+                  <Trash2 className="h-4 w-4" />
+                  Excluir usuário
+                </DialogTitle>
+                <DialogDescription>
+                  Tem certeza que deseja excluir{" "}
+                  <span className="font-semibold text-foreground">{deleteState.user?.display_name}</span>? Esta ação não
+                  pode ser desfeita.
+                </DialogDescription>
+              </DialogHeader>
+
+              <DialogFooter className="gap-2 pt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDeleteState(DELETE_INITIAL)}
+                  disabled={deleteState.deleting}
+                >
+                  Cancelar
+                </Button>
+                <Button variant="destructive" size="sm" onClick={confirmDelete} disabled={deleteState.deleting}>
+                  {deleteState.deleting ? (
+                    <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  Confirmar Exclusão
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
