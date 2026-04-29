@@ -22,6 +22,19 @@ import { PaginationControls } from "@/shared/components/common/Pagination";
 import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 
+// ── Configuração das tabelas ──────────────────────────────────────────────
+const DEMANDAS_TABLE = "demandas";
+const DEMANDAS_USER_COLS = [
+  "responsavel_requisitos",
+  "responsavel_dev",
+  "responsavel_teste",
+  "responsavel_arquiteto",
+  "aceite_responsavel",
+  "demandante",
+] as const;
+const DEMANDA_RESPONSAVEIS_TABLE = "demanda_responsaveis";
+
+// ── Interfaces ────────────────────────────────────────────────────────────
 interface UserWithRoles {
   user_id: string;
   display_name: string;
@@ -35,11 +48,10 @@ interface RoleOption {
   label: string;
 }
 
-// ✅ Estado do fluxo de exclusão
 interface DeleteState {
   user: UserWithRoles | null;
-  affectedCount: number; // qtd de demandas atribuídas
-  reassignToId: string; // usuário destino para reassociação
+  affectedCount: number;
+  reassignToId: string;
   checking: boolean;
   deleting: boolean;
 }
@@ -58,10 +70,7 @@ const MODULE_LABELS: Record<string, string> = {
   admin: "Administrador (ambos)",
 };
 
-// ✅ Ajuste aqui se o nome da tabela/coluna for diferente no seu banco
-const DEMANDAS_TABLE = "demandas"; // nome da tabela de demandas
-const DEMANDAS_USER_COL = "responsavel_id"; // coluna com o ID do usuário responsável
-
+// ── Componente ────────────────────────────────────────────────────────────
 export function UserRolesManager() {
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [availableRoles, setAvailableRoles] = useState<RoleOption[]>([]);
@@ -73,11 +82,9 @@ export function UserRolesManager() {
   const [saving, setSaving] = useState(false);
   const [searchFilter, setSearchFilter] = useState("");
   const debouncedSearch = useDebounce(searchFilter);
-
-  // ✅ Estado do fluxo de exclusão
   const [deleteState, setDeleteState] = useState<DeleteState>(DELETE_INITIAL);
 
-  // ── Carrega usuários + roles disponíveis ──────────────────────────────────
+  // ── Carrega usuários + roles disponíveis ────────────────────────────────
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
@@ -112,7 +119,7 @@ export function UserRolesManager() {
     fetchUsers();
   }, [fetchUsers]);
 
-  // ── Filtro + paginação ────────────────────────────────────────────────────
+  // ── Filtro + paginação ──────────────────────────────────────────────────
   const filteredUsers = useMemo(() => {
     if (!debouncedSearch) return users;
     const q = debouncedSearch.toLowerCase();
@@ -123,7 +130,7 @@ export function UserRolesManager() {
     pageSize: 10,
   });
 
-  // ── Edição ────────────────────────────────────────────────────────────────
+  // ── Edição ──────────────────────────────────────────────────────────────
   function startEditing(user: UserWithRoles) {
     setEditingUser(user.user_id);
     setPendingRoles([...user.roles]);
@@ -141,7 +148,7 @@ export function UserRolesManager() {
     setPendingRoles((prev) => (prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]));
   }
 
-  // ── Salvar ────────────────────────────────────────────────────────────────
+  // ── Salvar edição ───────────────────────────────────────────────────────
   async function saveRoles(userId: string) {
     const currentUser = users.find((u) => u.user_id === userId);
     if (!currentUser) return;
@@ -192,21 +199,29 @@ export function UserRolesManager() {
     }
   }
 
-  // ── Exclusão: abre modal e verifica demandas ──────────────────────────────
+  // ── Exclusão: abre modal e verifica vínculos ────────────────────────────
   async function handleDeleteClick(user: UserWithRoles) {
     setDeleteState({ ...DELETE_INITIAL, user, checking: true });
 
     try {
-      const { count, error } = await supabase
-        .from(DEMANDAS_TABLE)
-        .select("*", { count: "exact", head: true })
-        .eq(DEMANDAS_USER_COL, user.user_id);
+      const orFilter = DEMANDAS_USER_COLS.map((col) => `${col}.eq.${user.user_id}`).join(",");
 
-      if (error) throw error;
+      const [directRes, relationalRes] = await Promise.all([
+        supabase.from(DEMANDAS_TABLE).select("*", { count: "exact", head: true }).or(orFilter),
+        supabase
+          .from(DEMANDA_RESPONSAVEIS_TABLE)
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.user_id),
+      ]);
+
+      if (directRes.error) throw directRes.error;
+      if (relationalRes.error) throw relationalRes.error;
+
+      const totalAffected = (directRes.count ?? 0) + (relationalRes.count ?? 0);
 
       setDeleteState((prev) => ({
         ...prev,
-        affectedCount: count ?? 0,
+        affectedCount: totalAffected,
         checking: false,
       }));
     } catch {
@@ -215,12 +230,11 @@ export function UserRolesManager() {
     }
   }
 
-  // ── Exclusão: confirma (com ou sem reassociação) ──────────────────────────
+  // ── Exclusão: confirma com transferência completa ───────────────────────
   async function confirmDelete() {
     const { user, affectedCount, reassignToId } = deleteState;
     if (!user) return;
 
-    // Se há demandas, reassignToId é obrigatório
     if (affectedCount > 0 && !reassignToId) {
       toast.error("Selecione um usuário para transferir as demandas");
       return;
@@ -229,17 +243,40 @@ export function UserRolesManager() {
     setDeleteState((prev) => ({ ...prev, deleting: true }));
 
     try {
-      // 1. Transfere demandas (se houver)
       if (affectedCount > 0 && reassignToId) {
-        const { error } = await supabase
-          .from(DEMANDAS_TABLE)
-          .update({ [DEMANDAS_USER_COL]: reassignToId })
-          .eq(DEMANDAS_USER_COL, user.user_id);
+        // 1a. Transfere colunas diretas em demandas
+        for (const col of DEMANDAS_USER_COLS) {
+          await supabase
+            .from(DEMANDAS_TABLE)
+            .update({ [col]: reassignToId })
+            .eq(col, user.user_id);
+        }
 
-        if (error) throw error;
+        // 1b. Transfere linhas em demanda_responsaveis (com deduplicação)
+        const { data: relRows } = await supabase
+          .from(DEMANDA_RESPONSAVEIS_TABLE)
+          .select("id, demanda_id, papel")
+          .eq("user_id", user.user_id);
+
+        for (const row of relRows ?? []) {
+          const { count } = await supabase
+            .from(DEMANDA_RESPONSAVEIS_TABLE)
+            .select("*", { count: "exact", head: true })
+            .eq("demanda_id", row.demanda_id)
+            .eq("user_id", reassignToId)
+            .eq("papel", row.papel);
+
+          if ((count ?? 0) > 0) {
+            // Destino já tem esse papel nessa demanda → só remove o antigo
+            await supabase.from(DEMANDA_RESPONSAVEIS_TABLE).delete().eq("id", row.id);
+          } else {
+            // Transfere normalmente
+            await supabase.from(DEMANDA_RESPONSAVEIS_TABLE).update({ user_id: reassignToId }).eq("id", row.id);
+          }
+        }
       }
 
-      // 2. Remove todos os roles do usuário
+      // 2. Remove todos os roles
       await supabase.from("user_roles").delete().eq("user_id", user.user_id);
 
       // 3. Remove o perfil
@@ -247,7 +284,7 @@ export function UserRolesManager() {
 
       toast.success(
         affectedCount > 0
-          ? `Usuário excluído e ${affectedCount} demanda(s) transferida(s) com sucesso!`
+          ? `Usuário excluído e ${affectedCount} vínculo(s) transferido(s) com sucesso!`
           : "Usuário excluído com sucesso!",
       );
 
@@ -259,13 +296,13 @@ export function UserRolesManager() {
     }
   }
 
-  // ── Usuários disponíveis para reassociação (exclui o que será deletado) ───
+  // ── Usuários disponíveis para reassociação ──────────────────────────────
   const reassignOptions = useMemo(
     () => users.filter((u) => u.user_id !== deleteState.user?.user_id),
     [users, deleteState.user],
   );
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -335,7 +372,6 @@ export function UserRolesManager() {
                         <Button size="sm" variant="outline" onClick={() => startEditing(user)}>
                           Editar
                         </Button>
-                        {/* ✅ Botão de exclusão */}
                         <Button
                           size="sm"
                           variant="outline"
@@ -428,7 +464,7 @@ export function UserRolesManager() {
         onPageChange={setCurrentPage}
       />
 
-      {/* ✅ Modal de exclusão / reassociação */}
+      {/* ── Modal de exclusão / reassociação ────────────────────────────── */}
       <Dialog
         open={!!deleteState.user}
         onOpenChange={(open) => {
@@ -437,13 +473,13 @@ export function UserRolesManager() {
       >
         <DialogContent className="max-w-md">
           {deleteState.checking ? (
-            // Verificando demandas...
+            // Verificando vínculos...
             <div className="flex flex-col items-center gap-3 py-6">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
               <p className="text-sm text-muted-foreground">Verificando demandas atribuídas...</p>
             </div>
           ) : deleteState.affectedCount > 0 ? (
-            // Há demandas → pede reassociação
+            // Há vínculos → pede reassociação
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-destructive">
@@ -452,19 +488,17 @@ export function UserRolesManager() {
                 </DialogTitle>
                 <DialogDescription asChild>
                   <div className="space-y-3 pt-1">
-                    {/* Alerta */}
                     <div className="flex items-start gap-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
                       <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                       <p className="text-xs text-amber-800 dark:text-amber-300">
                         O usuário <span className="font-semibold">{deleteState.user?.display_name}</span> possui{" "}
-                        <span className="font-semibold">{deleteState.affectedCount} demanda(s)</span> atribuída(s).
+                        <span className="font-semibold">{deleteState.affectedCount} vínculo(s)</span> em demandas.
                         Selecione um novo responsável antes de excluir.
                       </p>
                     </div>
 
-                    {/* Seletor de usuário destino */}
                     <div>
-                      <Label className="text-xs font-semibold">Transferir demandas para</Label>
+                      <Label className="text-xs font-semibold">Transferir responsabilidades para</Label>
                       <Select
                         value={deleteState.reassignToId}
                         onValueChange={(v) => setDeleteState((prev) => ({ ...prev, reassignToId: v }))}
@@ -511,7 +545,7 @@ export function UserRolesManager() {
               </DialogFooter>
             </>
           ) : (
-            // Sem demandas → confirmação simples
+            // Sem vínculos → confirmação simples
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-destructive">
