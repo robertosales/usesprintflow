@@ -40,10 +40,16 @@ export function ReportFilters({ periodo, setPeriodo, analista, setAnalista, anal
       </Select>
       {showAnalista && analistas && setAnalista && (
         <Select value={analista || 'all'} onValueChange={setAnalista}>
-          <SelectTrigger className="w-[180px] h-8 text-xs"><SelectValue placeholder="Todos analistas" /></SelectTrigger>
+          <SelectTrigger className="w-[200px] h-8 text-xs">
+            <SelectValue placeholder="Todos analistas" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos analistas</SelectItem>
-            {analistas.map(a => <SelectItem key={a.user_id} value={a.user_id}>{a.display_name}</SelectItem>)}
+            {analistas.map(a => (
+              <SelectItem key={a.user_id} value={a.user_id} title={a.display_name}>
+                {a.display_name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       )}
