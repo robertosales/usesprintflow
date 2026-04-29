@@ -246,17 +246,20 @@ export function UserRolesManager() {
       if (affectedCount > 0 && reassignToId) {
         // 1a. Transfere colunas diretas em demandas
         for (const col of DEMANDAS_USER_COLS) {
-          await supabase
+          const { error } = await supabase
             .from(DEMANDAS_TABLE)
             .update({ [col]: reassignToId })
             .eq(col, user.user_id);
+          if (error) throw new Error(`Erro ao transferir coluna ${col}: ${error.message}`);
         }
 
         // 1b. Transfere linhas em demanda_responsaveis (com deduplicação)
-        const { data: relRows } = await supabase
+        const { data: relRows, error: fetchRelError } = await supabase
           .from(DEMANDA_RESPONSAVEIS_TABLE)
           .select("id, demanda_id, papel")
           .eq("user_id", user.user_id);
+
+        if (fetchRelError) throw new Error(`Erro ao buscar responsáveis: ${fetchRelError.message}`);
 
         for (const row of relRows ?? []) {
           const { count } = await supabase
@@ -267,20 +270,25 @@ export function UserRolesManager() {
             .eq("papel", row.papel);
 
           if ((count ?? 0) > 0) {
-            // Destino já tem esse papel nessa demanda → só remove o antigo
-            await supabase.from(DEMANDA_RESPONSAVEIS_TABLE).delete().eq("id", row.id);
+            const { error } = await supabase.from(DEMANDA_RESPONSAVEIS_TABLE).delete().eq("id", row.id);
+            if (error) throw new Error(`Erro ao remover duplicata: ${error.message}`);
           } else {
-            // Transfere normalmente
-            await supabase.from(DEMANDA_RESPONSAVEIS_TABLE).update({ user_id: reassignToId }).eq("id", row.id);
+            const { error } = await supabase
+              .from(DEMANDA_RESPONSAVEIS_TABLE)
+              .update({ user_id: reassignToId })
+              .eq("id", row.id);
+            if (error) throw new Error(`Erro ao transferir responsável: ${error.message}`);
           }
         }
       }
 
       // 2. Remove todos os roles
-      await supabase.from("user_roles").delete().eq("user_id", user.user_id);
+      const { error: rolesError } = await supabase.from("user_roles").delete().eq("user_id", user.user_id);
+      if (rolesError) throw new Error(`Erro ao remover roles: ${rolesError.message}`);
 
       // 3. Remove o perfil
-      await supabase.from("profiles").delete().eq("user_id", user.user_id);
+      const { error: profileError } = await supabase.from("profiles").delete().eq("user_id", user.user_id);
+      if (profileError) throw new Error(`Erro ao excluir perfil: ${profileError.message}`);
 
       toast.success(
         affectedCount > 0
@@ -290,8 +298,9 @@ export function UserRolesManager() {
 
       setDeleteState(DELETE_INITIAL);
       await fetchUsers();
-    } catch {
-      toast.error("Erro ao excluir usuário");
+    } catch (err: any) {
+      // Exibe a mensagem real do erro para facilitar o diagnóstico
+      toast.error(err?.message || "Erro ao excluir usuário");
       setDeleteState((prev) => ({ ...prev, deleting: false }));
     }
   }
