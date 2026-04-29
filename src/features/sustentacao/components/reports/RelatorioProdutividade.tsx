@@ -15,7 +15,24 @@ import { ReportHeader, ReportLegend } from "./ReportHeader";
 import { ExportButton } from "@/components/dashboard/ExportButton";
 import { getReportConfig } from "../../utils/reportConfig";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect } from "react";
 import { ChevronDown, ChevronRight, ClipboardList, CheckCircle2, Clock, AlertTriangle, FileText } from "lucide-react";
+
+// ── hook local para demanda_responsaveis ──────────────────────────────────────
+
+function useDemandaResponsaveis() {
+  const [responsaveis, setResponsaveis] = useState<Array<{ demanda_id: string; user_id: string; papel: string }>>([]);
+
+  useEffect(() => {
+    supabase
+      .from("demanda_responsaveis")
+      .select("demanda_id, user_id, papel")
+      .then(({ data }) => setResponsaveis(data || []));
+  }, []);
+
+  return { responsaveis };
+}
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -41,6 +58,8 @@ const SITUACAO_LABEL: Record<string, { label: string; cls: string }> = {
   em_andamento: { label: "Em andamento", cls: "bg-blue-100 text-blue-700 border-blue-200" },
   em_analise: { label: "Em análise", cls: "bg-blue-100 text-blue-700 border-blue-200" },
   em_execucao: { label: "Em execução", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  planejamento_ag_aprovacao: { label: "Ag. aprovação", cls: "bg-purple-100 text-purple-700 border-purple-200" },
+  planejamento_aprovada: { label: "Aprovada", cls: "bg-purple-100 text-purple-700 border-purple-200" },
   aberto: { label: "Aberto", cls: "bg-orange-100 text-orange-700 border-orange-200" },
   nova: { label: "Nova", cls: "bg-orange-100 text-orange-700 border-orange-200" },
   cancelado: { label: "Cancelado", cls: "bg-gray-100 text-gray-500 border-gray-200" },
@@ -50,7 +69,9 @@ const SITUACAO_LABEL: Record<string, { label: string; cls: string }> = {
 function SituacaoBadge({ situacao }: { situacao?: string | null }) {
   const s = SITUACAO_LABEL[situacao?.toLowerCase() ?? ""];
   return (
-    <Badge className={`text-[10px] ${s?.cls ?? "bg-muted text-muted-foreground"}`}>{s?.label ?? situacao ?? "—"}</Badge>
+    <Badge className={`text-[10px] ${s?.cls ?? "bg-muted text-muted-foreground"}`}>
+      {s?.label ?? situacao?.replace(/_/g, " ") ?? "—"}
+    </Badge>
   );
 }
 
@@ -103,6 +124,7 @@ export function RelatorioProdutividade() {
   const { transitions } = useAllTransitions();
   const { hours } = useAllHours();
   const profiles = useProfiles();
+  const { responsaveis } = useDemandaResponsaveis(); // ✅ tabela relacional
   const { teams } = useAuth();
 
   const [teamId, setTeamId] = useState("all");
@@ -113,7 +135,7 @@ export function RelatorioProdutividade() {
 
   const sustTeams = teams.filter((t) => t.module === "sustentacao");
 
-  // ✅ Set de IDs com perfil válido — usado para filtrar órfãos em todo o componente
+  // ✅ Set de IDs com perfil válido — bloqueia UUIDs órfãos
   const profileIds = useMemo(() => new Set(profiles.map((p) => p.user_id)), [profiles]);
 
   // mapa user_id → nome (apenas perfis válidos)
@@ -123,43 +145,28 @@ export function RelatorioProdutividade() {
     return m;
   }, [profiles]);
 
-  // analistas do time — apenas com perfil válido
-  const analistasList = useMemo(() => {
-    const idSet = new Set<string>();
-    demandas
-      .filter((d) => teamId === "all" || d.team_id === teamId)
-      .forEach((d) => {
-        if (d.responsavel_dev) idSet.add(d.responsavel_dev);
-        if (d.responsavel_requisitos) idSet.add(d.responsavel_requisitos);
-        if (d.responsavel_teste) idSet.add(d.responsavel_teste);
-        if (d.responsavel_arquiteto) idSet.add(d.responsavel_arquiteto);
-      });
-    hours
-      .filter((h) => {
-        const d = demandas.find((d) => d.id === h.demanda_id);
-        return d && (teamId === "all" || d.team_id === teamId);
-      })
-      .forEach((h) => idSet.add(h.user_id));
+  // ✅ mapa demanda_id → Set<user_id> — inclui demanda_responsaveis
+  const responsaveisPorDemanda = useMemo(() => {
+    const m = new Map<string, Set<string>>();
 
-    return profiles
-      .filter((p) => idSet.has(p.user_id)) // ✅ garante perfil válido
-      .map((p) => ({
-        user_id: p.user_id,
-        display_name: p.display_name || p.email || p.user_id.slice(0, 8),
-      }))
-      .sort((a, b) => a.display_name.localeCompare(b.display_name));
-  }, [demandas, hours, profiles, teamId]);
-
-  // demandas filtradas por período e time
-  const demandasFiltradas = useMemo(() => {
-    const inicio = new Date(dataInicio + "T00:00:00");
-    const fim = new Date(dataFim + "T23:59:59");
-    return demandas.filter((d) => {
-      if (teamId !== "all" && d.team_id !== teamId) return false;
-      const criado = new Date(d.created_at);
-      return criado >= inicio && criado <= fim;
+    // 1. colunas diretas da tabela demandas
+    demandas.forEach((d) => {
+      const ids = new Set<string>();
+      if (d.responsavel_dev) ids.add(d.responsavel_dev);
+      if (d.responsavel_requisitos) ids.add(d.responsavel_requisitos);
+      if (d.responsavel_teste) ids.add(d.responsavel_teste);
+      if (d.responsavel_arquiteto) ids.add(d.responsavel_arquiteto);
+      m.set(d.id, ids);
     });
-  }, [demandas, teamId, dataInicio, dataFim]);
+
+    // 2. tabela relacional demanda_responsaveis
+    responsaveis.forEach((r) => {
+      if (!m.has(r.demanda_id)) m.set(r.demanda_id, new Set());
+      m.get(r.demanda_id)!.add(r.user_id);
+    });
+
+    return m;
+  }, [demandas, responsaveis]);
 
   // mapa demanda_id → Map<user_id, horas>
   const horasPorDemandaUser = useMemo(() => {
@@ -173,41 +180,71 @@ export function RelatorioProdutividade() {
     return m;
   }, [hours]);
 
+  // analistas do time — apenas com perfil válido
+  const analistasList = useMemo(() => {
+    const idSet = new Set<string>();
+    const demandasDoTime = demandas.filter((d) => teamId === "all" || d.team_id === teamId);
+
+    demandasDoTime.forEach((d) => {
+      // colunas diretas
+      if (d.responsavel_dev) idSet.add(d.responsavel_dev);
+      if (d.responsavel_requisitos) idSet.add(d.responsavel_requisitos);
+      if (d.responsavel_teste) idSet.add(d.responsavel_teste);
+      if (d.responsavel_arquiteto) idSet.add(d.responsavel_arquiteto);
+      // tabela relacional
+      responsaveisPorDemanda.get(d.id)?.forEach((uid) => idSet.add(uid));
+      // quem lançou horas
+      horasPorDemandaUser.get(d.id)?.forEach((_, uid) => idSet.add(uid));
+    });
+
+    return profiles
+      .filter((p) => idSet.has(p.user_id)) // ✅ apenas perfis válidos
+      .map((p) => ({
+        user_id: p.user_id,
+        display_name: p.display_name || p.email || p.user_id.slice(0, 8),
+      }))
+      .sort((a, b) => a.display_name.localeCompare(b.display_name));
+  }, [demandas, responsaveisPorDemanda, horasPorDemandaUser, profiles, teamId]);
+
+  // demandas filtradas por período e time
+  const demandasFiltradas = useMemo(() => {
+    const inicio = new Date(dataInicio + "T00:00:00");
+    const fim = new Date(dataFim + "T23:59:59");
+    return demandas.filter((d) => {
+      if (teamId !== "all" && d.team_id !== teamId) return false;
+      const criado = new Date(d.created_at);
+      return criado >= inicio && criado <= fim;
+    });
+  }, [demandas, teamId, dataInicio, dataFim]);
+
   // agrupamento por analista → atividades
   const grupos = useMemo(() => {
-    // Coleta todos os user_ids participantes
+    // ✅ Coleta todos os IDs: colunas + demanda_responsaveis + demanda_hours
     const todosIds = new Set<string>();
     demandasFiltradas.forEach((d) => {
-      if (d.responsavel_dev) todosIds.add(d.responsavel_dev);
-      if (d.responsavel_requisitos) todosIds.add(d.responsavel_requisitos);
-      if (d.responsavel_teste) todosIds.add(d.responsavel_teste);
-      if (d.responsavel_arquiteto) todosIds.add(d.responsavel_arquiteto);
+      responsaveisPorDemanda.get(d.id)?.forEach((uid) => todosIds.add(uid));
       horasPorDemandaUser.get(d.id)?.forEach((_, uid) => todosIds.add(uid));
     });
 
-    // ✅ Filtra apenas IDs com perfil válido — remove qualquer UUID órfão
+    // ✅ Filtra apenas IDs com perfil válido — remove órfãos
     const ids = analista !== "all" ? [analista] : [...todosIds].filter((id) => profileIds.has(id));
 
     const result: AnalistaGroup[] = ids.map((userId) => {
       const atividades: AtividadeRow[] = demandasFiltradas
         .filter((d) => {
-          const eResponsavel =
-            d.responsavel_dev === userId ||
-            d.responsavel_requisitos === userId ||
-            d.responsavel_teste === userId ||
-            d.responsavel_arquiteto === userId;
+          // ✅ verifica responsabilidade via mapa unificado (colunas + relacional)
+          const eResponsavel = responsaveisPorDemanda.get(d.id)?.has(userId) ?? false;
           const lancouHora = horasPorDemandaUser.get(d.id)?.has(userId) ?? false;
           return eResponsavel || lancouHora;
         })
         .map((d) => {
           const horasAnalista = horasPorDemandaUser.get(d.id)?.get(userId) ?? 0;
 
-          // Outros analistas da mesma demanda
+          // Outros analistas da mesma demanda (exceto o atual)
           const outrosIds = new Set<string>();
-          if (d.responsavel_dev && d.responsavel_dev !== userId) outrosIds.add(d.responsavel_dev);
-          if (d.responsavel_requisitos && d.responsavel_requisitos !== userId) outrosIds.add(d.responsavel_requisitos);
-          if (d.responsavel_teste && d.responsavel_teste !== userId) outrosIds.add(d.responsavel_teste);
-          if (d.responsavel_arquiteto && d.responsavel_arquiteto !== userId) outrosIds.add(d.responsavel_arquiteto);
+          responsaveisPorDemanda.get(d.id)?.forEach((uid) => {
+            if (uid !== userId) outrosIds.add(uid);
+          });
           horasPorDemandaUser.get(d.id)?.forEach((_, uid) => {
             if (uid !== userId) outrosIds.add(uid);
           });
@@ -226,7 +263,7 @@ export function RelatorioProdutividade() {
             dataInicio: fmtDate(d.created_at),
             dataFim: fmtDate(d.aceite_data ?? conclusao?.created_at ?? null),
             horasAnalista,
-            // ✅ filtra órfãos também nos "Outros Analistas"
+            // ✅ filtra órfãos nos "Outros Analistas"
             outrosAnalistas: [...outrosIds]
               .filter((id) => profileIds.has(id))
               .map((id) => nomeMap.get(id) || id.slice(0, 8)),
@@ -250,7 +287,7 @@ export function RelatorioProdutividade() {
     });
 
     return result.filter((g) => g.atividades.length > 0).sort((a, b) => b.resolvidos - a.resolvidos);
-  }, [demandasFiltradas, horasPorDemandaUser, transitions, nomeMap, analista, profileIds]);
+  }, [demandasFiltradas, responsaveisPorDemanda, horasPorDemandaUser, transitions, nomeMap, analista, profileIds]);
 
   // KPIs globais
   const kpis = useMemo(
@@ -487,7 +524,6 @@ export function RelatorioProdutividade() {
                             </p>
                           </div>
                         </div>
-
                         <div className="flex items-center gap-2 shrink-0">
                           <Badge className={`text-[10px] ${rateColor(grupo.taxaResolucao)}`}>
                             {grupo.taxaResolucao.toFixed(0)}% resolução
@@ -557,8 +593,6 @@ export function RelatorioProdutividade() {
                                 </TableCell>
                               </TableRow>
                             ))}
-
-                            {/* Subtotal */}
                             <TableRow className="bg-muted/20 border-t font-semibold">
                               <TableCell colSpan={5} className="text-xs pl-4 text-muted-foreground">
                                 Subtotal — {grupo.nome}
