@@ -39,6 +39,8 @@ export function UserRolesManager() {
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [pendingRoles, setPendingRoles] = useState<AppRole[]>([]);
   const [pendingModule, setPendingModule] = useState<string>("sala_agil");
+  // ✅ NOVO: estado para edição do nome
+  const [pendingName, setPendingName] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [searchFilter, setSearchFilter] = useState("");
@@ -51,7 +53,7 @@ export function UserRolesManager() {
       const [profilesRes, userRolesRes, rolesFromBank] = await Promise.all([
         supabase.from("profiles").select("user_id, display_name, email, module_access"),
         supabase.from("user_roles").select("user_id, role"),
-        fetchAllRoles(), // ← busca roles do banco
+        fetchAllRoles(),
       ]);
 
       const profileList = (profilesRes.data || []) as any[];
@@ -95,11 +97,15 @@ export function UserRolesManager() {
     setEditingUser(user.user_id);
     setPendingRoles([...user.roles]);
     setPendingModule(user.module_access);
+    // ✅ NOVO: popula o nome atual
+    setPendingName(user.display_name === "—" ? "" : user.display_name);
   }
 
   function cancelEditing() {
     setEditingUser(null);
     setPendingRoles([]);
+    // ✅ NOVO: reseta o nome
+    setPendingName("");
   }
 
   function toggleRole(role: AppRole) {
@@ -111,24 +117,46 @@ export function UserRolesManager() {
     const currentUser = users.find((u) => u.user_id === userId);
     if (!currentUser) return;
 
+    // ✅ NOVO: valida que o nome não está vazio
+    const trimmedName = pendingName.trim();
+    if (!trimmedName) {
+      toast.error("O nome não pode estar vazio");
+      return;
+    }
+
     setSaving(true);
     try {
       const toRemove = currentUser.roles.filter((r) => !pendingRoles.includes(r));
       const toAdd = pendingRoles.filter((r) => !currentUser.roles.includes(r));
 
       for (const role of toRemove) {
-        await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", role as any);
+        await supabase
+          .from("user_roles")
+          .delete()
+          .eq("user_id", userId)
+          .eq("role", role as any);
       }
       for (const role of toAdd) {
         await supabase.from("user_roles").insert({ user_id: userId, role: role as any });
       }
 
-      if (currentUser.module_access !== pendingModule) {
-        await supabase.from("profiles").update({ module_access: pendingModule }).eq("user_id", userId);
+      // ✅ NOVO: atualiza nome e/ou módulo se mudaram
+      const nameChanged = trimmedName !== currentUser.display_name && trimmedName !== "—";
+      const moduleChanged = currentUser.module_access !== pendingModule;
+
+      if (nameChanged || moduleChanged) {
+        await supabase
+          .from("profiles")
+          .update({
+            ...(nameChanged && { display_name: trimmedName }),
+            ...(moduleChanged && { module_access: pendingModule }),
+          })
+          .eq("user_id", userId);
       }
 
       toast.success("Perfis atualizados com sucesso!");
       setEditingUser(null);
+      setPendingName("");
       await fetchUsers();
     } catch {
       toast.error("Erro ao salvar perfis");
@@ -212,6 +240,18 @@ export function UserRolesManager() {
                 <CardContent className="pt-0">
                   {isEditing ? (
                     <div className="space-y-4 mt-2">
+                      {/* ✅ NOVO: Campo de edição de nome */}
+                      <div className="max-w-xs">
+                        <Label className="text-xs font-semibold">Nome de Exibição</Label>
+                        <Input
+                          value={pendingName}
+                          onChange={(e) => setPendingName(e.target.value)}
+                          placeholder="Nome do usuário"
+                          className="h-8 mt-1 text-xs"
+                          maxLength={80}
+                        />
+                      </div>
+
                       {/* Módulo */}
                       <div className="max-w-xs">
                         <Label className="text-xs font-semibold">Módulo de Acesso</Label>
@@ -248,7 +288,6 @@ export function UserRolesManager() {
                       {user.roles.length > 0 ? (
                         user.roles.map((role) => (
                           <Badge key={role} variant="secondary" className="text-xs">
-                            {/* getRoleLabel como fallback se o banco não tiver o label */}
                             {availableRoles.find((r) => r.name === role)?.label || getRoleLabel(role)}
                           </Badge>
                         ))
