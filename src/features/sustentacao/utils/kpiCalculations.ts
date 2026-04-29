@@ -1,243 +1,142 @@
-import type { Demanda, DemandaTransition, DemandaHour } from "../types/demanda";
+// src/modules/sustentacao/utils/kpiCalculations.ts
 
-// ── Helpers ──
-function diffHours(a: string, b: string): number {
-  return Math.abs(new Date(b).getTime() - new Date(a).getTime()) / (1000 * 60 * 60);
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function formatHours(hours: number): string {
+  if (hours === 0) return "0h";
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
-function isToday(dateStr: string): boolean {
-  const d = new Date(dateStr);
-  const now = new Date();
-  return d.toDateString() === now.toDateString();
+function getNome(profiles: any[], userId: string): string {
+  const profile = profiles.find((p) => p.user_id === userId);
+  return profile?.display_name || profile?.email || userId.slice(0, 8);
 }
 
-// ── Atendimento e Volume ──
-export function calcAtendimento(demandas: Demanda[], backlogDays = 30) {
-  const ativos = demandas.filter(d => d.situacao !== 'aceite_final');
-  const total = ativos.length;
-  const abertosHoje = demandas.filter(d => isToday(d.created_at)).length;
-  const resolvidosHoje = demandas.filter(d => d.situacao === 'aceite_final' && d.aceite_data && isToday(d.aceite_data)).length;
-
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - backlogDays);
-  const backlog = ativos.filter(d => new Date(d.created_at) < cutoff).length;
-
-  // Taxa de reabertura: demandas que têm transição aceite_final -> qualquer outra coisa
-  // Simplified: count demandas that went to aceite_final and back
-  return { total, abertosHoje, resolvidosHoje, backlog, backlogDays };
+function isResolvido(situacao?: string | null): boolean {
+  return ["concluido", "resolvido"].includes(situacao?.toLowerCase() ?? "");
 }
 
-// ── Tempo ──
-export function calcTempos(demandas: Demanda[], transitions: DemandaTransition[]) {
-  const transitionsByDemanda = new Map<string, DemandaTransition[]>();
-  transitions.forEach(t => {
-    const arr = transitionsByDemanda.get(t.demanda_id) || [];
-    arr.push(t);
-    transitionsByDemanda.set(t.demanda_id, arr);
+function isAberto(situacao?: string | null): boolean {
+  return ["aberto", "em_andamento"].includes(situacao?.toLowerCase() ?? "");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// calcProdutividade
+//
+// Regra: uma demanda pode ter N analistas — cada um lança horas via
+// demanda_hours. O "atribuídos" de cada analista é a união de:
+//   1. demandas onde ele lançou ao menos 1 hora
+//   2. demandas onde ele é responsável em qualquer coluna
+//      (responsavel_dev | requisitos | teste | arquiteto)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function calcProdutividade(demandas: any[], transitions: any[], hours: any[], profiles: any[]) {
+  // 1. Mapa user_id → Map<demanda_id, totalHoras>
+  const horasPorUser = new Map<string, Map<string, number>>();
+  hours.forEach((h) => {
+    if (!h.user_id || !h.demanda_id) return;
+    if (!horasPorUser.has(h.user_id)) horasPorUser.set(h.user_id, new Map());
+    const m = horasPorUser.get(h.user_id)!;
+    m.set(h.demanda_id, (m.get(h.demanda_id) ?? 0) + (h.hours ?? 0));
   });
 
-  let tmrSum = 0, tmrCount = 0;
-  let mttrSum = 0, mttrCount = 0;
-  let mttaSum = 0, mttaCount = 0;
-
-  demandas.forEach(d => {
-    const ts = transitionsByDemanda.get(d.id) || [];
-    if (ts.length === 0) return;
-
-    // Sort by created_at ascending
-    const sorted = [...ts].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
-    // TMR: time from creation to first transition away from 'nova'
-    const firstAction = sorted.find(t => t.from_status === 'nova');
-    if (firstAction) {
-      tmrSum += diffHours(d.created_at, firstAction.created_at);
-      tmrCount++;
-    }
-
-    // MTTA: same as TMR for now (first acknowledgment)
-    const firstAck = sorted[0];
-    if (firstAck) {
-      mttaSum += diffHours(d.created_at, firstAck.created_at);
-      mttaCount++;
-    }
-
-    // MTTR: time from creation to aceite_final
-    if (d.situacao === 'aceite_final') {
-      const aceiteTransition = sorted.find(t => t.to_status === 'aceite_final');
-      if (aceiteTransition) {
-        mttrSum += diffHours(d.created_at, aceiteTransition.created_at);
-        mttrCount++;
-      }
-    }
+  // 2. Todos os user_ids únicos (horas + colunas responsável)
+  const todosIds = new Set<string>([...horasPorUser.keys()]);
+  demandas.forEach((d) => {
+    if (d.responsavel_dev) todosIds.add(d.responsavel_dev);
+    if (d.responsavel_requisitos) todosIds.add(d.responsavel_requisitos);
+    if (d.responsavel_teste) todosIds.add(d.responsavel_teste);
+    if (d.responsavel_arquiteto) todosIds.add(d.responsavel_arquiteto);
   });
 
-  return {
-    tmr: tmrCount > 0 ? tmrSum / tmrCount : 0,
-    mttr: mttrCount > 0 ? mttrSum / mttrCount : 0,
-    tma: mttrCount > 0 ? mttrSum / mttrCount : 0, // TMA ≈ MTTR for simplification
-    mtta: mttaCount > 0 ? mttaSum / mttaCount : 0,
-    tmrCount,
-    mttrCount,
-    mttaCount,
-  };
-}
+  return [...todosIds].map((userId) => {
+    // IDs de demandas onde lançou hora
+    const demandasComHora = new Set<string>(horasPorUser.get(userId)?.keys() ?? []);
 
-// ── SLA ──
-export interface SLAResult {
-  demandaId: string;
-  rhm: string;
-  projeto: string;
-  prioridade: string;
-  abertura: string;
-  prazoSLA: string;
-  resolucao: string | null;
-  statusSLA: 'dentro' | 'em_risco' | 'violado';
-  atraso: number; // hours
-  analista: string | null;
-}
+    // IDs de demandas onde é responsável direto
+    const demandasResponsavel = new Set<string>(
+      demandas
+        .filter(
+          (d) =>
+            d.responsavel_dev === userId ||
+            d.responsavel_requisitos === userId ||
+            d.responsavel_teste === userId ||
+            d.responsavel_arquiteto === userId,
+        )
+        .map((d) => d.id),
+    );
 
-export function calcSLA(demandas: Demanda[], transitions: DemandaTransition[]): { results: SLAResult[]; compliance: number; violados: number; emRisco: number; total: number } {
-  // SLA thresholds in hours
-  const SLA_HOURS: Record<string, number> = { '24x7': 4, 'padrao': 24 };
+    // União
+    const todasIds = new Set<string>([...demandasComHora, ...demandasResponsavel]);
+    const atribuidas = demandas.filter((d) => todasIds.has(d.id));
 
-  const transitionsByDemanda = new Map<string, DemandaTransition[]>();
-  transitions.forEach(t => {
-    const arr = transitionsByDemanda.get(t.demanda_id) || [];
-    arr.push(t);
-    transitionsByDemanda.set(t.demanda_id, arr);
-  });
+    const resolvidos = atribuidas.filter((d) => isResolvido(d.situacao)).length;
+    const emAberto = atribuidas.filter((d) => isAberto(d.situacao)).length;
 
-  const results: SLAResult[] = demandas.map(d => {
-    const slaHours = SLA_HOURS[d.sla] || 24;
-    const prazo = new Date(new Date(d.created_at).getTime() + slaHours * 60 * 60 * 1000);
-    const ts = transitionsByDemanda.get(d.id) || [];
-    const aceite = ts.find(t => t.to_status === 'aceite_final');
-    const resolucao = aceite ? aceite.created_at : null;
-    const now = new Date();
-    let statusSLA: 'dentro' | 'em_risco' | 'violado' = 'dentro';
-    let atraso = 0;
+    // Total de horas lançadas pelo analista (soma de todas as demandas)
+    const horasLancadas = [...(horasPorUser.get(userId)?.values() ?? [])].reduce((s, v) => s + v, 0);
 
-    if (resolucao) {
-      if (new Date(resolucao) > prazo) {
-        statusSLA = 'violado';
-        atraso = diffHours(prazo.toISOString(), resolucao);
-      }
-    } else {
-      if (now > prazo) {
-        statusSLA = 'violado';
-        atraso = diffHours(prazo.toISOString(), now.toISOString());
-      } else {
-        const remaining = (prazo.getTime() - now.getTime()) / (1000 * 60 * 60);
-        if (remaining < 2) statusSLA = 'em_risco';
-      }
-    }
+    const taxaResolucao = atribuidas.length > 0 ? (resolvidos / atribuidas.length) * 100 : 0;
+
+    // MTTR em horas: média do tempo entre created_at e aceite_data/updated_at
+    const tempos = atribuidas
+      .filter((d) => isResolvido(d.situacao))
+      .map((d) => {
+        const abertura = new Date(d.created_at).getTime();
+        const conclusao = d.aceite_data
+          ? new Date(d.aceite_data).getTime()
+          : d.updated_at
+            ? new Date(d.updated_at).getTime()
+            : null;
+        return conclusao ? (conclusao - abertura) / (1000 * 60 * 60) : null;
+      })
+      .filter((t): t is number => t !== null);
+
+    const mttrIndividual = tempos.length > 0 ? tempos.reduce((s, t) => s + t, 0) / tempos.length : null;
 
     return {
-      demandaId: d.id,
-      rhm: d.rhm,
-      projeto: d.projeto,
-      prioridade: d.sla === '24x7' ? 'Crítico' : 'Padrão',
-      abertura: d.created_at,
-      prazoSLA: prazo.toISOString(),
-      resolucao,
-      statusSLA,
-      atraso,
-      analista: d.responsavel_dev,
+      userId,
+      nome: getNome(profiles, userId),
+      atribuidos: atribuidas.length,
+      resolvidos,
+      emAberto,
+      horasLancadas,
+      taxaResolucao,
+      mttrIndividual,
     };
   });
-
-  const total = results.length;
-  const dentro = results.filter(r => r.statusSLA === 'dentro').length;
-  const violados = results.filter(r => r.statusSLA === 'violado').length;
-  const emRisco = results.filter(r => r.statusSLA === 'em_risco').length;
-  const compliance = total > 0 ? (dentro / total) * 100 : 0;
-
-  return { results, compliance, violados, emRisco, total };
 }
 
-// ── Produtividade por Analista ──
-export interface AnalistaStats {
-  userId: string;
-  nome: string;
-  atribuidos: number;
-  resolvidos: number;
-  taxaResolucao: number;
-  mttrIndividual: number;
-  fcrIndividual: number;
-  horasLancadas: number;
-  emAberto: number;
-  slaCompliance: number;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// calcKpiGeral — KPIs globais do painel (não individual)
+// ─────────────────────────────────────────────────────────────────────────────
 
-export function calcProdutividade(
-  demandas: Demanda[],
-  transitions: DemandaTransition[],
-  hours: DemandaHour[],
-  profiles: Array<{ user_id: string; display_name: string }>
-): AnalistaStats[] {
-  const analistas = new Map<string, AnalistaStats>();
+export function calcKpiGeral(demandas: any[], hours: any[]) {
+  const total = demandas.length;
+  const resolvidos = demandas.filter((d) => isResolvido(d.situacao)).length;
+  const emAberto = demandas.filter((d) => isAberto(d.situacao)).length;
+  const taxa = total > 0 ? (resolvidos / total) * 100 : 0;
+  const totalHoras = hours.reduce((s, h) => s + (h.hours ?? 0), 0);
 
-  const getOrCreate = (userId: string): AnalistaStats => {
-    if (!analistas.has(userId)) {
-      const p = profiles.find(pr => pr.user_id === userId);
-      analistas.set(userId, {
-        userId,
-        nome: p?.display_name || userId.slice(0, 8),
-        atribuidos: 0,
-        resolvidos: 0,
-        taxaResolucao: 0,
-        mttrIndividual: 0,
-        fcrIndividual: 0,
-        horasLancadas: 0,
-        emAberto: 0,
-        slaCompliance: 0,
-      });
-    }
-    return analistas.get(userId)!;
-  };
+  const tempos = demandas
+    .filter((d) => isResolvido(d.situacao))
+    .map((d) => {
+      const abertura = new Date(d.created_at).getTime();
+      const conclusao = d.aceite_data
+        ? new Date(d.aceite_data).getTime()
+        : d.updated_at
+          ? new Date(d.updated_at).getTime()
+          : null;
+      return conclusao ? (conclusao - abertura) / (1000 * 60 * 60) : null;
+    })
+    .filter((t): t is number => t !== null);
 
-  // Build a map: demanda_id -> set of user_ids who worked on it (from transitions)
-  const demandaWorkers = new Map<string, Set<string>>();
-  transitions.forEach(t => {
-    if (!demandaWorkers.has(t.demanda_id)) demandaWorkers.set(t.demanda_id, new Set());
-    demandaWorkers.get(t.demanda_id)!.add(t.user_id);
-  });
+  const mttrGeral = tempos.length > 0 ? tempos.reduce((s, t) => s + t, 0) / tempos.length : null;
 
-  // Count demandas by responsavel_dev OR by transition workers
-  demandas.forEach(d => {
-    // Determine who is responsible: prefer responsavel_dev, fallback to transition users
-    const responsaveis: string[] = [];
-    if (d.responsavel_dev) {
-      responsaveis.push(d.responsavel_dev);
-    } else {
-      // Use users who performed transitions on this demanda
-      const workers = demandaWorkers.get(d.id);
-      if (workers) responsaveis.push(...workers);
-    }
-
-    responsaveis.forEach(userId => {
-      const a = getOrCreate(userId);
-      a.atribuidos++;
-      if (d.situacao === 'aceite_final') a.resolvidos++;
-      else a.emAberto++;
-    });
-  });
-
-  // Sum hours by user
-  hours.forEach(h => {
-    const a = getOrCreate(h.user_id);
-    a.horasLancadas += Number(h.horas);
-  });
-
-  // Calc derived metrics
-  analistas.forEach(a => {
-    a.taxaResolucao = a.atribuidos > 0 ? (a.resolvidos / a.atribuidos) * 100 : 0;
-  });
-
-  return Array.from(analistas.values()).sort((a, b) => b.resolvidos - a.resolvidos);
-}
-
-export function formatHours(h: number): string {
-  if (h < 1) return `${Math.round(h * 60)}min`;
-  return `${h.toFixed(1)}h`;
+  return { total, resolvidos, emAberto, taxa, totalHoras, mttrGeral };
 }
