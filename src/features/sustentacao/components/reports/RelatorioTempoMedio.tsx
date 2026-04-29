@@ -11,6 +11,7 @@ import { ExportButton } from "@/components/dashboard/ExportButton";
 import { getReportConfig } from "../../utils/reportConfig";
 import { Clock, Timer, TrendingUp, Target } from "lucide-react";
 import type { Demanda, DemandaTransition } from "../../types/demanda";
+import { buildAnalistasDedup, analistaMatches } from "../../utils/analistasDedup";
 
 const META_MTTR = 4; // horas
 const META_TMR = 1; // hora
@@ -35,9 +36,9 @@ export function RelatorioTempoMedio() {
     }
     if (analista !== 'all') {
       const demandaIdsFromTransitions = new Set(
-        transitions.filter(t => t.user_id === analista).map(t => t.demanda_id)
+        transitions.filter(t => analistaMatches(analista, t.user_id)).map(t => t.demanda_id)
       );
-      items = items.filter(d => d.responsavel_dev === analista || demandaIdsFromTransitions.has(d.id));
+      items = items.filter(d => analistaMatches(analista, d.responsavel_dev) || demandaIdsFromTransitions.has(d.id));
     }
     return items;
   }, [demandas, periodo, analista, transitions, teamId]);
@@ -82,10 +83,7 @@ export function RelatorioTempoMedio() {
     const idSet = new Set<string>();
     demandas.forEach(d => { if (d.responsavel_dev) idSet.add(d.responsavel_dev); });
     transitions.forEach(t => { if (demandas.some(d => d.id === t.demanda_id)) idSet.add(t.user_id); });
-    return [...idSet].map(id => {
-      const p = profiles.find(pr => pr.user_id === id);
-      return { user_id: id, display_name: p?.display_name || id.slice(0, 8) };
-    });
+    return buildAnalistasDedup([...idSet], profiles);
   }, [demandas, transitions, profiles]);
 
   // Totals row
