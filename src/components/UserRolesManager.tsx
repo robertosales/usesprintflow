@@ -308,9 +308,14 @@ export function UserRolesManager() {
               <Card key={user.user_id}>
                 <CardHeader className="pb-2 flex flex-row items-start justify-between">
                   <div className="flex items-center gap-3">
-                    {/* ✅ Avatar corrigido — apenas a inicial */}
+                    {/* ✅ Avatar com iniciais do primeiro e último nome */}
                     <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 font-bold text-sm">
-                      {(user.display_name?.[0] || "U").toUpperCase()}
+                      {(() => {
+                        const parts = (user.display_name || "").trim().split(/\s+/).filter(Boolean);
+                        if (parts.length === 0) return "U";
+                        if (parts.length === 1) return parts[0][0].toUpperCase();
+                        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                      })()}
                     </div>
                     <div>
                       <CardTitle className="text-sm font-semibold">{user.display_name}</CardTitle>
