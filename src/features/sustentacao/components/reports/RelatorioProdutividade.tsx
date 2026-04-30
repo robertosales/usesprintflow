@@ -542,7 +542,7 @@ export function RelatorioProdutividade() {
         <CardContent className="pt-4 pb-3">
           <div className="flex flex-wrap gap-4 items-end">
             {/* ✅ Filtro de time funcionando */}
-            <div className="space-y-1">
+            <div className="hidden">
               <Label className="text-xs font-semibold">Time</Label>
               <Select
                 value={teamId}
