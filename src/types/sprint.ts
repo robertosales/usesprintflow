@@ -48,6 +48,15 @@ export type ImpedimentCriticality = "baixa" | "media" | "alta" | "critica";
 
 export type ImpedimentType = "tecnico" | "negocio" | "dependencia" | "recurso" | "ambiente" | "outro";
 
+/** Labels de criticidade — valores são strings simples (usados como ReactNode) */
+export const IMPEDIMENT_CRITICALITY_LABELS: Record<ImpedimentCriticality, string> = {
+  baixa: "Baixa",
+  media: "Média",
+  alta: "Alta",
+  critica: "Crítica",
+};
+
+/** Labels de tipo — valores são objetos com label + cor */
 export const IMPEDIMENT_TYPE_LABELS: Record<ImpedimentType, { label: string; color: string }> = {
   tecnico: { label: "Técnico", color: "#6366f1" },
   negocio: { label: "Negócio", color: "#f59e0b" },
@@ -55,13 +64,6 @@ export const IMPEDIMENT_TYPE_LABELS: Record<ImpedimentType, { label: string; col
   recurso: { label: "Recurso", color: "#ef4444" },
   ambiente: { label: "Ambiente", color: "#06b6d4" },
   outro: { label: "Outro", color: "#94a3b8" },
-};
-
-export const IMPEDIMENT_CRITICALITY_LABELS: Record<ImpedimentCriticality, string> = {
-  baixa: "Baixa",
-  media: "Média",
-  alta: "Alta",
-  critica: "Crítica",
 };
 
 export interface Impediment {
@@ -72,7 +74,7 @@ export interface Impediment {
   type?: ImpedimentType | null;
   reportedBy?: string | null;
   reportedAt?: string | null;
-  createdAt: string;
+  createdAt?: string;
   resolvedAt?: string | null;
   resolutionNote?: string | null;
   resolution?: string | null;
@@ -93,6 +95,21 @@ export interface CustomField {
   required?: boolean;
 }
 
+/** Alias para compatibilidade com componentes que importam CustomFieldDefinition */
+export type CustomFieldDefinition = CustomField & { id?: string };
+
+// ── AutomationRule ────────────────────────────────────────────────────────────
+
+export interface AutomationRule {
+  id: string;
+  name: string;
+  trigger: string;
+  action: string;
+  conditions?: Record<string, unknown>;
+  isActive: boolean;
+  createdAt?: string;
+}
+
 // ── Sprint ────────────────────────────────────────────────────────────────────
 
 export interface Sprint {
@@ -103,7 +120,7 @@ export interface Sprint {
   endDate: string;
   isActive: boolean;
   capacity?: number | null;
-  createdAt: string;
+  createdAt?: string;
 }
 
 // ── Epic ──────────────────────────────────────────────────────────────────────
@@ -114,7 +131,7 @@ export interface Epic {
   color: string;
   description?: string | null;
   projectId?: string | null;
-  createdAt: string;
+  createdAt?: string;
   updatedAt?: string | null;
 }
 
@@ -124,6 +141,7 @@ export interface Developer {
   id: string;
   name: string;
   email?: string | null;
+  avatar?: string | null;
   avatarUrl?: string | null;
   role?: string | null;
   capacity?: number | null;
@@ -144,7 +162,7 @@ export interface Activity {
   endDate?: string | null;
   isClosed?: boolean;
   closedAt?: string | null;
-  createdAt: string;
+  createdAt?: string;
 }
 
 // ── UserStory ─────────────────────────────────────────────────────────────────
@@ -168,14 +186,14 @@ export interface UserStory {
   startDate?: string | null;
   endDate?: string | null;
   functionPoints?: number | null;
-  customFields?: Record<string, unknown>;
+  customFields?: Record<string, string | number>;
   planningStatus?: string | null;
   votedAt?: string | null;
   orderIndex?: number;
   impediments?: Impediment[];
   tags?: string[];
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // ── WorkflowColumn ────────────────────────────────────────────────────────────
@@ -190,41 +208,113 @@ export interface WorkflowColumn {
   orderIndex?: number;
 }
 
-/** Mapa dotColor Tailwind → hex para fallback de cor dinâmica */
-export const DOT_COLOR_HEX: Record<string, string> = {
-  "bg-slate-400": "#94a3b8",
-  "bg-slate-500": "#64748b",
-  "bg-gray-400": "#9ca3af",
-  "bg-blue-400": "#60a5fa",
-  "bg-blue-500": "#3b82f6",
-  "bg-indigo-400": "#818cf8",
-  "bg-indigo-500": "#6366f1",
-  "bg-violet-400": "#a78bfa",
-  "bg-violet-500": "#8b5cf6",
-  "bg-purple-400": "#c084fc",
-  "bg-purple-500": "#a855f7",
-  "bg-amber-400": "#fbbf24",
-  "bg-amber-500": "#f59e0b",
-  "bg-yellow-400": "#facc15",
-  "bg-yellow-500": "#eab308",
-  "bg-orange-400": "#fb923c",
-  "bg-orange-500": "#f97316",
-  "bg-red-400": "#f87171",
-  "bg-red-500": "#ef4444",
-  "bg-rose-400": "#fb7185",
-  "bg-rose-500": "#f43f5e",
-  "bg-pink-400": "#f472b6",
-  "bg-cyan-400": "#22d3ee",
-  "bg-cyan-500": "#06b6d4",
-  "bg-teal-400": "#2dd4bf",
-  "bg-teal-500": "#14b8a6",
-  "bg-green-400": "#4ade80",
-  "bg-green-500": "#22c55e",
-  "bg-emerald-400": "#34d399",
-  "bg-emerald-500": "#10b981",
-};
+/** Opções de cor para o WorkflowManager */
+export const COLUMN_COLOR_OPTIONS: {
+  value: string;
+  label: string;
+  colorClass: string;
+  dotColor: string;
+  hex: string;
+}[] = [
+  {
+    value: "slate",
+    label: "Cinza",
+    colorClass: "bg-slate-100 text-slate-700 border-slate-300",
+    dotColor: "bg-slate-400",
+    hex: "#94a3b8",
+  },
+  {
+    value: "blue",
+    label: "Azul",
+    colorClass: "bg-blue-100 text-blue-700 border-blue-300",
+    dotColor: "bg-blue-400",
+    hex: "#60a5fa",
+  },
+  {
+    value: "indigo",
+    label: "Índigo",
+    colorClass: "bg-indigo-100 text-indigo-700 border-indigo-300",
+    dotColor: "bg-indigo-400",
+    hex: "#818cf8",
+  },
+  {
+    value: "violet",
+    label: "Violeta",
+    colorClass: "bg-violet-100 text-violet-700 border-violet-300",
+    dotColor: "bg-violet-400",
+    hex: "#a78bfa",
+  },
+  {
+    value: "purple",
+    label: "Roxo",
+    colorClass: "bg-purple-100 text-purple-700 border-purple-300",
+    dotColor: "bg-purple-400",
+    hex: "#c084fc",
+  },
+  {
+    value: "amber",
+    label: "Âmbar",
+    colorClass: "bg-amber-100 text-amber-700 border-amber-300",
+    dotColor: "bg-amber-400",
+    hex: "#fbbf24",
+  },
+  {
+    value: "orange",
+    label: "Laranja",
+    colorClass: "bg-orange-100 text-orange-700 border-orange-300",
+    dotColor: "bg-orange-400",
+    hex: "#fb923c",
+  },
+  {
+    value: "red",
+    label: "Vermelho",
+    colorClass: "bg-red-100 text-red-700 border-red-300",
+    dotColor: "bg-red-400",
+    hex: "#f87171",
+  },
+  {
+    value: "rose",
+    label: "Rosa",
+    colorClass: "bg-rose-100 text-rose-700 border-rose-300",
+    dotColor: "bg-rose-400",
+    hex: "#fb7185",
+  },
+  {
+    value: "cyan",
+    label: "Ciano",
+    colorClass: "bg-cyan-100 text-cyan-700 border-cyan-300",
+    dotColor: "bg-cyan-400",
+    hex: "#22d3ee",
+  },
+  {
+    value: "teal",
+    label: "Verde-azul",
+    colorClass: "bg-teal-100 text-teal-700 border-teal-300",
+    dotColor: "bg-teal-400",
+    hex: "#2dd4bf",
+  },
+  {
+    value: "emerald",
+    label: "Esmeralda",
+    colorClass: "bg-emerald-100 text-emerald-700 border-emerald-300",
+    dotColor: "bg-emerald-400",
+    hex: "#34d399",
+  },
+  {
+    value: "green",
+    label: "Verde",
+    colorClass: "bg-green-100 text-green-700 border-green-300",
+    dotColor: "bg-green-400",
+    hex: "#4ade80",
+  },
+];
 
-/** Retorna o hex de uma coluna com fallback automático pelo dotColor */
+/** Mapa dotColor Tailwind → hex */
+export const DOT_COLOR_HEX: Record<string, string> = Object.fromEntries(
+  COLUMN_COLOR_OPTIONS.map((o) => [o.dotColor, o.hex]),
+);
+
+/** Retorna o hex de uma WorkflowColumn com fallback automático */
 export function getColumnHex(col: WorkflowColumn): string {
   return col.hex || DOT_COLOR_HEX[col.dotColor] || "#94a3b8";
 }
@@ -282,7 +372,7 @@ export const DEFAULT_KANBAN_COLUMNS: WorkflowColumn[] = [
 
 // ── Funções auxiliares ────────────────────────────────────────────────────────
 
-/** Calcula uma data final somando `days` dias úteis a `startDate` (YYYY-MM-DD) */
+/** Calcula data final somando `days` dias úteis a partir de `startDate` */
 export function calculateEndDate(startDate: string, days: number): string {
   const date = new Date(startDate + "T12:00:00");
   let added = 0;
@@ -294,31 +384,36 @@ export function calculateEndDate(startDate: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** Soma o total de horas lançadas para uma HU */
-export function getTotalHoursForHU(huId: string, activities: Activity[]): number {
+/**
+ * Soma total de horas de uma HU.
+ * Assinatura: (activities, huId) — activities primeiro.
+ */
+export function getTotalHoursForHU(activities: Activity[], huId: string): number {
   return activities.filter((a) => a.huId === huId).reduce((s, a) => s + (a.hours ?? 0), 0);
 }
 
-/** Verifica se a HU possui impedimento ativo */
+/** Verifica se a HU possui algum impedimento ativo */
 export function hasActiveImpediment(hu: UserStory): boolean {
   return (hu.impediments ?? []).some((i) => !i.resolvedAt);
 }
 
-/** Verifica se a HU está atrasada (horas > 120% do estimado) */
+/**
+ * Verifica se a HU está atrasada:
+ * horas realizadas > 120% do estimado e status não é terminal.
+ */
 export function isHUOverdue(hu: UserStory, activities: Activity[]): boolean {
   const TERMINAL = ["concluida", "cancelada"];
   if (TERMINAL.includes(hu.status)) return false;
-  const total = getTotalHoursForHU(hu.id, activities);
+  const total = getTotalHoursForHU(activities, hu.id);
   const est = hu.estimatedHours ?? 0;
   return est > 0 && total > est * 1.2;
 }
 
-/** Verifica se o status é terminal (sem movimentação) */
 export function isTerminalStatus(status: string): boolean {
   return ["concluida", "cancelada"].includes(status);
 }
 
-// ── Tipos auxiliares ──────────────────────────────────────────────────────────
+// ── Tipos de relatório / métricas ────────────────────────────────────────────
 
 export interface SprintVelocity {
   sprintId: string;
