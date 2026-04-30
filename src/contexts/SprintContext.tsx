@@ -197,6 +197,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
             .filter((imp: any) => imp.hu_id === h.id)
             .map((imp: any) => ({
               id: imp.id,
+              huId: imp.hu_id,
               reason: imp.reason,
               type: imp.type,
               criticality: imp.criticality,
@@ -232,10 +233,12 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       setCustomFields(
         (cfRes.data || []).map((f: any) => ({
           id: f.id,
-          name: f.name,
-          type: f.field_type,
-          options: f.options,
-          required: f.required,
+          key: f.key || f.id,
+          name: f.name || f.label || "",
+          label: f.label || f.name || "",
+          type: f.field_type as any,
+          options: f.options ?? null,
+          required: f.required ?? false,
         })),
       );
 
@@ -243,9 +246,14 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         (arRes.data || []).map((r: any) => ({
           id: r.id,
           name: r.name,
-          enabled: r.enabled,
-          trigger: { type: r.trigger_type, fromStatus: r.trigger_from_status, toStatus: r.trigger_to_status },
-          action: { type: r.action_type, targetStatus: r.action_target_status, message: r.action_message },
+          enabled: r.enabled ?? r.is_active ?? false,
+          isActive: r.is_active ?? r.enabled ?? false,
+          trigger: { type: r.trigger_type, fromStatus: r.trigger_from_status ?? null, toStatus: r.trigger_to_status },
+          action: {
+            type: r.action_type,
+            targetStatus: r.action_target_status ?? null,
+            message: r.action_message ?? null,
+          },
           createdAt: r.created_at,
         })),
       );
@@ -285,16 +293,22 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   // ── AUTOMATION ENGINE ─────────────────────────────────────────────────────
   const runAutomations = useCallback(
     async (huId: string, fromStatus: string, toStatus: string) => {
-      const rules = automationRules.filter((r) => r.enabled && r.trigger.type === "status_change");
+      const rules = automationRules.filter((r) => {
+        const en = r.enabled ?? (r as any).isActive ?? false;
+        const trig = typeof r.trigger === "string" ? null : r.trigger;
+        return en && trig?.type === "status_change";
+      });
       for (const rule of rules) {
-        const matchFrom = !rule.trigger.fromStatus || rule.trigger.fromStatus === fromStatus;
-        const matchTo = rule.trigger.toStatus === toStatus;
+        const trig = typeof rule.trigger === "string" ? JSON.parse(rule.trigger) : rule.trigger;
+        const act = typeof rule.action === "string" ? JSON.parse(rule.action) : rule.action;
+        const matchFrom = !trig.fromStatus || trig.fromStatus === fromStatus;
+        const matchTo = trig.toStatus === toStatus;
         if (matchFrom && matchTo) {
-          if (rule.action.type === "notify" && rule.action.message) {
-            toast.info(`🤖 Automação "${rule.name}": ${rule.action.message}`);
+          if (act.type === "notify" && act.message) {
+            toast.info(`🤖 Automação "${rule.name}": ${act.message}`);
           }
-          if (rule.action.type === "change_status" && rule.action.targetStatus) {
-            await supabase.from("user_stories").update({ status: rule.action.targetStatus }).eq("id", huId);
+          if (act.type === "change_status" && act.targetStatus) {
+            await supabase.from("user_stories").update({ status: act.targetStatus }).eq("id", huId);
             toast.info(`🤖 Automação "${rule.name}": Status alterado automaticamente`);
           }
         }
@@ -654,7 +668,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.from("automation_rules").insert({
       team_id: teamId,
       name: rule.name,
-      enabled: rule.enabled,
+      enabled: rule.enabled ?? (rule as any).isActive ?? true,
+      is_active: rule.enabled ?? (rule as any).isActive ?? true,
       trigger_type: rule.trigger.type,
       trigger_from_status: rule.trigger.fromStatus || null,
       trigger_to_status: rule.trigger.toStatus,
@@ -672,7 +687,14 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const updateAutomationRule = async (id: string, rule: Partial<Omit<AutomationRule, "id" | "createdAt">>) => {
     const updateData: any = {};
     if (rule.name !== undefined) updateData.name = rule.name;
-    if (rule.enabled !== undefined) updateData.enabled = rule.enabled;
+    if (rule.enabled !== undefined) {
+      updateData.enabled = rule.enabled;
+      updateData.is_active = rule.enabled;
+    }
+    if ((rule as any).isActive !== undefined && rule.enabled === undefined) {
+      updateData.enabled = (rule as any).isActive;
+      updateData.is_active = (rule as any).isActive;
+    }
     if (rule.trigger) {
       if (rule.trigger.type !== undefined) updateData.trigger_type = rule.trigger.type;
       if (rule.trigger.fromStatus !== undefined) updateData.trigger_from_status = rule.trigger.fromStatus;
