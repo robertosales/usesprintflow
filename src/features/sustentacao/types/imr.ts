@@ -6,6 +6,7 @@ export const TIPOS_DEMANDA_IMR = [
   { value: "apuracao_especial", label: "Apuração especial" },
   { value: "atendimento", label: "Atendimento" },
   { value: "atualizacao_arquitetura", label: "Atualização Arquitetura Deploy" },
+  { value: "atividade_interna_sustentação", label: "Atividade Interna Sustentação" },
   { value: "diagnostico", label: "Diagnóstico de Incidente" },
   { value: "homologacao_assistida", label: "Homologação assistida" },
   { value: "instalacao_atualizacao_de_sw", label: "Instalação/atualização de SW" },
