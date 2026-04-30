@@ -309,14 +309,40 @@ export const COLUMN_COLOR_OPTIONS: {
   },
 ];
 
-/** Mapa dotColor Tailwind → hex */
-export const DOT_COLOR_HEX: Record<string, string> = Object.fromEntries(
-  COLUMN_COLOR_OPTIONS.map((o) => [o.dotColor, o.hex]),
-);
+/**
+ * Mapa multi-formato: aceita qualquer variação armazenada no banco.
+ *   "bg-blue-400" → "#60a5fa"
+ *   "blue"        → "#60a5fa"
+ *   "blue-400"    → "#60a5fa"
+ *   "#60a5fa"     → "#60a5fa"   (hex direto)
+ */
+const _DOT_ENTRIES: [string, string][] = COLUMN_COLOR_OPTIONS.flatMap((o) => [
+  [o.dotColor, o.hex], // "bg-blue-400"
+  [o.value, o.hex], // "blue"
+  [o.dotColor.replace("bg-", ""), o.hex], // "blue-400"
+  [o.hex.toLowerCase(), o.hex], // "#60a5fa"
+  [o.hex.toUpperCase(), o.hex], // "#60A5FA"
+  [o.colorClass.split(" ")[0], o.hex], // "bg-blue-100"
+]);
 
-/** Retorna o hex de uma WorkflowColumn com fallback automático */
+export const DOT_COLOR_HEX: Record<string, string> = Object.fromEntries(_DOT_ENTRIES);
+
+/**
+ * Retorna o hex de uma WorkflowColumn.
+ * Tenta em ordem: campo hex → lookup pelo dotColor (qualquer formato) → fallback cinza.
+ */
 export function getColumnHex(col: WorkflowColumn): string {
-  return col.hex || DOT_COLOR_HEX[col.dotColor] || "#94a3b8";
+  if (col.hex && /^#[0-9a-fA-F]{3,8}$/.test(col.hex)) return col.hex;
+  const raw = col.dotColor ?? "";
+  // hex direto no dotColor
+  if (/^#[0-9a-fA-F]{3,8}$/.test(raw)) return raw;
+  // lookup no mapa
+  if (DOT_COLOR_HEX[raw]) return DOT_COLOR_HEX[raw];
+  // fallback: tenta pegar o nome da cor do Tailwind class
+  const base = raw.replace("bg-", "").split("-")[0]; // "blue"
+  const found = COLUMN_COLOR_OPTIONS.find((o) => o.value === base);
+  if (found) return found.hex;
+  return "#94a3b8";
 }
 
 export const DEFAULT_KANBAN_COLUMNS: WorkflowColumn[] = [
