@@ -5,6 +5,7 @@ export interface WorkflowColumn {
   label: string;
   colorClass: string;
   dotColor: string;
+  hex?: string; // ← adicionar esta linha
 }
 
 export const DEFAULT_KANBAN_COLUMNS: WorkflowColumn[] = [
