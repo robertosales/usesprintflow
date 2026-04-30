@@ -248,13 +248,14 @@ export interface SustentacaoBoardProps {
    * Lista de demandas — busque no contexto/hook do seu projeto e passe aqui:
    *   const { demandas } = useSustentacao();
    */
-  demandas: Demanda[];
+  demandas?: Demanda[];
   onSelectDemanda?: (demanda: Demanda) => void;
   /** Chamado ao clicar em "+" numa coluna. Recebe o status da coluna. */
   onCreateDemanda?: (situacao?: string) => void;
 }
 
-export function SustentacaoBoard({ demandas, onSelectDemanda, onCreateDemanda }: SustentacaoBoardProps) {
+export function SustentacaoBoard({ demandas: demandasProp, onSelectDemanda, onCreateDemanda }: SustentacaoBoardProps) {
+  const demandas = demandasProp ?? [];
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
 
@@ -266,28 +267,35 @@ export function SustentacaoBoard({ demandas, onSelectDemanda, onCreateDemanda }:
     });
 
   const filtered = useMemo(() => {
-    if (!search) return demandas;
+    const safe = demandas ?? [];
+    if (!search) return safe;
     const q = search.toLowerCase();
-    return demandas.filter(
+    return safe.filter(
       (d) =>
-        (d.descricao ?? "").toLowerCase().includes(q) ||
-        (d.projeto ?? "").toLowerCase().includes(q) ||
-        (d.rhm ?? "").toLowerCase().includes(q),
+        String(d.descricao ?? "")
+          .toLowerCase()
+          .includes(q) ||
+        String(d.projeto ?? "")
+          .toLowerCase()
+          .includes(q) ||
+        String(d.rhm ?? "")
+          .toLowerCase()
+          .includes(q),
     );
   }, [demandas, search]);
 
   const byStatus = useMemo(() => {
     const map: Record<string, Demanda[]> = {};
-    VISIBLE_COLS.forEach((k) => {
+    (VISIBLE_COLS ?? []).forEach((k) => {
       map[k] = [];
     });
-    filtered.forEach((d) => {
+    (demandas ?? []).filter(Boolean).forEach((d) => {
       const key = (d.situacao as string) ?? "filaatendimento";
       if (!map[key]) map[key] = [];
       map[key].push(d);
     });
     return map;
-  }, [filtered]);
+  }, [demandas]);
 
   return (
     <div className="flex flex-col h-full gap-3">
