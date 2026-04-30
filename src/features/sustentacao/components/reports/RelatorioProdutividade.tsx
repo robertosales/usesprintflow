@@ -540,31 +540,6 @@ export function RelatorioProdutividade() {
       {/* Filtros */}
       <Card>
         <CardContent className="pt-4 pb-3">
-          <div className="flex flex-wrap gap-4 items-end">
-            {/* ✅ Filtro de time funcionando */}
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Time</Label>
-              <Select
-                value={teamId}
-                onValueChange={(v) => {
-                  setTeamId(v);
-                  setAnalista("all");
-                }}
-              >
-                <SelectTrigger className="w-[180px] h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os times</SelectItem>
-                  {sustTeams.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* Filtro de analista (atualiza conforme time) */}
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Analista</Label>
