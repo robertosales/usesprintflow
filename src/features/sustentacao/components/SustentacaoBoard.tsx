@@ -1,630 +1,336 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useDemandas } from "@/hooks/useDemandas";
+import type { Demanda } from "@/types/demanda";
+import { WORKFLOWLABELS, WORKFLOWCOLORS, FLOWPRINCIPAL, WORKFLOWSTEPS } from "@/components/DemandaDetail";
+import {
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  Settings2,
+  Search,
+  X,
+  Clock,
+  ShieldAlert,
+  AlertTriangle,
+  AlertCircle,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Columns3, AlertCircle, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
-import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
-import { useDemandas } from "../hooks/useDemandas";
-import { useWorkflowSteps } from "../hooks/useWorkflowSteps";
-import { DemandaCard } from "./DemandaCard";
-import { DemandaDetail } from "./DemandaDetail";
-import { JustificativaDialog } from "./JustificativaDialog";
-import {
-  SITUACAO_LABELS,
-  FLOW_PRINCIPAL,
-  REQUIRES_JUSTIFICATIVA,
-  isDemandaIniciada,
-  getResponsavelAtivo,
-} from "../types/demanda";
-import type { Demanda } from "../types/demanda";
-import { useDebounce } from "@/shared/hooks/useDebounce";
-import { SkeletonList } from "@/shared/components/common/SkeletonList";
-import { EmptyState } from "@/shared/components/common/EmptyState";
-import { fetchProfilesByUserIds, fetchDevelopersFallback } from "../services/profiles.service";
-import { fetchEvidenceCountsByDemandaAndFase } from "../services/workflowSteps.service";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 
-// Fallback para quando o workflow do banco ainda não carregou
-const BOARD_COLUMNS_FALLBACK = [
-  "fila_atendimento",
-  "planejamento_elaboracao",
-  "planejamento_ag_aprovacao",
-  "planejamento_aprovada",
-  "em_execucao",
-  "bloqueada",
-  "hom_ag_homologacao",
-  "hom_homologada",
-  "rejeitada",
-  "fila_producao",
-  "ag_aceite_final",
-  "cancelada",
-];
+// ── helpers ───────────────────────────────────────────────────────────────────
 
-const COL_LABELS_FALLBACK: Record<string, string> = {
-  fila_atendimento: "Fila Atendimento",
-  planejamento_elaboracao: "Em Elaboração",
-  planejamento_ag_aprovacao: "Ag. Aprovação",
-  planejamento_aprovada: "Aprovada p/ Exec",
-  em_execucao: "Em Execução",
-  bloqueada: "Bloqueada",
-  hom_ag_homologacao: "Ag. Homologação",
-  hom_homologada: "Homologada",
-  rejeitada: "Rejeitada",
-  fila_producao: "Fila Produção",
-  ag_aceite_final: "Ag. Aceite Final",
-  cancelada: "Cancelada",
+const COLUMN_COLORS: Record<string, { hex: string; bgLight: string }> = {
+  filaatendimento: { hex: "#64748b", bgLight: "#f8fafc" },
+  planejamentoelaboracao: { hex: "#3b82f6", bgLight: "#eff6ff" },
+  planejamentoagaprovacao: { hex: "#6366f1", bgLight: "#eef2ff" },
+  planejamentoaprovada: { hex: "#8b5cf6", bgLight: "#f5f3ff" },
+  emexecucao: { hex: "#f59e0b", bgLight: "#fffbeb" },
+  bloqueada: { hex: "#ef4444", bgLight: "#fef2f2" },
+  homaghomologacao: { hex: "#06b6d4", bgLight: "#ecfeff" },
+  homhomologada: { hex: "#14b8a6", bgLight: "#f0fdfa" },
+  rejeitada: { hex: "#f43f5e", bgLight: "#fff1f2" },
+  filaproducao: { hex: "#f97316", bgLight: "#fff7ed" },
+  agaceitefinal: { hex: "#10b981", bgLight: "#ecfdf5" },
 };
 
-const COL_HEX_FALLBACK: Record<string, string> = {
-  fila_atendimento: "#94a3b8",
-  planejamento_elaboracao: "#3b82f6",
-  planejamento_ag_aprovacao: "#6366f1",
-  planejamento_aprovada: "#8b5cf6",
-  em_execucao: "#eab308",
-  bloqueada: "#ef4444",
-  hom_ag_homologacao: "#06b6d4",
-  hom_homologada: "#14b8a6",
-  rejeitada: "#f43f5e",
-  fila_producao: "#f97316",
-  ag_aceite_final: "#10b981",
-  cancelada: "#9ca3af",
-};
-
-const SEM_RESPONSAVEL = "__sem_responsavel__";
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function isUuid(value: string | null | undefined): value is string {
-  return Boolean(value && UUID_RE.test(value));
+function hexAlpha(hex: string, a: number) {
+  const c = hex.replace("#", "");
+  return `rgba(${parseInt(c.slice(0, 2), 16)},${parseInt(c.slice(2, 4), 16)},${parseInt(c.slice(4, 6), 16)},${a})`;
 }
 
-function hexWithOpacity(hex: string, opacity: number): string {
-  // opacity 0..1 → 2-digit hex suffix
-  const alpha = Math.round(opacity * 255)
-    .toString(16)
-    .padStart(2, "0");
-  return `${hex}${alpha}`;
+function slaDaysRemaining(demanda: Demanda): number | null {
+  if (!demanda.prazosolucao) return null;
+  const now = new Date();
+  const dead = new Date(demanda.prazosolucao);
+  return Math.round((dead.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function isForwardMove(demanda: Demanda, targetStatus: string): boolean {
-  if (targetStatus === "bloqueada" || targetStatus === "rejeitada") return true;
-  if (targetStatus === "cancelada") return true;
-  if (demanda.situacao === "rejeitada") return targetStatus === "em_execucao";
-  if (demanda.situacao === "bloqueada") return false;
-  const flow = Array.from(FLOW_PRINCIPAL);
-  const currentIdx = flow.indexOf(demanda.situacao as any);
-  const targetIdx = flow.indexOf(targetStatus as any);
-  if (currentIdx < 0 || targetIdx < 0) return false;
-  return targetIdx > currentIdx;
-}
+// ── Demanda Card ──────────────────────────────────────────────────────────────
 
-interface SustentacaoBoardProps {
-  onCreateDemanda?: (situacaoInicial?: string) => void;
-}
-
-export function SustentacaoBoard({ onCreateDemanda }: SustentacaoBoardProps) {
-  const { demandas, loading, error, moveTo, update, remove, reload } = useDemandas();
-  const { steps: workflowSteps, loading: wfLoading } = useWorkflowSteps();
-
-  const [selected, setSelected] = useState<Demanda | null>(null);
-  const [selectedInitialTab, setSelectedInitialTab] = useState<string | undefined>(undefined);
-  const [pendingMoveTarget, setPendingMoveTarget] = useState<string | undefined>(undefined);
-  const [deleteTarget, setDeleteTarget] = useState<Demanda | null>(null);
-  const [justTarget, setJustTarget] = useState<{ demanda: Demanda; status: string } | null>(null);
-  const [evidenceTarget, setEvidenceTarget] = useState<{ demanda: Demanda; status: string; missing: string[] } | null>(
-    null,
-  );
-  const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
-  const [evidenceCache, setEvidenceCache] = useState<Record<string, number>>({});
-  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
-
-  const [search, setSearch] = useState("");
-  const [filterProjeto, setFilterProjeto] = useState("all");
-  const [assigneeFilter, setAssigneeFilter] = useState("all");
-  const [profilesMap, setProfilesMap] = useState<Map<string, string>>(new Map());
-  const debouncedSearch = useDebounce(search, 300);
-
-  // ── Mapa dinâmico key → { label, hex } vindo do banco ─────────────────
-  const stepsMap = useMemo(() => {
-    const m = new Map<string, { label: string; hex: string }>();
-    workflowSteps.forEach((s) => m.set(s.key, { label: s.label, hex: s.hex }));
-    return m;
-  }, [workflowSteps]);
-
-  // ── Colunas: usa o workflow do banco como fonte de verdade ─────────────
-  const columns = useMemo(
-    () => (workflowSteps.length > 0 ? workflowSteps.map((s) => s.key) : BOARD_COLUMNS_FALLBACK),
-    [workflowSteps],
-  );
-
-  // ── Helpers de label e cor ─────────────────────────────────────────────
-  const resolveLabel = useCallback(
-    (status: string) => stepsMap.get(status)?.label ?? COL_LABELS_FALLBACK[status] ?? SITUACAO_LABELS[status] ?? status,
-    [stepsMap],
-  );
-
-  const resolveHex = useCallback(
-    (status: string) => stepsMap.get(status)?.hex ?? COL_HEX_FALLBACK[status] ?? "#94a3b8",
-    [stepsMap],
-  );
-
-  useEffect(() => {
-    if (demandas.length === 0) return;
-    const ids = demandas.map((d) => d.id);
-    fetchEvidenceCountsByDemandaAndFase(ids).then(setEvidenceCache);
-  }, [demandas]);
-
-  const teamMembers = useMemo(() => {
-    const keys = new Set<string>();
-    demandas.forEach((d) => {
-      const responsavel = getResponsavelAtivo(d);
-      if (responsavel) keys.add(responsavel);
-    });
-    return Array.from(keys);
-  }, [demandas]);
-
-  useEffect(() => {
-    const missing = teamMembers.filter((id) => isUuid(id) && !profilesMap.has(id));
-    if (missing.length === 0) return;
-    (async () => {
-      const next = new Map(profilesMap);
-      const profMap = await fetchProfilesByUserIds(missing);
-      profMap.forEach((p, id) => {
-        if (p.display_name) next.set(id, p.display_name);
-      });
-      const stillMissing = missing.filter((id) => !next.has(id));
-      if (stillMissing.length > 0) {
-        const devMap = await fetchDevelopersFallback(stillMissing);
-        devMap.forEach((name, id) => next.set(id, name));
-      }
-      setProfilesMap(next);
-    })();
-  }, [teamMembers]);
-
-  const getInitials = (name: string) => {
-    if (!name || name === "...") return "?";
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return "?";
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  };
-
-  const memberCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    demandas.forEach((d) => {
-      const responsavel = getResponsavelAtivo(d) || SEM_RESPONSAVEL;
-      counts[responsavel] = (counts[responsavel] || 0) + 1;
-    });
-    return counts;
-  }, [demandas]);
-
-  const assigneeOptions = useMemo(() => {
-    const options = teamMembers.map((id) => ({
-      id,
-      name: profilesMap.get(id) || id,
-      count: memberCounts[id] || 0,
-      unassigned: false,
-    }));
-    if (memberCounts[SEM_RESPONSAVEL]) {
-      options.push({
-        id: SEM_RESPONSAVEL,
-        name: "Sem responsável",
-        count: memberCounts[SEM_RESPONSAVEL],
-        unassigned: true,
-      });
-    }
-    return options.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-  }, [teamMembers, profilesMap, memberCounts]);
-
-  const projetos = useMemo(() => [...new Set(demandas.map((d) => d.projeto).filter(Boolean))], [demandas]);
-
-  const filtered = useMemo(
-    () =>
-      demandas.filter((d) => {
-        if (
-          debouncedSearch &&
-          !d.rhm.toLowerCase().includes(debouncedSearch.toLowerCase()) &&
-          !d.projeto.toLowerCase().includes(debouncedSearch.toLowerCase())
-        )
-          return false;
-        if (filterProjeto !== "all" && d.projeto !== filterProjeto) return false;
-        if (assigneeFilter !== "all") {
-          const responsavel = getResponsavelAtivo(d) || SEM_RESPONSAVEL;
-          if (responsavel !== assigneeFilter) return false;
-        }
-        return true;
-      }),
-    [demandas, debouncedSearch, filterProjeto, assigneeFilter],
-  );
-
-  const toggleColumn = (status: string) =>
-    setCollapsedColumns((prev) => {
-      const next = new Set(prev);
-      if (next.has(status)) next.delete(status);
-      else next.add(status);
-      return next;
-    });
-
-  const validateDrop = (demanda: Demanda, targetStatus: string): { error?: string; evidenceMissing?: string[] } => {
-    if (demanda.situacao === targetStatus) return {};
-    if (!isForwardMove(demanda, targetStatus))
-      return { error: "Movimentação não permitida: apenas avanço sequencial é permitido." };
-    if (targetStatus === "planejamento_ag_aprovacao") {
-      const total = Object.keys(evidenceCache)
-        .filter((k) => k.startsWith(`${demanda.id}:`))
-        .reduce((sum, k) => sum + (evidenceCache[k] || 0), 0);
-      if (total === 0)
-        return { evidenceMissing: ["Obrigatório anexar ao menos uma evidência antes de avançar para Ag. Aprovação."] };
-    }
-    return {};
-  };
-
-  const handleDrop = async (e: React.DragEvent, status: string) => {
-    e.preventDefault();
-    setDragOverColumn(null);
-    const id = e.dataTransfer.getData("demanda-id");
-    const demanda = demandas.find((d) => d.id === id);
-    if (!demanda || demanda.situacao === status) return;
-    const validation = validateDrop(demanda, status);
-    if (validation.error) {
-      toast.error(validation.error);
-      return;
-    }
-    if (validation.evidenceMissing) {
-      setEvidenceTarget({ demanda, status, missing: validation.evidenceMissing });
-      return;
-    }
-    if ((REQUIRES_JUSTIFICATIVA as readonly string[]).includes(status)) {
-      setJustTarget({ demanda, status });
-      return;
-    }
-    await moveTo(demanda, status);
-  };
-
-  const handleContextMove = async (demanda: Demanda, status: string) => {
-    if (demanda.situacao === status) return;
-    const validation = validateDrop(demanda, status);
-    if (validation.error) {
-      toast.error(validation.error);
-      return;
-    }
-    if (validation.evidenceMissing) {
-      setEvidenceTarget({ demanda, status, missing: validation.evidenceMissing });
-      return;
-    }
-    if ((REQUIRES_JUSTIFICATIVA as readonly string[]).includes(status)) {
-      setJustTarget({ demanda, status });
-      return;
-    }
-    await moveTo(demanda, status);
-  };
-
-  const moveOptions = useMemo(() => columns.map((c) => ({ key: c, label: resolveLabel(c) })), [columns, resolveLabel]);
-
-  if (loading || wfLoading) return <SkeletonList count={6} />;
-  if (error)
-    return (
-      <div className="text-center py-10 text-destructive">
-        {error}
-        <button onClick={reload} className="underline ml-2">
-          Tentar novamente
-        </button>
-      </div>
-    );
+function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accentHex: string; onClick?: () => void }) {
+  const slaD = slaDaysRemaining(demanda);
+  const slaUrgente = slaD !== null && slaD <= 3 && slaD >= 0;
+  const slaAtrasado = slaD !== null && slaD < 0;
 
   return (
-    <div className="space-y-4">
-      {/* ── Cabeçalho ── */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h2 className="text-lg font-semibold">Board Kanban</h2>
-          <p className="text-xs text-muted-foreground">
-            Clique no ícone do cabeçalho para retrair/expandir colunas. Arraste para mover demandas.
-          </p>
+    <div
+      onClick={onClick}
+      className="bg-white rounded-lg border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.06)]
+        hover:shadow-[0_3px_10px_rgba(0,0,0,0.10)] transition-all duration-150 overflow-hidden cursor-pointer select-none"
+    >
+      {/* accent line */}
+      <div className="h-0.5" style={{ backgroundColor: accentHex }} />
+
+      <div className="p-3">
+        {/* título / descrição */}
+        <p className="text-[13px] font-semibold leading-snug text-gray-800 line-clamp-2 mb-2">
+          {demanda.descricao ?? demanda.tipo ?? "Demanda"}
+        </p>
+
+        {/* RHM · Projeto */}
+        {(demanda.rhm || demanda.projeto) && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {demanda.rhm && (
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: hexAlpha(accentHex, 0.12), color: accentHex }}
+              >
+                RHM {demanda.rhm}
+              </span>
+            )}
+            {demanda.projeto && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium truncate max-w-[140px]">
+                {demanda.projeto}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* ID + alertas */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+            </svg>
+            <span className="font-mono font-medium">#{demanda.id?.slice(0, 8)}</span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            {slaAtrasado && (
+              <span className="flex items-center gap-0.5 text-[10px] bg-red-50 text-red-600 border border-red-200 rounded px-1.5 py-0.5">
+                <AlertTriangle className="h-2.5 w-2.5" />
+                SLA
+              </span>
+            )}
+            {slaUrgente && !slaAtrasado && (
+              <span className="flex items-center gap-0.5 text-[10px] bg-amber-50 text-amber-600 border border-amber-200 rounded px-1.5 py-0.5">
+                <Clock className="h-2.5 w-2.5" />
+                {slaD}d
+              </span>
+            )}
+          </div>
         </div>
-        <Badge variant="outline" className="text-xs">
+
+        {/* SLA normal */}
+        {slaD !== null && !slaUrgente && !slaAtrasado && (
+          <div className="flex items-center gap-1 mt-1.5 text-[10px] text-gray-400">
+            <Clock className="h-2.5 w-2.5" />
+            <span>{slaD}d restantes</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Collapsed strip ───────────────────────────────────────────────────────────
+
+function CollapsedCol({
+  label,
+  count,
+  accentHex,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  accentHex: string;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className="flex-shrink-0 w-10 flex flex-col items-center rounded-xl border border-border/60 bg-white
+        shadow-[0_1px_3px_rgba(0,0,0,0.06)] cursor-pointer hover:shadow-md transition-all py-3 gap-3"
+      style={{ borderTop: `3px solid ${accentHex}` }}
+    >
+      <ChevronRight className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+      <span
+        className="text-[11px] font-bold flex-1 text-center leading-tight"
+        style={{ writingMode: "vertical-lr", transform: "rotate(180deg)", color: accentHex, letterSpacing: "0.04em" }}
+      >
+        {label}
+      </span>
+      <span
+        className="text-[10px] font-bold rounded-full min-w-[18px] text-center py-0.5 px-1"
+        style={{ backgroundColor: hexAlpha(accentHex, 0.12), color: accentHex }}
+      >
+        {count}
+      </span>
+    </div>
+  );
+}
+
+// ── Expanded column ───────────────────────────────────────────────────────────
+
+function ExpandedCol({
+  colKey,
+  label,
+  demandas,
+  accentHex,
+  onCollapse,
+  onCardClick,
+}: {
+  colKey: string;
+  label: string;
+  demandas: Demanda[];
+  accentHex: string;
+  onCollapse: () => void;
+  onCardClick?: (d: Demanda) => void;
+}) {
+  return (
+    <div
+      className="flex-shrink-0 w-[280px] flex flex-col rounded-xl border border-border/60 bg-white
+      shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-all"
+      style={{ borderTop: `3px solid ${accentHex}` }}
+    >
+      {/* header */}
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100">
+        <button onClick={onCollapse} className="p-0.5 rounded hover:bg-gray-100 transition-colors">
+          <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+        </button>
+        <span className="flex-1 text-[12px] font-bold tracking-wide uppercase truncate" style={{ color: accentHex }}>
+          {label}
+        </span>
+        <span
+          className="text-[11px] font-bold rounded-full h-5 min-w-[20px] px-1.5 flex items-center justify-center"
+          style={{ backgroundColor: hexAlpha(accentHex, 0.12), color: accentHex }}
+        >
+          {demandas.length}
+        </span>
+        <button className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600">
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+        <button className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600">
+          <Settings2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* cards */}
+      <div className="p-2 overflow-y-auto flex-1 space-y-2" style={{ maxHeight: "calc(100vh - 260px)" }}>
+        {demandas.length === 0 ? (
+          <div className="flex items-center justify-center h-14 rounded-lg border-2 border-dashed border-gray-200 text-xs text-gray-400">
+            Sem demandas
+          </div>
+        ) : (
+          demandas.map((d) => (
+            <DemandaCard key={d.id} demanda={d} accentHex={accentHex} onClick={() => onCardClick?.(d)} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Colunas visíveis (fluxo principal + bloqueada + rejeitada) ─────────────────
+
+const ALL_COLUMNS = [...FLOWPRINCIPAL, "bloqueada", "rejeitada"] as string[];
+
+// deduplica mantendo ordem
+const VISIBLE_COLUMNS = ALL_COLUMNS.filter((v, i, a) => a.indexOf(v) === i);
+
+// ── Board ─────────────────────────────────────────────────────────────────────
+
+interface SustentacaoBoardProps {
+  onSelectDemanda?: (demanda: Demanda) => void;
+}
+
+export function SustentacaoBoard({ onSelectDemanda }: SustentacaoBoardProps) {
+  const { demandas } = useDemandas();
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
+
+  const toggle = (key: string) =>
+    setCollapsed((prev) => {
+      const n = new Set(prev);
+      n.has(key) ? n.delete(key) : n.add(key);
+      return n;
+    });
+
+  const filtered = useMemo(() => {
+    if (!search) return demandas;
+    const q = search.toLowerCase();
+    return demandas.filter(
+      (d) =>
+        (d.descricao ?? "").toLowerCase().includes(q) ||
+        (d.projeto ?? "").toLowerCase().includes(q) ||
+        (d.rhm ?? "").toLowerCase().includes(q),
+    );
+  }, [demandas, search]);
+
+  const byStatus = useMemo(() => {
+    const map: Record<string, Demanda[]> = {};
+    VISIBLE_COLUMNS.forEach((k) => {
+      map[k] = [];
+    });
+    filtered.forEach((d) => {
+      const key = d.situacao ?? "filaatendimento";
+      if (!map[key]) map[key] = [];
+      map[key].push(d);
+    });
+    return map;
+  }, [filtered]);
+
+  return (
+    <div className="flex flex-col h-full gap-3">
+      {/* top bar */}
+      <div className="flex items-center gap-3 px-1">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search"
+            className="w-full pl-9 pr-3 h-9 rounded-lg border border-gray-200 bg-white text-sm
+              placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <Badge variant="outline" className="text-xs font-mono h-9 px-3">
           {filtered.length} demanda{filtered.length !== 1 ? "s" : ""}
         </Badge>
       </div>
 
-      {/* ── Filtros ── */}
-      <div className="flex flex-wrap gap-2 p-3 bg-muted/30 rounded-lg border">
-        <Select value={filterProjeto} onValueChange={setFilterProjeto}>
-          <SelectTrigger className="w-[150px] h-8 text-xs bg-background">
-            <SelectValue placeholder="Projeto" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos projetos</SelectItem>
-            {projetos.map((p) => (
-              <SelectItem key={p} value={p}>
-                {p}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* board */}
+      <div className="flex gap-2 pb-4 overflow-x-auto flex-1" style={{ minHeight: 120 }}>
+        {VISIBLE_COLUMNS.map((key) => {
+          const label = WORKFLOWLABELS[key] ?? key;
+          const color = COLUMN_COLORS[key] ?? { hex: "#94a3b8", bgLight: "#f8fafc" };
+          const items = byStatus[key] ?? [];
+          const isCollapsed = collapsed.has(key);
 
-        <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por RHM ou projeto..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-8 text-xs bg-background"
-          />
-        </div>
-      </div>
-
-      {/* ── Time (filtro por responsável) ── */}
-      {assigneeOptions.length > 0 && (
-        <div className="flex items-center gap-3 flex-wrap p-3 bg-muted/20 rounded-lg border border-border/40">
-          <span className="text-xs text-muted-foreground shrink-0 font-medium">Time:</span>
-          <div className="flex items-center gap-2 flex-wrap">
-            {assigneeOptions.map(({ id, name, count, unassigned }) => {
-              const isActive = assigneeFilter === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => setAssigneeFilter(isActive ? "all" : id)}
-                  title={`${name} — ${count} demanda${count !== 1 ? "s" : ""}`}
-                  className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-lg transition-all border
-                    ${isActive ? "bg-primary/10 border-primary shadow-sm scale-105" : "border-transparent hover:bg-muted hover:border-border"}`}
-                >
-                  <div
-                    className={`h-7 w-7 rounded-full text-[11px] font-bold flex items-center justify-center transition-all
-                    ${isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
-                  >
-                    {unassigned ? "?" : getInitials(name)}
-                  </div>
-                  <span className="text-[9px] font-medium leading-none text-muted-foreground">{count}</span>
-                </button>
-              );
-            })}
-            {assigneeFilter !== "all" && (
-              <button
-                onClick={() => setAssigneeFilter("all")}
-                className="h-6 w-6 rounded-full bg-muted/80 text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
-                title="Limpar filtro de responsável"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {demandas.length === 0 && !loading && (
-        <EmptyState
-          icon={Columns3}
-          title="Nenhuma demanda encontrada"
-          description="Crie uma nova demanda ou ajuste os filtros."
-        />
-      )}
-
-      {/* ── Board ── */}
-      <div className="flex gap-3 pb-4 overflow-x-auto" style={{ minHeight: 120 }}>
-        {columns.map((status) => {
-          const items = filtered.filter((d) => d.situacao === status);
-          const isCollapsed = collapsedColumns.has(status);
-          const isDragOver = dragOverColumn === status;
-          const hex = resolveHex(status);
-          const label = resolveLabel(status);
-
+          if (isCollapsed) {
+            return (
+              <CollapsedCol
+                key={key}
+                label={label}
+                count={items.length}
+                accentHex={color.hex}
+                onClick={() => toggle(key)}
+              />
+            );
+          }
           return (
-            <div
-              key={status}
-              className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out ${
-                isCollapsed ? "w-[56px]" : "w-[300px]"
-              }`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOverColumn(status);
-              }}
-              onDragLeave={() => setDragOverColumn(null)}
-              onDrop={(e) => handleDrop(e, status)}
-            >
-              <div
-                className={`flex flex-col rounded-xl border bg-muted/30 transition-all duration-200 shadow-sm border-t-2
-                  ${isDragOver ? "ring-2 ring-primary/30 bg-primary/5" : ""}
-                  ${isCollapsed ? "p-1 items-center" : "p-3"}`}
-                style={{ borderTopColor: hex }}
-              >
-                {isCollapsed ? (
-                  /* ── Coluna retraída ── */
-                  <div
-                    className="flex flex-col items-center gap-2 cursor-pointer py-3"
-                    onClick={() => toggleColumn(status)}
-                    title={`Expandir: ${label}`}
-                  >
-                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <Badge
-                      className="text-[11px] h-5 min-w-5 flex items-center justify-center border"
-                      style={{
-                        backgroundColor: hexWithOpacity(hex, 0.15),
-                        color: hex,
-                        borderColor: hexWithOpacity(hex, 0.4),
-                      }}
-                    >
-                      {items.length}
-                    </Badge>
-                    <span
-                      className="text-[11px] font-semibold text-muted-foreground mt-1"
-                      style={{ writingMode: "vertical-lr", textOrientation: "mixed", whiteSpace: "nowrap" }}
-                    >
-                      {label}
-                    </span>
-                  </div>
-                ) : (
-                  /* ── Coluna expandida ── */
-                  <>
-                    {/* Cabeçalho da coluna */}
-                    <div className="flex items-center justify-between mb-3 px-0.5 gap-1">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <button
-                          onClick={() => toggleColumn(status)}
-                          className="p-0.5 rounded hover:bg-muted transition-colors shrink-0"
-                          title="Retrair coluna"
-                        >
-                          <ChevronLeft className="h-4 w-4 text-muted-foreground" />
-                        </button>
-                        {/* Badge do nome da coluna com cor dinâmica */}
-                        <span
-                          className="text-xs font-bold px-2.5 py-1 rounded-full border truncate"
-                          style={{
-                            backgroundColor: hexWithOpacity(hex, 0.13),
-                            color: hex,
-                            borderColor: hexWithOpacity(hex, 0.4),
-                          }}
-                        >
-                          {label}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          onClick={() => onCreateDemanda?.(status)}
-                          className="p-1 rounded hover:bg-muted transition-colors"
-                          title={`Nova demanda em "${label}"`}
-                        >
-                          <Plus className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
-                        </button>
-                        <Badge className="text-xs h-5 min-w-[22px] flex items-center justify-center bg-background border shadow-sm text-foreground">
-                          {items.length}
-                        </Badge>
-                      </div>
-                    </div>
-
-                    {/* Lista de cards */}
-                    <div
-                      className="flex flex-col gap-3 overflow-y-auto pr-0.5"
-                      style={{ maxHeight: "calc(100vh - 260px)" }}
-                    >
-                      {items.length === 0 ? (
-                        <div
-                          className={`flex items-center justify-center h-20 rounded-lg border-2 border-dashed text-sm text-muted-foreground transition-colors duration-150
-                            ${isDragOver ? "border-primary/50 bg-primary/5 text-primary" : "border-border/50"}`}
-                        >
-                          {isDragOver ? "Soltar aqui" : "Vazio"}
-                        </div>
-                      ) : (
-                        items.map((d) => (
-                          <DemandaCard
-                            key={d.id}
-                            demanda={d}
-                            onOpen={(dem) => {
-                              setSelectedInitialTab(undefined);
-                              setPendingMoveTarget(undefined);
-                              setSelected(dem);
-                            }}
-                            onDelete={setDeleteTarget}
-                            draggable
-                            onDragStart={(e, dem) => e.dataTransfer.setData("demanda-id", dem.id)}
-                            moveOptions={moveOptions}
-                            onMove={handleContextMove}
-                          />
-                        ))
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+            <ExpandedCol
+              key={key}
+              colKey={key}
+              label={label}
+              demandas={items}
+              accentHex={color.hex}
+              onCollapse={() => toggle(key)}
+              onCardClick={onSelectDemanda}
+            />
           );
         })}
       </div>
-
-      <p className="text-[10px] text-muted-foreground text-center pb-2">
-        Arraste os cards para alterar a situação. O sistema valida progressão sequencial e evidências obrigatórias
-        automaticamente.
-      </p>
-
-      {selected && (
-        <div className="fixed inset-0 z-50 bg-background overflow-auto">
-          <DemandaDetail
-            demanda={demandas.find((d) => d.id === selected.id) || selected}
-            onBack={() => {
-              setSelected(null);
-              setSelectedInitialTab(undefined);
-              setPendingMoveTarget(undefined);
-              reload();
-            }}
-            onUpdate={update}
-            onMoveTo={moveTo}
-            initialTab={selectedInitialTab}
-            pendingMoveTarget={pendingMoveTarget}
-          />
-        </div>
-      )}
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
-        onConfirm={() => {
-          if (deleteTarget) {
-            if (isDemandaIniciada(deleteTarget)) {
-              toast.error("Demanda já iniciada. Use 'Cancelar Demanda' na tela de detalhes.");
-              setDeleteTarget(null);
-              return;
-            }
-            remove(deleteTarget.id);
-            setDeleteTarget(null);
-          }
-        }}
-      />
-
-      <JustificativaDialog
-        open={!!justTarget}
-        onClose={() => setJustTarget(null)}
-        onConfirm={async (j) => {
-          if (justTarget) {
-            await moveTo(justTarget.demanda, justTarget.status, j);
-            setJustTarget(null);
-          }
-        }}
-      />
-
-      <Dialog open={!!evidenceTarget} onOpenChange={(o) => !o && setEvidenceTarget(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-amber-500" />
-              Evidência Obrigatória Pendente
-            </DialogTitle>
-            <DialogDescription>
-              Para avançar <strong>{evidenceTarget?.demanda.rhm}</strong>, é necessário anexar a(s) evidência(s):
-            </DialogDescription>
-          </DialogHeader>
-          <ul className="list-disc pl-6 text-sm text-muted-foreground space-y-1">
-            {evidenceTarget?.missing.map((m, i) => (
-              <li key={i}>{m}</li>
-            ))}
-          </ul>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setEvidenceTarget(null)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => {
-                if (evidenceTarget) {
-                  setSelectedInitialTab("evidencias");
-                  setPendingMoveTarget(evidenceTarget.status);
-                  setSelected(evidenceTarget.demanda);
-                  setEvidenceTarget(null);
-                }
-              }}
-            >
-              Abrir Demanda
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
