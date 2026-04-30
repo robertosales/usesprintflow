@@ -665,6 +665,175 @@ export function UserRolesManager() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ── Modal: Trocar e-mail ─────────────────────────────────────────── */}
+      <Dialog
+        open={!!emailState.user}
+        onOpenChange={(open) => {
+          if (!open && !emailState.saving) setEmailState(EMAIL_INITIAL);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-primary" />
+              Trocar e-mail do usuário
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3 pt-1">
+                <p className="text-xs text-muted-foreground">
+                  Será enviado um <strong>e-mail de confirmação</strong> para o novo endereço. O acesso atual continua
+                  válido até que o usuário clique no link de validação.
+                </p>
+                <div>
+                  <Label className="text-xs font-semibold">E-mail atual</Label>
+                  <Input value={emailState.user?.email ?? ""} disabled className="h-8 mt-1 text-xs" />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold">Novo e-mail *</Label>
+                  <Input
+                    type="email"
+                    value={emailState.newEmail}
+                    onChange={(e) => setEmailState((p) => ({ ...p, newEmail: e.target.value }))}
+                    placeholder="novo@email.com"
+                    className="h-8 mt-1 text-xs"
+                    autoFocus
+                  />
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setEmailState(EMAIL_INITIAL)} disabled={emailState.saving}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={submitChangeEmail} disabled={emailState.saving}>
+              {emailState.saving ? (
+                <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1" />
+              ) : (
+                <Mail className="h-3.5 w-3.5 mr-1" />
+              )}
+              Enviar confirmação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal: Reset de senha ────────────────────────────────────────── */}
+      <Dialog
+        open={!!resetState.user}
+        onOpenChange={(open) => {
+          if (!open && !resetState.saving) setResetState(RESET_INITIAL);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-primary" />
+              Resetar senha de {resetState.user?.display_name}
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3 pt-1">
+                {resetState.generatedPassword ? (
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2 rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <p className="text-xs text-emerald-800 dark:text-emerald-300">
+                        Senha temporária gerada. <strong>Copie agora</strong> — ela não será exibida novamente. O
+                        usuário será obrigado a definir uma nova senha no próximo login.
+                      </p>
+                    </div>
+                    <Label className="text-xs font-semibold">Senha temporária</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        readOnly
+                        value={resetState.generatedPassword}
+                        className="h-9 font-mono text-sm"
+                        onFocus={(e) => e.currentTarget.select()}
+                      />
+                      <Button size="sm" type="button" onClick={() => copyToClipboard(resetState.generatedPassword!)}>
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : resetState.recoveryLink ? (
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2 rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <p className="text-xs text-emerald-800 dark:text-emerald-300">
+                        Link de redefinição gerado. Caso o e-mail não chegue, repasse este link manualmente:
+                      </p>
+                    </div>
+                    <Input
+                      readOnly
+                      value={resetState.recoveryLink}
+                      className="h-9 text-xs"
+                      onFocus={(e) => e.currentTarget.select()}
+                    />
+                    <Button size="sm" type="button" onClick={() => copyToClipboard(resetState.recoveryLink!)}>
+                      <Copy className="h-3.5 w-3.5 mr-1" />
+                      Copiar link
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">Escolha como deseja resetar a senha:</p>
+                    <div className="space-y-2">
+                      <label className="flex items-start gap-2 cursor-pointer rounded-md border p-2 hover:bg-muted/40">
+                        <input
+                          type="radio"
+                          name="reset-mode"
+                          checked={resetState.mode === "temp_password"}
+                          onChange={() => setResetState((p) => ({ ...p, mode: "temp_password" }))}
+                          className="mt-0.5"
+                        />
+                        <div>
+                          <p className="text-xs font-semibold">Gerar senha temporária</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Sistema gera uma senha forte exibida ao admin uma única vez. No próximo login, o usuário
+                            será forçado a trocá-la.
+                          </p>
+                        </div>
+                      </label>
+                      <label className="flex items-start gap-2 cursor-pointer rounded-md border p-2 hover:bg-muted/40">
+                        <input
+                          type="radio"
+                          name="reset-mode"
+                          checked={resetState.mode === "send_link"}
+                          onChange={() => setResetState((p) => ({ ...p, mode: "send_link" }))}
+                          className="mt-0.5"
+                        />
+                        <div>
+                          <p className="text-xs font-semibold">Enviar link de redefinição por e-mail</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            O usuário recebe um link no e-mail e define a própria senha (mesmo fluxo de "Esqueci minha
+                            senha").
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setResetState(RESET_INITIAL)} disabled={resetState.saving}>
+              {resetState.generatedPassword || resetState.recoveryLink ? "Fechar" : "Cancelar"}
+            </Button>
+            {!resetState.generatedPassword && !resetState.recoveryLink && (
+              <Button size="sm" onClick={submitResetPassword} disabled={resetState.saving}>
+                {resetState.saving ? (
+                  <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1" />
+                ) : (
+                  <KeyRound className="h-3.5 w-3.5 mr-1" />
+                )}
+                Confirmar reset
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
