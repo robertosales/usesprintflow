@@ -345,6 +345,28 @@ export function getColumnHex(col: WorkflowColumn): string {
   return "#94a3b8";
 }
 
+/**
+ * Normaliza uma WorkflowColumn vinda do banco de dados.
+ * Garante que o campo `hex` seja sempre preenchido, independente do formato
+ * em que `dotColor` foi salvo (Tailwind class, hex, valor curto etc.).
+ *
+ * Use no SprintContext ao carregar colunas do Supabase:
+ *   setWorkflowColumns(rawCols.map(normalizeWorkflowColumn))
+ */
+export function normalizeWorkflowColumn(col: WorkflowColumn): WorkflowColumn {
+  if (col.hex && /^#[0-9a-fA-F]{3,8}$/.test(col.hex)) return col; // já ok
+  const resolvedHex = getColumnHex(col);
+  return { ...col, hex: resolvedHex };
+}
+
+/**
+ * Normaliza um array de colunas (atalho para usar no SprintContext).
+ * Ex:  const cols = normalizeWorkflowColumns(rawDataFromSupabase);
+ */
+export function normalizeWorkflowColumns(cols: WorkflowColumn[]): WorkflowColumn[] {
+  return cols.map(normalizeWorkflowColumn);
+}
+
 export const DEFAULT_KANBAN_COLUMNS: WorkflowColumn[] = [
   {
     key: "aguardando_desenvolvimento",
