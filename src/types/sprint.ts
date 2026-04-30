@@ -68,7 +68,7 @@ export const IMPEDIMENT_TYPE_LABELS: Record<ImpedimentType, { label: string; col
 
 export interface Impediment {
   id: string;
-  huId: string;
+  huId?: string;
   reason: string;
   criticality: ImpedimentCriticality;
   type?: ImpedimentType | null;
@@ -90,23 +90,48 @@ export type CustomFieldType = "text" | "number" | "date" | "boolean" | "select";
 export interface CustomField {
   key: string;
   label: string;
+  /** Alias de label — alguns componentes usam .name */
+  name?: string;
   type: CustomFieldType;
   options?: string[];
   required?: boolean;
 }
 
-/** Alias para compatibilidade com componentes que importam CustomFieldDefinition */
-export type CustomFieldDefinition = CustomField & { id?: string };
+/** CustomFieldDefinition compatível com componentes legados que usam .name */
+export interface CustomFieldDefinition {
+  id?: string;
+  key?: string;
+  /** Nome do campo — usado em UserStoryManager, CustomFieldManager */
+  name: string;
+  label?: string;
+  type: CustomFieldType;
+  options?: string[] | null;
+  required?: boolean;
+}
 
 // ── AutomationRule ────────────────────────────────────────────────────────────
+
+export interface AutomationRuleTrigger {
+  type: "status_change" | string;
+  fromStatus?: string | null;
+  toStatus: string;
+}
+
+export interface AutomationRuleAction {
+  type: "change_status" | "notify" | string;
+  targetStatus?: string | null;
+  message?: string | null;
+}
 
 export interface AutomationRule {
   id: string;
   name: string;
-  trigger: string;
-  action: string;
+  enabled: boolean;
+  /** @deprecated use enabled */
+  isActive?: boolean;
+  trigger: AutomationRuleTrigger;
+  action: AutomationRuleAction;
   conditions?: Record<string, unknown>;
-  isActive: boolean;
   createdAt?: string;
 }
 
@@ -189,6 +214,7 @@ export interface UserStory {
   customFields?: Record<string, string | number>;
   planningStatus?: string | null;
   votedAt?: string | null;
+  votedBy?: string | null;
   orderIndex?: number;
   impediments?: Impediment[];
   tags?: string[];
