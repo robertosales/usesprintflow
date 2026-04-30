@@ -71,11 +71,12 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { action, user_id, new_email, mode } = body as {
+    const { action, user_id, new_email, mode, email_mode } = body as {
       action: "change_email" | "reset_password";
       user_id: string;
       new_email?: string;
       mode?: "temp_password" | "send_link";
+      email_mode?: "confirm" | "direct";
     };
 
     if (!action || !user_id) {
@@ -93,18 +94,32 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      // updateUserById com email + email_confirm:false dispara o e-mail de
-      // confirmação para o novo endereço; o usuário só passa a usá-lo após confirmar.
+      const isDirect = email_mode === "direct";
+      // direct  → email_confirm: true  → troca imediata, sem e-mail de confirmação
+      // confirm → email_confirm: false → envia e-mail de confirmação ao novo endereço
       const { error } = await admin.auth.admin.updateUserById(user_id, {
         email: new_email,
-        email_confirm: false,
+        email_confirm: isDirect,
       });
       if (error) throw error;
+
+      // Sincroniza profiles.email + força troca de senha em modo direto (segurança)
+      const profileUpdate: Record<string, unknown> = {};
+      if (isDirect) {
+        profileUpdate.email = new_email;
+        profileUpdate.must_change_password = true;
+      }
+      if (Object.keys(profileUpdate).length > 0) {
+        await admin.from("profiles").update(profileUpdate).eq("user_id", user_id);
+      }
 
       return new Response(
         JSON.stringify({
           success: true,
-          message: "E-mail de confirmação enviado para o novo endereço. O usuário deve clicar no link para validar.",
+          mode: isDirect ? "direct" : "confirm",
+          message: isDirect
+            ? "E-mail trocado com sucesso. O usuário será obrigado a redefinir a senha no próximo login."
+            : "E-mail de confirmação enviado para o novo endereço. O usuário deve clicar no link para validar.",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
