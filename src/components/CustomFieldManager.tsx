@@ -1,234 +1,181 @@
 import { useState } from "react";
+import type { ElementType } from "react";
 import { useSprint } from "@/contexts/SprintContext";
-import { CustomFieldType } from "@/types/sprint";
+import type { CustomFieldDefinition } from "@/types/sprint";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { SlidersHorizontal, Plus, Trash2, Pencil, Type, Hash, List } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Type, Hash, List, ToggleLeft, Calendar, Plus, Trash2, Edit, Save, X } from "lucide-react";
 import { toast } from "sonner";
 
-const TYPE_ICONS: Record<CustomFieldType, ElementType> = {
+// ── Tipos de campo suportados ─────────────────────────────────────────────────
+
+type CustomFieldType = "text" | "number" | "select" | "boolean" | "date";
+
+const FIELD_TYPE_ICONS: Record<CustomFieldType, ElementType> = {
   text: Type,
   number: Hash,
   select: List,
-  boolean: ToggleLeft, // ← adicionar (import ToggleLeft from lucide-react)
-  date: Calendar, // ← adicionar (import Calendar from lucide-react)
+  boolean: ToggleLeft,
+  date: Calendar,
 };
 
-const TYPE_LABELS: Record<CustomFieldType, string> = {
+const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
   text: "Texto",
   number: "Número",
   select: "Seleção",
-  boolean: "Sim/Não", // ← adicionar
-  date: "Data", // ← adicionar
+  boolean: "Sim/Não",
+  date: "Data",
 };
+
+const ALL_TYPES = Object.keys(FIELD_TYPE_LABELS) as CustomFieldType[];
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+function FieldTypeIcon({ type, className }: { type: string; className?: string }) {
+  const Icon = FIELD_TYPE_ICONS[type as CustomFieldType] ?? Type;
+  return <Icon className={className ?? "h-4 w-4"} />;
+}
+
+// ── CustomFieldManager ────────────────────────────────────────────────────────
 
 export function CustomFieldManager() {
   const { customFields, addCustomField, updateCustomField, removeCustomField } = useSprint();
+
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [type, setType] = useState<CustomFieldType>("text");
-  const [required, setRequired] = useState(false);
-  const [optionsText, setOptionsText] = useState("");
+  const [form, setForm] = useState({
+    name: "",
+    type: "text" as CustomFieldType,
+    required: false,
+    options: "", // CSV para tipo select
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const resetForm = () => {
-    setName("");
-    setType("text");
-    setRequired(false);
-    setOptionsText("");
+    setForm({ name: "", type: "text", required: false, options: "" });
     setErrors({});
     setEditId(null);
   };
 
+  const openCreate = () => {
+    resetForm();
+    setOpen(true);
+  };
+
+  const openEdit = (field: CustomFieldDefinition) => {
+    setEditId(field.id ?? null);
+    setForm({
+      name: field.name,
+      type: (field.type as CustomFieldType) ?? "text",
+      required: field.required ?? false,
+      options: (field.options ?? []).join(", "),
+    });
+    setOpen(true);
+  };
+
   const validate = () => {
     const e: Record<string, string> = {};
-    if (!name.trim()) e.name = "Nome do campo é obrigatório";
-    if (type === "select" && !optionsText.trim()) e.options = "Informe as opções separadas por vírgula";
+    if (!form.name.trim()) e.name = "Nome é obrigatório";
+    if (form.type === "select" && !form.options.trim()) e.options = "Informe ao menos uma opção";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = (ev: React.FormEvent) => {
-    ev.preventDefault();
+  const parseOptions = () =>
+    form.options
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+  const handleSave = async () => {
     if (!validate()) return;
-    const options =
-      type === "select"
-        ? optionsText
-            .split(",")
-            .map((o) => o.trim())
-            .filter(Boolean)
-        : undefined;
+
+    const payload: Omit<CustomFieldDefinition, "id"> = {
+      name: form.name.trim(),
+      type: form.type,
+      required: form.required,
+      options: form.type === "select" ? parseOptions() : null,
+    };
+
     if (editId) {
-      updateCustomField(editId, { name: name.trim(), type, required, options });
+      await updateCustomField(editId, payload);
       toast.success("Campo atualizado!");
     } else {
-      addCustomField({ name: name.trim(), type, required, options });
-      toast.success("Campo personalizado criado!");
+      await addCustomField(payload);
+      toast.success("Campo criado!");
     }
-    resetForm();
+
     setOpen(false);
+    resetForm();
   };
 
-  const openEdit = (id: string) => {
-    const field = customFields.find((f) => f.id === id);
-    if (!field) return;
-    setEditId(field.id);
-    setName(field.name);
-    setType(field.type);
-    setRequired(field.required);
-    setOptionsText(field.options?.join(", ") || "");
-    setErrors({});
-    setOpen(true);
+  const handleRemove = async (id: string) => {
+    await removeCustomField(id);
+    toast.success("Campo removido!");
   };
 
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <SlidersHorizontal className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-bold tracking-tight">Campos Personalizados</h2>
-          <Badge variant="secondary">{customFields.length}</Badge>
+        <div>
+          <h3 className="font-semibold text-base">Campos Personalizados</h3>
+          <p className="text-sm text-muted-foreground">Campos extras nas Histórias de Usuário</p>
         </div>
-        <Dialog
-          open={open}
-          onOpenChange={(v) => {
-            setOpen(v);
-            if (!v) resetForm();
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-1.5">
-              <Plus className="h-4 w-4" /> Novo Campo
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <SlidersHorizontal className="h-5 w-5 text-primary" />
-                {editId ? "Editar Campo" : "Novo Campo Personalizado"}
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label>
-                  Nome do Campo <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    setErrors((p) => ({ ...p, name: "" }));
-                  }}
-                  placeholder="Ex: Ambiente de Deploy"
-                  className="mt-1"
-                />
-                {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
-              </div>
-              <div>
-                <Label>Tipo</Label>
-                <Select value={type} onValueChange={(v) => setType(v as CustomFieldType)}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.entries(FIELD_TYPE_LABELS) as [CustomFieldType, string][]).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>
-                        {v}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {type === "select" && (
-                <div>
-                  <Label>
-                    Opções <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    value={optionsText}
-                    onChange={(e) => {
-                      setOptionsText(e.target.value);
-                      setErrors((p) => ({ ...p, options: "" }));
-                    }}
-                    placeholder="Opção 1, Opção 2, Opção 3"
-                    className="mt-1"
-                  />
-                  <p className="text-[10px] text-muted-foreground mt-1">Separe as opções por vírgula</p>
-                  {errors.options && <p className="text-xs text-destructive mt-1">{errors.options}</p>}
-                </div>
-              )}
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <Label className="text-sm">Campo obrigatório?</Label>
-                <Switch checked={required} onCheckedChange={setRequired} />
-              </div>
-              <Button type="submit" className="w-full gap-2">
-                <SlidersHorizontal className="h-4 w-4" /> {editId ? "Salvar" : "Criar Campo"}
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button size="sm" onClick={openCreate} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Novo Campo
+        </Button>
       </div>
 
+      {/* Lista */}
       {customFields.length === 0 ? (
         <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-            <SlidersHorizontal className="h-12 w-12 mb-3 opacity-30" />
-            <p className="font-medium">Nenhum campo personalizado</p>
-            <p className="text-sm mt-1">Adicione campos extras às User Stories (texto, número ou seleção)</p>
+          <CardContent className="py-8 text-center text-muted-foreground text-sm">
+            Nenhum campo personalizado criado ainda
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-2">
           {customFields.map((field) => {
-            const Icon = FIELD_TYPE_ICONS[field.type];
+            const typedField = field as CustomFieldDefinition;
+            const Icon = FIELD_TYPE_ICONS[typedField.type as CustomFieldType] ?? Type;
             return (
-              <Card key={field.id} className="group hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm">{field.name}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="secondary" className="text-[10px]">
-                            {FIELD_TYPE_LABELS[field.type]}
-                          </Badge>
-                          {field.required && (
-                            <Badge variant="outline" className="text-[10px] text-destructive border-destructive/30">
-                              Obrigatório
-                            </Badge>
-                          )}
-                        </div>
-                        {field.type === "select" && field.options && (
-                          <p className="text-[10px] text-muted-foreground mt-1">Opções: {field.options.join(", ")}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(field.id)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive"
-                        onClick={() => {
-                          removeCustomField(field.id);
-                          toast.info("Campo removido");
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+              <Card key={typedField.id}>
+                <CardContent className="p-3 flex items-center gap-3">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="font-medium text-sm truncate">{typedField.name}</span>
+                    <Badge variant="secondary" className="text-xs shrink-0">
+                      {FIELD_TYPE_LABELS[typedField.type as CustomFieldType] ?? typedField.type}
+                    </Badge>
+                    {typedField.required && (
+                      <Badge variant="outline" className="text-xs text-destructive border-destructive/30 shrink-0">
+                        Obrigatório
+                      </Badge>
+                    )}
+                    {typedField.type === "select" && typedField.options && typedField.options.length > 0 && (
+                      <span className="text-xs text-muted-foreground truncate">{typedField.options.join(" · ")}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(typedField)} className="h-7 w-7 p-0">
+                      <Edit className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                      onClick={() => typedField.id && handleRemove(typedField.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -236,6 +183,115 @@ export function CustomFieldManager() {
           })}
         </div>
       )}
+
+      {/* Dialog criar/editar */}
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          if (!v) {
+            setOpen(false);
+            resetForm();
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {editId ? <Edit className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+              {editId ? "Editar Campo" : "Novo Campo Personalizado"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Nome */}
+            <div>
+              <Label className="text-sm font-medium">
+                Nome <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                value={form.name}
+                onChange={(e) => {
+                  setForm((p) => ({ ...p, name: e.target.value }));
+                  setErrors((p) => ({ ...p, name: "" }));
+                }}
+                placeholder="Ex: Prioridade de Negócio"
+                className="mt-1"
+              />
+              {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
+            </div>
+
+            {/* Tipo */}
+            <div>
+              <Label className="text-sm font-medium">Tipo</Label>
+              <Select value={form.type} onValueChange={(v) => setForm((p) => ({ ...p, type: v as CustomFieldType }))}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ALL_TYPES.map((t) => {
+                    const Icon = FIELD_TYPE_ICONS[t];
+                    return (
+                      <SelectItem key={t} value={t}>
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-4 w-4" />
+                          {FIELD_TYPE_LABELS[t]}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Opções (apenas select) */}
+            {form.type === "select" && (
+              <div>
+                <Label className="text-sm font-medium">
+                  Opções <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={form.options}
+                  onChange={(e) => {
+                    setForm((p) => ({ ...p, options: e.target.value }));
+                    setErrors((p) => ({ ...p, options: "" }));
+                  }}
+                  placeholder="Opção 1, Opção 2, Opção 3"
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Separe as opções por vírgula</p>
+                {errors.options && <p className="text-xs text-destructive mt-1">{errors.options}</p>}
+              </div>
+            )}
+
+            {/* Obrigatório */}
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">Obrigatório</p>
+                <p className="text-xs text-muted-foreground">Exige preenchimento ao criar a HU</p>
+              </div>
+              <Switch checked={form.required} onCheckedChange={(v) => setForm((p) => ({ ...p, required: v }))} />
+            </div>
+
+            {/* Ações */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 gap-2"
+                onClick={() => {
+                  setOpen(false);
+                  resetForm();
+                }}
+              >
+                <X className="h-4 w-4" /> Cancelar
+              </Button>
+              <Button className="flex-1 gap-2" onClick={handleSave}>
+                <Save className="h-4 w-4" />
+                {editId ? "Salvar" : "Criar Campo"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
