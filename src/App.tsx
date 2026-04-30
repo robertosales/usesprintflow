@@ -8,13 +8,15 @@ import { SprintProvider } from "@/contexts/SprintContext";
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import ResetPassword from "./pages/ResetPassword.tsx";
+import ForcePasswordChange from "./pages/ForcePasswordChange.tsx";
 import { SustentacaoPage } from "./features/sustentacao/SustentacaoPage";
 import { ModuleSelector } from "./features/sustentacao/components/ModuleSelector";
 
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth();
+  const { session, loading, profile, refreshProfile } = useAuth();
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -25,7 +27,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  return session ? <>{children}</> : <Navigate to="/auth" replace />;
+  if (!session) return <Navigate to="/auth" replace />;
+  if (profile?.must_change_password) {
+    return <ForcePasswordChange onDone={refreshProfile} />;
+  }
+  return <>{children}</>;
 }
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
@@ -72,6 +78,7 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
               <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
               <Route path="/sala-agil" element={<ProtectedRoute><ModuleGuard module="sala_agil"><Index /></ModuleGuard></ProtectedRoute>} />

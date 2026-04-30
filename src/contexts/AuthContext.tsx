@@ -11,6 +11,7 @@ interface Profile {
   email: string;
   avatar_url: string | null;
   module_access: string;
+  must_change_password?: boolean;
 }
 
 interface AuthContextType {
@@ -26,6 +27,7 @@ interface AuthContextType {
   refreshTeams: () => Promise<void>;
   roles: AppRole[];
   hasPermission: (permission: Permission) => boolean;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -57,6 +59,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("Error fetching profile:", err);
     }
+  };
+
+  const refreshProfile = async () => {
+    if (user?.id) await fetchProfile(user.id);
   };
 
   const fetchRoles = async (userId: string) => {
@@ -169,6 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshTeams,
         roles,
         hasPermission,
+        refreshProfile,
       }}
     >
       {children}
