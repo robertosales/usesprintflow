@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ShieldCheck, Save, Search, Trash2, AlertTriangle, ArrowRightLeft } from "lucide-react";
+import { ShieldCheck, Save, Search, Trash2, AlertTriangle, ArrowRightLeft, Mail, KeyRound, Copy, CheckCircle2 } from "lucide-react";
 import { fetchAllRoles, getRoleLabel, type AppRole } from "@/hooks/usePermissions";
 import { PaginationControls } from "@/shared/components/common/Pagination";
 import { usePagination } from "@/shared/hooks/usePagination";
@@ -62,6 +62,28 @@ const DELETE_INITIAL: DeleteState = {
   deleting: false,
 };
 
+interface EmailState {
+  user: UserWithRoles | null;
+  newEmail: string;
+  saving: boolean;
+}
+const EMAIL_INITIAL: EmailState = { user: null, newEmail: "", saving: false };
+
+interface ResetState {
+  user: UserWithRoles | null;
+  mode: "temp_password" | "send_link";
+  saving: boolean;
+  generatedPassword: string | null;
+  recoveryLink: string | null;
+}
+const RESET_INITIAL: ResetState = {
+  user: null,
+  mode: "temp_password",
+  saving: false,
+  generatedPassword: null,
+  recoveryLink: null,
+};
+
 const MODULE_LABELS: Record<string, string> = {
   sala_agil: "Sala Ágil",
   sustentacao: "Sustentação",
@@ -80,6 +102,8 @@ export function UserRolesManager() {
   const [searchFilter, setSearchFilter] = useState("");
   const debouncedSearch = useDebounce(searchFilter);
   const [deleteState, setDeleteState] = useState<DeleteState>(DELETE_INITIAL);
+  const [emailState, setEmailState] = useState<EmailState>(EMAIL_INITIAL);
+  const [resetState, setResetState] = useState<ResetState>(RESET_INITIAL);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -274,6 +298,77 @@ export function UserRolesManager() {
     [users, deleteState.user],
   );
 
+  // ── Trocar e-mail (envia confirmação ao novo endereço) ────────────────────
+  async function submitChangeEmail() {
+    const { user, newEmail } = emailState;
+    if (!user) return;
+    const trimmed = newEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      toast.error("E-mail inválido");
+      return;
+    }
+    if (trimmed === user.email.toLowerCase()) {
+      toast.error("O novo e-mail é igual ao atual");
+      return;
+    }
+    setEmailState((p) => ({ ...p, saving: true }));
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-user-management", {
+        body: { action: "change_email", user_id: user.user_id, new_email: trimmed },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(
+        "E-mail de confirmação enviado para o novo endereço. O usuário só passará a usá-lo após confirmar.",
+      );
+      setEmailState(EMAIL_INITIAL);
+      await fetchUsers();
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao trocar e-mail");
+      setEmailState((p) => ({ ...p, saving: false }));
+    }
+  }
+
+  // ── Reset de senha ────────────────────────────────────────────────────────
+  async function submitResetPassword() {
+    const { user, mode } = resetState;
+    if (!user) return;
+    setResetState((p) => ({ ...p, saving: true }));
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-user-management", {
+        body: { action: "reset_password", user_id: user.user_id, mode },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const result = data as any;
+      if (mode === "temp_password") {
+        setResetState((p) => ({
+          ...p,
+          saving: false,
+          generatedPassword: result.temp_password,
+        }));
+        toast.success("Senha temporária gerada. Copie e repasse ao usuário.");
+      } else {
+        setResetState((p) => ({
+          ...p,
+          saving: false,
+          recoveryLink: result.recovery_link ?? null,
+        }));
+        toast.success("Link de redefinição enviado para o e-mail do usuário.");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao redefinir senha");
+      setResetState((p) => ({ ...p, saving: false }));
+    }
+  }
+
+  function copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text).then(
+      () => toast.success("Copiado!"),
+      () => toast.error("Não foi possível copiar"),
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -345,6 +440,22 @@ export function UserRolesManager() {
                       <div className="flex gap-1.5">
                         <Button size="sm" variant="outline" onClick={() => startEditing(user)}>
                           Editar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Trocar e-mail"
+                          onClick={() => setEmailState({ user, newEmail: user.email, saving: false })}
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Resetar senha"
+                          onClick={() => setResetState({ ...RESET_INITIAL, user })}
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                           size="sm"
