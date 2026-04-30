@@ -298,7 +298,7 @@ export function UserRolesManager() {
     [users, deleteState.user],
   );
 
-  // ── Trocar e-mail (envia confirmação ao novo endereço) ────────────────────
+  // ── Trocar e-mail (troca direta + obriga reset de senha no próximo login) ─
   async function submitChangeEmail() {
     const { user, newEmail } = emailState;
     if (!user) return;
@@ -314,12 +314,17 @@ export function UserRolesManager() {
     setEmailState((p) => ({ ...p, saving: true }));
     try {
       const { data, error } = await supabase.functions.invoke("admin-user-management", {
-        body: { action: "change_email", user_id: user.user_id, new_email: trimmed },
+        body: {
+          action: "change_email",
+          user_id: user.user_id,
+          new_email: trimmed,
+          email_mode: "direct",
+        },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       toast.success(
-        "E-mail de confirmação enviado para o novo endereço. O usuário só passará a usá-lo após confirmar.",
+        "E-mail trocado. O usuário deverá redefinir a senha no próximo login.",
       );
       setEmailState(EMAIL_INITIAL);
       await fetchUsers();
