@@ -20,6 +20,41 @@ import {
 } from "@/types/sprint";
 import { toast } from "sonner";
 
+// ── Conversão de dotColor Tailwind → hex (fallback para dados legados) ───────
+const DOT_TO_HEX: Record<string, string> = {
+  "bg-slate-400": "#94a3b8",
+  "bg-slate-500": "#64748b",
+  "bg-blue-400": "#60a5fa",
+  "bg-blue-500": "#3b82f6",
+  "bg-indigo-400": "#818cf8",
+  "bg-indigo-500": "#6366f1",
+  "bg-violet-400": "#a78bfa",
+  "bg-violet-500": "#8b5cf6",
+  "bg-purple-400": "#c084fc",
+  "bg-purple-500": "#a855f7",
+  "bg-amber-400": "#fbbf24",
+  "bg-amber-500": "#f59e0b",
+  "bg-yellow-400": "#facc15",
+  "bg-yellow-500": "#eab308",
+  "bg-orange-400": "#fb923c",
+  "bg-orange-500": "#f97316",
+  "bg-red-400": "#f87171",
+  "bg-red-500": "#ef4444",
+  "bg-rose-400": "#fb7185",
+  "bg-rose-500": "#f43f5e",
+  "bg-cyan-400": "#22d3ee",
+  "bg-cyan-500": "#06b6d4",
+  "bg-teal-400": "#2dd4bf",
+  "bg-teal-500": "#14b8a6",
+  "bg-green-400": "#4ade80",
+  "bg-green-500": "#22c55e",
+  "bg-emerald-400": "#34d399",
+  "bg-emerald-500": "#10b981",
+};
+function dotToHex(dotColor?: string): string {
+  return DOT_TO_HEX[dotColor || ""] || "#94a3b8";
+}
+
 interface AddImpedimentData {
   reason: string;
   type: ImpedimentType;
@@ -93,7 +128,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
   const teamId = currentTeamId;
 
-  // ---- FETCH ALL DATA ----
+  // ── FETCH ALL DATA ────────────────────────────────────────────────────────
   const refreshAll = useCallback(async () => {
     if (!teamId) {
       setDevelopers([]);
@@ -118,6 +153,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         supabase.from("impediments").select("*").eq("team_id", teamId).limit(200),
         supabase.from("custom_field_definitions").select("*").eq("team_id", teamId).limit(50),
         supabase.from("automation_rules").select("*").eq("team_id", teamId).limit(50),
+        // ── Carrega colunas do workflow do banco filtrando pelo time atual
         supabase.from("workflow_columns").select("*").eq("team_id", teamId).order("sort_order").limit(50),
       ]);
 
@@ -190,7 +226,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
           votedAt: h.voted_at || null,
           votedBy: h.voted_by || null,
           functionPoints: h.function_points != null ? Number(h.function_points) : null,
-          // ✅ CORREÇÃO 1: leitura do assignee_id do banco
           assigneeId: h.assignee_id || null,
           impediments: impData
             .filter((imp: any) => imp.hu_id === h.id)
@@ -249,14 +284,18 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         })),
       );
 
+      // ── Mapeia colunas do workflow com suporte a hex ───────────────────
+      // Prioridade: campo `hex` do banco → derivado de `dot_color` → fallback slate
       const wc = (wcRes.data || []) as any[];
       if (wc.length > 0) {
         setWorkflowColumnsState(
           wc.map((c: any) => ({
             key: c.key,
             label: c.label,
-            colorClass: c.color_class,
-            dotColor: c.dot_color,
+            colorClass: c.color_class || "",
+            dotColor: c.dot_color || "",
+            // Campo hex: usa o valor salvo no banco; se não existir, deriva do dotColor
+            hex: c.hex || dotToHex(c.dot_color),
           })),
         );
       } else {
@@ -275,7 +314,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
   const activeSprint = sprints.find((s) => s.isActive) || null;
 
-  // ---- AUTOMATION ENGINE ----
+  // ── AUTOMATION ENGINE ─────────────────────────────────────────────────────
   const runAutomations = useCallback(
     async (huId: string, fromStatus: string, toStatus: string) => {
       const rules = automationRules.filter((r) => r.enabled && r.trigger.type === "status_change");
@@ -296,7 +335,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     [automationRules],
   );
 
-  // ---- DEVELOPERS ----
+  // ── DEVELOPERS ────────────────────────────────────────────────────────────
   const addDeveloper = async (dev: Omit<Developer, "id">) => {
     if (!teamId) return;
     const { error } = await supabase.from("developers").insert({
@@ -327,7 +366,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     await refreshAll();
   };
 
-  // ---- USER STORIES ----
+  // ── USER STORIES ──────────────────────────────────────────────────────────
   const addUserStory = async (hu: Omit<UserStory, "id" | "code" | "createdAt" | "status" | "impediments">) => {
     if (!teamId) return;
     const count = userStories.length + 1;
@@ -348,7 +387,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       size_reference: (hu as any).sizeReference || null,
       estimated_hours: (hu as any).estimatedHours || null,
       function_points: (hu as any).functionPoints || null,
-      // ✅ CORREÇÃO 2: salvar assignee_id na inclusão
       assignee_id: (hu as any).assigneeId || null,
     });
     if (error) {
@@ -376,18 +414,14 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if ((hu as any).votedAt !== undefined) updateData.voted_at = (hu as any).votedAt;
     if ((hu as any).votedBy !== undefined) updateData.voted_by = (hu as any).votedBy;
     if ((hu as any).functionPoints !== undefined) updateData.function_points = (hu as any).functionPoints ?? null;
-    // ✅ CORREÇÃO 3: mapear assigneeId → assignee_id na edição
     if ("assigneeId" in hu) updateData.assignee_id = (hu as any).assigneeId ?? null;
 
-    console.log("[updateUserStory] payload:", id, updateData);
     const { data, error } = await supabase.from("user_stories").update(updateData).eq("id", id).select();
     if (error) {
-      console.error("[updateUserStory] Supabase error:", error);
       toast.error("Erro ao atualizar HU: " + error.message);
       return;
     }
     if (!data || data.length === 0) {
-      console.warn("[updateUserStory] No rows updated — possible RLS issue");
       toast.error("Erro ao atualizar HU: nenhuma linha afetada (verifique permissões)");
       return;
     }
@@ -404,14 +438,12 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (hu) {
       const oldStatus = hu.status;
       await supabase.from("user_stories").update({ status }).eq("id", id);
-      if (oldStatus !== status) {
-        await runAutomations(id, oldStatus, status);
-      }
+      if (oldStatus !== status) await runAutomations(id, oldStatus, status);
       await refreshAll();
     }
   };
 
-  // ---- ACTIVITIES ----
+  // ── ACTIVITIES ────────────────────────────────────────────────────────────
   const addActivity = async (act: Omit<Activity, "id" | "endDate" | "createdAt">) => {
     if (!teamId) return;
     const endDate = calculateEndDate(act.startDate, act.hours);
@@ -430,8 +462,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       toast.error("Erro ao criar atividade");
       return;
     }
-
-    // ✅ NOVO: Se a atividade criada é do tipo "bug", move a HU para a coluna "bug".
     if (act.activityType === "bug") {
       const hu = userStories.find((h) => h.id === act.huId);
       const bugCol = workflowColumns.find((c) => c.key === "bug");
@@ -440,7 +470,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         toast.info(`🐛 HU movida para "${bugCol.label}"`);
       }
     }
-
     await refreshAll();
   };
 
@@ -456,9 +485,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (act.startDate !== undefined) updateData.start_date = act.startDate;
     const newStart = act.startDate || existing.startDate;
     const newHours = act.hours || existing.hours;
-    if (act.startDate || act.hours) {
-      updateData.end_date = calculateEndDate(newStart, newHours);
-    }
+    if (act.startDate || act.hours) updateData.end_date = calculateEndDate(newStart, newHours);
     const { error } = await supabase.from("activities").update(updateData).eq("id", id);
     if (error) {
       toast.error("Erro ao atualizar atividade");
@@ -492,15 +519,10 @@ export function SprintProvider({ children }: { children: ReactNode }) {
           }
         }
       }
-
-      // ✅ NOVO: ao fechar uma tarefa de bug, se a HU está na coluna "bug" e
-      // não há mais bugs abertos, move HU de volta para "em_teste".
       if (act.activityType === "bug") {
         const hu = userStories.find((h) => h.id === act.huId);
         if (hu && hu.status === "bug") {
-          const remainingOpenBugs = huActs.filter(
-            (a) => a.id !== id && a.activityType === "bug" && !a.isClosed,
-          );
+          const remainingOpenBugs = huActs.filter((a) => a.id !== id && a.activityType === "bug" && !a.isClosed);
           if (remainingOpenBugs.length === 0) {
             const targetCol = workflowColumns.find((c) => c.key === "em_teste");
             if (targetCol) {
@@ -519,7 +541,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     await refreshAll();
   };
 
-  // ---- IMPEDIMENTS ----
+  // ── IMPEDIMENTS ───────────────────────────────────────────────────────────
   const addImpediment = async (huId: string, data: AddImpedimentData) => {
     if (!teamId) return;
     const { error } = await supabase.from("impediments").insert({
@@ -542,15 +564,12 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const resolveImpediment = async (_huId: string, impedimentId: string, resolution?: string) => {
     await supabase
       .from("impediments")
-      .update({
-        resolved_at: new Date().toISOString(),
-        resolution: resolution || null,
-      })
+      .update({ resolved_at: new Date().toISOString(), resolution: resolution || null })
       .eq("id", impedimentId);
     await refreshAll();
   };
 
-  // ---- SPRINTS ----
+  // ── SPRINTS ───────────────────────────────────────────────────────────────
   const addSprint = async (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => {
     if (!teamId) return;
     await supabase.from("sprints").update({ is_active: false }).eq("team_id", teamId);
@@ -596,7 +615,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     await refreshAll();
   };
 
-  // ---- EPICS ----
+  // ── EPICS ─────────────────────────────────────────────────────────────────
   const addEpic = async (epic: Omit<Epic, "id" | "createdAt">) => {
     if (!teamId) return;
     const { error } = await supabase.from("epics").insert({
@@ -626,7 +645,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     await refreshAll();
   };
 
-  // ---- CUSTOM FIELDS ----
+  // ── CUSTOM FIELDS ─────────────────────────────────────────────────────────
   const addCustomField = async (field: Omit<CustomFieldDefinition, "id">) => {
     if (!teamId) return;
     const { error } = await supabase.from("custom_field_definitions").insert({
@@ -662,7 +681,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     await refreshAll();
   };
 
-  // ---- AUTOMATION RULES ----
+  // ── AUTOMATION RULES ──────────────────────────────────────────────────────
   const addAutomationRule = async (rule: Omit<AutomationRule, "id" | "createdAt">) => {
     if (!teamId) return;
     const { error } = await supabase.from("automation_rules").insert({
@@ -710,7 +729,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     await refreshAll();
   };
 
-  // ---- WORKFLOW COLUMNS ----
+  // ── WORKFLOW COLUMNS ──────────────────────────────────────────────────────
   const setWorkflowColumns = (columns: WorkflowColumn[]) => setWorkflowColumnsState(columns);
 
   const addWorkflowColumn = async (col: WorkflowColumn) => {
@@ -720,8 +739,10 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       team_id: teamId,
       key: col.key,
       label: col.label,
-      color_class: col.colorClass,
-      dot_color: col.dotColor,
+      color_class: col.colorClass || "",
+      dot_color: col.dotColor || "",
+      // ── Salva hex no banco para o KanbanBoard usar diretamente
+      hex: (col as any).hex || dotToHex(col.dotColor),
       sort_order: maxOrder,
     });
     if (error) {
@@ -742,7 +763,12 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const updateData: any = {};
     if (col.label !== undefined) updateData.label = col.label;
     if (col.colorClass !== undefined) updateData.color_class = col.colorClass;
-    if (col.dotColor !== undefined) updateData.dot_color = col.dotColor;
+    if (col.dotColor !== undefined) {
+      updateData.dot_color = col.dotColor;
+      // Atualiza hex derivado quando dotColor muda e não há hex explícito
+      if (!(col as any).hex) updateData.hex = dotToHex(col.dotColor);
+    }
+    if ((col as any).hex !== undefined) updateData.hex = (col as any).hex;
     await supabase.from("workflow_columns").update(updateData).eq("team_id", teamId).eq("key", key);
     await refreshAll();
   };
