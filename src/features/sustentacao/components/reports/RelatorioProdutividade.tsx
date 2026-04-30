@@ -6,17 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select, SelectContent, SelectItem,
-  SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
-  Table, TableBody, TableCell,
-  TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import {
-  Collapsible, CollapsibleContent, CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useDemandas } from "../../hooks/useDemandas";
 import { useAllTransitions, useAllHours, useProfiles } from "../../hooks/useAllTransitions";
 import { useFases } from "../../hooks/useFases";
@@ -27,17 +19,20 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
-  ChevronDown, ChevronRight,
-  ClipboardList, CheckCircle2, Clock,
-  AlertTriangle, FileText, FileDown,
+  ChevronDown,
+  ChevronRight,
+  ClipboardList,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  FileText,
+  FileDown,
 } from "lucide-react";
 
 // ── hook local para demanda_responsaveis ──────────────────────────────────────
 
 function useDemandaResponsaveis() {
-  const [responsaveis, setResponsaveis] = useState<
-    Array<{ demanda_id: string; user_id: string; papel: string }>
-  >([]);
+  const [responsaveis, setResponsaveis] = useState<Array<{ demanda_id: string; user_id: string; papel: string }>>([]);
   useEffect(() => {
     supabase
       .from("demanda_responsaveis")
@@ -54,42 +49,42 @@ function fmtDate(d?: string | null) {
   return new Date(d).toLocaleDateString("pt-BR");
 }
 
-function today() { return new Date().toISOString().split("T")[0]; }
+function today() {
+  return new Date().toISOString().split("T")[0];
+}
 function daysAgo(n: number) {
-  const d = new Date(); d.setDate(d.getDate() - n);
+  const d = new Date();
+  d.setDate(d.getDate() - n);
   return d.toISOString().split("T")[0];
 }
 
 const SITUACAO_LABEL: Record<string, { label: string; cls: string }> = {
-  concluido:                 { label: "Concluído",         cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  resolvido:                 { label: "Resolvido",         cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  aceite_final:              { label: "Aceite Final",      cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  ag_aceite_final:           { label: "Ag. Aceite Final",  cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  em_andamento:              { label: "Em Andamento",      cls: "bg-blue-100 text-blue-700 border-blue-200" },
-  em_analise:                { label: "Em Análise",        cls: "bg-blue-100 text-blue-700 border-blue-200" },
-  em_execucao:               { label: "Em Execução",       cls: "bg-blue-100 text-blue-700 border-blue-200" },
-  fila_atendimento:          { label: "Fila Atendimento",  cls: "bg-slate-100 text-slate-700 border-slate-200" },
-  planejamento_elaboracao:   { label: "Em Elaboração",     cls: "bg-blue-100 text-blue-700 border-blue-200" },
-  planejamento_ag_aprovacao: { label: "Ag. Aprovação",     cls: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-  planejamento_aprovada:     { label: "Aprovada p/ Exec",  cls: "bg-violet-100 text-violet-700 border-violet-200" },
-  bloqueada:                 { label: "Bloqueada",         cls: "bg-red-100 text-red-700 border-red-200" },
-  hom_ag_homologacao:        { label: "Ag. Homologação",   cls: "bg-cyan-100 text-cyan-700 border-cyan-200" },
-  hom_homologada:            { label: "Homologada",        cls: "bg-teal-100 text-teal-700 border-teal-200" },
-  fila_producao:             { label: "Fila Produção",     cls: "bg-orange-100 text-orange-700 border-orange-200" },
-  aberto:                    { label: "Aberto",            cls: "bg-orange-100 text-orange-700 border-orange-200" },
-  nova:                      { label: "Nova",              cls: "bg-orange-100 text-orange-700 border-orange-200" },
-  cancelado:                 { label: "Cancelado",         cls: "bg-gray-100 text-gray-500 border-gray-200" },
-  cancelada:                 { label: "Cancelada",         cls: "bg-gray-100 text-gray-500 border-gray-200" },
-  rejeitado:                 { label: "Rejeitado",         cls: "bg-red-100 text-red-700 border-red-200" },
-  rejeitada:                 { label: "Rejeitada",         cls: "bg-red-100 text-red-700 border-red-200" },
+  concluido: { label: "Concluído", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  resolvido: { label: "Resolvido", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  aceite_final: { label: "Aceite Final", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  ag_aceite_final: { label: "Ag. Aceite Final", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  em_andamento: { label: "Em Andamento", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  em_analise: { label: "Em Análise", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  em_execucao: { label: "Em Execução", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  fila_atendimento: { label: "Fila Atendimento", cls: "bg-slate-100 text-slate-700 border-slate-200" },
+  planejamento_elaboracao: { label: "Em Elaboração", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  planejamento_ag_aprovacao: { label: "Ag. Aprovação", cls: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+  planejamento_aprovada: { label: "Aprovada p/ Exec", cls: "bg-violet-100 text-violet-700 border-violet-200" },
+  bloqueada: { label: "Bloqueada", cls: "bg-red-100 text-red-700 border-red-200" },
+  hom_ag_homologacao: { label: "Ag. Homologação", cls: "bg-cyan-100 text-cyan-700 border-cyan-200" },
+  hom_homologada: { label: "Homologada", cls: "bg-teal-100 text-teal-700 border-teal-200" },
+  fila_producao: { label: "Fila Produção", cls: "bg-orange-100 text-orange-700 border-orange-200" },
+  aberto: { label: "Aberto", cls: "bg-orange-100 text-orange-700 border-orange-200" },
+  nova: { label: "Nova", cls: "bg-orange-100 text-orange-700 border-orange-200" },
+  cancelado: { label: "Cancelado", cls: "bg-gray-100 text-gray-500 border-gray-200" },
+  cancelada: { label: "Cancelada", cls: "bg-gray-100 text-gray-500 border-gray-200" },
+  rejeitado: { label: "Rejeitado", cls: "bg-red-100 text-red-700 border-red-200" },
+  rejeitada: { label: "Rejeitada", cls: "bg-red-100 text-red-700 border-red-200" },
 };
 
 function situacaoLabel(s?: string | null) {
   if (!s) return "—";
-  return (
-    SITUACAO_LABEL[s.toLowerCase()]?.label ??
-    s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-  );
+  return SITUACAO_LABEL[s.toLowerCase()]?.label ?? s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function SituacaoBadge({ situacao }: { situacao?: string | null }) {
@@ -109,8 +104,8 @@ function rateColor(rate: number) {
   return rate >= 80
     ? "bg-emerald-100 text-emerald-700 border-emerald-200"
     : rate >= 40
-    ? "bg-orange-100 text-orange-700 border-orange-200"
-    : "bg-destructive/10 text-destructive border-destructive/20";
+      ? "bg-orange-100 text-orange-700 border-orange-200"
+      : "bg-destructive/10 text-destructive border-destructive/20";
 }
 
 function getInitials(nome: string) {
@@ -118,6 +113,11 @@ function getInitials(nome: string) {
   if (parts.length === 0) return "U";
   if (parts.length === 1) return parts[0][0].toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// helper: trunca string
+function trunc(s: string, max: number) {
+  return s.length > max ? s.slice(0, max - 1) + "…" : s;
 }
 
 // ── tipos internos ────────────────────────────────────────────────────────────
@@ -167,9 +167,11 @@ function AtividadeExpandivel({ atividade }: { atividade: AtividadeRow }) {
         <TableCell className="text-xs font-mono pl-4 w-[90px]">
           <div className="flex items-center gap-1">
             {temDetalhe ? (
-              open
-                ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
-                : <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+              open ? (
+                <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+              ) : (
+                <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+              )
             ) : (
               <span className="w-3 inline-block" />
             )}
@@ -177,7 +179,9 @@ function AtividadeExpandivel({ atividade }: { atividade: AtividadeRow }) {
           </div>
         </TableCell>
         <TableCell className="text-xs max-w-[180px]">
-          <span className="line-clamp-2" title={atividade.projeto}>{atividade.projeto}</span>
+          <span className="line-clamp-2" title={atividade.projeto}>
+            {atividade.projeto}
+          </span>
         </TableCell>
         <TableCell className="text-xs">
           <SituacaoBadge situacao={atividade.situacao} />
@@ -191,7 +195,9 @@ function AtividadeExpandivel({ atividade }: { atividade: AtividadeRow }) {
           {atividade.outrosAnalistas.length > 0 ? (
             <div className="flex flex-wrap gap-1">
               {atividade.outrosAnalistas.map((n) => (
-                <Badge key={n} variant="secondary" className="text-[10px] font-normal">{n}</Badge>
+                <Badge key={n} variant="secondary" className="text-[10px] font-normal">
+                  {n}
+                </Badge>
               ))}
             </div>
           ) : (
@@ -206,10 +212,16 @@ function AtividadeExpandivel({ atividade }: { atividade: AtividadeRow }) {
             <Table>
               <TableHeader>
                 <TableRow className="border-b border-muted/40">
-                  <TableHead className="text-[10px] font-semibold text-muted-foreground py-1.5 w-[110px]">Data</TableHead>
-                  <TableHead className="text-[10px] font-semibold text-muted-foreground py-1.5 w-[160px]">Fase</TableHead>
+                  <TableHead className="text-[10px] font-semibold text-muted-foreground py-1.5 w-[110px]">
+                    Data
+                  </TableHead>
+                  <TableHead className="text-[10px] font-semibold text-muted-foreground py-1.5 w-[160px]">
+                    Fase
+                  </TableHead>
                   <TableHead className="text-[10px] font-semibold text-muted-foreground py-1.5">Descrição</TableHead>
-                  <TableHead className="text-[10px] font-semibold text-muted-foreground py-1.5 text-right w-[70px]">Horas</TableHead>
+                  <TableHead className="text-[10px] font-semibold text-muted-foreground py-1.5 text-right w-[70px]">
+                    Horas
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -244,35 +256,27 @@ function AtividadeExpandivel({ atividade }: { atividade: AtividadeRow }) {
 
 // ── PDF individual ────────────────────────────────────────────────────────────
 
-async function gerarPDFIndividual(
-  grupo: AnalistaGroup,
-  dataInicio: string,
-  dataFim: string,
-) {
+async function gerarPDFIndividual(grupo: AnalistaGroup, dataInicio: string, dataFim: string) {
   try {
     const { default: jsPDF } = await import("jspdf");
-    const autoTable          = (await import("jspdf-autotable")).default;
+    const autoTable = (await import("jspdf-autotable")).default;
 
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const now = new Date();
-    const W   = doc.internal.pageSize.getWidth();   // 210mm
-    const ML  = 12;  // margem esquerda
-    const MR  = 12;  // margem direita
-    const CW  = W - ML - MR; // largura útil = 186mm
+    const W = doc.internal.pageSize.getWidth(); // 210mm
+    const ML = 12;
+    const MR = 12;
+    const CW = W - ML - MR; // 186mm
 
     // ── Paleta ────────────────────────────────────────────────────────────────
-    const PRIMARY    = [15, 118, 110]  as [number,number,number]; // teal-700
-    const DARK       = [30, 41, 59]    as [number,number,number]; // slate-800
-    const MUTED      = [100, 116, 139] as [number,number,number]; // slate-500
-    const LIGHT_BG   = [248, 250, 252] as [number,number,number]; // slate-50
-    const BORDER_CLR = [226, 232, 240] as [number,number,number]; // slate-200
-    const HEAD_ROW   = [51, 65, 85]    as [number,number,number]; // slate-700
-    const ALT_ROW    = [248, 250, 252] as [number,number,number]; // slate-50
-    const TOTAL_BG   = [241, 245, 249] as [number,number,number]; // slate-100
-
-    // helper — trunca string pelo número de caracteres
-    const trunc = (s: string, max: number) =>
-      s.length > max ? s.slice(0, max - 1) + "…" : s;
+    const PRIMARY = [15, 118, 110] as [number, number, number];
+    const DARK = [30, 41, 59] as [number, number, number];
+    const MUTED = [100, 116, 139] as [number, number, number];
+    const LIGHT_BG = [248, 250, 252] as [number, number, number];
+    const BORDER_CLR = [226, 232, 240] as [number, number, number];
+    const HEAD_ROW = [51, 65, 85] as [number, number, number];
+    const ALT_ROW = [248, 250, 252] as [number, number, number];
+    const TOTAL_BG = [241, 245, 249] as [number, number, number];
 
     // ── Cabeçalho do documento ────────────────────────────────────────────────
     doc.setFillColor(...PRIMARY);
@@ -286,10 +290,7 @@ async function gerarPDFIndividual(
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.text("Módulo: Sustentação", ML, 16);
-    doc.text(
-      `Gerado em: ${now.toLocaleDateString("pt-BR")} às ${now.toLocaleTimeString("pt-BR")}`,
-      ML, 21,
-    );
+    doc.text(`Gerado em: ${now.toLocaleDateString("pt-BR")} às ${now.toLocaleTimeString("pt-BR")}`, ML, 21);
 
     // ── Bloco analista ────────────────────────────────────────────────────────
     let y = 31;
@@ -298,7 +299,7 @@ async function gerarPDFIndividual(
     doc.setDrawColor(...BORDER_CLR);
     doc.roundedRect(ML, y, CW, 16, 2, 2, "S");
 
-    // avatar
+    // avatar circular
     doc.setFillColor(...PRIMARY);
     doc.circle(ML + 8, y + 8, 5.5, "F");
     doc.setTextColor(255, 255, 255);
@@ -315,10 +316,7 @@ async function gerarPDFIndividual(
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(...MUTED);
-    doc.text(
-      `Período: ${fmtDate(dataInicio)} a ${fmtDate(dataFim)}`,
-      ML + 17, y + 13,
-    );
+    doc.text(`Período: ${fmtDate(dataInicio)} a ${fmtDate(dataFim)}`, ML + 17, y + 13);
 
     // ── KPIs — 5 colunas ─────────────────────────────────────────────────────
     y += 21;
@@ -330,11 +328,36 @@ async function gerarPDFIndividual(
     y += 3;
     const kpiW = CW / 5;
     const kpis = [
-      { label: "Atividades",     value: String(grupo.atividades.length),         bg: [219,234,254] as [number,number,number], txt: [30,64,175]  as [number,number,number] },
-      { label: "Resolvidas",     value: String(grupo.resolvidos),                 bg: [220,252,231] as [number,number,number], txt: [4,120,87]   as [number,number,number] },
-      { label: "Em Aberto",      value: String(grupo.emAberto),                   bg: [255,237,213] as [number,number,number], txt: [154,52,18]  as [number,number,number] },
-      { label: "Taxa Resolução", value: `${grupo.taxaResolucao.toFixed(0)}%`,     bg: [243,232,255] as [number,number,number], txt: [109,40,217] as [number,number,number] },
-      { label: "Total Horas",    value: `${grupo.totalHoras.toFixed(1)}h`,        bg: [204,251,241] as [number,number,number], txt: [15,118,110] as [number,number,number] },
+      {
+        label: "Atividades",
+        value: String(grupo.atividades.length),
+        bg: [219, 234, 254] as [number, number, number],
+        txt: [30, 64, 175] as [number, number, number],
+      },
+      {
+        label: "Resolvidas",
+        value: String(grupo.resolvidos),
+        bg: [220, 252, 231] as [number, number, number],
+        txt: [4, 120, 87] as [number, number, number],
+      },
+      {
+        label: "Em Aberto",
+        value: String(grupo.emAberto),
+        bg: [255, 237, 213] as [number, number, number],
+        txt: [154, 52, 18] as [number, number, number],
+      },
+      {
+        label: "Taxa Resolução",
+        value: `${grupo.taxaResolucao.toFixed(0)}%`,
+        bg: [243, 232, 255] as [number, number, number],
+        txt: [109, 40, 217] as [number, number, number],
+      },
+      {
+        label: "Total Horas",
+        value: `${grupo.totalHoras.toFixed(1)}h`,
+        bg: [204, 251, 241] as [number, number, number],
+        txt: [15, 118, 110] as [number, number, number],
+      },
     ];
 
     kpis.forEach(({ label, value, bg, txt }, i) => {
@@ -355,50 +378,65 @@ async function gerarPDFIndividual(
     y += 20;
 
     for (const ativ of grupo.atividades) {
-      // Nova página se necessário (deixa pelo menos 40mm)
-      if (y > 252) { doc.addPage(); y = 14; }
+      // Nova página se necessário
+      if (y > 252) {
+        doc.addPage();
+        y = 14;
+      }
 
-      // ── Cabeçalho da demanda — 2 linhas, altura 18mm ─────────────────────
-      const HEADER_H = 18;
-      doc.setFillColor(...PRIMARY);
-      doc.roundedRect(ML, y, CW, HEADER_H, 2, 2, "F");
-
-      // Linha 1: RHM · Projeto (truncado para não sobrepor a situação)
+      // ── Faixa 1 (verde, 10mm): RHM · Projeto  |  Situação ────────────────
       const sitLabel = situacaoLabel(ativ.situacao);
-      // reserva espaço para a badge de situação (~30mm)
-      const maxProjetoChars = 52;
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(8.5);
-      doc.setFont("helvetica", "bold");
-      doc.text(
-        `RHM ${ativ.rhm}  ·  ${trunc(ativ.projeto, maxProjetoChars)}`,
-        ML + 4, y + 7,
-      );
+      doc.setFillColor(...PRIMARY);
+      doc.roundedRect(ML, y, CW, 10, 2, 2, "F");
 
-      // Badge situação — caixa branca semi-transparente à direita
-      const badgeW = 34;
-      const badgeX = ML + CW - badgeW - 3;
-      doc.setFillColor(255, 255, 255);
-      doc.setGState(new (doc as any).GState({ opacity: 0.2 }));
-      doc.roundedRect(badgeX, y + 2, badgeW, 7, 1.5, 1.5, "F");
-      doc.setGState(new (doc as any).GState({ opacity: 1 }));
+      // RHM em negrito + projeto normal — truncado para não encostar na situação
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(6.5);
+      doc.setFontSize(8);
       doc.setFont("helvetica", "bold");
-      doc.text(trunc(sitLabel, 22), badgeX + badgeW / 2, y + 7, { align: "center" });
+      const rhmLabel = `RHM ${ativ.rhm}`;
+      doc.text(rhmLabel, ML + 3, y + 7);
 
-      // Linha 2: metadados Início / Fim / Horas
+      const rhmW = doc.getTextWidth(rhmLabel);
+      doc.setFont("helvetica", "normal");
+      doc.text(`  ·  ${trunc(ativ.projeto, 40)}`, ML + 3 + rhmW, y + 7);
+
+      // Situação — texto simples alinhado à direita, sem caixa
       doc.setFontSize(7);
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(200, 240, 240);
-      const meta = [
-        `Início: ${ativ.dataInicio}`,
-        `Fim: ${ativ.dataFim}`,
-        `Horas: ${ativ.horasAnalista > 0 ? ativ.horasAnalista.toFixed(1) + "h" : "—"}`,
-      ].join("     ");
-      doc.text(meta, ML + 4, y + 14);
+      doc.setTextColor(204, 255, 249);
+      doc.text(trunc(sitLabel, 22), ML + CW - 3, y + 7, { align: "right" });
 
-      y += HEADER_H + 1;
+      y += 10;
+
+      // ── Faixa 2 (cinza claro, 8mm): Início | Fim | Horas ─────────────────
+      doc.setFillColor(...TOTAL_BG);
+      doc.rect(ML, y, CW, 8, "F");
+      doc.setDrawColor(...BORDER_CLR);
+      doc.rect(ML, y, CW, 8, "S");
+
+      // 3 colunas com posições fixas — sem risco de overflow
+      const c1X = ML + 3;
+      const c2X = ML + CW * 0.36;
+      const c3X = ML + CW * 0.68;
+
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...MUTED);
+      doc.text("Início:", c1X, y + 5.5);
+      doc.text("Fim:", c2X, y + 5.5);
+      doc.text("Horas:", c3X, y + 5.5);
+
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...DARK);
+      doc.text(ativ.dataInicio, c1X + doc.getTextWidth("Início: "), y + 5.5);
+      doc.text(ativ.dataFim, c2X + doc.getTextWidth("Fim: "), y + 5.5);
+      doc.text(
+        ativ.horasAnalista > 0 ? `${ativ.horasAnalista.toFixed(1)}h` : "—",
+        c3X + doc.getTextWidth("Horas: "),
+        y + 5.5,
+      );
+
+      y += 10;
 
       // ── Sub-tabela de horas ───────────────────────────────────────────────
       if (ativ.horasDetalhadas.length > 0) {
@@ -414,31 +452,40 @@ async function gerarPDFIndividual(
               trunc(h.descricao, 80),
               `${h.horas.toFixed(1)}h`,
             ]),
-            // subtotal
             [
-              { content: "Total nesta demanda", colSpan: 3, styles: { fontStyle: "bold" as const, fillColor: TOTAL_BG, textColor: DARK } },
-              { content: `${totalDemanda.toFixed(1)}h`,     styles: { fontStyle: "bold" as const, halign: "right" as const, fillColor: TOTAL_BG, textColor: PRIMARY } },
+              {
+                content: "Total nesta demanda",
+                colSpan: 3,
+                styles: { fontStyle: "bold" as const, fillColor: TOTAL_BG, textColor: DARK },
+              },
+              {
+                content: `${totalDemanda.toFixed(1)}h`,
+                styles: {
+                  fontStyle: "bold" as const,
+                  halign: "right" as const,
+                  fillColor: TOTAL_BG,
+                  textColor: PRIMARY,
+                },
+              },
             ],
           ],
-          styles:             { fontSize: 7.5, cellPadding: 2.2, textColor: DARK, overflow: "linebreak" },
-          headStyles:         { fillColor: HEAD_ROW, textColor: 255, fontStyle: "bold", fontSize: 7 },
+          styles: { fontSize: 7.5, cellPadding: 2.2, textColor: DARK, overflow: "linebreak" },
+          headStyles: { fillColor: HEAD_ROW, textColor: 255, fontStyle: "bold", fontSize: 7 },
           alternateRowStyles: { fillColor: ALT_ROW },
-          // Data=22 | Fase=35 | Descrição=auto | Horas=18
           columnStyles: {
             0: { cellWidth: 22 },
             1: { cellWidth: 35 },
             2: { cellWidth: "auto" },
             3: { cellWidth: 18, halign: "right" },
           },
-          margin:          { left: ML, right: MR },
-          tableLineColor:  BORDER_CLR,
-          tableLineWidth:  0.2,
-          showHead:        "firstPage",
+          margin: { left: ML, right: MR },
+          tableLineColor: BORDER_CLR,
+          tableLineWidth: 0.2,
+          showHead: "firstPage",
         });
 
         y = (doc as any).lastAutoTable.finalY + 6;
       } else {
-        // sem horas
         doc.setFillColor(...ALT_ROW);
         doc.rect(ML, y, CW, 8, "F");
         doc.setDrawColor(...BORDER_CLR);
@@ -452,7 +499,10 @@ async function gerarPDFIndividual(
     }
 
     // ── Total Geral ───────────────────────────────────────────────────────────
-    if (y > 263) { doc.addPage(); y = 14; }
+    if (y > 263) {
+      doc.addPage();
+      y = 14;
+    }
     y += 2;
     doc.setFillColor(...PRIMARY);
     doc.roundedRect(ML, y, CW, 11, 2, 2, "F");
@@ -463,15 +513,11 @@ async function gerarPDFIndividual(
     doc.setFontSize(11);
     doc.text(`${grupo.totalHoras.toFixed(1)}h`, ML + CW - 4, y + 7.5, { align: "right" });
 
-    // Nota rodapé
     y += 16;
     doc.setTextColor(...MUTED);
     doc.setFontSize(6.5);
     doc.setFont("helvetica", "italic");
-    doc.text(
-      "Documento gerado automaticamente pelo sistema de gestão — Sustentação",
-      W / 2, y, { align: "center" },
-    );
+    doc.text("Documento gerado automaticamente pelo sistema de gestão — Sustentação", W / 2, y, { align: "center" });
 
     // ── Numeração de páginas ──────────────────────────────────────────────────
     const total = (doc as any).internal.getNumberOfPages();
@@ -480,11 +526,7 @@ async function gerarPDFIndividual(
       doc.setFontSize(7);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...MUTED);
-      doc.text(
-        `Página ${i} de ${total}`,
-        W - MR, doc.internal.pageSize.getHeight() - 6,
-        { align: "right" },
-      );
+      doc.text(`Página ${i} de ${total}`, W - MR, doc.internal.pageSize.getHeight() - 6, { align: "right" });
     }
 
     const nomeArq = grupo.nome.replace(/\s+/g, "_");
@@ -496,45 +538,39 @@ async function gerarPDFIndividual(
   }
 }
 
-  }
-}
-
 // ── componente principal ──────────────────────────────────────────────────────
 
 export function RelatorioProdutividade() {
-  const { demandas }     = useDemandas();
-  const { transitions }  = useAllTransitions();
-  const { hours }        = useAllHours();
-  const profiles         = useProfiles();
+  const { demandas } = useDemandas();
+  const { transitions } = useAllTransitions();
+  const { hours } = useAllHours();
+  const profiles = useProfiles();
   const { responsaveis } = useDemandaResponsaveis();
-  const { teams }        = useAuth();
+  const { teams } = useAuth();
 
   const { fases } = useFases();
   const fasesMap = useMemo(() => {
     const m: Record<string, string> = {};
-    fases.forEach((f) => { m[f.key] = f.label; });
+    fases.forEach((f) => {
+      m[f.key] = f.label;
+    });
     return m;
   }, [fases]);
 
-  const [teamId, setTeamId]         = useState("all");
-  const [analista, setAnalista]     = useState("all");
+  const [teamId, setTeamId] = useState("all");
+  const [analista, setAnalista] = useState("all");
   const [dataInicio, setDataInicio] = useState(daysAgo(30));
-  const [dataFim, setDataFim]       = useState(today());
+  const [dataFim, setDataFim] = useState(today());
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [exportingPDF, setExportingPDF] = useState(false);
 
   const sustTeams = teams.filter((t) => t.module === "sustentacao");
 
-  const profileIds = useMemo(
-    () => new Set(profiles.map((p) => p.user_id)),
-    [profiles],
-  );
+  const profileIds = useMemo(() => new Set(profiles.map((p) => p.user_id)), [profiles]);
 
   const nomeMap = useMemo(() => {
     const m = new Map<string, string>();
-    profiles.forEach((p) =>
-      m.set(p.user_id, p.display_name || p.email || p.user_id.slice(0, 8)),
-    );
+    profiles.forEach((p) => m.set(p.user_id, p.display_name || p.email || p.user_id.slice(0, 8)));
     return m;
   }, [profiles]);
 
@@ -542,10 +578,10 @@ export function RelatorioProdutividade() {
     const m = new Map<string, Set<string>>();
     demandas.forEach((d) => {
       const ids = new Set<string>();
-      if (d.responsavel_dev)        ids.add(d.responsavel_dev);
+      if (d.responsavel_dev) ids.add(d.responsavel_dev);
       if (d.responsavel_requisitos) ids.add(d.responsavel_requisitos);
-      if (d.responsavel_teste)      ids.add(d.responsavel_teste);
-      if (d.responsavel_arquiteto)  ids.add(d.responsavel_arquiteto);
+      if (d.responsavel_teste) ids.add(d.responsavel_teste);
+      if (d.responsavel_arquiteto) ids.add(d.responsavel_arquiteto);
       m.set(d.id, ids);
     });
     responsaveis.forEach((r) => {
@@ -555,8 +591,7 @@ export function RelatorioProdutividade() {
     return m;
   }, [demandas, responsaveis]);
 
-  const resolveUserId = (h: any): string | null =>
-    h.user_id || h.lancado_por || null;
+  const resolveUserId = (h: any): string | null => h.user_id || h.lancado_por || null;
 
   const horasPorDemandaUser = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
@@ -578,17 +613,18 @@ export function RelatorioProdutividade() {
       const key = `${h.demanda_id}::${uid}`;
       if (!m.has(key)) m.set(key, []);
       m.get(key)!.push({
-        id:        h.id || `${key}-${Math.random()}`,
-        data:      fmtDate(h.created_at),
-        fase:      fasesMap[h.fase] || h.fase || "—",
+        id: h.id || `${key}-${Math.random()}`,
+        data: fmtDate(h.created_at),
+        fase: fasesMap[h.fase] || h.fase || "—",
         descricao: h.descricao || "—",
-        horas:     Number(h.horas ?? 0),
+        horas: Number(h.horas ?? 0),
       });
     });
     m.forEach((list) =>
-      list.sort((a, b) =>
-        new Date(b.data.split("/").reverse().join("-")).getTime() -
-        new Date(a.data.split("/").reverse().join("-")).getTime(),
+      list.sort(
+        (a, b) =>
+          new Date(b.data.split("/").reverse().join("-")).getTime() -
+          new Date(a.data.split("/").reverse().join("-")).getTime(),
       ),
     );
     return m;
@@ -605,7 +641,7 @@ export function RelatorioProdutividade() {
     return profiles
       .filter((p) => idSet.has(p.user_id))
       .map((p) => ({
-        user_id:      p.user_id,
+        user_id: p.user_id,
         display_name: p.display_name || p.email || p.user_id.slice(0, 8),
       }))
       .sort((a, b) => a.display_name.localeCompare(b.display_name));
@@ -613,7 +649,7 @@ export function RelatorioProdutividade() {
 
   const demandasFiltradas = useMemo(() => {
     const inicio = new Date(dataInicio + "T00:00:00");
-    const fim    = new Date(dataFim    + "T23:59:59");
+    const fim = new Date(dataFim + "T23:59:59");
     return demandas.filter((d) => {
       if (teamId !== "all" && d.team_id !== teamId) return false;
       const criado = new Date(d.created_at);
@@ -628,23 +664,25 @@ export function RelatorioProdutividade() {
       horasPorDemandaUser.get(d.id)?.forEach((_, uid) => todosIds.add(uid));
     });
 
-    const ids = analista !== "all"
-      ? [analista]
-      : [...todosIds].filter((id) => profileIds.has(id));
+    const ids = analista !== "all" ? [analista] : [...todosIds].filter((id) => profileIds.has(id));
 
     const result: AnalistaGroup[] = ids.map((userId) => {
       const atividades: AtividadeRow[] = demandasFiltradas
         .filter((d) => {
           const eResponsavel = responsaveisPorDemanda.get(d.id)?.has(userId) ?? false;
-          const lancouHora   = horasPorDemandaUser.get(d.id)?.has(userId) ?? false;
+          const lancouHora = horasPorDemandaUser.get(d.id)?.has(userId) ?? false;
           return eResponsavel || lancouHora;
         })
         .map((d) => {
           const horasAnalista = horasPorDemandaUser.get(d.id)?.get(userId) ?? 0;
 
           const outrosIds = new Set<string>();
-          responsaveisPorDemanda.get(d.id)?.forEach((uid) => { if (uid !== userId) outrosIds.add(uid); });
-          horasPorDemandaUser.get(d.id)?.forEach((_, uid) => { if (uid !== userId) outrosIds.add(uid); });
+          responsaveisPorDemanda.get(d.id)?.forEach((uid) => {
+            if (uid !== userId) outrosIds.add(uid);
+          });
+          horasPorDemandaUser.get(d.id)?.forEach((_, uid) => {
+            if (uid !== userId) outrosIds.add(uid);
+          });
 
           const conclusao = transitions
             .filter((t) => t.demanda_id === d.id)
@@ -652,12 +690,12 @@ export function RelatorioProdutividade() {
             .find((t) => ["aceite_final", "ag_aceite_final", "concluido", "resolvido"].includes(t.to_status ?? ""));
 
           return {
-            demandaId:   d.id,
-            rhm:         d.rhm || "—",
-            projeto:     d.projeto || d.titulo || "—",
-            situacao:    d.situacao || "—",
-            dataInicio:  fmtDate(d.created_at),
-            dataFim:     fmtDate(d.aceite_data ?? conclusao?.created_at ?? null),
+            demandaId: d.id,
+            rhm: d.rhm || "—",
+            projeto: d.projeto || d.titulo || "—",
+            situacao: d.situacao || "—",
+            dataInicio: fmtDate(d.created_at),
+            dataFim: fmtDate(d.aceite_data ?? conclusao?.created_at ?? null),
             horasAnalista,
             outrosAnalistas: [...outrosIds]
               .filter((id) => profileIds.has(id))
@@ -666,9 +704,9 @@ export function RelatorioProdutividade() {
           };
         });
 
-      const totalHoras    = atividades.reduce((s, a) => s + a.horasAnalista, 0);
-      const resolvidos    = atividades.filter((a) => isResolvido(a.situacao)).length;
-      const emAberto      = atividades.length - resolvidos;
+      const totalHoras = atividades.reduce((s, a) => s + a.horasAnalista, 0);
+      const resolvidos = atividades.filter((a) => isResolvido(a.situacao)).length;
+      const emAberto = atividades.length - resolvidos;
       const taxaResolucao = atividades.length > 0 ? (resolvidos / atividades.length) * 100 : 0;
 
       return {
@@ -682,9 +720,7 @@ export function RelatorioProdutividade() {
       };
     });
 
-    return result
-      .filter((g) => g.atividades.length > 0)
-      .sort((a, b) => b.resolvidos - a.resolvidos);
+    return result.filter((g) => g.atividades.length > 0).sort((a, b) => b.resolvidos - a.resolvidos);
   }, [
     demandasFiltradas,
     responsaveisPorDemanda,
@@ -696,24 +732,30 @@ export function RelatorioProdutividade() {
     profileIds,
   ]);
 
-  const kpis = useMemo(() => ({
-    totalAtividades: grupos.reduce((s, g) => s + g.atividades.length, 0),
-    totalResolvidos: grupos.reduce((s, g) => s + g.resolvidos, 0),
-    totalEmAberto:   grupos.reduce((s, g) => s + g.emAberto, 0),
-    totalHoras:      grupos.reduce((s, g) => s + g.totalHoras, 0),
-  }), [grupos]);
+  const kpis = useMemo(
+    () => ({
+      totalAtividades: grupos.reduce((s, g) => s + g.atividades.length, 0),
+      totalResolvidos: grupos.reduce((s, g) => s + g.resolvidos, 0),
+      totalEmAberto: grupos.reduce((s, g) => s + g.emAberto, 0),
+      totalHoras: grupos.reduce((s, g) => s + g.totalHoras, 0),
+    }),
+    [grupos],
+  );
 
   const toggleGroup = (id: string) =>
-    setOpenGroups((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const expandAll   = () => setOpenGroups(new Set(grupos.map((g) => g.userId)));
+    setOpenGroups((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  const expandAll = () => setOpenGroups(new Set(grupos.map((g) => g.userId)));
   const collapseAll = () => setOpenGroups(new Set());
 
   const reportCfg = getReportConfig("produtividade");
 
-  // ── Export geral (todos os analistas) ────────────────────────────────────
   const getExportData = () => {
     const isIndividual = analista !== "all";
-    const nomeAnalista = isIndividual ? (nomeMap.get(analista) || analista) : null;
+    const nomeAnalista = isIndividual ? nomeMap.get(analista) || analista : null;
 
     return {
       title: isIndividual
@@ -722,7 +764,13 @@ export function RelatorioProdutividade() {
       analista: nomeAnalista,
       headers: [
         ...(isIndividual ? [] : ["Analista"]),
-        "RHM", "Projeto", "Situação", "Data Início", "Data Fim", "Horas", "Outros Analistas",
+        "RHM",
+        "Projeto",
+        "Situação",
+        "Data Início",
+        "Data Fim",
+        "Horas",
+        "Outros Analistas",
       ],
       rows: grupos.flatMap((g) =>
         g.atividades.flatMap((a) => {
@@ -738,9 +786,11 @@ export function RelatorioProdutividade() {
           ];
           const linhasDetalhe = a.horasDetalhadas.map((h) => [
             ...(isIndividual ? [] : [""]),
-            "", "",
+            "",
+            "",
             `  ↳ ${h.fase}`,
-            h.data, "",
+            h.data,
+            "",
             h.horas.toFixed(1),
             h.descricao,
           ]);
@@ -750,7 +800,6 @@ export function RelatorioProdutividade() {
     };
   };
 
-  // ── Trigger do PDF individual ─────────────────────────────────────────────
   const handleExportIndividual = async () => {
     if (analista === "all" || grupos.length === 0) return;
     setExportingPDF(true);
@@ -768,7 +817,7 @@ export function RelatorioProdutividade() {
         modulo={reportCfg.modulo}
       />
 
-      {/* Título */}
+      {/* Título + botões */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -780,14 +829,10 @@ export function RelatorioProdutividade() {
               </Badge>
             )}
           </h2>
-          <p className="text-sm text-muted-foreground">
-            Clique na linha do RHM para ver o detalhe das horas lançadas
-          </p>
+          <p className="text-sm text-muted-foreground">Clique na linha do RHM para ver o detalhe das horas lançadas</p>
         </div>
 
-        {/* Botões de exportação */}
         <div className="flex items-center gap-2">
-          {/* Botão PDF individual — aparece apenas com analista selecionado */}
           {isIndividual && (
             <Button
               size="sm"
@@ -804,7 +849,6 @@ export function RelatorioProdutividade() {
               Relatório Individual (PDF)
             </Button>
           )}
-          {/* Botão export geral (CSV / Excel / PDF / Markdown) */}
           <ExportButton getData={getExportData} />
         </div>
       </div>
@@ -813,33 +857,41 @@ export function RelatorioProdutividade() {
       <Card>
         <CardContent className="pt-4 pb-3">
           <div className="flex flex-wrap gap-4 items-end">
-
-            {/* Filtro de time — oculto visualmente, lógica preservada */}
             <div className="hidden">
               <Label className="text-xs font-semibold">Time</Label>
               <Select
                 value={teamId}
-                onValueChange={(v) => { setTeamId(v); setAnalista("all"); }}
+                onValueChange={(v) => {
+                  setTeamId(v);
+                  setAnalista("all");
+                }}
               >
-                <SelectTrigger className="w-[180px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-[180px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os times</SelectItem>
                   {sustTeams.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Filtro de analista */}
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Analista</Label>
               <Select value={analista} onValueChange={setAnalista}>
-                <SelectTrigger className="w-[210px] h-8 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
+                <SelectTrigger className="w-[210px] h-8 text-xs">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos analistas</SelectItem>
                   {analistasList.map((a) => (
-                    <SelectItem key={a.user_id} value={a.user_id}>{a.display_name}</SelectItem>
+                    <SelectItem key={a.user_id} value={a.user_id}>
+                      {a.display_name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -847,18 +899,40 @@ export function RelatorioProdutividade() {
 
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Data Início</Label>
-              <Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="h-8 text-xs w-[140px]" />
+              <Input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="h-8 text-xs w-[140px]"
+              />
             </div>
 
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Data Fim</Label>
-              <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="h-8 text-xs w-[140px]" />
+              <Input
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="h-8 text-xs w-[140px]"
+              />
             </div>
 
             <div className="flex gap-1 items-end pb-0.5">
-              {[{ label: "7d", days: 7 }, { label: "30d", days: 30 }, { label: "90d", days: 90 }].map(({ label, days }) => (
-                <Button key={label} size="sm" variant="outline" className="h-8 text-xs px-2"
-                  onClick={() => { setDataInicio(daysAgo(days)); setDataFim(today()); }}>
+              {[
+                { label: "7d", days: 7 },
+                { label: "30d", days: 30 },
+                { label: "90d", days: 90 },
+              ].map(({ label, days }) => (
+                <Button
+                  key={label}
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs px-2"
+                  onClick={() => {
+                    setDataInicio(daysAgo(days));
+                    setDataFim(today());
+                  }}
+                >
                   {label}
                 </Button>
               ))}
@@ -870,10 +944,34 @@ export function RelatorioProdutividade() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Total Atividades", value: kpis.totalAtividades, icon: <ClipboardList className="h-4 w-4 text-blue-600" />,    cls: "bg-blue-100 dark:bg-blue-950/30" },
-          { label: "Resolvidos",       value: kpis.totalResolvidos, icon: <CheckCircle2 className="h-4 w-4 text-emerald-600" />,  cls: "bg-emerald-100 dark:bg-emerald-950/30" },
-          { label: "Em Aberto",        value: kpis.totalEmAberto,   icon: <AlertTriangle className={`h-4 w-4 ${kpis.totalEmAberto > 10 ? "text-destructive" : "text-orange-500"}`} />, cls: kpis.totalEmAberto > 10 ? "bg-destructive/10" : "bg-orange-100 dark:bg-orange-950/30" },
-          { label: "Horas Lançadas",   value: `${kpis.totalHoras.toFixed(1)}h`, icon: <Clock className="h-4 w-4 text-primary" />, cls: "bg-primary/10" },
+          {
+            label: "Total Atividades",
+            value: kpis.totalAtividades,
+            icon: <ClipboardList className="h-4 w-4 text-blue-600" />,
+            cls: "bg-blue-100 dark:bg-blue-950/30",
+          },
+          {
+            label: "Resolvidos",
+            value: kpis.totalResolvidos,
+            icon: <CheckCircle2 className="h-4 w-4 text-emerald-600" />,
+            cls: "bg-emerald-100 dark:bg-emerald-950/30",
+          },
+          {
+            label: "Em Aberto",
+            value: kpis.totalEmAberto,
+            icon: (
+              <AlertTriangle
+                className={`h-4 w-4 ${kpis.totalEmAberto > 10 ? "text-destructive" : "text-orange-500"}`}
+              />
+            ),
+            cls: kpis.totalEmAberto > 10 ? "bg-destructive/10" : "bg-orange-100 dark:bg-orange-950/30",
+          },
+          {
+            label: "Horas Lançadas",
+            value: `${kpis.totalHoras.toFixed(1)}h`,
+            icon: <Clock className="h-4 w-4 text-primary" />,
+            cls: "bg-primary/10",
+          },
         ].map(({ label, value, icon, cls }) => (
           <Card key={label}>
             <CardContent className="p-4 flex items-center gap-3">
@@ -890,8 +988,12 @@ export function RelatorioProdutividade() {
       {/* Controles expand/collapse */}
       {grupos.length > 0 && (
         <div className="flex justify-end gap-2">
-          <Button size="sm" variant="ghost" className="text-xs" onClick={expandAll}>Expandir tudo</Button>
-          <Button size="sm" variant="ghost" className="text-xs" onClick={collapseAll}>Recolher tudo</Button>
+          <Button size="sm" variant="ghost" className="text-xs" onClick={expandAll}>
+            Expandir tudo
+          </Button>
+          <Button size="sm" variant="ghost" className="text-xs" onClick={collapseAll}>
+            Recolher tudo
+          </Button>
         </div>
       )}
 
@@ -919,7 +1021,8 @@ export function RelatorioProdutividade() {
                           <div>
                             <p className="text-sm font-semibold">{grupo.nome}</p>
                             <p className="text-xs text-muted-foreground">
-                              {grupo.atividades.length} atividade{grupo.atividades.length !== 1 ? "s" : ""} · {grupo.totalHoras.toFixed(1)}h lançadas
+                              {grupo.atividades.length} atividade{grupo.atividades.length !== 1 ? "s" : ""} ·{" "}
+                              {grupo.totalHoras.toFixed(1)}h lançadas
                             </p>
                           </div>
                         </div>
@@ -927,15 +1030,19 @@ export function RelatorioProdutividade() {
                           <Badge className={`text-[10px] ${rateColor(grupo.taxaResolucao)}`}>
                             {grupo.taxaResolucao.toFixed(0)}% resolução
                           </Badge>
-                          <Badge variant="outline" className="text-[10px]">{grupo.resolvidos} resolvidos</Badge>
+                          <Badge variant="outline" className="text-[10px]">
+                            {grupo.resolvidos} resolvidos
+                          </Badge>
                           {grupo.emAberto > 0 && (
                             <Badge className="text-[10px] bg-orange-100 text-orange-700 border-orange-200">
                               {grupo.emAberto} em aberto
                             </Badge>
                           )}
-                          {isOpen
-                            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                          {isOpen ? (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          )}
                         </div>
                       </div>
                     </CardHeader>
@@ -958,10 +1065,7 @@ export function RelatorioProdutividade() {
                           </TableHeader>
                           <TableBody>
                             {grupo.atividades.map((a) => (
-                              <AtividadeExpandivel
-                                key={`${grupo.userId}-${a.demandaId}`}
-                                atividade={a}
-                              />
+                              <AtividadeExpandivel key={`${grupo.userId}-${a.demandaId}`} atividade={a} />
                             ))}
                             <TableRow className="bg-muted/20 border-t font-semibold">
                               <TableCell colSpan={5} className="text-xs pl-4 text-muted-foreground">
@@ -986,12 +1090,15 @@ export function RelatorioProdutividade() {
 
       <ReportLegend
         items={[
-          { sigla: "RHM",              descricao: "Clique na linha para ver o detalhe das horas lançadas (Data, Fase, Descrição, Horas)" },
-          { sigla: "Projeto",          descricao: "Nome do projeto vinculado à atividade" },
-          { sigla: "Horas",            descricao: "Total de horas lançadas pelo analista nesta atividade" },
+          {
+            sigla: "RHM",
+            descricao: "Clique na linha para ver o detalhe das horas lançadas (Data, Fase, Descrição, Horas)",
+          },
+          { sigla: "Projeto", descricao: "Nome do projeto vinculado à atividade" },
+          { sigla: "Horas", descricao: "Total de horas lançadas pelo analista nesta atividade" },
           { sigla: "Outros Analistas", descricao: "Demais pessoas vinculadas à mesma atividade" },
-          { sigla: "Taxa Resolução",   descricao: "Atividades resolvidas ÷ total × 100 — por analista" },
-          { sigla: "Data Fim",         descricao: "Data de aceite ou da última transição de conclusão" },
+          { sigla: "Taxa Resolução", descricao: "Atividades resolvidas ÷ total × 100 — por analista" },
+          { sigla: "Data Fim", descricao: "Data de aceite ou da última transição de conclusão" },
         ]}
       />
     </div>
