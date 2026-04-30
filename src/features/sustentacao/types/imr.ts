@@ -6,7 +6,7 @@ export const TIPOS_DEMANDA_IMR = [
   { value: "apuracao_especial", label: "Apuração especial" },
   { value: "atendimento", label: "Atendimento" },
   { value: "atualizacao_arquitetura", label: "Atualização Arquitetura Deploy" },
-  { value: "atividade_interna_sustentação", label: "Atividade Interna Sustentação" },
+  { value: "atividade_interna_sustentacao", label: "Atividade Interna Sustentação" },
   { value: "diagnostico", label: "Diagnóstico de Incidente" },
   { value: "homologacao_assistida", label: "Homologação assistida" },
   { value: "instalacao_atualizacao_de_sw", label: "Instalação/atualização de SW" },
@@ -35,6 +35,8 @@ export const TIPO_LABEL_MAP: Record<string, string> = Object.fromEntries(
 export function mapLegacyTipo(tipo: string): string {
   if (tipo === "corretiva") return "manutencao_corretiva";
   if (tipo === "evolutiva") return "evolutiva_pequeno_porte";
+  // Normaliza value antigo com caracteres não-ASCII (ç/ã) para o slug atual
+  if (tipo === "atividade_interna_sustentação") return "atividade_interna_sustentacao";
   return tipo;
 }
 
