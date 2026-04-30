@@ -298,7 +298,7 @@ export function UserRolesManager() {
     [users, deleteState.user],
   );
 
-  // ── Trocar e-mail (envia confirmação ao novo endereço) ────────────────────
+  // ── Trocar e-mail (troca direta + obriga reset de senha no próximo login) ─
   async function submitChangeEmail() {
     const { user, newEmail } = emailState;
     if (!user) return;
@@ -314,12 +314,17 @@ export function UserRolesManager() {
     setEmailState((p) => ({ ...p, saving: true }));
     try {
       const { data, error } = await supabase.functions.invoke("admin-user-management", {
-        body: { action: "change_email", user_id: user.user_id, new_email: trimmed },
+        body: {
+          action: "change_email",
+          user_id: user.user_id,
+          new_email: trimmed,
+          email_mode: "direct",
+        },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       toast.success(
-        "E-mail de confirmação enviado para o novo endereço. O usuário só passará a usá-lo após confirmar.",
+        "E-mail trocado. O usuário deverá redefinir a senha no próximo login.",
       );
       setEmailState(EMAIL_INITIAL);
       await fetchUsers();
@@ -682,8 +687,8 @@ export function UserRolesManager() {
             <DialogDescription asChild>
               <div className="space-y-3 pt-1">
                 <p className="text-xs text-muted-foreground">
-                  Será enviado um <strong>e-mail de confirmação</strong> para o novo endereço. O acesso atual continua
-                  válido até que o usuário clique no link de validação.
+                  O e-mail será <strong>trocado imediatamente</strong>, sem confirmação.
+                  Por segurança, o usuário será <strong>obrigado a redefinir a senha</strong> no próximo login.
                 </p>
                 <div>
                   <Label className="text-xs font-semibold">E-mail atual</Label>
@@ -713,7 +718,7 @@ export function UserRolesManager() {
               ) : (
                 <Mail className="h-3.5 w-3.5 mr-1" />
               )}
-              Enviar confirmação
+              Trocar e-mail agora
             </Button>
           </DialogFooter>
         </DialogContent>
