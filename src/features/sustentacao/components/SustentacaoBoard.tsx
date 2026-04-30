@@ -1,22 +1,8 @@
 import { useState, useMemo } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { useDemandas } from "@/hooks/useDemandas";
 import type { Demanda } from "@/types/demanda";
-import { WORKFLOWLABELS, WORKFLOWCOLORS, FLOWPRINCIPAL, WORKFLOWSTEPS } from "@/components/DemandaDetail";
-import {
-  ChevronDown,
-  ChevronRight,
-  Plus,
-  Settings2,
-  Search,
-  X,
-  Clock,
-  ShieldAlert,
-  AlertTriangle,
-  AlertCircle,
-} from "lucide-react";
+import { WORKFLOWLABELS, FLOWPRINCIPAL } from "@/components/DemandaDetail";
+import { ChevronDown, ChevronRight, Plus, Settings2, Search, X, Clock, AlertTriangle, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -50,8 +36,8 @@ function slaDaysRemaining(demanda: Demanda): number | null {
 
 function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accentHex: string; onClick?: () => void }) {
   const slaD = slaDaysRemaining(demanda);
-  const slaUrgente = slaD !== null && slaD <= 3 && slaD >= 0;
-  const slaAtrasado = slaD !== null && slaD < 0;
+  const slaUrgent = slaD !== null && slaD <= 3 && slaD >= 0;
+  const slaLate = slaD !== null && slaD < 0;
 
   return (
     <div
@@ -59,16 +45,13 @@ function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accent
       className="bg-white rounded-lg border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.06)]
         hover:shadow-[0_3px_10px_rgba(0,0,0,0.10)] transition-all duration-150 overflow-hidden cursor-pointer select-none"
     >
-      {/* accent line */}
       <div className="h-0.5" style={{ backgroundColor: accentHex }} />
 
       <div className="p-3">
-        {/* título / descrição */}
         <p className="text-[13px] font-semibold leading-snug text-gray-800 line-clamp-2 mb-2">
           {demanda.descricao ?? demanda.tipo ?? "Demanda"}
         </p>
 
-        {/* RHM · Projeto */}
         {(demanda.rhm || demanda.projeto) && (
           <div className="flex flex-wrap gap-1 mb-2">
             {demanda.rhm && (
@@ -87,7 +70,6 @@ function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accent
           </div>
         )}
 
-        {/* ID + alertas */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -98,13 +80,13 @@ function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accent
           </div>
 
           <div className="flex items-center gap-1">
-            {slaAtrasado && (
+            {slaLate && (
               <span className="flex items-center gap-0.5 text-[10px] bg-red-50 text-red-600 border border-red-200 rounded px-1.5 py-0.5">
                 <AlertTriangle className="h-2.5 w-2.5" />
                 SLA
               </span>
             )}
-            {slaUrgente && !slaAtrasado && (
+            {slaUrgent && !slaLate && (
               <span className="flex items-center gap-0.5 text-[10px] bg-amber-50 text-amber-600 border border-amber-200 rounded px-1.5 py-0.5">
                 <Clock className="h-2.5 w-2.5" />
                 {slaD}d
@@ -113,8 +95,7 @@ function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accent
           </div>
         </div>
 
-        {/* SLA normal */}
-        {slaD !== null && !slaUrgente && !slaAtrasado && (
+        {slaD !== null && !slaUrgent && !slaLate && (
           <div className="flex items-center gap-1 mt-1.5 text-[10px] text-gray-400">
             <Clock className="h-2.5 w-2.5" />
             <span>{slaD}d restantes</span>
@@ -141,8 +122,8 @@ function CollapsedCol({
   return (
     <div
       onClick={onClick}
-      className="flex-shrink-0 w-10 flex flex-col items-center rounded-xl border border-border/60 bg-white
-        shadow-[0_1px_3px_rgba(0,0,0,0.06)] cursor-pointer hover:shadow-md transition-all py-3 gap-3"
+      className="flex-shrink-0 w-10 flex flex-col items-center rounded-xl border border-border/60
+        bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] cursor-pointer hover:shadow-md transition-all py-3 gap-3"
       style={{ borderTop: `3px solid ${accentHex}` }}
     >
       <ChevronRight className="h-3.5 w-3.5 text-gray-400 shrink-0" />
@@ -181,11 +162,10 @@ function ExpandedCol({
 }) {
   return (
     <div
-      className="flex-shrink-0 w-[280px] flex flex-col rounded-xl border border-border/60 bg-white
-      shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-all"
+      className="flex-shrink-0 w-[280px] flex flex-col rounded-xl border border-border/60
+        bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-all"
       style={{ borderTop: `3px solid ${accentHex}` }}
     >
-      {/* header */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100">
         <button onClick={onCollapse} className="p-0.5 rounded hover:bg-gray-100 transition-colors">
           <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
@@ -207,7 +187,6 @@ function ExpandedCol({
         </button>
       </div>
 
-      {/* cards */}
       <div className="p-2 overflow-y-auto flex-1 space-y-2" style={{ maxHeight: "calc(100vh - 260px)" }}>
         {demandas.length === 0 ? (
           <div className="flex items-center justify-center h-14 rounded-lg border-2 border-dashed border-gray-200 text-xs text-gray-400">
@@ -223,21 +202,25 @@ function ExpandedCol({
   );
 }
 
-// ── Colunas visíveis (fluxo principal + bloqueada + rejeitada) ─────────────────
+// ── Colunas visíveis ──────────────────────────────────────────────────────────
 
 const ALL_COLUMNS = [...FLOWPRINCIPAL, "bloqueada", "rejeitada"] as string[];
-
-// deduplica mantendo ordem
-const VISIBLE_COLUMNS = ALL_COLUMNS.filter((v, i, a) => a.indexOf(v) === i);
+const VISIBLE_COLS = ALL_COLUMNS.filter((v, i, a) => a.indexOf(v) === i);
 
 // ── Board ─────────────────────────────────────────────────────────────────────
 
 interface SustentacaoBoardProps {
+  /**
+   * Lista de demandas a exibir.
+   * Passe via hook do seu contexto, ex:
+   *   const { demandas } = useSustentacao();
+   *   <SustentacaoBoard demandas={demandas} onSelectDemanda={...} />
+   */
+  demandas: Demanda[];
   onSelectDemanda?: (demanda: Demanda) => void;
 }
 
-export function SustentacaoBoard({ onSelectDemanda }: SustentacaoBoardProps) {
-  const { demandas } = useDemandas();
+export function SustentacaoBoard({ demandas, onSelectDemanda }: SustentacaoBoardProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
 
@@ -261,7 +244,7 @@ export function SustentacaoBoard({ onSelectDemanda }: SustentacaoBoardProps) {
 
   const byStatus = useMemo(() => {
     const map: Record<string, Demanda[]> = {};
-    VISIBLE_COLUMNS.forEach((k) => {
+    VISIBLE_COLS.forEach((k) => {
       map[k] = [];
     });
     filtered.forEach((d) => {
@@ -301,13 +284,13 @@ export function SustentacaoBoard({ onSelectDemanda }: SustentacaoBoardProps) {
 
       {/* board */}
       <div className="flex gap-2 pb-4 overflow-x-auto flex-1" style={{ minHeight: 120 }}>
-        {VISIBLE_COLUMNS.map((key) => {
+        {VISIBLE_COLS.map((key) => {
           const label = WORKFLOWLABELS[key] ?? key;
           const color = COLUMN_COLORS[key] ?? { hex: "#94a3b8", bgLight: "#f8fafc" };
           const items = byStatus[key] ?? [];
-          const isCollapsed = collapsed.has(key);
+          const isCol = collapsed.has(key);
 
-          if (isCollapsed) {
+          if (isCol) {
             return (
               <CollapsedCol
                 key={key}
