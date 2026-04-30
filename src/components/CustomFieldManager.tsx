@@ -12,15 +12,20 @@ import { Switch } from "@/components/ui/switch";
 import { SlidersHorizontal, Plus, Trash2, Pencil, Type, Hash, List } from "lucide-react";
 import { toast } from "sonner";
 
-const FIELD_TYPE_ICONS: Record<CustomFieldType, React.ElementType> = {
+const TYPE_ICONS: Record<CustomFieldType, ElementType> = {
   text: Type,
   number: Hash,
   select: List,
+  boolean: ToggleLeft, // ← adicionar (import ToggleLeft from lucide-react)
+  date: Calendar, // ← adicionar (import Calendar from lucide-react)
 };
-const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
+
+const TYPE_LABELS: Record<CustomFieldType, string> = {
   text: "Texto",
   number: "Número",
   select: "Seleção",
+  boolean: "Sim/Não", // ← adicionar
+  date: "Data", // ← adicionar
 };
 
 export function CustomFieldManager() {
@@ -34,7 +39,12 @@ export function CustomFieldManager() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const resetForm = () => {
-    setName(""); setType("text"); setRequired(false); setOptionsText(""); setErrors({}); setEditId(null);
+    setName("");
+    setType("text");
+    setRequired(false);
+    setOptionsText("");
+    setErrors({});
+    setEditId(null);
   };
 
   const validate = () => {
@@ -48,7 +58,13 @@ export function CustomFieldManager() {
   const handleSubmit = (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!validate()) return;
-    const options = type === "select" ? optionsText.split(",").map((o) => o.trim()).filter(Boolean) : undefined;
+    const options =
+      type === "select"
+        ? optionsText
+            .split(",")
+            .map((o) => o.trim())
+            .filter(Boolean)
+        : undefined;
     if (editId) {
       updateCustomField(editId, { name: name.trim(), type, required, options });
       toast.success("Campo atualizado!");
@@ -63,9 +79,13 @@ export function CustomFieldManager() {
   const openEdit = (id: string) => {
     const field = customFields.find((f) => f.id === id);
     if (!field) return;
-    setEditId(field.id); setName(field.name); setType(field.type); setRequired(field.required);
+    setEditId(field.id);
+    setName(field.name);
+    setType(field.type);
+    setRequired(field.required);
     setOptionsText(field.options?.join(", ") || "");
-    setErrors({}); setOpen(true);
+    setErrors({});
+    setOpen(true);
   };
 
   return (
@@ -76,9 +96,17 @@ export function CustomFieldManager() {
           <h2 className="text-lg font-bold tracking-tight">Campos Personalizados</h2>
           <Badge variant="secondary">{customFields.length}</Badge>
         </div>
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
+        <Dialog
+          open={open}
+          onOpenChange={(v) => {
+            setOpen(v);
+            if (!v) resetForm();
+          }}
+        >
           <DialogTrigger asChild>
-            <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> Novo Campo</Button>
+            <Button size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" /> Novo Campo
+            </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -89,25 +117,49 @@ export function CustomFieldManager() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label>Nome do Campo <span className="text-destructive">*</span></Label>
-                <Input value={name} onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: "" })); }} placeholder="Ex: Ambiente de Deploy" className="mt-1" />
+                <Label>
+                  Nome do Campo <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setErrors((p) => ({ ...p, name: "" }));
+                  }}
+                  placeholder="Ex: Ambiente de Deploy"
+                  className="mt-1"
+                />
                 {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
               </div>
               <div>
                 <Label>Tipo</Label>
                 <Select value={type} onValueChange={(v) => setType(v as CustomFieldType)}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     {(Object.entries(FIELD_TYPE_LABELS) as [CustomFieldType, string][]).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                      <SelectItem key={k} value={k}>
+                        {v}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               {type === "select" && (
                 <div>
-                  <Label>Opções <span className="text-destructive">*</span></Label>
-                  <Input value={optionsText} onChange={(e) => { setOptionsText(e.target.value); setErrors((p) => ({ ...p, options: "" })); }} placeholder="Opção 1, Opção 2, Opção 3" className="mt-1" />
+                  <Label>
+                    Opções <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={optionsText}
+                    onChange={(e) => {
+                      setOptionsText(e.target.value);
+                      setErrors((p) => ({ ...p, options: "" }));
+                    }}
+                    placeholder="Opção 1, Opção 2, Opção 3"
+                    className="mt-1"
+                  />
                   <p className="text-[10px] text-muted-foreground mt-1">Separe as opções por vírgula</p>
                   {errors.options && <p className="text-xs text-destructive mt-1">{errors.options}</p>}
                 </div>
@@ -147,8 +199,14 @@ export function CustomFieldManager() {
                       <div>
                         <p className="font-semibold text-sm">{field.name}</p>
                         <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="secondary" className="text-[10px]">{FIELD_TYPE_LABELS[field.type]}</Badge>
-                          {field.required && <Badge variant="outline" className="text-[10px] text-destructive border-destructive/30">Obrigatório</Badge>}
+                          <Badge variant="secondary" className="text-[10px]">
+                            {FIELD_TYPE_LABELS[field.type]}
+                          </Badge>
+                          {field.required && (
+                            <Badge variant="outline" className="text-[10px] text-destructive border-destructive/30">
+                              Obrigatório
+                            </Badge>
+                          )}
                         </div>
                         {field.type === "select" && field.options && (
                           <p className="text-[10px] text-muted-foreground mt-1">Opções: {field.options.join(", ")}</p>
@@ -159,7 +217,15 @@ export function CustomFieldManager() {
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(field.id)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { removeCustomField(field.id); toast.info("Campo removido"); }}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive"
+                        onClick={() => {
+                          removeCustomField(field.id);
+                          toast.info("Campo removido");
+                        }}
+                      >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>

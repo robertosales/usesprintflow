@@ -1,25 +1,65 @@
 import { useState, useMemo } from "react";
-import type { Demanda } from "@/types/demanda";
-import { WORKFLOWLABELS, FLOWPRINCIPAL } from "@/components/DemandaDetail";
-import { ChevronDown, ChevronRight, Plus, Settings2, Search, X, Clock, AlertTriangle, AlertCircle } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Settings2, Search, X, Clock, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-// ── helpers ───────────────────────────────────────────────────────────────────
+// ── Tipo local de Demanda (subset dos campos usados no board) ─────────────────
+// Se @/types/demanda existir no seu projeto, substitua por:
+//   import type { Demanda } from "@/types/demanda";
+export interface Demanda {
+  id?: string;
+  situacao?: string;
+  descricao?: string | null;
+  tipo?: string | null;
+  projeto?: string | null;
+  rhm?: string | null;
+  prazosolucao?: string | null;
+  [key: string]: unknown;
+}
 
-const COLUMN_COLORS: Record<string, { hex: string; bgLight: string }> = {
-  filaatendimento: { hex: "#64748b", bgLight: "#f8fafc" },
-  planejamentoelaboracao: { hex: "#3b82f6", bgLight: "#eff6ff" },
-  planejamentoagaprovacao: { hex: "#6366f1", bgLight: "#eef2ff" },
-  planejamentoaprovada: { hex: "#8b5cf6", bgLight: "#f5f3ff" },
-  emexecucao: { hex: "#f59e0b", bgLight: "#fffbeb" },
-  bloqueada: { hex: "#ef4444", bgLight: "#fef2f2" },
-  homaghomologacao: { hex: "#06b6d4", bgLight: "#ecfeff" },
-  homhomologada: { hex: "#14b8a6", bgLight: "#f0fdfa" },
-  rejeitada: { hex: "#f43f5e", bgLight: "#fff1f2" },
-  filaproducao: { hex: "#f97316", bgLight: "#fff7ed" },
-  agaceitefinal: { hex: "#10b981", bgLight: "#ecfdf5" },
+// ── Constantes de workflow (espelho de DemandaDetail) ─────────────────────────
+// Mantido inline para evitar dependência de @/components/DemandaDetail
+export const WORKFLOWLABELS: Record<string, string> = {
+  filaatendimento: "Fila de Atendimento",
+  planejamentoelaboracao: "Planejamento Em Elaboração",
+  planejamentoagaprovacao: "Planejamento Ag. Aprovação",
+  planejamentoaprovada: "Planejamento Aprovada p/ Exec",
+  emexecucao: "Em Execução",
+  bloqueada: "Bloqueada",
+  homaghomologacao: "Hom Ag. Homologação",
+  homhomologada: "Hom Homologada",
+  rejeitada: "Rejeitada",
+  filaproducao: "Fila para Produção / Infra",
+  agaceitefinal: "Ag. Aceite Final",
 };
 
+export const FLOWPRINCIPAL = [
+  "filaatendimento",
+  "planejamentoelaboracao",
+  "planejamentoagaprovacao",
+  "planejamentoaprovada",
+  "emexecucao",
+  "homaghomologacao",
+  "homhomologada",
+  "filaproducao",
+  "agaceitefinal",
+] as const;
+
+// ── Cores por coluna ──────────────────────────────────────────────────────────
+const COLUMN_COLORS: Record<string, { hex: string }> = {
+  filaatendimento: { hex: "#64748b" },
+  planejamentoelaboracao: { hex: "#3b82f6" },
+  planejamentoagaprovacao: { hex: "#6366f1" },
+  planejamentoaprovada: { hex: "#8b5cf6" },
+  emexecucao: { hex: "#f59e0b" },
+  bloqueada: { hex: "#ef4444" },
+  homaghomologacao: { hex: "#06b6d4" },
+  homhomologada: { hex: "#14b8a6" },
+  rejeitada: { hex: "#f43f5e" },
+  filaproducao: { hex: "#f97316" },
+  agaceitefinal: { hex: "#10b981" },
+};
+
+// ── helpers ───────────────────────────────────────────────────────────────────
 function hexAlpha(hex: string, a: number) {
   const c = hex.replace("#", "");
   return `rgba(${parseInt(c.slice(0, 2), 16)},${parseInt(c.slice(2, 4), 16)},${parseInt(c.slice(4, 6), 16)},${a})`;
@@ -28,16 +68,19 @@ function hexAlpha(hex: string, a: number) {
 function slaDaysRemaining(demanda: Demanda): number | null {
   if (!demanda.prazosolucao) return null;
   const now = new Date();
-  const dead = new Date(demanda.prazosolucao);
+  const dead = new Date(demanda.prazosolucao as string);
   return Math.round((dead.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-// ── Demanda Card ──────────────────────────────────────────────────────────────
+// ── Colunas visíveis ──────────────────────────────────────────────────────────
+const ALL_COLS = [...FLOWPRINCIPAL, "bloqueada", "rejeitada"] as string[];
+const VISIBLE_COLS = ALL_COLS.filter((v, i, a) => a.indexOf(v) === i);
 
+// ── Demanda Card ──────────────────────────────────────────────────────────────
 function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accentHex: string; onClick?: () => void }) {
   const slaD = slaDaysRemaining(demanda);
-  const slaUrgent = slaD !== null && slaD <= 3 && slaD >= 0;
-  const slaLate = slaD !== null && slaD < 0;
+  const urgent = slaD !== null && slaD <= 3 && slaD >= 0;
+  const late = slaD !== null && slaD < 0;
 
   return (
     <div
@@ -46,7 +89,6 @@ function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accent
         hover:shadow-[0_3px_10px_rgba(0,0,0,0.10)] transition-all duration-150 overflow-hidden cursor-pointer select-none"
     >
       <div className="h-0.5" style={{ backgroundColor: accentHex }} />
-
       <div className="p-3">
         <p className="text-[13px] font-semibold leading-snug text-gray-800 line-clamp-2 mb-2">
           {demanda.descricao ?? demanda.tipo ?? "Demanda"}
@@ -76,26 +118,24 @@ function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accent
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <polyline points="14 2 14 8 20 8" />
             </svg>
-            <span className="font-mono font-medium">#{demanda.id?.slice(0, 8)}</span>
+            <span className="font-mono font-medium">#{String(demanda.id ?? "").slice(0, 8)}</span>
           </div>
 
           <div className="flex items-center gap-1">
-            {slaLate && (
+            {late && (
               <span className="flex items-center gap-0.5 text-[10px] bg-red-50 text-red-600 border border-red-200 rounded px-1.5 py-0.5">
-                <AlertTriangle className="h-2.5 w-2.5" />
-                SLA
+                <AlertTriangle className="h-2.5 w-2.5" /> SLA
               </span>
             )}
-            {slaUrgent && !slaLate && (
+            {urgent && !late && (
               <span className="flex items-center gap-0.5 text-[10px] bg-amber-50 text-amber-600 border border-amber-200 rounded px-1.5 py-0.5">
-                <Clock className="h-2.5 w-2.5" />
-                {slaD}d
+                <Clock className="h-2.5 w-2.5" /> {slaD}d
               </span>
             )}
           </div>
         </div>
 
-        {slaD !== null && !slaUrgent && !slaLate && (
+        {slaD !== null && !urgent && !late && (
           <div className="flex items-center gap-1 mt-1.5 text-[10px] text-gray-400">
             <Clock className="h-2.5 w-2.5" />
             <span>{slaD}d restantes</span>
@@ -107,7 +147,6 @@ function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accent
 }
 
 // ── Collapsed strip ───────────────────────────────────────────────────────────
-
 function CollapsedCol({
   label,
   count,
@@ -144,21 +183,20 @@ function CollapsedCol({
 }
 
 // ── Expanded column ───────────────────────────────────────────────────────────
-
 function ExpandedCol({
-  colKey,
   label,
   demandas,
   accentHex,
   onCollapse,
   onCardClick,
+  onAdd,
 }: {
-  colKey: string;
   label: string;
   demandas: Demanda[];
   accentHex: string;
   onCollapse: () => void;
   onCardClick?: (d: Demanda) => void;
+  onAdd?: () => void;
 }) {
   return (
     <div
@@ -179,12 +217,14 @@ function ExpandedCol({
         >
           {demandas.length}
         </span>
-        <button className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600">
-          <Plus className="h-3.5 w-3.5" />
-        </button>
-        <button className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600">
-          <Settings2 className="h-3.5 w-3.5" />
-        </button>
+        {onAdd && (
+          <button
+            onClick={onAdd}
+            className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       <div className="p-2 overflow-y-auto flex-1 space-y-2" style={{ maxHeight: "calc(100vh - 260px)" }}>
@@ -194,7 +234,7 @@ function ExpandedCol({
           </div>
         ) : (
           demandas.map((d) => (
-            <DemandaCard key={d.id} demanda={d} accentHex={accentHex} onClick={() => onCardClick?.(d)} />
+            <DemandaCard key={d.id as string} demanda={d} accentHex={accentHex} onClick={() => onCardClick?.(d)} />
           ))
         )}
       </div>
@@ -202,25 +242,19 @@ function ExpandedCol({
   );
 }
 
-// ── Colunas visíveis ──────────────────────────────────────────────────────────
-
-const ALL_COLUMNS = [...FLOWPRINCIPAL, "bloqueada", "rejeitada"] as string[];
-const VISIBLE_COLS = ALL_COLUMNS.filter((v, i, a) => a.indexOf(v) === i);
-
 // ── Board ─────────────────────────────────────────────────────────────────────
-
-interface SustentacaoBoardProps {
+export interface SustentacaoBoardProps {
   /**
-   * Lista de demandas a exibir.
-   * Passe via hook do seu contexto, ex:
+   * Lista de demandas — busque no contexto/hook do seu projeto e passe aqui:
    *   const { demandas } = useSustentacao();
-   *   <SustentacaoBoard demandas={demandas} onSelectDemanda={...} />
    */
   demandas: Demanda[];
   onSelectDemanda?: (demanda: Demanda) => void;
+  /** Chamado ao clicar em "+" numa coluna. Recebe o status da coluna. */
+  onCreateDemanda?: (situacao?: string) => void;
 }
 
-export function SustentacaoBoard({ demandas, onSelectDemanda }: SustentacaoBoardProps) {
+export function SustentacaoBoard({ demandas, onSelectDemanda, onCreateDemanda }: SustentacaoBoardProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
 
@@ -248,7 +282,7 @@ export function SustentacaoBoard({ demandas, onSelectDemanda }: SustentacaoBoard
       map[k] = [];
     });
     filtered.forEach((d) => {
-      const key = d.situacao ?? "filaatendimento";
+      const key = (d.situacao as string) ?? "filaatendimento";
       if (!map[key]) map[key] = [];
       map[key].push(d);
     });
@@ -264,7 +298,7 @@ export function SustentacaoBoard({ demandas, onSelectDemanda }: SustentacaoBoard
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search"
+            placeholder="Buscar demanda..."
             className="w-full pl-9 pr-3 h-9 rounded-lg border border-gray-200 bg-white text-sm
               placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
           />
@@ -286,7 +320,7 @@ export function SustentacaoBoard({ demandas, onSelectDemanda }: SustentacaoBoard
       <div className="flex gap-2 pb-4 overflow-x-auto flex-1" style={{ minHeight: 120 }}>
         {VISIBLE_COLS.map((key) => {
           const label = WORKFLOWLABELS[key] ?? key;
-          const color = COLUMN_COLORS[key] ?? { hex: "#94a3b8", bgLight: "#f8fafc" };
+          const color = COLUMN_COLORS[key] ?? { hex: "#94a3b8" };
           const items = byStatus[key] ?? [];
           const isCol = collapsed.has(key);
 
@@ -304,12 +338,12 @@ export function SustentacaoBoard({ demandas, onSelectDemanda }: SustentacaoBoard
           return (
             <ExpandedCol
               key={key}
-              colKey={key}
               label={label}
               demandas={items}
               accentHex={color.hex}
               onCollapse={() => toggle(key)}
               onCardClick={onSelectDemanda}
+              onAdd={onCreateDemanda ? () => onCreateDemanda(key) : undefined}
             />
           );
         })}
