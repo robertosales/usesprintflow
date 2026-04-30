@@ -17,43 +17,10 @@ import {
   AutomationRule,
   WorkflowColumn,
   DEFAULT_KANBAN_COLUMNS,
+  normalizeWorkflowColumns,
+  getColumnHex,
 } from "@/types/sprint";
 import { toast } from "sonner";
-
-// ── Conversão de dotColor Tailwind → hex (fallback para dados legados) ───────
-const DOT_TO_HEX: Record<string, string> = {
-  "bg-slate-400": "#94a3b8",
-  "bg-slate-500": "#64748b",
-  "bg-blue-400": "#60a5fa",
-  "bg-blue-500": "#3b82f6",
-  "bg-indigo-400": "#818cf8",
-  "bg-indigo-500": "#6366f1",
-  "bg-violet-400": "#a78bfa",
-  "bg-violet-500": "#8b5cf6",
-  "bg-purple-400": "#c084fc",
-  "bg-purple-500": "#a855f7",
-  "bg-amber-400": "#fbbf24",
-  "bg-amber-500": "#f59e0b",
-  "bg-yellow-400": "#facc15",
-  "bg-yellow-500": "#eab308",
-  "bg-orange-400": "#fb923c",
-  "bg-orange-500": "#f97316",
-  "bg-red-400": "#f87171",
-  "bg-red-500": "#ef4444",
-  "bg-rose-400": "#fb7185",
-  "bg-rose-500": "#f43f5e",
-  "bg-cyan-400": "#22d3ee",
-  "bg-cyan-500": "#06b6d4",
-  "bg-teal-400": "#2dd4bf",
-  "bg-teal-500": "#14b8a6",
-  "bg-green-400": "#4ade80",
-  "bg-green-500": "#22c55e",
-  "bg-emerald-400": "#34d399",
-  "bg-emerald-500": "#10b981",
-};
-function dotToHex(dotColor?: string): string {
-  return DOT_TO_HEX[dotColor || ""] || "#94a3b8";
-}
 
 interface AddImpedimentData {
   reason: string;
@@ -153,7 +120,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         supabase.from("impediments").select("*").eq("team_id", teamId).limit(200),
         supabase.from("custom_field_definitions").select("*").eq("team_id", teamId).limit(50),
         supabase.from("automation_rules").select("*").eq("team_id", teamId).limit(50),
-        // ── Carrega colunas do workflow do banco filtrando pelo time atual
         supabase.from("workflow_columns").select("*").eq("team_id", teamId).order("sort_order").limit(50),
       ]);
 
@@ -284,20 +250,22 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         })),
       );
 
-      // ── Mapeia colunas do workflow com suporte a hex ───────────────────
-      // Prioridade: campo `hex` do banco → derivado de `dot_color` → fallback slate
+      // ── Colunas do workflow ───────────────────────────────────────────────
+      // normalizeWorkflowColumns garante que `hex` seja sempre resolvido,
+      // independente do formato salvo no banco (dotColor, value, hex direto, etc.)
       const wc = (wcRes.data || []) as any[];
       if (wc.length > 0) {
-        setWorkflowColumnsState(
-          wc.map((c: any) => ({
-            key: c.key,
-            label: c.label,
-            colorClass: c.color_class || "",
-            dotColor: c.dot_color || "",
-            // Campo hex: usa o valor salvo no banco; se não existir, deriva do dotColor
-            hex: c.hex || dotToHex(c.dot_color),
-          })),
-        );
+        const rawCols: WorkflowColumn[] = wc.map((c: any) => ({
+          key: c.key,
+          label: c.label,
+          colorClass: c.color_class || "",
+          dotColor: c.dot_color || "",
+          hex: c.hex || undefined,
+          wipLimit: c.wip_limit ?? null,
+          orderIndex: c.sort_order ?? 0,
+        }));
+        // normalizeWorkflowColumns resolve o hex de qualquer formato armazenado
+        setWorkflowColumnsState(normalizeWorkflowColumns(rawCols));
       } else {
         setWorkflowColumnsState(DEFAULT_KANBAN_COLUMNS);
       }
@@ -415,14 +383,13 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if ((hu as any).votedBy !== undefined) updateData.voted_by = (hu as any).votedBy;
     if ((hu as any).functionPoints !== undefined) updateData.function_points = (hu as any).functionPoints ?? null;
     if ("assigneeId" in hu) updateData.assignee_id = (hu as any).assigneeId ?? null;
-
     const { data, error } = await supabase.from("user_stories").update(updateData).eq("id", id).select();
     if (error) {
       toast.error("Erro ao atualizar HU: " + error.message);
       return;
     }
     if (!data || data.length === 0) {
-      toast.error("Erro ao atualizar HU: nenhuma linha afetada (verifique permissões)");
+      toast.error("Erro ao atualizar HU: nenhuma linha afetada");
       return;
     }
     await refreshAll();
@@ -730,19 +697,19 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   };
 
   // ── WORKFLOW COLUMNS ──────────────────────────────────────────────────────
-  const setWorkflowColumns = (columns: WorkflowColumn[]) => setWorkflowColumnsState(columns);
+  const setWorkflowColumns = (columns: WorkflowColumn[]) => setWorkflowColumnsState(normalizeWorkflowColumns(columns));
 
   const addWorkflowColumn = async (col: WorkflowColumn) => {
     if (!teamId) return;
+    const normalized = normalizeWorkflowColumns([col])[0];
     const maxOrder = workflowColumns.length;
     const { error } = await supabase.from("workflow_columns").insert({
       team_id: teamId,
-      key: col.key,
-      label: col.label,
-      color_class: col.colorClass || "",
-      dot_color: col.dotColor || "",
-      // ── Salva hex no banco para o KanbanBoard usar diretamente
-      hex: (col as any).hex || dotToHex(col.dotColor),
+      key: normalized.key,
+      label: normalized.label,
+      color_class: normalized.colorClass || "",
+      dot_color: normalized.dotColor || "",
+      hex: normalized.hex, // ← sempre salva hex resolvido
       sort_order: maxOrder,
     });
     if (error) {
@@ -765,10 +732,12 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (col.colorClass !== undefined) updateData.color_class = col.colorClass;
     if (col.dotColor !== undefined) {
       updateData.dot_color = col.dotColor;
-      // Atualiza hex derivado quando dotColor muda e não há hex explícito
-      if (!(col as any).hex) updateData.hex = dotToHex(col.dotColor);
+      // Sempre atualiza o hex derivado quando dotColor muda
+      const fakeCol = { key, label: "", colorClass: "", dotColor: col.dotColor, hex: col.hex };
+      updateData.hex = getColumnHex(fakeCol as WorkflowColumn);
     }
-    if ((col as any).hex !== undefined) updateData.hex = (col as any).hex;
+    if (col.hex !== undefined) updateData.hex = col.hex; // hex explícito sobrescreve
+    if (col.wipLimit !== undefined) updateData.wip_limit = col.wipLimit;
     await supabase.from("workflow_columns").update(updateData).eq("team_id", teamId).eq("key", key);
     await refreshAll();
   };
@@ -778,7 +747,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     for (let i = 0; i < columns.length; i++) {
       await supabase.from("workflow_columns").update({ sort_order: i }).eq("team_id", teamId).eq("key", columns[i].key);
     }
-    setWorkflowColumnsState(columns);
+    setWorkflowColumnsState(normalizeWorkflowColumns(columns));
   };
 
   return (
