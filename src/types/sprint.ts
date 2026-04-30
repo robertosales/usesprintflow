@@ -1,99 +1,135 @@
 // src/types/sprint.ts
 
-// ── Enums / Constantes ────────────────────────────────────────────────────────
+// ── Tamanho / Story Points ────────────────────────────────────────────────────
 
 export const SIZE_REFERENCES = ["PP", "P", "M", "G", "GG"] as const;
 export type SizeReference = (typeof SIZE_REFERENCES)[number];
 
+// ── Prioridade ────────────────────────────────────────────────────────────────
+
 export const PRIORITY_OPTIONS = ["baixa", "media", "alta", "critica"] as const;
 export type Priority = (typeof PRIORITY_OPTIONS)[number];
 
-export const IMPEDIMENT_CRITICALITY_LABELS: Record<string, string> = {
+export const PRIORITY_LABELS: Record<Priority, string> = {
   baixa: "Baixa",
   media: "Média",
   alta: "Alta",
   critica: "Crítica",
 };
 
+// ── Activity Types ────────────────────────────────────────────────────────────
+
 export const ACTIVITY_TYPES = [
-  "desenvolvimento",
-  "teste",
-  "arquitetura",
+  "task",
   "bug",
-  "reuniao",
-  "documentacao",
-  "revisao",
-  "outro",
+  "architecture",
+  "test",
+  "meeting",
+  "documentation",
+  "review",
+  "other",
 ] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 
-export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
-  desenvolvimento: "Desenvolvimento",
-  teste: "Teste",
-  arquitetura: "Arquitetura",
-  bug: "Bug",
-  reuniao: "Reunião",
-  documentacao: "Documentação",
-  revisao: "Revisão",
-  outro: "Outro",
+export const ACTIVITY_TYPE_LABELS: Record<ActivityType, { label: string; color: string }> = {
+  task: { label: "Tarefa", color: "#6366f1" },
+  bug: { label: "Bug", color: "#ef4444" },
+  architecture: { label: "Arquitetura", color: "#8b5cf6" },
+  test: { label: "Teste", color: "#f59e0b" },
+  meeting: { label: "Reunião", color: "#06b6d4" },
+  documentation: { label: "Documentação", color: "#10b981" },
+  review: { label: "Revisão", color: "#f97316" },
+  other: { label: "Outro", color: "#94a3b8" },
 };
 
-// ── Interfaces principais ─────────────────────────────────────────────────────
+// ── Impedimento ───────────────────────────────────────────────────────────────
 
-export interface Sprint {
-  id: string;
-  name: string;
-  goal?: string | null;
-  startDate: string; // ISO date string
-  endDate: string; // ISO date string
-  status: "planning" | "active" | "completed" | "cancelled";
-  capacity?: number | null;
-  projectId?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+export type ImpedimentCriticality = "baixa" | "media" | "alta" | "critica";
 
-export interface Epic {
-  id: string;
-  name: string;
-  color: string; // hex, ex: "#6366f1"
-  description?: string | null;
-  projectId?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+export type ImpedimentType = "tecnico" | "negocio" | "dependencia" | "recurso" | "ambiente" | "outro";
+
+export const IMPEDIMENT_TYPE_LABELS: Record<ImpedimentType, { label: string; color: string }> = {
+  tecnico: { label: "Técnico", color: "#6366f1" },
+  negocio: { label: "Negócio", color: "#f59e0b" },
+  dependencia: { label: "Dependência", color: "#f97316" },
+  recurso: { label: "Recurso", color: "#ef4444" },
+  ambiente: { label: "Ambiente", color: "#06b6d4" },
+  outro: { label: "Outro", color: "#94a3b8" },
+};
+
+export const IMPEDIMENT_CRITICALITY_LABELS: Record<ImpedimentCriticality, string> = {
+  baixa: "Baixa",
+  media: "Média",
+  alta: "Alta",
+  critica: "Crítica",
+};
 
 export interface Impediment {
   id: string;
   huId: string;
   reason: string;
-  criticality: "baixa" | "media" | "alta" | "critica";
+  criticality: ImpedimentCriticality;
+  type?: ImpedimentType | null;
   reportedBy?: string | null;
+  reportedAt?: string | null;
   createdAt: string;
   resolvedAt?: string | null;
   resolutionNote?: string | null;
+  resolution?: string | null;
+  hasTicket?: boolean;
+  ticketId?: string | null;
+  ticketUrl?: string | null;
 }
 
-export interface UserStory {
-  id: string;
-  code: string; // ex: "HU-001"
-  title: string;
-  description?: string | null;
-  acceptanceCriteria?: string | null;
-  priority: Priority;
-  status: string; // chave do WorkflowColumn
-  sprintId: string | null;
-  epicId?: string | null;
-  assigneeId?: string | null;
-  sizeReference?: SizeReference | null;
-  storyPoints?: number | null;
-  estimatedHours?: number | null;
-  orderIndex?: number;
-  impediments?: Impediment[];
-  tags?: string[];
-  createdAt: string;
-  updatedAt: string;
+// ── Custom Fields ─────────────────────────────────────────────────────────────
+
+export type CustomFieldType = "text" | "number" | "date" | "boolean" | "select";
+
+export interface CustomField {
+  key: string;
+  label: string;
+  type: CustomFieldType;
+  options?: string[];
+  required?: boolean;
 }
+
+// ── Sprint ────────────────────────────────────────────────────────────────────
+
+export interface Sprint {
+  id: string;
+  name: string;
+  goal?: string | null;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+  capacity?: number | null;
+  createdAt: string;
+}
+
+// ── Epic ──────────────────────────────────────────────────────────────────────
+
+export interface Epic {
+  id: string;
+  name: string;
+  color: string;
+  description?: string | null;
+  projectId?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
+// ── Developer ─────────────────────────────────────────────────────────────────
+
+export interface Developer {
+  id: string;
+  name: string;
+  email?: string | null;
+  avatarUrl?: string | null;
+  role?: string | null;
+  capacity?: number | null;
+}
+
+// ── Activity ──────────────────────────────────────────────────────────────────
 
 export interface Activity {
   id: string;
@@ -104,17 +140,42 @@ export interface Activity {
   hours: number;
   activityType: ActivityType;
   date?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  isClosed?: boolean;
+  closedAt?: string | null;
   createdAt: string;
-  updatedAt: string;
 }
 
-export interface Developer {
+// ── UserStory ─────────────────────────────────────────────────────────────────
+
+export type KanbanStatus = string;
+
+export interface UserStory {
   id: string;
-  name: string;
-  email?: string | null;
-  avatarUrl?: string | null;
-  role?: string | null;
-  capacity?: number | null; // horas por sprint
+  code: string;
+  title: string;
+  description?: string | null;
+  acceptanceCriteria?: string | null;
+  priority: Priority;
+  status: KanbanStatus;
+  sprintId: string | null;
+  epicId?: string | null;
+  assigneeId?: string | null;
+  sizeReference?: SizeReference | null;
+  storyPoints?: number | null;
+  estimatedHours?: number | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  functionPoints?: number | null;
+  customFields?: Record<string, unknown>;
+  planningStatus?: string | null;
+  votedAt?: string | null;
+  orderIndex?: number;
+  impediments?: Impediment[];
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ── WorkflowColumn ────────────────────────────────────────────────────────────
@@ -122,14 +183,14 @@ export interface Developer {
 export interface WorkflowColumn {
   key: string;
   label: string;
-  colorClass: string; // classes Tailwind para badge
-  dotColor: string; // classe Tailwind para dot (bg-*)
-  hex?: string; // cor hex para bordas/acentos dinâmicos no board
+  colorClass: string;
+  dotColor: string;
+  hex?: string;
   wipLimit?: number | null;
   orderIndex?: number;
 }
 
-/** Mapa de dotColor Tailwind → hex equivalente para fallback de cor */
+/** Mapa dotColor Tailwind → hex para fallback de cor dinâmica */
 export const DOT_COLOR_HEX: Record<string, string> = {
   "bg-slate-400": "#94a3b8",
   "bg-slate-500": "#64748b",
@@ -163,7 +224,7 @@ export const DOT_COLOR_HEX: Record<string, string> = {
   "bg-emerald-500": "#10b981",
 };
 
-/** Retorna a cor hex de uma coluna, com fallback automático */
+/** Retorna o hex de uma coluna com fallback automático pelo dotColor */
 export function getColumnHex(col: WorkflowColumn): string {
   return col.hex || DOT_COLOR_HEX[col.dotColor] || "#94a3b8";
 }
@@ -219,35 +280,42 @@ export const DEFAULT_KANBAN_COLUMNS: WorkflowColumn[] = [
   },
 ];
 
-// ── Helpers de estado ─────────────────────────────────────────────────────────
+// ── Funções auxiliares ────────────────────────────────────────────────────────
 
-/** Colunas terminais — HUs aqui não podem ser movidas de volta */
-export const TERMINAL_STATUSES = ["concluida", "cancelada"] as const;
-
-export function isTerminalStatus(status: string): boolean {
-  return (TERMINAL_STATUSES as readonly string[]).includes(status);
+/** Calcula uma data final somando `days` dias úteis a `startDate` (YYYY-MM-DD) */
+export function calculateEndDate(startDate: string, days: number): string {
+  const date = new Date(startDate + "T12:00:00");
+  let added = 0;
+  while (added < days) {
+    date.setDate(date.getDate() + 1);
+    const dow = date.getDay();
+    if (dow !== 0 && dow !== 6) added++;
+  }
+  return date.toISOString().slice(0, 10);
 }
 
-/** Verifica se a HU possui impedimento ativo (não resolvido) */
+/** Soma o total de horas lançadas para uma HU */
+export function getTotalHoursForHU(huId: string, activities: Activity[]): number {
+  return activities.filter((a) => a.huId === huId).reduce((s, a) => s + (a.hours ?? 0), 0);
+}
+
+/** Verifica se a HU possui impedimento ativo */
 export function hasActiveImpediment(hu: UserStory): boolean {
   return (hu.impediments ?? []).some((i) => !i.resolvedAt);
 }
 
-/**
- * Verifica se a HU está atrasada:
- * - Sprint encerrada e HU não está em status terminal, OU
- * - HU com horas realizadas > estimadas (sem estar concluída)
- */
+/** Verifica se a HU está atrasada (horas > 120% do estimado) */
 export function isHUOverdue(hu: UserStory, activities: Activity[]): boolean {
-  if (isTerminalStatus(hu.status)) return false;
+  const TERMINAL = ["concluida", "cancelada"];
+  if (TERMINAL.includes(hu.status)) return false;
+  const total = getTotalHoursForHU(hu.id, activities);
+  const est = hu.estimatedHours ?? 0;
+  return est > 0 && total > est * 1.2;
+}
 
-  const huActivities = activities.filter((a) => a.huId === hu.id);
-  const totalHours = huActivities.reduce((s, a) => s + (a.hours ?? 0), 0);
-  const estimated = hu.estimatedHours ?? 0;
-
-  if (estimated > 0 && totalHours > estimated * 1.2) return true;
-
-  return false;
+/** Verifica se o status é terminal (sem movimentação) */
+export function isTerminalStatus(status: string): boolean {
+  return ["concluida", "cancelada"].includes(status);
 }
 
 // ── Tipos auxiliares ──────────────────────────────────────────────────────────
@@ -255,8 +323,8 @@ export function isHUOverdue(hu: UserStory, activities: Activity[]): boolean {
 export interface SprintVelocity {
   sprintId: string;
   sprintName: string;
-  planned: number; // story points planejados
-  delivered: number; // story points entregues
+  planned: number;
+  delivered: number;
 }
 
 export interface TeamWorkload {
