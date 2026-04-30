@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ShieldCheck, Save, Search, Trash2, AlertTriangle, ArrowRightLeft } from "lucide-react";
+import { ShieldCheck, Save, Search, Trash2, AlertTriangle, ArrowRightLeft, Mail, KeyRound, Copy, CheckCircle2 } from "lucide-react";
 import { fetchAllRoles, getRoleLabel, type AppRole } from "@/hooks/usePermissions";
 import { PaginationControls } from "@/shared/components/common/Pagination";
 import { usePagination } from "@/shared/hooks/usePagination";
@@ -62,6 +62,28 @@ const DELETE_INITIAL: DeleteState = {
   deleting: false,
 };
 
+interface EmailState {
+  user: UserWithRoles | null;
+  newEmail: string;
+  saving: boolean;
+}
+const EMAIL_INITIAL: EmailState = { user: null, newEmail: "", saving: false };
+
+interface ResetState {
+  user: UserWithRoles | null;
+  mode: "temp_password" | "send_link";
+  saving: boolean;
+  generatedPassword: string | null;
+  recoveryLink: string | null;
+}
+const RESET_INITIAL: ResetState = {
+  user: null,
+  mode: "temp_password",
+  saving: false,
+  generatedPassword: null,
+  recoveryLink: null,
+};
+
 const MODULE_LABELS: Record<string, string> = {
   sala_agil: "Sala Ágil",
   sustentacao: "Sustentação",
@@ -80,6 +102,8 @@ export function UserRolesManager() {
   const [searchFilter, setSearchFilter] = useState("");
   const debouncedSearch = useDebounce(searchFilter);
   const [deleteState, setDeleteState] = useState<DeleteState>(DELETE_INITIAL);
+  const [emailState, setEmailState] = useState<EmailState>(EMAIL_INITIAL);
+  const [resetState, setResetState] = useState<ResetState>(RESET_INITIAL);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -274,6 +298,77 @@ export function UserRolesManager() {
     [users, deleteState.user],
   );
 
+  // ── Trocar e-mail (envia confirmação ao novo endereço) ────────────────────
+  async function submitChangeEmail() {
+    const { user, newEmail } = emailState;
+    if (!user) return;
+    const trimmed = newEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      toast.error("E-mail inválido");
+      return;
+    }
+    if (trimmed === user.email.toLowerCase()) {
+      toast.error("O novo e-mail é igual ao atual");
+      return;
+    }
+    setEmailState((p) => ({ ...p, saving: true }));
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-user-management", {
+        body: { action: "change_email", user_id: user.user_id, new_email: trimmed },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(
+        "E-mail de confirmação enviado para o novo endereço. O usuário só passará a usá-lo após confirmar.",
+      );
+      setEmailState(EMAIL_INITIAL);
+      await fetchUsers();
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao trocar e-mail");
+      setEmailState((p) => ({ ...p, saving: false }));
+    }
+  }
+
+  // ── Reset de senha ────────────────────────────────────────────────────────
+  async function submitResetPassword() {
+    const { user, mode } = resetState;
+    if (!user) return;
+    setResetState((p) => ({ ...p, saving: true }));
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-user-management", {
+        body: { action: "reset_password", user_id: user.user_id, mode },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const result = data as any;
+      if (mode === "temp_password") {
+        setResetState((p) => ({
+          ...p,
+          saving: false,
+          generatedPassword: result.temp_password,
+        }));
+        toast.success("Senha temporária gerada. Copie e repasse ao usuário.");
+      } else {
+        setResetState((p) => ({
+          ...p,
+          saving: false,
+          recoveryLink: result.recovery_link ?? null,
+        }));
+        toast.success("Link de redefinição enviado para o e-mail do usuário.");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao redefinir senha");
+      setResetState((p) => ({ ...p, saving: false }));
+    }
+  }
+
+  function copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text).then(
+      () => toast.success("Copiado!"),
+      () => toast.error("Não foi possível copiar"),
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -345,6 +440,22 @@ export function UserRolesManager() {
                       <div className="flex gap-1.5">
                         <Button size="sm" variant="outline" onClick={() => startEditing(user)}>
                           Editar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Trocar e-mail"
+                          onClick={() => setEmailState({ user, newEmail: user.email, saving: false })}
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Resetar senha"
+                          onClick={() => setResetState({ ...RESET_INITIAL, user })}
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                           size="sm"
@@ -552,6 +663,175 @@ export function UserRolesManager() {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal: Trocar e-mail ─────────────────────────────────────────── */}
+      <Dialog
+        open={!!emailState.user}
+        onOpenChange={(open) => {
+          if (!open && !emailState.saving) setEmailState(EMAIL_INITIAL);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-primary" />
+              Trocar e-mail do usuário
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3 pt-1">
+                <p className="text-xs text-muted-foreground">
+                  Será enviado um <strong>e-mail de confirmação</strong> para o novo endereço. O acesso atual continua
+                  válido até que o usuário clique no link de validação.
+                </p>
+                <div>
+                  <Label className="text-xs font-semibold">E-mail atual</Label>
+                  <Input value={emailState.user?.email ?? ""} disabled className="h-8 mt-1 text-xs" />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold">Novo e-mail *</Label>
+                  <Input
+                    type="email"
+                    value={emailState.newEmail}
+                    onChange={(e) => setEmailState((p) => ({ ...p, newEmail: e.target.value }))}
+                    placeholder="novo@email.com"
+                    className="h-8 mt-1 text-xs"
+                    autoFocus
+                  />
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setEmailState(EMAIL_INITIAL)} disabled={emailState.saving}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={submitChangeEmail} disabled={emailState.saving}>
+              {emailState.saving ? (
+                <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1" />
+              ) : (
+                <Mail className="h-3.5 w-3.5 mr-1" />
+              )}
+              Enviar confirmação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal: Reset de senha ────────────────────────────────────────── */}
+      <Dialog
+        open={!!resetState.user}
+        onOpenChange={(open) => {
+          if (!open && !resetState.saving) setResetState(RESET_INITIAL);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-primary" />
+              Resetar senha de {resetState.user?.display_name}
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3 pt-1">
+                {resetState.generatedPassword ? (
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2 rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <p className="text-xs text-emerald-800 dark:text-emerald-300">
+                        Senha temporária gerada. <strong>Copie agora</strong> — ela não será exibida novamente. O
+                        usuário será obrigado a definir uma nova senha no próximo login.
+                      </p>
+                    </div>
+                    <Label className="text-xs font-semibold">Senha temporária</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        readOnly
+                        value={resetState.generatedPassword}
+                        className="h-9 font-mono text-sm"
+                        onFocus={(e) => e.currentTarget.select()}
+                      />
+                      <Button size="sm" type="button" onClick={() => copyToClipboard(resetState.generatedPassword!)}>
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : resetState.recoveryLink ? (
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2 rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <p className="text-xs text-emerald-800 dark:text-emerald-300">
+                        Link de redefinição gerado. Caso o e-mail não chegue, repasse este link manualmente:
+                      </p>
+                    </div>
+                    <Input
+                      readOnly
+                      value={resetState.recoveryLink}
+                      className="h-9 text-xs"
+                      onFocus={(e) => e.currentTarget.select()}
+                    />
+                    <Button size="sm" type="button" onClick={() => copyToClipboard(resetState.recoveryLink!)}>
+                      <Copy className="h-3.5 w-3.5 mr-1" />
+                      Copiar link
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">Escolha como deseja resetar a senha:</p>
+                    <div className="space-y-2">
+                      <label className="flex items-start gap-2 cursor-pointer rounded-md border p-2 hover:bg-muted/40">
+                        <input
+                          type="radio"
+                          name="reset-mode"
+                          checked={resetState.mode === "temp_password"}
+                          onChange={() => setResetState((p) => ({ ...p, mode: "temp_password" }))}
+                          className="mt-0.5"
+                        />
+                        <div>
+                          <p className="text-xs font-semibold">Gerar senha temporária</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Sistema gera uma senha forte exibida ao admin uma única vez. No próximo login, o usuário
+                            será forçado a trocá-la.
+                          </p>
+                        </div>
+                      </label>
+                      <label className="flex items-start gap-2 cursor-pointer rounded-md border p-2 hover:bg-muted/40">
+                        <input
+                          type="radio"
+                          name="reset-mode"
+                          checked={resetState.mode === "send_link"}
+                          onChange={() => setResetState((p) => ({ ...p, mode: "send_link" }))}
+                          className="mt-0.5"
+                        />
+                        <div>
+                          <p className="text-xs font-semibold">Enviar link de redefinição por e-mail</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            O usuário recebe um link no e-mail e define a própria senha (mesmo fluxo de "Esqueci minha
+                            senha").
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setResetState(RESET_INITIAL)} disabled={resetState.saving}>
+              {resetState.generatedPassword || resetState.recoveryLink ? "Fechar" : "Cancelar"}
+            </Button>
+            {!resetState.generatedPassword && !resetState.recoveryLink && (
+              <Button size="sm" onClick={submitResetPassword} disabled={resetState.saving}>
+                {resetState.saving ? (
+                  <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1" />
+                ) : (
+                  <KeyRound className="h-3.5 w-3.5 mr-1" />
+                )}
+                Confirmar reset
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

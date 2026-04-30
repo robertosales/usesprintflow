@@ -1287,6 +1287,7 @@ export type Database = {
           email: string
           id: string
           module_access: string
+          must_change_password: boolean
           updated_at: string
           user_id: string
         }
@@ -1297,6 +1298,7 @@ export type Database = {
           email?: string
           id?: string
           module_access?: string
+          must_change_password?: boolean
           updated_at?: string
           user_id: string
         }
@@ -1307,6 +1309,7 @@ export type Database = {
           email?: string
           id?: string
           module_access?: string
+          must_change_password?: boolean
           updated_at?: string
           user_id?: string
         }
