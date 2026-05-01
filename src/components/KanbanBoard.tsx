@@ -485,9 +485,11 @@ export function KanbanBoard() {
     resolveImpediment,
     activeSprint,
     workflowColumns,
+    addUserStory,
   } = useSprint();
   const { hasPermission } = useAuth();
   const canMove = hasPermission("move_kanban");
+  const canCreate = hasPermission("manage_user_stories");
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
