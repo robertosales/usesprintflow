@@ -431,9 +431,15 @@ function ExpandedColumn({
           {hus.length}
         </span>
 
-        <button className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600">
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+        {onAddCard && (
+          <button
+            onClick={onAddCard}
+            title="Adicionar HU nesta coluna"
+            className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        )}
         <button className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600">
           <Settings2 className="h-3.5 w-3.5" />
         </button>
