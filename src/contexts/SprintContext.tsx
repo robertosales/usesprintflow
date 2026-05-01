@@ -45,7 +45,7 @@ interface SprintContextType {
   addDeveloper: (dev: Omit<Developer, "id">) => Promise<void>;
   updateDeveloper: (id: string, dev: Partial<Omit<Developer, "id">>) => Promise<void>;
   removeDeveloper: (id: string) => Promise<void>;
-  addUserStory: (hu: Omit<UserStory, "id" | "code" | "createdAt" | "status" | "impediments">) => Promise<void>;
+  addUserStory: (hu: Omit<UserStory, "id" | "code" | "createdAt" | "impediments"> & { status?: string }) => Promise<void>;
   updateUserStory: (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => Promise<void>;
   removeUserStory: (id: string) => Promise<void>;
   updateUserStoryStatus: (id: string, status: KanbanStatus) => Promise<void>;
@@ -349,7 +349,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   };
 
   // ── USER STORIES ──────────────────────────────────────────────────────────
-  const addUserStory = async (hu: Omit<UserStory, "id" | "code" | "createdAt" | "status" | "impediments">) => {
+  const addUserStory = async (hu: Omit<UserStory, "id" | "code" | "createdAt" | "impediments"> & { status?: string }) => {
     if (!teamId) return;
     const count = userStories.length + 1;
     const firstCol = workflowColumns[0]?.key || "aguardando_desenvolvimento";
@@ -362,7 +362,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       description: hu.description,
       story_points: hu.storyPoints,
       priority: hu.priority,
-      status: firstCol,
+      status: hu.status || firstCol,
       custom_fields: hu.customFields || {},
       start_date: hu.startDate || null,
       end_date: hu.endDate || null,
@@ -766,10 +766,22 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
   const reorderWorkflowColumns = async (columns: WorkflowColumn[]) => {
     if (!teamId) return;
+    const normalized = normalizeWorkflowColumns(columns);
     for (let i = 0; i < columns.length; i++) {
-      await supabase.from("workflow_columns").update({ sort_order: i }).eq("team_id", teamId).eq("key", columns[i].key);
+      const c = normalized[i];
+      await supabase
+        .from("workflow_columns")
+        .update({
+          sort_order: i,
+          label: c.label,
+          color_class: c.colorClass || "",
+          dot_color: c.dotColor || "",
+          hex: c.hex || null,
+        })
+        .eq("team_id", teamId)
+        .eq("key", c.key);
     }
-    setWorkflowColumnsState(normalizeWorkflowColumns(columns));
+    setWorkflowColumnsState(normalized);
   };
 
   return (

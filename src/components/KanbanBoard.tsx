@@ -384,6 +384,7 @@ function ExpandedColumn({
   updateUserStoryStatus,
   workflowColumns,
   canMove,
+  onAddCard,
 }: {
   col: WorkflowColumn;
   hus: UserStory[];
@@ -398,6 +399,7 @@ function ExpandedColumn({
   updateUserStoryStatus: (id: string, status: string) => void;
   workflowColumns: WorkflowColumn[];
   canMove: boolean;
+  onAddCard?: () => void;
 }) {
   return (
     <div
@@ -429,9 +431,15 @@ function ExpandedColumn({
           {hus.length}
         </span>
 
-        <button className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600">
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+        {onAddCard && (
+          <button
+            onClick={onAddCard}
+            title="Adicionar HU nesta coluna"
+            className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        )}
         <button className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600">
           <Settings2 className="h-3.5 w-3.5" />
         </button>
@@ -485,9 +493,11 @@ export function KanbanBoard() {
     resolveImpediment,
     activeSprint,
     workflowColumns,
+    addUserStory,
   } = useSprint();
   const { hasPermission } = useAuth();
   const canMove = hasPermission("move_kanban");
+  const canCreate = hasPermission("create_backlog");
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
@@ -627,6 +637,25 @@ export function KanbanBoard() {
                 updateUserStoryStatus={updateUserStoryStatus}
                 workflowColumns={workflowColumns}
                 canMove={canMove}
+                onAddCard={
+                  canCreate && activeSprint
+                    ? () => {
+                        const title = window.prompt("Título da nova HU:");
+                        if (!title || !title.trim()) return;
+                        addUserStory({
+                          title: title.trim(),
+                          description: "",
+                          storyPoints: 0,
+                          priority: "media",
+                          sprintId: activeSprint.id,
+                          status: col.key,
+                          customFields: {},
+                        } as any)
+                          .then(() => toast.success(`HU criada em "${col.label}"`))
+                          .catch(() => toast.error("Erro ao criar HU"));
+                      }
+                    : undefined
+                }
               />
             );
           })}

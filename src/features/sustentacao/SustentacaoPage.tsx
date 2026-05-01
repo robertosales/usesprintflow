@@ -3,9 +3,11 @@ import { SustentacaoBoard } from "./components/SustentacaoBoard";
 import type { Demanda } from "./types/demanda";
 import { useDemandas } from "./hooks/useDemandas";
 import { DemandaDetail } from "./components/DemandaDetail";
+import { DemandaForm } from "./components/DemandaForm";
+import { toast } from "sonner";
 
 export default function SustentacaoPage() {
-  const { demandas, loading, update, moveTo } = useDemandas();
+  const { demandas, loading, update, moveTo, create } = useDemandas();
   const [selected, setSelected] = useState<Demanda | null>(null);
   const [createSituacao, setCreateSituacao] = useState<string | undefined>();
   const [showCreate, setShowCreate] = useState(false);
@@ -53,6 +55,20 @@ export default function SustentacaoPage() {
         demandas={demandas}
         onCreateDemanda={handleCreateDemanda}
         onSelectDemanda={handleSelectDemanda}
+      />
+      <DemandaForm
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        situacaoInicial={createSituacao}
+        onSubmit={async (data) => {
+          try {
+            await create(data as Partial<Demanda>);
+            toast.success("Demanda criada com sucesso!");
+            setShowCreate(false);
+          } catch (e: any) {
+            toast.error("Erro ao criar demanda: " + (e?.message ?? ""));
+          }
+        }}
       />
     </div>
   );
