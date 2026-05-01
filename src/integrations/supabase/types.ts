@@ -1971,29 +1971,35 @@ export type Database = {
         Row: {
           color_class: string
           dot_color: string
+          hex: string | null
           id: string
           key: string
           label: string
           sort_order: number
           team_id: string
+          wip_limit: number | null
         }
         Insert: {
           color_class: string
           dot_color: string
+          hex?: string | null
           id?: string
           key: string
           label: string
           sort_order?: number
           team_id: string
+          wip_limit?: number | null
         }
         Update: {
           color_class?: string
           dot_color?: string
+          hex?: string | null
           id?: string
           key?: string
           label?: string
           sort_order?: number
           team_id?: string
+          wip_limit?: number | null
         }
         Relationships: [
           {
