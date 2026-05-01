@@ -2,19 +2,8 @@ import { useState, useMemo } from "react";
 import { ChevronDown, ChevronRight, Plus, Settings2, Search, X, Clock, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-// ── Tipo local de Demanda (subset dos campos usados no board) ─────────────────
-// Se @/types/demanda existir no seu projeto, substitua por:
-//   import type { Demanda } from "@/types/demanda";
-export interface Demanda {
-  id?: string;
-  situacao?: string;
-  descricao?: string | null;
-  tipo?: string | null;
-  projeto?: string | null;
-  rhm?: string | null;
-  prazosolucao?: string | null;
-  [key: string]: unknown;
-}
+import type { Demanda } from "../types/demanda";
+export type { Demanda };
 
 // ── Constantes de workflow (espelho de DemandaDetail) ─────────────────────────
 // Mantido inline para evitar dependência de @/components/DemandaDetail
