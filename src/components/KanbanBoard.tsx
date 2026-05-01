@@ -384,6 +384,7 @@ function ExpandedColumn({
   updateUserStoryStatus,
   workflowColumns,
   canMove,
+  onAddCard,
 }: {
   col: WorkflowColumn;
   hus: UserStory[];
@@ -398,6 +399,7 @@ function ExpandedColumn({
   updateUserStoryStatus: (id: string, status: string) => void;
   workflowColumns: WorkflowColumn[];
   canMove: boolean;
+  onAddCard?: () => void;
 }) {
   return (
     <div
