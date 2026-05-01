@@ -10,7 +10,7 @@ import Auth from "./pages/Auth.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import ForcePasswordChange from "./pages/ForcePasswordChange.tsx";
-import { SustentacaoPage } from "./features/sustentacao/SustentacaoPage";
+import SustentacaoPage from "./features/sustentacao/SustentacaoPage";
 import { ModuleSelector } from "./features/sustentacao/components/ModuleSelector";
 
 const queryClient = new QueryClient();

@@ -2,19 +2,8 @@ import { useState, useMemo } from "react";
 import { ChevronDown, ChevronRight, Plus, Settings2, Search, X, Clock, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-// ── Tipo local de Demanda (subset dos campos usados no board) ─────────────────
-// Se @/types/demanda existir no seu projeto, substitua por:
-//   import type { Demanda } from "@/types/demanda";
-export interface Demanda {
-  id?: string;
-  situacao?: string;
-  descricao?: string | null;
-  tipo?: string | null;
-  projeto?: string | null;
-  rhm?: string | null;
-  prazosolucao?: string | null;
-  [key: string]: unknown;
-}
+import type { Demanda } from "../types/demanda";
+export type { Demanda };
 
 // ── Constantes de workflow (espelho de DemandaDetail) ─────────────────────────
 // Mantido inline para evitar dependência de @/components/DemandaDetail
@@ -66,9 +55,10 @@ function hexAlpha(hex: string, a: number) {
 }
 
 function slaDaysRemaining(demanda: Demanda): number | null {
-  if (!demanda.prazosolucao) return null;
+  const prazo = (demanda as unknown as { prazosolucao?: string | null }).prazosolucao;
+  if (!prazo) return null;
   const now = new Date();
-  const dead = new Date(demanda.prazosolucao as string);
+  const dead = new Date(prazo);
   return Math.round((dead.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
