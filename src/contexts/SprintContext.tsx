@@ -45,7 +45,7 @@ interface SprintContextType {
   addDeveloper: (dev: Omit<Developer, "id">) => Promise<void>;
   updateDeveloper: (id: string, dev: Partial<Omit<Developer, "id">>) => Promise<void>;
   removeDeveloper: (id: string) => Promise<void>;
-  addUserStory: (hu: Omit<UserStory, "id" | "code" | "createdAt" | "status" | "impediments">) => Promise<void>;
+  addUserStory: (hu: Omit<UserStory, "id" | "code" | "createdAt" | "impediments"> & { status?: string }) => Promise<void>;
   updateUserStory: (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => Promise<void>;
   removeUserStory: (id: string) => Promise<void>;
   updateUserStoryStatus: (id: string, status: KanbanStatus) => Promise<void>;
