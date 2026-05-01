@@ -489,7 +489,7 @@ export function KanbanBoard() {
   } = useSprint();
   const { hasPermission } = useAuth();
   const canMove = hasPermission("move_kanban");
-  const canCreate = hasPermission("manage_user_stories");
+  const canCreate = hasPermission("create_backlog");
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
