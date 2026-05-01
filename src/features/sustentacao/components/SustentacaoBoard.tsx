@@ -55,9 +55,10 @@ function hexAlpha(hex: string, a: number) {
 }
 
 function slaDaysRemaining(demanda: Demanda): number | null {
-  if (!demanda.prazosolucao) return null;
+  const prazo = (demanda as unknown as { prazosolucao?: string | null }).prazosolucao;
+  if (!prazo) return null;
   const now = new Date();
-  const dead = new Date(demanda.prazosolucao as string);
+  const dead = new Date(prazo);
   return Math.round((dead.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
