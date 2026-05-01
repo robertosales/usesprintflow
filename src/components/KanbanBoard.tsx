@@ -637,6 +637,25 @@ export function KanbanBoard() {
                 updateUserStoryStatus={updateUserStoryStatus}
                 workflowColumns={workflowColumns}
                 canMove={canMove}
+                onAddCard={
+                  canCreate && activeSprint
+                    ? () => {
+                        const title = window.prompt("Título da nova HU:");
+                        if (!title || !title.trim()) return;
+                        addUserStory({
+                          title: title.trim(),
+                          description: "",
+                          storyPoints: 0,
+                          priority: "media",
+                          sprintId: activeSprint.id,
+                          status: col.key,
+                          customFields: {},
+                        } as any)
+                          .then(() => toast.success(`HU criada em "${col.label}"`))
+                          .catch(() => toast.error("Erro ao criar HU"));
+                      }
+                    : undefined
+                }
               />
             );
           })}
