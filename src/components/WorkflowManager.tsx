@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSprint } from "@/contexts/SprintContext";
-import { COLUMN_COLOR_OPTIONS, WorkflowColumn, DEFAULT_KANBAN_COLUMNS } from "@/types/sprint";
+import { COLUMN_COLOR_OPTIONS, WorkflowColumn, DEFAULT_KANBAN_COLUMNS, getColumnHex } from "@/types/sprint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -79,7 +79,13 @@ export function WorkflowManager() {
     markChanged(
       draft.map((c) =>
         c.key === editingKey
-          ? { ...c, label: editLabel.trim(), colorClass: colorOpt.colorClass, dotColor: colorOpt.dotColor }
+          ? {
+              ...c,
+              label: editLabel.trim(),
+              colorClass: colorOpt.colorClass,
+              dotColor: colorOpt.dotColor,
+              hex: getColumnHex({ ...c, dotColor: colorOpt.dotColor, hex: undefined as any }),
+            }
           : c
       )
     );
