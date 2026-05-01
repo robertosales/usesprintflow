@@ -349,7 +349,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   };
 
   // ── USER STORIES ──────────────────────────────────────────────────────────
-  const addUserStory = async (hu: Omit<UserStory, "id" | "code" | "createdAt" | "status" | "impediments">) => {
+  const addUserStory = async (hu: Omit<UserStory, "id" | "code" | "createdAt" | "impediments"> & { status?: string }) => {
     if (!teamId) return;
     const count = userStories.length + 1;
     const firstCol = workflowColumns[0]?.key || "aguardando_desenvolvimento";
@@ -362,7 +362,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       description: hu.description,
       story_points: hu.storyPoints,
       priority: hu.priority,
-      status: firstCol,
+      status: hu.status || firstCol,
       custom_fields: hu.customFields || {},
       start_date: hu.startDate || null,
       end_date: hu.endDate || null,
