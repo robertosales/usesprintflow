@@ -766,10 +766,22 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
   const reorderWorkflowColumns = async (columns: WorkflowColumn[]) => {
     if (!teamId) return;
+    const normalized = normalizeWorkflowColumns(columns);
     for (let i = 0; i < columns.length; i++) {
-      await supabase.from("workflow_columns").update({ sort_order: i }).eq("team_id", teamId).eq("key", columns[i].key);
+      const c = normalized[i];
+      await supabase
+        .from("workflow_columns")
+        .update({
+          sort_order: i,
+          label: c.label,
+          color_class: c.colorClass || "",
+          dot_color: c.dotColor || "",
+          hex: c.hex || null,
+        })
+        .eq("team_id", teamId)
+        .eq("key", c.key);
     }
-    setWorkflowColumnsState(normalizeWorkflowColumns(columns));
+    setWorkflowColumnsState(normalized);
   };
 
   return (
