@@ -14,25 +14,34 @@ import { buildAnalistasDedup, analistaMatches } from "../../utils/analistasDedup
 
 const META_SLA = 95; // %
 
+function today() { return new Date().toISOString().split("T")[0]; }
+function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split("T")[0]; }
+function fmtDateBR(d: string) { return d ? new Date(d).toLocaleDateString("pt-BR") : "—"; }
+
 export function RelatorioSLA() {
   const { demandas } = useDemandas();
   const { transitions } = useAllTransitions();
   const profiles = useProfiles();
   const [periodo, setPeriodo] = useState('30');
+  const [dataInicio, setDataInicio] = useState(daysAgo(30));
+  const [dataFim, setDataFim] = useState(today());
   const [analista, setAnalista] = useState('all');
   const [teamId, setTeamId] = useState('all');
 
   const filtered = useMemo(() => {
     let items = demandas;
     if (teamId !== 'all') items = items.filter(d => d.team_id === teamId);
-    if (periodo !== 'all') {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - parseInt(periodo));
-      items = items.filter(d => new Date(d.created_at) >= cutoff);
+    if (dataInicio) {
+      const ini = new Date(dataInicio + 'T00:00:00');
+      items = items.filter(d => new Date(d.created_at) >= ini);
+    }
+    if (dataFim) {
+      const fim = new Date(dataFim + 'T23:59:59');
+      items = items.filter(d => new Date(d.created_at) <= fim);
     }
     if (analista !== 'all') items = items.filter(d => analistaMatches(analista, d.responsavel_dev));
     return items;
-  }, [demandas, periodo, analista, teamId]);
+  }, [demandas, dataInicio, dataFim, analista, teamId]);
 
   const sla = useMemo(() => calcSLA(filtered, transitions), [filtered, transitions]);
 
@@ -81,18 +90,31 @@ export function RelatorioSLA() {
 
   return (
     <div className="space-y-5">
-      <ReportHeader tipoRelatorio={reportCfg.titulo} periodo={periodo} modulo={reportCfg.modulo} />
+      <ReportHeader tipoRelatorio={reportCfg.titulo} periodo={`${fmtDateBR(dataInicio)} a ${fmtDateBR(dataFim)}`} modulo={reportCfg.modulo} />
 
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-semibold">{reportCfg.titulo.replace('Relatório — ', '')}</h2>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Shield className="h-5 w-5 text-primary" />
+            {reportCfg.titulo.replace('Relatório — ', '')}
+            {analista !== 'all' && (
+              <Badge variant="secondary" className="ml-1 text-xs font-normal">
+                {analistas.find(a => a.user_id === analista)?.display_name || analista}
+              </Badge>
+            )}
+          </h2>
           <p className="text-sm text-muted-foreground">{reportCfg.subtitulo} · Meta: ≥ {META_SLA}%</p>
         </div>
-        <div className="flex items-center gap-2">
-          <ReportFilters periodo={periodo} setPeriodo={setPeriodo} analista={analista} setAnalista={setAnalista} analistas={analistas} teamId={teamId} setTeamId={setTeamId} />
-          <ExportButton getData={getExportData} />
-        </div>
+        <ExportButton getData={getExportData} />
       </div>
+
+      <ReportFilters
+        periodo={periodo} setPeriodo={setPeriodo}
+        analista={analista} setAnalista={setAnalista} analistas={analistas}
+        teamId={teamId} setTeamId={setTeamId}
+        dataInicio={dataInicio} setDataInicio={setDataInicio}
+        dataFim={dataFim} setDataFim={setDataFim}
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
