@@ -26,10 +26,21 @@ import {
   X,
   Bug,
   ArrowRightLeft,
+  Flag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ImpedimentDialog } from "@/components/ImpedimentManager";
 import { QuickActivityDialog } from "@/components/QuickActivityDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -494,10 +505,12 @@ export function KanbanBoard() {
     activeSprint,
     workflowColumns,
     addUserStory,
+    updateSprint,
   } = useSprint();
   const { hasPermission } = useAuth();
   const canMove = hasPermission("move_kanban");
   const canCreate = hasPermission("create_backlog");
+  const canCloseSprint = hasPermission("manage_sprints") || hasPermission("create_backlog");
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
@@ -506,6 +519,8 @@ export function KanbanBoard() {
   const [impedimentDialog, setImpedimentDialog] = useState<string | null>(null);
   const [quickTaskHU, setQuickTaskHU] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [confirmCloseSprint, setConfirmCloseSprint] = useState(false);
+  const [closingSprint, setClosingSprint] = useState(false);
 
   const toggle = useCallback(
     (key: string) =>
@@ -545,6 +560,27 @@ export function KanbanBoard() {
   };
 
   const activeHU = activeId ? sprintStories.find((h) => h.id === activeId) : null;
+
+  const huStats = useMemo(() => {
+    if (!activeSprint) return { done: 0, total: 0, open: 0 };
+    const lastCol = workflowColumns[workflowColumns.length - 1]?.key;
+    const done = sprintStories.filter((h) => h.status === lastCol || h.status === "done").length;
+    return { done, total: sprintStories.length, open: sprintStories.length - done };
+  }, [activeSprint, sprintStories, workflowColumns]);
+
+  const handleCloseSprint = async () => {
+    if (!activeSprint) return;
+    setClosingSprint(true);
+    try {
+      await updateSprint(activeSprint.id, { isActive: false });
+      toast.success(`Sprint "${activeSprint.name}" encerrada com sucesso`);
+      setConfirmCloseSprint(false);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao encerrar sprint");
+    } finally {
+      setClosingSprint(false);
+    }
+  };
 
   if (!activeSprint) {
     return (
@@ -595,6 +631,19 @@ export function KanbanBoard() {
           {activeSprint.name}
           <span className="text-muted-foreground">· {sprintStories.length} HUs</span>
         </Badge>
+
+        {canCloseSprint && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/5 hover:text-destructive"
+            onClick={() => setConfirmCloseSprint(true)}
+            title="Encerrar sprint atual"
+          >
+            <Flag className="h-3.5 w-3.5" />
+            Encerrar Sprint
+          </Button>
+        )}
       </div>
 
       {/* board */}
@@ -687,6 +736,39 @@ export function KanbanBoard() {
       {quickTaskHU && (
         <QuickActivityDialog open={!!quickTaskHU} onClose={() => setQuickTaskHU(null)} huId={quickTaskHU} />
       )}
+
+      <AlertDialog open={confirmCloseSprint} onOpenChange={setConfirmCloseSprint}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Encerrar a Sprint atual?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você está prestes a encerrar a sprint <strong>{activeSprint?.name}</strong>.
+              <br />
+              <span className="block mt-2 text-xs">
+                Resumo: {huStats.total} HU(s) — {huStats.done} concluída(s) · {huStats.open} em aberto.
+              </span>
+              {huStats.open > 0 && (
+                <span className="block mt-2 text-amber-600 text-xs">
+                  ⚠️ Há HUs em aberto. Considere movê-las para o backlog ou para a próxima sprint antes de encerrar.
+                </span>
+              )}
+              <span className="block mt-2 text-xs text-muted-foreground">
+                A sprint deixará de ser exibida no board, mas o histórico será preservado.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={closingSprint}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCloseSprint}
+              disabled={closingSprint}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {closingSprint ? "Encerrando…" : "Encerrar Sprint"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

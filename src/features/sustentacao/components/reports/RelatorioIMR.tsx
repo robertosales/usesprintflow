@@ -12,13 +12,19 @@ import * as eventosSvc from "../../services/eventos.service";
 import { REPORT_CONFIGS } from "../../utils/reportConfig";
 import { ReportHeader } from "./ReportHeader";
 import { ReportFilters } from "./ReportFilters";
-import { Download } from "lucide-react";
+import { Download, BarChart3 } from "lucide-react";
+
+function today() { return new Date().toISOString().split("T")[0]; }
+function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split("T")[0]; }
+function fmtDateBR(d: string) { return d ? new Date(d).toLocaleDateString("pt-BR") : "—"; }
 
 export function RelatorioIMR() {
   const { demandas } = useDemandas();
   const { currentTeamId, profile } = useAuth();
   const [eventos, setEventos] = useState<DemandaEvento[]>([]);
   const [filterPeriodo, setFilterPeriodo] = useState('30');
+  const [dataInicio, setDataInicio] = useState(daysAgo(30));
+  const [dataFim, setDataFim] = useState(today());
   const [teamId, setTeamId] = useState('all');
 
   const loadEventos = useCallback(async () => {
@@ -31,13 +37,16 @@ export function RelatorioIMR() {
   const filtered = useMemo(() => {
     let items = demandas as unknown as DemandaIMR[];
     if (teamId !== 'all') items = items.filter(d => d.team_id === teamId);
-    if (filterPeriodo !== 'all') {
-      const days = parseInt(filterPeriodo);
-      const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
-      items = items.filter(d => new Date(d.created_at) >= cutoff);
+    if (dataInicio) {
+      const ini = new Date(dataInicio + 'T00:00:00');
+      items = items.filter(d => new Date(d.created_at) >= ini);
+    }
+    if (dataFim) {
+      const fim = new Date(dataFim + 'T23:59:59');
+      items = items.filter(d => new Date(d.created_at) <= fim);
     }
     return items;
-  }, [demandas, filterPeriodo, teamId]);
+  }, [demandas, dataInicio, dataFim, teamId]);
 
   const iap = useMemo(() => calcIAP(filtered), [filtered]);
   const iqs = useMemo(() => calcIQS(filtered), [filtered]);
@@ -80,13 +89,28 @@ export function RelatorioIMR() {
 
   return (
     <div className="space-y-6">
-      <ReportHeader tipoRelatorio={REPORT_CONFIGS.sustentacao_imr.titulo} periodo={filterPeriodo} />
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <ReportFilters periodo={filterPeriodo} setPeriodo={setFilterPeriodo} showAnalista={false} teamId={teamId} setTeamId={setTeamId} />
+      <ReportHeader tipoRelatorio={REPORT_CONFIGS.sustentacao_imr.titulo} periodo={`${fmtDateBR(dataInicio)} a ${fmtDateBR(dataFim)}`} />
+
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            {REPORT_CONFIGS.sustentacao_imr.titulo.replace('Relatório — ', '')}
+          </h2>
+          <p className="text-sm text-muted-foreground">{REPORT_CONFIGS.sustentacao_imr.subtitulo}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5"><Download className="h-4 w-4" />Exportar CSV</Button>
+        <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
+          <Download className="h-4 w-4" />Exportar CSV
+        </Button>
       </div>
+
+      <ReportFilters
+        periodo={filterPeriodo} setPeriodo={setFilterPeriodo}
+        showAnalista={false}
+        teamId={teamId} setTeamId={setTeamId}
+        dataInicio={dataInicio} setDataInicio={setDataInicio}
+        dataFim={dataFim} setDataFim={setDataFim}
+      />
 
       {/* Resumo Executivo */}
       <Card>
