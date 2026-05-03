@@ -25,7 +25,6 @@ export function RelatorioIMR() {
   const [filterPeriodo, setFilterPeriodo] = useState('30');
   const [dataInicio, setDataInicio] = useState(daysAgo(30));
   const [dataFim, setDataFim] = useState(today());
-  const [teamId, setTeamId] = useState('all');
 
   const loadEventos = useCallback(async () => {
     if (!currentTeamId) return;
@@ -36,7 +35,6 @@ export function RelatorioIMR() {
 
   const filtered = useMemo(() => {
     let items = demandas as unknown as DemandaIMR[];
-    if (teamId !== 'all') items = items.filter(d => d.team_id === teamId);
     if (dataInicio) {
       const ini = new Date(dataInicio + 'T00:00:00');
       items = items.filter(d => new Date(d.created_at) >= ini);
@@ -46,7 +44,7 @@ export function RelatorioIMR() {
       items = items.filter(d => new Date(d.created_at) <= fim);
     }
     return items;
-  }, [demandas, dataInicio, dataFim, teamId]);
+  }, [demandas, dataInicio, dataFim]);
 
   const iap = useMemo(() => calcIAP(filtered), [filtered]);
   const iqs = useMemo(() => calcIQS(filtered), [filtered]);
@@ -107,7 +105,6 @@ export function RelatorioIMR() {
       <ReportFilters
         periodo={filterPeriodo} setPeriodo={setFilterPeriodo}
         showAnalista={false}
-        teamId={teamId} setTeamId={setTeamId}
         dataInicio={dataInicio} setDataInicio={setDataInicio}
         dataFim={dataFim} setDataFim={setDataFim}
       />
