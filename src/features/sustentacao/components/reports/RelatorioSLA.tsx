@@ -26,11 +26,9 @@ export function RelatorioSLA() {
   const [dataInicio, setDataInicio] = useState(daysAgo(30));
   const [dataFim, setDataFim] = useState(today());
   const [analista, setAnalista] = useState('all');
-  const [teamId, setTeamId] = useState('all');
 
   const filtered = useMemo(() => {
     let items = demandas;
-    if (teamId !== 'all') items = items.filter(d => d.team_id === teamId);
     if (dataInicio) {
       const ini = new Date(dataInicio + 'T00:00:00');
       items = items.filter(d => new Date(d.created_at) >= ini);
@@ -41,13 +39,19 @@ export function RelatorioSLA() {
     }
     if (analista !== 'all') items = items.filter(d => analistaMatches(analista, d.responsavel_dev));
     return items;
-  }, [demandas, dataInicio, dataFim, analista, teamId]);
+  }, [demandas, dataInicio, dataFim, analista]);
 
   const sla = useMemo(() => calcSLA(filtered, transitions), [filtered, transitions]);
 
   const analistas = useMemo(() => {
-    const ids = [...new Set(demandas.map(d => d.responsavel_dev).filter(Boolean))] as string[];
-    return buildAnalistasDedup(ids, profiles);
+    const profileIds = new Set(profiles.map(p => p.user_id));
+    const idSet = new Set<string>();
+    demandas.forEach(d => {
+      [d.responsavel_dev, d.responsavel_requisitos, d.responsavel_teste, d.responsavel_arquiteto]
+        .filter((id): id is string => !!id && profileIds.has(id))
+        .forEach(id => idSet.add(id));
+    });
+    return buildAnalistasDedup([...idSet], profiles);
   }, [demandas, profiles]);
 
   const maiorViolacao = useMemo(() => {
@@ -111,7 +115,6 @@ export function RelatorioSLA() {
       <ReportFilters
         periodo={periodo} setPeriodo={setPeriodo}
         analista={analista} setAnalista={setAnalista} analistas={analistas}
-        teamId={teamId} setTeamId={setTeamId}
         dataInicio={dataInicio} setDataInicio={setDataInicio}
         dataFim={dataFim} setDataFim={setDataFim}
       />

@@ -37,13 +37,9 @@ export function RelatorioTempoMedio() {
   const [dataInicio, setDataInicio] = useState(daysAgo(30));
   const [dataFim, setDataFim] = useState(today());
   const [analista, setAnalista] = useState('all');
-  const [teamId, setTeamId] = useState('all');
 
   const filtered = useMemo(() => {
     let items = demandas;
-    if (teamId !== 'all') {
-      items = items.filter(d => d.team_id === teamId);
-    }
     if (dataInicio) {
       const ini = new Date(dataInicio + 'T00:00:00');
       items = items.filter(d => new Date(d.created_at) >= ini);
@@ -59,7 +55,7 @@ export function RelatorioTempoMedio() {
       items = items.filter(d => analistaMatches(analista, d.responsavel_dev) || demandaIdsFromTransitions.has(d.id));
     }
     return items;
-  }, [demandas, dataInicio, dataFim, analista, transitions, teamId]);
+  }, [demandas, dataInicio, dataFim, analista, transitions]);
 
   const tempos = useMemo(() => calcTempos(filtered, transitions), [filtered, transitions]);
 
@@ -98,11 +94,17 @@ export function RelatorioTempoMedio() {
   }, [filtered, transitions, profiles]);
 
   const analistas = useMemo(() => {
+    // Igual à Produtividade: somente analistas que são responsáveis das demandas
+    // e que possuem perfil cadastrado (evita duplicatas tipo "Samuel T").
+    const profileIds = new Set(profiles.map(p => p.user_id));
     const idSet = new Set<string>();
-    demandas.forEach(d => { if (d.responsavel_dev) idSet.add(d.responsavel_dev); });
-    transitions.forEach(t => { if (demandas.some(d => d.id === t.demanda_id)) idSet.add(t.user_id); });
+    demandas.forEach(d => {
+      [d.responsavel_dev, d.responsavel_requisitos, d.responsavel_teste, d.responsavel_arquiteto]
+        .filter((id): id is string => !!id && profileIds.has(id))
+        .forEach(id => idSet.add(id));
+    });
     return buildAnalistasDedup([...idSet], profiles);
-  }, [demandas, transitions, profiles]);
+  }, [demandas, profiles]);
 
   // Totals row
   const totals = useMemo(() => {
@@ -155,8 +157,6 @@ export function RelatorioTempoMedio() {
         analista={analista}
         setAnalista={setAnalista}
         analistas={analistas}
-        teamId={teamId}
-        setTeamId={setTeamId}
         dataInicio={dataInicio}
         setDataInicio={setDataInicio}
         dataFim={dataFim}
