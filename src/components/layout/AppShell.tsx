@@ -172,8 +172,8 @@ function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: 
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <button className="w-full flex items-center justify-center p-2 rounded-md hover:bg-white/[0.06] transition-colors">
-            <Building2 className="h-4 w-4 text-white/35" />
+          <button className="w-full flex items-center justify-center p-2 rounded-md hover:bg-sidebar-accent transition-colors">
+            <Building2 className="h-4 w-4 text-muted-foreground" />
           </button>
         </TooltipTrigger>
         <TooltipContent side="right" className="text-xs">
@@ -185,17 +185,17 @@ function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-white/[0.05] transition-colors group">
-          <div className="h-7 w-7 rounded-lg bg-white/[0.07] flex items-center justify-center shrink-0 border border-white/[0.08]">
-            <Building2 className="h-3.5 w-3.5 text-white/40" />
+        <button className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors group">
+          <div className="h-7 w-7 rounded-lg bg-sidebar-accent flex items-center justify-center shrink-0 border border-border">
+            <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
           </div>
           <div className="flex-1 text-left min-w-0">
-            <p className="text-[10px] text-white/30 leading-none mb-0.5 uppercase tracking-wider">Time ativo</p>
-            <p className="text-[12px] font-medium text-white/80 truncate leading-none">
+            <p className="text-[10px] text-muted-foreground leading-none mb-0.5 uppercase tracking-wider">Time ativo</p>
+            <p className="text-[12px] font-medium text-sidebar-foreground truncate leading-none">
               {activeTeam?.name ?? "Selecionar time"}
             </p>
           </div>
-          <ChevronsUpDown className="h-3.5 w-3.5 text-white/25 group-hover:text-white/50 transition-colors shrink-0" />
+          <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors shrink-0" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="right" className="w-52">
@@ -246,11 +246,14 @@ function NavItemButton({
       className={cn(
         "w-full flex items-center rounded-lg transition-all duration-150 group relative",
         collapsed ? "justify-center h-9 w-9 mx-auto" : "gap-2.5 px-3 py-2",
-        isActive ? "text-white" : "text-white/40 hover:text-white/75 hover:bg-white/[0.04]",
+        isActive ? "text-white" : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent",
       )}
       style={
         isActive
-          ? { backgroundColor: accent.hexAlpha(0.18), boxShadow: `inset 0 0 0 1px ${accent.hexAlpha(0.25)}` }
+          ? {
+              backgroundColor: accent.hexAlpha(0.18),
+              boxShadow: `inset 0 0 0 1px ${accent.hexAlpha(0.25)}`,
+            }
           : {}
       }
     >
@@ -322,11 +325,11 @@ function SidebarNav({
       {groups.map(({ group, items: groupItems }) => (
         <div key={group}>
           {!collapsed && (
-            <p className="px-3 pb-1 text-[9px] font-bold tracking-[0.12em] text-white/20 uppercase select-none">
+            <p className="px-3 pb-1 text-[9px] font-bold tracking-[0.12em] text-muted-foreground/50 uppercase select-none">
               {GROUP_LABELS[group]}
             </p>
           )}
-          {collapsed && group !== "main" && <div className="h-px bg-white/[0.06] mx-1 my-1" />}
+          {collapsed && group !== "main" && <div className="h-px bg-border mx-1 my-1" />}
           <div className={cn("space-y-0.5", collapsed && "flex flex-col items-center")}>
             {groupItems.map((item) => (
               <NavItemButton
@@ -359,7 +362,7 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
                 "flex w-full items-center justify-center rounded-lg p-2 transition-all",
                 module === "sala_agil"
                   ? "bg-[rgba(1,105,111,0.25)] text-[#4f98a3]"
-                  : "text-white/30 hover:text-white/60 hover:bg-white/[0.04]",
+                  : "text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent",
               )}
             >
               <Zap className="h-3.5 w-3.5" />
@@ -377,7 +380,7 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
                 "flex w-full items-center justify-center rounded-lg p-2 transition-all",
                 module === "sustentacao"
                   ? "bg-amber-500/20 text-amber-400"
-                  : "text-white/30 hover:text-white/60 hover:bg-white/[0.04]",
+                  : "text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent",
               )}
             >
               <Wrench className="h-3.5 w-3.5" />
@@ -391,14 +394,14 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
     );
   }
   return (
-    <div className="mx-2 mb-2 flex items-center gap-1 rounded-xl bg-white/[0.04] p-1 border border-white/[0.06]">
+    <div className="mx-2 mb-2 flex items-center gap-1 rounded-xl bg-sidebar-accent p-1 border border-border">
       <button
         onClick={() => navigate("/sala-agil")}
         className={cn(
           "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-all",
           module === "sala_agil"
             ? "bg-[rgba(1,105,111,0.35)] text-[#4f98a3] shadow-sm"
-            : "text-white/35 hover:text-white/60",
+            : "text-sidebar-foreground/40 hover:text-sidebar-foreground",
         )}
       >
         <Zap className="h-3 w-3" /> Ágil
@@ -407,7 +410,9 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
         onClick={() => navigate("/sustentacao")}
         className={cn(
           "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-all",
-          module === "sustentacao" ? "bg-amber-500/25 text-amber-400 shadow-sm" : "text-white/35 hover:text-white/60",
+          module === "sustentacao"
+            ? "bg-amber-500/25 text-amber-400 shadow-sm"
+            : "text-sidebar-foreground/40 hover:text-sidebar-foreground",
         )}
       >
         <Wrench className="h-3 w-3" /> Sust.
@@ -419,8 +424,10 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
 // ─── DarkModeToggle ───────────────────────────────────────────────────────────
 function DarkModeToggle() {
   const [isDark, setIsDark] = useState(() => {
-    const saved = sessionStorage.getItem("theme");
-    if (saved) return saved === "dark";
+    try {
+      const saved = sessionStorage.getItem("theme");
+      if (saved) return saved === "dark";
+    } catch {}
     return document.documentElement.classList.contains("dark");
   });
 
@@ -444,8 +451,8 @@ function DarkModeToggle() {
         <button
           onClick={() => setIsDark((d) => !d)}
           aria-label="Alternar modo escuro"
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-white/40
-            hover:bg-white/[0.07] hover:text-white/70 transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground
+            hover:bg-sidebar-accent hover:text-foreground transition-colors"
         >
           {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
@@ -471,25 +478,26 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
   const pageLabel = activeItem?.label ?? "Dashboard";
   const Icon = activeItem?.icon;
   return (
-    <header
-      className="h-12 shrink-0 flex items-center justify-between px-4 bg-[#0f0f11]"
-      style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.06)" }}
-    >
+    <header className="h-12 shrink-0 flex items-center justify-between px-4 bg-sidebar border-b border-border">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] text-white/25 font-medium hidden sm:block">
+        <span className="text-[11px] text-muted-foreground font-medium hidden sm:block">
           {module === "sala_agil" ? "Sala Ágil" : "Sustentação"}
         </span>
-        <ChevronRight className="h-3 w-3 text-white/20 hidden sm:block" />
+        <ChevronRight className="h-3 w-3 text-muted-foreground/50 hidden sm:block" />
         <div className="flex items-center gap-2">
           {Icon && <Icon className={cn("h-4 w-4 shrink-0", accent.textCls)} />}
-          <span className="text-[13px] font-semibold text-white">{pageLabel}</span>
+          <span className="text-[13px] font-semibold text-foreground">{pageLabel}</span>
         </div>
       </div>
       <div className="flex items-center gap-1">
         {module === "sala_agil" && activeSprint && (
           <div
             className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border"
-            style={{ backgroundColor: accent.hexAlpha(0.12), color: accent.hex, borderColor: accent.hexAlpha(0.25) }}
+            style={{
+              backgroundColor: accent.hexAlpha(0.12),
+              color: accent.hex,
+              borderColor: accent.hexAlpha(0.25),
+            }}
           >
             <GitBranch className="h-2.5 w-2.5" />
             {activeSprint.name}
@@ -524,15 +532,15 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
         {/* Sidebar */}
         <aside
           className={cn(
-            "flex flex-col h-full shrink-0 bg-[#0f0f11] transition-[width] duration-200 ease-in-out overflow-hidden",
+            "flex flex-col h-full shrink-0 bg-sidebar transition-[width] duration-200 ease-in-out overflow-hidden",
             sidebarWidth,
           )}
-          style={{ boxShadow: "1px 0 0 rgba(255,255,255,0.05), 4px 0 24px rgba(0,0,0,0.35)" }}
+          style={{ boxShadow: "1px 0 0 hsl(var(--border)), 4px 0 24px rgba(0,0,0,0.15)" }}
         >
           {/* Logo */}
           <div
             className={cn(
-              "flex items-center h-12 shrink-0 px-3 border-b border-white/[0.06]",
+              "flex items-center h-12 shrink-0 px-3 border-b border-border",
               collapsed ? "justify-center" : "justify-between",
             )}
           >
@@ -542,8 +550,8 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
               <div className="flex items-center gap-2.5">
                 <HeartSuitIcon className={cn("h-5 w-5 shrink-0", accent.textCls)} />
                 <div className="min-w-0">
-                  <p className="text-[14px] font-bold text-white tracking-tight leading-none">SprintFlow</p>
-                  <p className="text-[9px] text-white/25 uppercase tracking-widest leading-none mt-0.5">
+                  <p className="text-[14px] font-bold text-foreground tracking-tight leading-none">SprintFlow</p>
+                  <p className="text-[9px] text-muted-foreground uppercase tracking-widest leading-none mt-0.5">
                     {module === "sala_agil" ? "Sala Ágil" : "Sustentação"}
                   </p>
                 </div>
@@ -553,8 +561,8 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
               <button
                 onClick={() => setCollapsed(true)}
                 aria-label="Recolher sidebar"
-                className="flex h-6 w-6 items-center justify-center rounded-md text-white/20
-                  hover:bg-white/[0.06] hover:text-white/50 transition-colors"
+                className="flex h-6 w-6 items-center justify-center rounded-md
+                  text-muted-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
               >
                 <PanelLeftClose className="h-3.5 w-3.5" />
               </button>
@@ -566,7 +574,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
               onClick={() => setCollapsed(false)}
               aria-label="Expandir sidebar"
               className="absolute top-3 left-3 flex h-6 w-6 items-center justify-center
-                rounded-md text-white/20 hover:bg-white/[0.06] hover:text-white/50 transition-colors z-10"
+                rounded-md text-muted-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors z-10"
             />
           )}
 
@@ -598,19 +606,19 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             <TeamSwitcher module={module} collapsed={collapsed} />
           </div>
 
-          <div className="h-px bg-white/[0.06] mx-2 mb-1" />
+          <div className="h-px bg-border mx-2 mb-1" />
 
           {/* Nav */}
           <SidebarNav module={module} activeKey={activeKey} collapsed={collapsed} onNavigate={onNavigate} />
 
-          {/* Rodapé: avatar + logout */}
+          {/* Rodapé */}
           <div className="shrink-0 px-2 pb-3 pt-1">
-            <div className="h-px bg-white/[0.06] mb-2" />
+            <div className="h-px bg-border mb-2" />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   className={cn(
-                    "w-full flex items-center gap-2.5 rounded-xl p-2 hover:bg-white/[0.05] transition-colors",
+                    "w-full flex items-center gap-2.5 rounded-xl p-2 hover:bg-sidebar-accent transition-colors",
                     collapsed && "justify-center",
                   )}
                 >
@@ -624,10 +632,10 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                   </Avatar>
                   {!collapsed && (
                     <div className="flex-1 text-left min-w-0">
-                      <p className="text-[12px] font-semibold text-white/80 truncate leading-none">
+                      <p className="text-[12px] font-semibold text-foreground truncate leading-none">
                         {profile?.full_name ?? profile?.display_name ?? profile?.email?.split("@")[0] ?? "Usuário"}
                       </p>
-                      <p className="text-[10px] text-white/30 truncate leading-none mt-0.5">
+                      <p className="text-[10px] text-muted-foreground truncate leading-none mt-0.5">
                         {profile?.role ?? profile?.module_access ?? "Membro"}
                       </p>
                     </div>
