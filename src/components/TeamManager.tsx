@@ -21,17 +21,22 @@ interface TeamMemberInfo {
 }
 
 interface TeamManagerProps {
-  moduleFilter?: 'sala_agil' | 'sustentacao';
+  moduleFilter?: "sala_agil" | "sustentacao";
 }
 
 export function TeamManager({ moduleFilter }: TeamManagerProps) {
   const { teams, refreshTeams, currentTeamId, setCurrentTeamId, isAdmin, hasPermission } = useAuth();
-  const canManage = hasPermission('manage_teams');
+  const canManage = hasPermission("manage_teams");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [module, setModule] = useState<string>(moduleFilter || "sala_agil");
   const [open, setOpen] = useState(false);
-  const [editingTeam, setEditingTeam] = useState<{ id: string; name: string; description: string; module: string } | null>(null);
+  const [editingTeam, setEditingTeam] = useState<{
+    id: string;
+    name: string;
+    description: string;
+    module: string;
+  } | null>(null);
   const [teamMembers, setTeamMembers] = useState<Record<string, TeamMemberInfo[]>>({});
   const [allTeams, setAllTeams] = useState<any[]>([]);
 
@@ -46,12 +51,21 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
   };
 
   const loadTeamMembers = async (teamIds: string[]) => {
-    if (teamIds.length === 0) { setTeamMembers({}); return; }
+    if (teamIds.length === 0) {
+      setTeamMembers({});
+      return;
+    }
     const { data: tmData } = await supabase.from("team_members").select("*").in("team_id", teamIds);
-    if (!tmData || tmData.length === 0) { setTeamMembers({}); return; }
+    if (!tmData || tmData.length === 0) {
+      setTeamMembers({});
+      return;
+    }
 
     const userIds = [...new Set(tmData.map((m: any) => m.user_id))];
-    const { data: profiles } = await supabase.from("profiles").select("user_id, display_name, email").in("user_id", userIds);
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, display_name, email")
+      .in("user_id", userIds);
     const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
 
     const result: Record<string, TeamMemberInfo[]> = {};
@@ -74,36 +88,78 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
   }, [moduleFilter]);
 
   const handleCreate = async () => {
-    if (!name.trim()) { toast.error("Nome do time é obrigatório *"); return; }
-    const { data: { user } } = await supabase.auth.getUser();
+    if (!name.trim()) {
+      toast.error("Nome do time é obrigatório *");
+      return;
+    }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
-    
-    const { data, error } = await supabase.from("teams").insert({
-      name: name.trim(), description: description.trim(), created_by: user.id, module: module,
-    } as any).select().single();
-    
-    if (error) { toast.error("Erro ao criar time"); return; }
-    
+
+    const { data, error } = await supabase
+      .from("teams")
+      .insert({
+        name: name.trim(),
+        description: description.trim(),
+        created_by: user.id,
+        module: module,
+      } as any)
+      .select()
+      .single();
+
+    if (error) {
+      toast.error("Erro ao criar time");
+      return;
+    }
+
     await supabase.from("team_members").insert({
-      team_id: (data as any).id, user_id: user.id, role: "admin",
+      team_id: (data as any).id,
+      user_id: user.id,
+      role: "admin",
     });
-    
-    if (module === 'sala_agil') {
+
+    if (module === "sala_agil") {
       const defaultCols = [
-        { key: "aguardando_desenvolvimento", label: "Aguardando Desenvolvimento", color_class: "bg-kanban-aguardando", dot_color: "bg-muted-foreground", sort_order: 0 },
-        { key: "em_desenvolvimento", label: "Em Desenvolvimento", color_class: "bg-kanban-desenvolvimento", dot_color: "bg-info", sort_order: 1 },
-        { key: "em_code_review", label: "Em Code Review", color_class: "bg-kanban-review", dot_color: "bg-accent", sort_order: 2 },
+        {
+          key: "aguardando_desenvolvimento",
+          label: "Aguardando Desenvolvimento",
+          color_class: "bg-kanban-aguardando",
+          dot_color: "bg-muted-foreground",
+          sort_order: 0,
+        },
+        {
+          key: "em_desenvolvimento",
+          label: "Em Desenvolvimento",
+          color_class: "bg-kanban-desenvolvimento",
+          dot_color: "bg-info",
+          sort_order: 1,
+        },
+        {
+          key: "em_code_review",
+          label: "Em Code Review",
+          color_class: "bg-kanban-review",
+          dot_color: "bg-accent",
+          sort_order: 2,
+        },
         { key: "em_teste", label: "Em Teste", color_class: "bg-kanban-teste", dot_color: "bg-warning", sort_order: 3 },
         { key: "bug", label: "Bug", color_class: "bg-kanban-bug", dot_color: "bg-destructive", sort_order: 4 },
-        { key: "pronto_para_publicacao", label: "Pronto para Publicação", color_class: "bg-kanban-pronto", dot_color: "bg-success", sort_order: 5 },
+        {
+          key: "pronto_para_publicacao",
+          label: "Pronto para Publicação",
+          color_class: "bg-kanban-pronto",
+          dot_color: "bg-success",
+          sort_order: 5,
+        },
       ];
-      await supabase.from("workflow_columns").insert(
-        defaultCols.map((c) => ({ ...c, team_id: (data as any).id }))
-      );
+      await supabase.from("workflow_columns").insert(defaultCols.map((c) => ({ ...c, team_id: (data as any).id })));
     }
-    
+
     toast.success("Time criado com sucesso!");
-    setName(""); setDescription(""); setModule(moduleFilter || "sala_agil"); setOpen(false);
+    setName("");
+    setDescription("");
+    setModule(moduleFilter || "sala_agil");
+    setOpen(false);
     await refreshTeams();
     await loadTeams();
     setCurrentTeamId((data as any).id);
@@ -111,10 +167,18 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
 
   const handleUpdate = async () => {
     if (!editingTeam) return;
-    const { error } = await supabase.from("teams").update({
-      name: editingTeam.name, description: editingTeam.description, module: editingTeam.module,
-    } as any).eq("id", editingTeam.id);
-    if (error) { toast.error("Erro ao atualizar"); return; }
+    const { error } = await supabase
+      .from("teams")
+      .update({
+        name: editingTeam.name,
+        description: editingTeam.description,
+        module: editingTeam.module,
+      } as any)
+      .eq("id", editingTeam.id);
+    if (error) {
+      toast.error("Erro ao atualizar");
+      return;
+    }
     toast.success("Time atualizado!");
     setEditingTeam(null);
     await refreshTeams();
@@ -137,7 +201,7 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
     setDeleteTarget(null);
   };
 
-  const MODULE_LABELS: Record<string, string> = { sala_agil: 'Sala Ágil', sustentacao: 'Sustentação' };
+  const MODULE_LABELS: Record<string, string> = { sala_agil: "Sala Ágil", sustentacao: "Sustentação" };
 
   return (
     <div className="space-y-6">
@@ -147,41 +211,53 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
             <Users className="h-6 w-6 text-primary" /> Times / Squads
           </h2>
           <p className="text-sm text-muted-foreground">
-            {moduleFilter ? `Times do módulo ${MODULE_LABELS[moduleFilter]}` : 'Gerencie os times do projeto'}
+            {moduleFilter ? `Times do módulo ${MODULE_LABELS[moduleFilter]}` : "Gerencie os times do projeto"}
           </p>
         </div>
         {canManage && (
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" /> Novo Time</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Criar Time</DialogTitle></DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Nome *</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Squad Alpha" />
-              </div>
-              <div>
-                <Label>Descrição</Label>
-                <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição do time" />
-              </div>
-              {!moduleFilter && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" /> Novo Time
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Criar Time</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
                 <div>
-                  <Label>Tipo de Time *</Label>
-                  <Select value={module} onValueChange={setModule}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sala_agil">Sala Ágil</SelectItem>
-                      <SelectItem value="sustentacao">Sustentação</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Nome *</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Squad Alpha" />
                 </div>
-              )}
-              <Button onClick={handleCreate} className="w-full">Criar Time</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+                <div>
+                  <Label>Descrição</Label>
+                  <Input
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Descrição do time"
+                  />
+                </div>
+                {!moduleFilter && (
+                  <div>
+                    <Label>Tipo de Time *</Label>
+                    <Select value={module} onValueChange={setModule}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sala_agil">Sala Ágil</SelectItem>
+                        <SelectItem value="sustentacao">Sustentação</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <Button onClick={handleCreate} className="w-full">
+                  Criar Time
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         )}
       </div>
 
@@ -197,25 +273,44 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-0.5">
                   <CardTitle className="text-lg">{team.name}</CardTitle>
-                  <Badge variant="outline" className="text-[10px]">{MODULE_LABELS[team.module] || team.module}</Badge>
+                  <Badge variant="outline" className="text-[10px]">
+                    {MODULE_LABELS[team.module] || team.module}
+                  </Badge>
                 </div>
                 <div className="flex gap-1">
                   {canManage && (
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingTeam({ id: team.id, name: team.name, description: team.description || "", module: team.module || "sala_agil" }); }}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingTeam({
+                          id: team.id,
+                          name: team.name,
+                          description: team.description || "",
+                          module: team.module || "sala_agil",
+                        });
+                      }}
+                    >
                       <Edit2 className="h-4 w-4" />
                     </Button>
                   )}
                   {canManage && (
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeleteTarget(team.id); }}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTarget(team.id);
+                      }}
+                    >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   )}
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                {currentTeamId === team.id && (
-                  <span className="text-xs text-primary font-medium">● Time ativo</span>
-                )}
+                {currentTeamId === team.id && <span className="text-xs text-primary font-medium">● Time ativoxxx</span>}
                 {members.length > 0 ? (
                   <div className="space-y-1.5 pt-1 border-t border-border/50">
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
@@ -225,7 +320,9 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
                       <div key={m.user_id} className="flex items-center gap-2 text-xs">
                         <UserCircle className="h-4 w-4 text-muted-foreground shrink-0" />
                         <span className="font-medium truncate flex-1">{m.display_name}</span>
-                        <Badge variant="secondary" className="text-[10px] shrink-0">{m.role}</Badge>
+                        <Badge variant="secondary" className="text-[10px] shrink-0">
+                          {m.role}
+                        </Badge>
                       </div>
                     ))}
                   </div>
@@ -239,27 +336,44 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
       </div>
 
       {allTeams.length === 0 && (
-        <EmptyState icon={Users} title="Nenhum time encontrado" description="Utilize o botão acima para criar seu primeiro time." />
+        <EmptyState
+          icon={Users}
+          title="Nenhum time encontrado"
+          description="Utilize o botão acima para criar seu primeiro time."
+        />
       )}
 
       <Dialog open={!!editingTeam} onOpenChange={(o) => !o && setEditingTeam(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Editar Time</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Editar Time</DialogTitle>
+          </DialogHeader>
           {editingTeam && (
             <div className="space-y-4">
               <div>
                 <Label>Nome *</Label>
-                <Input value={editingTeam.name} onChange={(e) => setEditingTeam({ ...editingTeam, name: e.target.value })} />
+                <Input
+                  value={editingTeam.name}
+                  onChange={(e) => setEditingTeam({ ...editingTeam, name: e.target.value })}
+                />
               </div>
               <div>
                 <Label>Descrição</Label>
-                <Input value={editingTeam.description} onChange={(e) => setEditingTeam({ ...editingTeam, description: e.target.value })} />
+                <Input
+                  value={editingTeam.description}
+                  onChange={(e) => setEditingTeam({ ...editingTeam, description: e.target.value })}
+                />
               </div>
               {!moduleFilter && (
                 <div>
                   <Label>Tipo de Time</Label>
-                  <Select value={editingTeam.module} onValueChange={v => setEditingTeam({ ...editingTeam, module: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select
+                    value={editingTeam.module}
+                    onValueChange={(v) => setEditingTeam({ ...editingTeam, module: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="sala_agil">Sala Ágil</SelectItem>
                       <SelectItem value="sustentacao">Sustentação</SelectItem>
@@ -267,12 +381,20 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
                   </Select>
                 </div>
               )}
-              <Button onClick={handleUpdate} className="w-full">Salvar</Button>
+              <Button onClick={handleUpdate} className="w-full">
+                Salvar
+              </Button>
             </div>
           )}
         </DialogContent>
       </Dialog>
-      <ConfirmDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)} onConfirm={handleConfirmDelete} title="Confirmar exclusão" description="Excluir este time? Todos os dados associados serão perdidos. Esta ação não poderá ser desfeita." />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Confirmar exclusão"
+        description="Excluir este time? Todos os dados associados serão perdidos. Esta ação não poderá ser desfeita."
+      />
     </div>
   );
 }
