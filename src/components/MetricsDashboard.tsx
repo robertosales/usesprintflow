@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, BarChart2, Loader2, TrendingUp } from "lucide-react";
-import { DashboardFilters, DashboardFilterState, INITIAL_FILTERS } from "./DashboardFilters";
+import { DashboardFilters, DashboardFilterState, INITIAL_FILTERS } from "@/components/dashboard/DashboardFilters";
 import { EmptyState } from "@/shared/components/common/EmptyState";
 
 interface SprintMetrics {
@@ -23,6 +23,15 @@ interface TeamMetrics {
   metrics: SprintMetrics;
 }
 
+type UserStoryMetricsRow = {
+  id: string;
+  status: string | null;
+  type: string | null;
+  lead_time: number | null;
+  hours_estimated: number | null;
+  hours_logged: number | null;
+};
+
 export function MetricsDashboard() {
   const { isAdmin, teams, currentTeamId } = useAuth();
 
@@ -35,7 +44,7 @@ export function MetricsDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Mesma base de times usada em outros pontos da aplicação (menu lateral etc.)
+  // mesma base de times que o resto da aplicação
   const visibleTeams = useMemo(() => teams, [teams]);
 
   const effectiveTeamId = filters.teamId === "all" ? currentTeamId || "" : filters.teamId;
@@ -77,19 +86,20 @@ export function MetricsDashboard() {
           const { data: userStoriesData, error: userStoriesError } = await supabase
             .from("user_stories")
             .select("id, status, hours_estimated, hours_logged, type, lead_time")
-            .in("sprint_id", sprintIds);
+            .in("sprint_id", sprintIds)
+            .returns<UserStoryMetricsRow[]>();
 
           if (userStoriesError) throw userStoriesError;
 
           const metricsForTeam: SprintMetrics = {
             totalUserStories: userStoriesData?.length || 0,
             totalClosedUserStories: userStoriesData?.filter((us) => us.status === "done").length || 0,
-            totalHoursPlanned: userStoriesData?.reduce((sum, us) => sum + (us.hours_estimated || 0), 0) || 0,
-            totalHoursLogged: userStoriesData?.reduce((sum, us) => sum + (us.hours_logged || 0), 0) || 0,
+            totalHoursPlanned: userStoriesData?.reduce((sum, us) => sum + (us.hours_estimated ?? 0), 0) || 0,
+            totalHoursLogged: userStoriesData?.reduce((sum, us) => sum + (us.hours_logged ?? 0), 0) || 0,
             bugCount: userStoriesData?.filter((us) => us.type === "bug").length || 0,
             avgLeadTime:
               userStoriesData && userStoriesData.length > 0
-                ? userStoriesData.reduce((sum, us) => sum + (us.lead_time || 0), 0) / userStoriesData.length
+                ? userStoriesData.reduce((sum, us) => sum + (us.lead_time ?? 0), 0) / userStoriesData.length
                 : 0,
             teamProductivity:
               userStoriesData && userStoriesData.length > 0
@@ -150,9 +160,9 @@ export function MetricsDashboard() {
       <DashboardFilters
         filters={filters}
         onChange={handleFiltersChange}
-        sprints={[]} // carregue sprints se precisar filtrar por sprint específica
+        sprints={[]} // carregar se for filtrar por sprint específica
         teams={visibleTeams}
-        members={[]} // se for adicionar filtro por membro, popular aqui
+        members={[]} // reservar para filtro por membro
         isAdmin={isAdmin}
       />
 
