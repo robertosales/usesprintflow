@@ -310,7 +310,7 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                {currentTeamId === team.id && <span className="text-xs text-primary font-medium">● Time ativoxxx</span>}
+                {currentTeamId === team.id && <span className="text-xs text-primary font-medium">● Time ativo</span>}
                 {members.length > 0 ? (
                   <div className="space-y-1.5 pt-1 border-t border-border/50">
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
