@@ -1,52 +1,648 @@
-// src/components/layout/AppShell.tsx
-// ── CORREÇÃO: Aliases seguros para profile.full_name e profile.role ──────────
-// Adicione estas 2 linhas logo após: const { profile } = useAuth();
-// e substitua as ocorrências conforme abaixo.
+import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { useSprint } from "@/contexts/SprintContext";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  LayoutDashboard,
+  ListTodo,
+  Layers,
+  Kanban,
+  Calendar,
+  BarChart3,
+  History,
+  Users,
+  Settings,
+  Zap,
+  Wrench,
+  LogOut,
+  User,
+  GitBranch,
+  AlertTriangle,
+  FileText,
+  Upload,
+  Repeat,
+  Activity,
+  ShieldCheck,
+  ChevronRight,
+  Building2,
+  ChevronsUpDown,
+  Check,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Sun,
+  Moon,
+} from "lucide-react";
+import { NotificationBell } from "@/components/NotificationBell";
+import { cn } from "@/lib/utils";
+import { useState, useEffect } from "react";
 
-// ANTES (causa TS2339):
-//   profile?.role
-//   profile?.full_name
-//
-// DEPOIS (type-safe):
-//   profileRole
-//   profileName
-//
-// ── Snippet para colar no topo da função AppShell() ──────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-/*
-  const { profile, currentTeamId } = useAuth();
+type ActiveModule = "sala_agil" | "sustentacao";
 
-  // Aliases type-safe — funciona com ou sem os campos no tipo Profile
-  const profileName =
-    (profile as any)?.full_name ??
-    (profile as any)?.name ??
-    profile?.email?.split("@")[0] ??
-    "Usuário";
+interface NavItem {
+  key: string;
+  label: string;
+  icon: React.ElementType;
+  path: string;
+  group: "main" | "org" | "config";
+  roles?: string[];
+}
 
-  const profileRole =
-    (profile as any)?.role ??
-    "Membro";
-*/
+interface AppShellProps {
+  module: ActiveModule;
+  children: React.ReactNode;
+  activeKey?: string;
+  onNavigate?: (key: string) => void;
+}
 
-// ── Depois, em todo o JSX do AppShell, substitua: ─────────────────────────────
-//   profile?.full_name  →  profileName
-//   profile?.role       →  profileRole
-//
-// ── Exemplo das linhas afetadas (300, 306, 428, 430, 437): ───────────────────
+// ─── SVGs ─────────────────────────────────────────────────────────────────────
 
-/*
-  // linha ~300 — ícone de avatar
-  <span>{profileName.charAt(0).toUpperCase()}</span>
+function HeartSuitIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 21.593c-5.63-5.539-11-10.297-11-14.402 0-3.791 3.068-5.191 5.281-5.191 1.312 0 4.151.501 5.719 4.457 1.59-3.968 4.464-4.447 5.726-4.447 2.54 0 5.274 1.621 5.274 5.181 0 4.069-5.136 8.625-11 14.402z" />
+    </svg>
+  );
+}
 
-  // linha ~306 — nome no dropdown
-  <p className="font-medium">{profileName}</p>
+function PlayingCardIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect x="4" y="2" width="11" height="15" rx="1.5" />
+      <path
+        d="M7 5.5c0-.8.6-1.5 1.4-1.5.4 0 .8.2 1.1.6.3-.4.7-.6 1.1-.6.8 0 1.4.7 1.4 1.5 0 1.2-1.5 2.3-2.5 3C9.5 7.8 7 6.7 7 5.5z"
+        fill="currentColor"
+        stroke="none"
+      />
+      <rect x="9" y="7" width="11" height="15" rx="1.5" />
+    </svg>
+  );
+}
 
-  // linha ~428 — nome no sidebar footer
-  <span className="font-medium truncate">{profileName}</span>
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-  // linha ~430 — role no sidebar footer
-  <span className="text-xs text-muted-foreground truncate">{profileRole}</span>
+const GROUP_LABELS: Record<NavItem["group"], string> = {
+  main: "PRINCIPAL",
+  org: "RELATÓRIOS",
+  config: "CONFIGURAÇÕES",
+};
 
-  // linha ~437 — avatar tooltip
-  <span>{profileName}</span>
-*/
+const NAV_SALA_AGIL: NavItem[] = [
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/sala-agil", group: "main" },
+  { key: "board", label: "Board Kanban", icon: Kanban, path: "/sala-agil/board", group: "main" },
+  { key: "backlog", label: "Backlog", icon: ListTodo, path: "/sala-agil/backlog", group: "main" },
+  { key: "epicos", label: "Épicos", icon: Layers, path: "/sala-agil/epicos", group: "main" },
+  { key: "planning", label: "Planning Poker", icon: PlayingCardIcon, path: "/sala-agil/planning", group: "main" },
+  { key: "calendario", label: "Calendário", icon: Calendar, path: "/sala-agil/calendario", group: "main" },
+  { key: "equipe", label: "Equipe", icon: Users, path: "/sala-agil/equipe", group: "main" },
+  { key: "atividades", label: "Atividades", icon: Activity, path: "/sala-agil/atividades", group: "main" },
+  { key: "impedimentos", label: "Impedimentos", icon: AlertTriangle, path: "/sala-agil/impedimentos", group: "main" },
+  { key: "retro", label: "Retrospectiva", icon: Repeat, path: "/sala-agil/retro", group: "main" },
+  {
+    key: "gerador-apf",
+    label: "Relatório de Evidências",
+    icon: FileText,
+    path: "/sala-agil/gerador-apf",
+    group: "main",
+    roles: ["scrum_master", "analyst"],
+  },
+  { key: "metricas", label: "Métricas", icon: BarChart3, path: "/sala-agil/metricas", group: "org" },
+  { key: "historico", label: "Histórico", icon: History, path: "/sala-agil/historico", group: "org" },
+  { key: "times", label: "Times", icon: Users, path: "/sala-agil/times", group: "config" },
+  { key: "membros", label: "Membros", icon: User, path: "/sala-agil/membros", group: "config" },
+  { key: "perfis", label: "Perfis (RBAC)", icon: ShieldCheck, path: "/sala-agil/perfis", group: "config" },
+  { key: "fluxo", label: "Fluxo", icon: GitBranch, path: "/sala-agil/fluxo", group: "config" },
+  { key: "campos", label: "Campos Custom", icon: Settings, path: "/sala-agil/campos", group: "config" },
+  { key: "automacoes", label: "Automações", icon: Repeat, path: "/sala-agil/automacoes", group: "config" },
+];
+
+const NAV_SUSTENTACAO: NavItem[] = [
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/sustentacao", group: "main" },
+  { key: "board", label: "Board Kanban", icon: Kanban, path: "/sustentacao/board", group: "main" },
+  { key: "demandas", label: "Demandas", icon: ListTodo, path: "/sustentacao/demandas", group: "main" },
+  { key: "projetos", label: "Projetos", icon: Layers, path: "/sustentacao/projetos", group: "main" },
+  { key: "importacao", label: "Importação Excel", icon: Upload, path: "/sustentacao/importacao", group: "main" },
+  { key: "equipe", label: "Equipe", icon: Users, path: "/sustentacao/equipe", group: "main" },
+  { key: "fluxo", label: "Fluxo de Trabalho", icon: GitBranch, path: "/sustentacao/fluxo", group: "main" },
+  { key: "relatorios", label: "Relatórios", icon: FileText, path: "/sustentacao/relatorios", group: "org" },
+  { key: "times", label: "Times", icon: Users, path: "/sustentacao/times", group: "config" },
+  { key: "membros", label: "Membros", icon: User, path: "/sustentacao/membros", group: "config" },
+  { key: "perfis", label: "Perfis (RBAC)", icon: ShieldCheck, path: "/sustentacao/perfis", group: "config" },
+  { key: "campos", label: "Campos Custom", icon: Settings, path: "/sustentacao/campos", group: "config" },
+  { key: "automacoes", label: "Automações", icon: Repeat, path: "/sustentacao/automacoes", group: "config" },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getAccent(module: ActiveModule) {
+  return module === "sala_agil"
+    ? {
+        text: "text-[hsl(var(--sidebar-primary))]",
+        bg: "bg-[hsl(var(--sidebar-primary)/0.12)]",
+        border: "border-[hsl(var(--sidebar-primary)/0.25)]",
+        dot: "bg-[hsl(var(--sidebar-primary))]",
+        avatar: "bg-[hsl(var(--sidebar-primary))]",
+      }
+    : {
+        text: "text-amber-400",
+        bg: "bg-amber-400/10",
+        border: "border-amber-400/25",
+        dot: "bg-amber-400",
+        avatar: "bg-amber-500",
+      };
+}
+
+// ─── TeamSwitcher ─────────────────────────────────────────────────────────────
+
+function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
+  const { teams, currentTeamId, setCurrentTeamId } = useAuth();
+  const moduleTeams = teams.filter((t) => t.module === module);
+  const activeTeam = moduleTeams.find((t) => t.id === currentTeamId);
+
+  if (moduleTeams.length <= 1) return null;
+
+  if (collapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button className="w-full flex items-center justify-center p-2 rounded-md hover:bg-white/[0.05] transition-colors">
+            <Building2 className="h-4 w-4 text-white/40" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="text-xs">
+          {activeTeam?.name ?? "Time"}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md hover:bg-white/[0.05] transition-colors group">
+          <div className="h-7 w-7 rounded-md bg-white/[0.08] flex items-center justify-center shrink-0">
+            <Building2 className="h-3.5 w-3.5 text-white/50" />
+          </div>
+          <div className="flex-1 text-left min-w-0">
+            <p className="text-[10px] text-white/30 leading-none mb-0.5">Time ativo</p>
+            <p className="text-[12px] font-medium text-white truncate leading-none">
+              {activeTeam?.name ?? "Selecionar time"}
+            </p>
+          </div>
+          <ChevronsUpDown className="h-3.5 w-3.5 text-white/30 group-hover:text-white/60 transition-colors shrink-0" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="right" className="w-52">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">Trocar time</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {moduleTeams.map((team) => (
+          <DropdownMenuItem
+            key={team.id}
+            onClick={() => setCurrentTeamId(team.id)}
+            className="text-xs gap-2 justify-between cursor-pointer"
+          >
+            <span className="flex items-center gap-2">
+              <Building2 className="h-3.5 w-3.5" />
+              {team.name}
+            </span>
+            {team.id === currentTeamId && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ─── NavItemButton ────────────────────────────────────────────────────────────
+
+function NavItemButton({
+  item,
+  module,
+  isActive,
+  collapsed,
+  onNavigate,
+}: {
+  item: NavItem;
+  module: ActiveModule;
+  isActive: boolean;
+  collapsed: boolean;
+  onNavigate?: (key: string) => void;
+}) {
+  const navigate = useNavigate();
+  const accent = getAccent(module);
+  const Icon = item.icon;
+
+  const handleClick = () => {
+    onNavigate ? onNavigate(item.key) : navigate(item.path);
+  };
+
+  const btn = (
+    <button
+      onClick={handleClick}
+      className={cn(
+        "w-full flex items-center gap-3 rounded-md text-[13px] transition-all duration-100 relative",
+        collapsed ? "justify-center px-0 py-2.5" : "px-[10px] py-[7px]",
+        isActive
+          ? "bg-white/[0.06] text-white"
+          : "text-[hsl(var(--sidebar-foreground))] hover:bg-white/[0.05] hover:text-white",
+      )}
+    >
+      {isActive && !collapsed && (
+        <span
+          className={cn("absolute left-1.5 top-1/2 -translate-y-1/2 h-[5px] w-[5px] rounded-full shrink-0", accent.dot)}
+        />
+      )}
+      {isActive && collapsed && (
+        <span className={cn("absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-full", accent.dot)} />
+      )}
+      <Icon className={cn("h-4 w-4 shrink-0", isActive ? accent.text : "text-[hsl(var(--sidebar-foreground))]")} />
+      {!collapsed && <span className="truncate">{item.label}</span>}
+    </button>
+  );
+
+  if (collapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{btn}</TooltipTrigger>
+        <TooltipContent side="right" className="text-xs">
+          {item.label}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return btn;
+}
+
+// ─── SidebarNav ───────────────────────────────────────────────────────────────
+
+function SidebarNav({
+  module,
+  activeKey,
+  collapsed,
+  onNavigate,
+}: {
+  module: ActiveModule;
+  activeKey?: string;
+  collapsed: boolean;
+  onNavigate?: (key: string) => void;
+}) {
+  const location = useLocation();
+  const items = module === "sala_agil" ? NAV_SALA_AGIL : NAV_SUSTENTACAO;
+  const groups = Array.from(new Set(items.map((i) => i.group))) as NavItem["group"][];
+
+  function isItemActive(item: NavItem) {
+    if (activeKey) return item.key === activeKey;
+    const roots = ["/sala-agil", "/sustentacao"];
+    if (roots.includes(item.path)) return location.pathname === item.path;
+    return location.pathname.startsWith(item.path);
+  }
+
+  return (
+    <nav className="flex-1 overflow-y-auto px-2 py-1 space-y-3 scrollbar-thin scrollbar-thumb-white/10">
+      {groups.map((group) => {
+        const groupItems = items.filter((i) => i.group === group);
+        return (
+          <div key={group}>
+            {!collapsed && (
+              <p className="px-2.5 pb-1 text-[9px] font-semibold tracking-widest text-white/25 uppercase">
+                {GROUP_LABELS[group]}
+              </p>
+            )}
+            {collapsed && <div className="h-px bg-white/[0.07] my-1.5 mx-1" />}
+            {groupItems.map((item) => (
+              <NavItemButton
+                key={item.key}
+                item={item}
+                module={module}
+                isActive={isItemActive(item)}
+                collapsed={collapsed}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
+// ─── ModuleSwitcher ───────────────────────────────────────────────────────────
+
+function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
+  const navigate = useNavigate();
+
+  if (collapsed) {
+    return (
+      <div className="mx-2 mb-2 flex flex-col gap-1">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => navigate("/sala-agil")}
+              className={cn(
+                "flex w-full items-center justify-center rounded-md p-2 text-[11px] font-semibold transition-all",
+                module === "sala_agil"
+                  ? "bg-[hsl(var(--sidebar-accent))] text-white"
+                  : "text-white/40 hover:text-white/70",
+              )}
+            >
+              <Zap className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-xs">
+            Sala Ágil
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => navigate("/sustentacao")}
+              className={cn(
+                "flex w-full items-center justify-center rounded-md p-2 text-[11px] font-semibold transition-all",
+                module === "sustentacao" ? "bg-amber-500/80 text-white" : "text-white/40 hover:text-white/70",
+              )}
+            >
+              <Wrench className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-xs">
+            Sustentação
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-2 mb-2 flex items-center gap-1 rounded-lg bg-white/[0.05] p-1">
+      <button
+        onClick={() => navigate("/sala-agil")}
+        className={cn(
+          "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-semibold transition-all",
+          module === "sala_agil"
+            ? "bg-[hsl(var(--sidebar-accent))] text-white shadow-sm"
+            : "text-white/40 hover:text-white/70",
+        )}
+      >
+        <Zap className="h-3 w-3" /> Ágil
+      </button>
+      <button
+        onClick={() => navigate("/sustentacao")}
+        className={cn(
+          "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-semibold transition-all",
+          module === "sustentacao" ? "bg-amber-500/80 text-white shadow-sm" : "text-white/40 hover:text-white/70",
+        )}
+      >
+        <Wrench className="h-3 w-3" /> Sust.
+      </button>
+    </div>
+  );
+}
+
+// ─── DarkModeToggle ───────────────────────────────────────────────────────────
+
+function DarkModeToggle() {
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [isDark]);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={() => setIsDark((d) => !d)}
+          aria-label="Alternar modo escuro"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+        >
+          {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent className="text-xs">{isDark ? "Modo claro" : "Modo escuro"}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+// ─── Topbar ───────────────────────────────────────────────────────────────────
+
+function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: string }) {
+  const { activeSprint } = useSprint();
+  const location = useLocation();
+  const accent = getAccent(module);
+  const items = module === "sala_agil" ? NAV_SALA_AGIL : NAV_SUSTENTACAO;
+
+  const activeItem = activeKey
+    ? items.find((i) => i.key === activeKey)
+    : items.find((i) => {
+        const roots = ["/sala-agil", "/sustentacao"];
+        if (roots.includes(i.path)) return location.pathname === i.path;
+        return location.pathname.startsWith(i.path);
+      });
+
+  const pageLabel = activeItem?.label ?? "Dashboard";
+  const Icon = activeItem?.icon;
+
+  return (
+    <header
+      className="h-12 shrink-0 flex items-center justify-between px-4 bg-[#0f0f11]"
+      style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.06)" }}
+    >
+      <div className="flex items-center gap-2.5">
+        {Icon && <Icon className={cn("h-4 w-4 shrink-0", accent.text)} />}
+        <span className="text-[13px] font-semibold text-white">{pageLabel}</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        {module === "sala_agil" && activeSprint && (
+          <Badge
+            variant="outline"
+            className={cn(
+              "hidden sm:flex h-6 gap-1 text-[10px] font-medium cursor-default",
+              accent.bg,
+              accent.text,
+              accent.border,
+            )}
+          >
+            <GitBranch className="h-2.5 w-2.5" />
+            {activeSprint.name}
+          </Badge>
+        )}
+        <DarkModeToggle />
+        <NotificationBell />
+      </div>
+    </header>
+  );
+}
+
+// ─── AppShell ─────────────────────────────────────────────────────────────────
+
+export function AppShell({ module, children, activeKey, onNavigate }: AppShellProps) {
+  const { profile, isAdmin, signOut } = useAuth();
+  const navigate = useNavigate();
+  const [collapsed, setCollapsed] = useState(false);
+
+  const moduleAccess = profile?.module_access ?? "sala_agil";
+  const canSwitch = isAdmin || moduleAccess === "admin";
+  const accent = getAccent(module);
+
+  const initials = (profile?.display_name ?? "U")
+    .split(" ")
+    .map((n: string) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  const sidebarWidth = collapsed ? "w-[56px]" : "w-[220px]";
+
+  return (
+    <TooltipProvider delayDuration={100}>
+      <div className="flex h-screen w-screen overflow-hidden bg-background" data-module={module}>
+        {/* ── Sidebar ───────────────────────────────────────────── */}
+        <aside
+          className={cn(
+            "flex flex-col h-full shrink-0 bg-[#0f0f11] transition-[width] duration-200 ease-in-out",
+            sidebarWidth,
+          )}
+          style={{ boxShadow: "4px 0 24px rgba(0,0,0,0.4)" }}
+        >
+          {/* Logo + Collapse toggle */}
+          <div className={cn("flex items-center h-12 shrink-0 px-3", collapsed ? "justify-center" : "justify-between")}>
+            {!collapsed && (
+              <div className="flex items-center gap-2.5">
+                <HeartSuitIcon className={cn("h-5 w-5 shrink-0", accent.text)} />
+                <span className="text-[15px] font-bold text-white tracking-tight">NexOps</span>
+              </div>
+            )}
+            {collapsed && <HeartSuitIcon className={cn("h-5 w-5 shrink-0", accent.text)} />}
+            <button
+              onClick={() => setCollapsed((c) => !c)}
+              aria-label={collapsed ? "Expandir sidebar" : "Recolher sidebar"}
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-md text-white/30 hover:bg-white/[0.05] hover:text-white/70 transition-colors",
+                collapsed && "mt-1",
+              )}
+            >
+              {collapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+
+          {/* ① Switcher de módulo */}
+          {canSwitch ? (
+            <ModuleSwitcher module={module} collapsed={collapsed} />
+          ) : (
+            <div
+              className={cn(
+                "mx-2 mb-2 flex items-center rounded-lg px-3 py-2 text-[12px] font-semibold",
+                collapsed ? "justify-center px-0 py-2" : "gap-2",
+                accent.bg,
+                accent.text,
+              )}
+            >
+              {module === "sala_agil" ? (
+                <Zap className="h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <Wrench className="h-3.5 w-3.5 shrink-0" />
+              )}
+              {!collapsed && (module === "sala_agil" ? "Sala Ágil" : "Sustentação")}
+            </div>
+          )}
+
+          {/* ② Time ativo */}
+          <div className="px-2 mb-1">
+            <TeamSwitcher module={module} collapsed={collapsed} />
+          </div>
+
+          {/* Separador */}
+          <div className="h-px bg-white/[0.07] mx-2 mb-1" />
+
+          {/* ③ Nav */}
+          <SidebarNav module={module} activeKey={activeKey} collapsed={collapsed} onNavigate={onNavigate} />
+
+          {/* ④ Rodapé */}
+          <div className="shrink-0 px-2 pb-3 pt-2">
+            <div className="h-px bg-white/[0.07] mb-2" />
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={cn(
+                    "w-full flex items-center rounded-md hover:bg-white/[0.05] transition-colors group",
+                    collapsed ? "justify-center p-2" : "gap-2.5 px-2 py-2",
+                  )}
+                >
+                  <Avatar className="h-7 w-7 shrink-0">
+                    <AvatarFallback className={cn("text-[10px] font-bold text-white", accent.avatar)}>
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  {!collapsed && (
+                    <>
+                      <div className="flex-1 text-left min-w-0">
+                        <p className="text-[12px] font-medium text-white truncate leading-none mb-0.5">
+                          {profile?.display_name ?? "Usuário"}
+                        </p>
+                        <p className="text-[10px] text-white/40 capitalize truncate leading-none">
+                          {profile?.module_access ?? "membro"}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-3.5 w-3.5 text-white/30 group-hover:text-white/60 transition-colors shrink-0" />
+                    </>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" side={collapsed ? "right" : "top"} className="w-48 mb-1">
+                <DropdownMenuLabel className="text-xs">
+                  <p className="font-semibold">{profile?.display_name}</p>
+                  <p className="text-muted-foreground font-normal capitalize">{profile?.module_access}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {canSwitch && (
+                  <DropdownMenuItem onClick={() => navigate("/modulos")} className="text-xs gap-2">
+                    <Layers className="h-3.5 w-3.5" /> Trocar Módulo
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => signOut()}
+                  className="text-xs gap-2 text-destructive focus:text-destructive"
+                >
+                  <LogOut className="h-3.5 w-3.5" /> Sair
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </aside>
+
+        {/* ── Área principal ──────────────────────────────────────── */}
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-[#0f0f11]">
+          <Topbar module={module} activeKey={activeKey} />
+          <main className="flex-1 overflow-y-auto bg-background rounded-tl-xl">{children}</main>
+        </div>
+      </div>
+    </TooltipProvider>
+  );
+}
