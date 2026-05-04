@@ -26,10 +26,10 @@ interface TeamMetrics {
 type UserStoryMetricsRow = {
   id: string;
   status: string | null;
-  type: string | null;
-  lead_time: number | null;
-  hours_estimated: number | null;
-  hours_logged: number | null;
+  priority: string | null;
+  estimated_hours: number | null;
+  start_date: string | null; // date
+  end_date: string | null; // date
 };
 
 export function MetricsDashboard() {
@@ -72,17 +72,14 @@ export function MetricsDashboard() {
         const newMetrics: TeamMetrics[] = [];
 
         for (const team of teamsToLoad) {
-          // monta query base de sprints
+          // 1) Sprints do time
           let sprintQuery = supabase.from("sprints").select("id, name").eq("team_id", team.id);
 
-          // comportamento de acordo com DashboardFilters:
-          // - "active"  -> sprint ativa (is_active = true)
-          // - "all"     -> todas as sprints do time
-          // - qualquer outro valor -> id específico de sprint
+          // filters.sprintId: "active" | "all" | id específico
           if (filters.sprintId === "active") {
             sprintQuery = sprintQuery.eq("is_active", true);
           } else if (filters.sprintId === "all") {
-            // nada adicional
+            // nada
           } else if (filters.sprintId) {
             sprintQuery = sprintQuery.eq("id", filters.sprintId);
           }
@@ -94,28 +91,72 @@ export function MetricsDashboard() {
           const sprintIds = (sprintData || []).map((s) => s.id);
           if (sprintIds.length === 0) continue;
 
-          const { data: userStoriesData, error: userStoriesError } = await supabase
+          // 2) User stories dessas sprints
+          let userStoriesQuery = supabase
             .from("user_stories")
-            .select("id, status, hours_estimated, hours_logged, type, lead_time")
-            .in("sprint_id", sprintIds)
-            .returns<UserStoryMetricsRow[]>();
+            .select("id, status, priority, estimated_hours, start_date, end_date")
+            .in("sprint_id", sprintIds);
+
+          // aplica filtros de status/prioridade/datas se quiser
+          if (filters.status && filters.status !== "all") {
+            userStoriesQuery = userStoriesQuery.eq("status", filters.status);
+          }
+
+          if (filters.priority && filters.priority !== "all") {
+            userStoriesQuery = userStoriesQuery.eq("priority", filters.priority);
+          }
+
+          if (filters.dateFrom) {
+            userStoriesQuery = userStoriesQuery.gte("start_date", filters.dateFrom);
+          }
+
+          if (filters.dateTo) {
+            userStoriesQuery = userStoriesQuery.lte("end_date", filters.dateTo);
+          }
+
+          const { data: userStoriesData, error: userStoriesError } =
+            await userStoriesQuery.returns<UserStoryMetricsRow[]>();
 
           if (userStoriesError) throw userStoriesError;
 
+          const totalUserStories = userStoriesData?.length || 0;
+
+          const totalClosedUserStories = userStoriesData?.filter((us) => us.status === "concluida").length || 0;
+
+          const totalHoursPlanned = userStoriesData?.reduce((sum, us) => sum + (us.estimated_hours ?? 0), 0) || 0;
+
+          // ainda não existe coluna de horas lançadas; mantemos 0 por enquanto
+          const totalHoursLogged = 0;
+
+          // não temos coluna "type" -> bugCount 0 até existir campo apropriado
+          const bugCount = 0;
+
+          // calcula lead time médio (dias) a partir de start_date e end_date
+          let avgLeadTime = 0;
+          if (userStoriesData && userStoriesData.length > 0) {
+            const withDates = userStoriesData.filter((us) => us.start_date && us.end_date);
+            if (withDates.length > 0) {
+              const totalDays = withDates.reduce((sum, us) => {
+                const start = new Date(us.start_date as string);
+                const end = new Date(us.end_date as string);
+                const diffMs = end.getTime() - start.getTime();
+                const diffDays = diffMs / (1000 * 60 * 60 * 24);
+                return sum + diffDays;
+              }, 0);
+              avgLeadTime = totalDays / withDates.length;
+            }
+          }
+
+          const teamProductivity = totalUserStories > 0 ? (totalClosedUserStories / totalUserStories) * 100 : 0;
+
           const metricsForTeam: SprintMetrics = {
-            totalUserStories: userStoriesData?.length || 0,
-            totalClosedUserStories: userStoriesData?.filter((us) => us.status === "done").length || 0,
-            totalHoursPlanned: userStoriesData?.reduce((sum, us) => sum + (us.hours_estimated ?? 0), 0) || 0,
-            totalHoursLogged: userStoriesData?.reduce((sum, us) => sum + (us.hours_logged ?? 0), 0) || 0,
-            bugCount: userStoriesData?.filter((us) => us.type === "bug").length || 0,
-            avgLeadTime:
-              userStoriesData && userStoriesData.length > 0
-                ? userStoriesData.reduce((sum, us) => sum + (us.lead_time ?? 0), 0) / userStoriesData.length
-                : 0,
-            teamProductivity:
-              userStoriesData && userStoriesData.length > 0
-                ? (userStoriesData.filter((us) => us.status === "done").length / userStoriesData.length) * 100
-                : 0,
+            totalUserStories,
+            totalClosedUserStories,
+            totalHoursPlanned,
+            totalHoursLogged,
+            bugCount,
+            avgLeadTime,
+            teamProductivity,
           };
 
           newMetrics.push({
@@ -133,7 +174,17 @@ export function MetricsDashboard() {
         setLoading(false);
       }
     },
-    [filters.sprintId, filters.teamId, visibleTeams, isAdmin, currentTeamId],
+    [
+      filters.sprintId,
+      filters.teamId,
+      filters.status,
+      filters.priority,
+      filters.dateFrom,
+      filters.dateTo,
+      visibleTeams,
+      isAdmin,
+      currentTeamId,
+    ],
   ); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -156,7 +207,7 @@ export function MetricsDashboard() {
           <div>
             <h1 className="text-xl font-bold tracking-tight">Métricas</h1>
             <p className="text-xs text-muted-foreground">
-              Visão agregada de produtividade, bugs e lead time das sprints do time.
+              Visão agregada de produtividade, esforço e lead time das sprints do time.
             </p>
           </div>
         </div>
