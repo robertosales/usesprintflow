@@ -7,19 +7,13 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SprintProvider } from "@/contexts/SprintContext";
 
 // Pages
+import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import ForcePasswordChange from "./pages/ForcePasswordChange.tsx";
-import { ModuleSelector } from "./features/sustentacao/components/ModuleSelector";
-
-// Sala Ágil
-import Index from "./pages/Index.tsx";
-import { DashboardHome } from "./components/DashboardHome";
-import { ProductivityReport } from "./components/sala-agil/ProductivityReport";
-
-// Sustentação
 import SustentacaoPage from "./features/sustentacao/SustentacaoPage";
+import { ModuleSelector } from "./features/sustentacao/components/ModuleSelector";
 
 const queryClient = new QueryClient();
 
@@ -84,7 +78,6 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              {/* Auth */}
               <Route
                 path="/auth"
                 element={
@@ -94,8 +87,6 @@ const App = () => (
                 }
               />
               <Route path="/reset-password" element={<ResetPassword />} />
-
-              {/* Root */}
               <Route
                 path="/"
                 element={
@@ -113,7 +104,7 @@ const App = () => (
                 }
               />
 
-              {/* Sala Ágil — rotas aninhadas */}
+              {/* Sala Ágil — navegação interna gerenciada pelo Index/AppShell */}
               <Route
                 path="/sala-agil"
                 element={
@@ -123,12 +114,7 @@ const App = () => (
                     </ModuleGuard>
                   </ProtectedRoute>
                 }
-              >
-                <Route index element={<DashboardHome />} />
-                <Route path="produtividade" element={<ProductivityReport />} />
-                {/* As demais sub-rotas (kanban, backlog, sprints, etc.)
-                    continuam sendo gerenciadas pelo Index/AppShell existente */}
-              </Route>
+              />
 
               {/* Sustentação */}
               <Route
