@@ -2,34 +2,40 @@ import { useEffect, useState } from "react";
 import { Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+function getCurrentTheme(): "light" | "dark" {
+  return (document.documentElement.getAttribute("data-theme") as "light" | "dark") || "dark";
+}
 
+export function ThemeToggle() {
+  const [theme, setTheme] = useState<"light" | "dark">(getCurrentTheme);
+
+  // Sincroniza se o atributo mudar externamente
   useEffect(() => {
-    const saved = document.documentElement.getAttribute("data-theme") as "light" | "dark" | null;
-    if (saved) {
-      setTheme(saved);
-    } else {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      const initial = prefersDark ? "dark" : "light";
-      setTheme(initial);
-      document.documentElement.setAttribute("data-theme", initial);
-      if (initial === "dark") document.documentElement.classList.add("dark");
-    }
+    const observer = new MutationObserver(() => {
+      setTheme(getCurrentTheme());
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => observer.disconnect();
   }, []);
 
   const toggle = () => {
     const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
+    // Atualiza o DOM
     document.documentElement.setAttribute("data-theme", next);
     if (next === "dark") {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
     }
+    // Persiste
     try {
       sessionStorage.setItem("theme", next);
     } catch {}
+    // Atualiza estado local (o MutationObserver também faria isso, mas é mais rápido assim)
+    setTheme(next);
   };
 
   return (
