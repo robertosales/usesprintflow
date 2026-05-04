@@ -1,19 +1,18 @@
-/* src/index.css  (ou globals.css) */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
-/* ── Tokens light (padrão) ─────────────────────────────── */
 :root,
 [data-theme="light"] {
-  --background: 240 10% 97%;
+  --background: 0 0% 97%;
   --foreground: 240 10% 10%;
   --card: 0 0% 100%;
   --card-foreground: 240 10% 10%;
   --popover: 0 0% 100%;
   --popover-foreground: 240 10% 10%;
-  --primary: 173 98% 22%; /* teal #016a6e */
+  --primary: 173 98% 22%;
   --primary-foreground: 0 0% 100%;
   --secondary: 240 5% 92%;
   --secondary-foreground: 240 6% 20%;
-  --muted: 240 5% 90%;
+  --muted: 240 5% 92%;
   --muted-foreground: 240 4% 46%;
   --accent: 173 40% 92%;
   --accent-foreground: 173 98% 18%;
@@ -23,9 +22,11 @@
   --input: 240 6% 87%;
   --ring: 173 98% 22%;
   --radius: 0.5rem;
+  --sidebar: 240 10% 98%;
+  --sidebar-foreground: 240 10% 15%;
+  --sidebar-accent: 240 5% 92%;
 }
 
-/* ── Tokens dark ────────────────────────────────────────── */
 [data-theme="dark"],
 .dark {
   --background: 240 10% 8%;
@@ -34,7 +35,7 @@
   --card-foreground: 240 5% 90%;
   --popover: 240 10% 11%;
   --popover-foreground: 240 5% 90%;
-  --primary: 173 50% 55%; /* teal claro no dark */
+  --primary: 173 50% 55%;
   --primary-foreground: 240 10% 8%;
   --secondary: 240 8% 18%;
   --secondary-foreground: 240 5% 80%;
@@ -47,21 +48,38 @@
   --border: 240 8% 20%;
   --input: 240 8% 20%;
   --ring: 173 50% 55%;
+  --sidebar: 0 0% 8.6%;
+  --sidebar-foreground: 240 5% 90%;
+  --sidebar-accent: 240 8% 14%;
 }
 
-/* ── Base ───────────────────────────────────────────────── */
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
 }
-
+html {
+  font-size: 16px;
+}
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-family: "Satoshi", "Inter", sans-serif;
+  font-family: "Inter", sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   transition:
     background-color 250ms ease,
     color 250ms ease;
+  margin: 0;
+}
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 9999px;
 }
