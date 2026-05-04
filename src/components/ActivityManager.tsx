@@ -33,6 +33,30 @@ import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 
+// Helpers para duração H:MM ---------------------------------------
+
+function durationToDecimal(value: string): number {
+  // "4:00" → 4.0, "0:30" → 0.5, "1:15" → 1.25
+  const [h = "0", m = "0"] = value.split(":");
+  const hours = parseInt(h, 10) || 0;
+  const minutes = parseInt(m, 10) || 0;
+  return hours + minutes / 60;
+}
+
+function decimalToDuration(decimal: number): string {
+  // 4 → "4:00", 0.5 → "0:30", 1.25 → "1:15"
+  const hours = Math.floor(decimal);
+  const minutes = Math.round((decimal - hours) * 60);
+  return `${hours}:${String(minutes).padStart(2, "0")}`;
+}
+
+function isValidDuration(value: string): boolean {
+  // aceita "H:MM" ou "HH:MM"
+  return /^\d+:[0-5]\d$/.test(value);
+}
+
+// -----------------------------------------------------------------
+
 export function ActivityManager() {
   const {
     activities,
@@ -56,7 +80,7 @@ export function ActivityManager() {
   const [activityType, setActivityType] = useState<ActivityType>("task");
   const [huId, setHuId] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
-  const [hours, setHours] = useState("4");
+  const [duration, setDuration] = useState("4:00"); // H:MM
   const [startDate, setStartDate] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [expandedComments, setExpandedComments] = useState<string | null>(null);
@@ -104,8 +128,15 @@ export function ActivityManager() {
     if (!huId) e.huId = "Selecione uma User Story";
     if (!assigneeId) e.assigneeId = "Selecione um responsável";
     if (!startDate) e.startDate = "Data de início é obrigatória";
-    if (!hours || Number(hours) < 1) e.hours = "Horas deve ser no mínimo 1";
-    if (isLimitado && Number(hours) > 8) e.hours = "Máximo de 8 horas por atividade";
+
+    if (!isValidDuration(duration)) {
+      e.hours = "Formato inválido. Use H:MM (ex: 0:30, 1:15)";
+    } else {
+      const dec = durationToDecimal(duration);
+      if (dec <= 0) e.hours = "Duração deve ser maior que zero";
+      else if (isLimitado && dec > 8) e.hours = "Máximo de 8:00 por atividade (task/bug)";
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -116,7 +147,7 @@ export function ActivityManager() {
     setActivityType("task");
     setHuId("");
     setAssigneeId("");
-    setHours("4");
+    setDuration("4:00");
     setStartDate("");
     setErrors({});
     setEditId(null);
@@ -130,7 +161,7 @@ export function ActivityManager() {
     }
     setSubmitting(true);
     try {
-      const numHours = Number(hours);
+      const numHours = durationToDecimal(duration); // decimal para backend
       if (editId) {
         await updateActivity(editId, {
           title: title.trim(),
@@ -172,7 +203,7 @@ export function ActivityManager() {
     setActivityType(act.activityType);
     setHuId(act.huId);
     setAssigneeId(act.assigneeId);
-    setHours(String(act.hours));
+    setDuration(decimalToDuration(act.hours)); // decimal → H:MM
     setStartDate(act.startDate);
     setErrors({});
     setOpen(true);
@@ -281,7 +312,7 @@ export function ActivityManager() {
                         const used = getTotalHoursForHU(activities, hu.id);
                         return (
                           <SelectItem key={hu.id} value={hu.id}>
-                            {hu.code} — {hu.title} ({used}/24h)
+                            {hu.code} — {hu.title} ({decimalToDuration(used)}/24:00)
                           </SelectItem>
                         );
                       })}
@@ -316,19 +347,31 @@ export function ActivityManager() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>
-                      Horas estimadas <span className="text-destructive">*</span>
+                      Duração estimada <span className="text-destructive">*</span>
                     </Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max={isLimitado ? 8 : undefined}
-                      value={hours}
-                      onChange={(e) => {
-                        setHours(e.target.value);
-                        setErrors((p) => ({ ...p, hours: "" }));
-                      }}
-                      className="mt-1"
-                    />
+                    <div className="relative mt-1">
+                      <Input
+                        placeholder="H:MM"
+                        value={duration}
+                        onChange={(e) => {
+                          setDuration(e.target.value);
+                          setErrors((p) => ({ ...p, hours: "" }));
+                        }}
+                        onBlur={() => {
+                          if (/^\d+$/.test(duration)) {
+                            setDuration(`${duration}:00`);
+                          }
+                        }}
+                        className="pr-14"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                        h:min
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Ex: <b>0:15</b> (15min), <b>0:30</b> (30min), <b>1:30</b> (1h30)
+                      {isLimitado && " · máx 8:00"}
+                    </p>
                     {errors.hours && <p className="text-xs text-destructive mt-1">{errors.hours}</p>}
                   </div>
                   <div>
@@ -450,8 +493,6 @@ export function ActivityManager() {
           icon={ListTodo}
           title="Nenhum item encontrado"
           description={hasFilters ? "Tente ajustar os filtros" : "Crie atividades para as User Stories da sprint"}
-          //actionLabel={!hasFilters && canUpdate ? "Criar novo" : undefined}
-          //onAction={!hasFilters && canUpdate ? () => setOpen(true) : undefined}
         />
       )}
 
@@ -480,7 +521,7 @@ export function ActivityManager() {
                     <span className={`text-sm font-semibold ${isClosed ? "line-through" : ""}`}>{act.title}</span>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                       <span>{dev?.name || "N/A"}</span>
-                      <span>{act.hours}h</span>
+                      <span>{decimalToDuration(act.hours)}</span>
                       <span>
                         {new Date(act.startDate).toLocaleDateString("pt-BR")} →{" "}
                         {new Date(act.endDate).toLocaleDateString("pt-BR")}
@@ -538,7 +579,7 @@ export function ActivityManager() {
                   </div>
                 </div>
                 {isExpanded && currentTeamId && (
-                  <div className="mt-3 space-y-3 border-t pt-3">
+                  <div className="mt-3 space-y-3 border-top pt-3">
                     <FileUploader entityType="activity" entityId={act.id} teamId={currentTeamId} />
                     <ActivityComments activityId={act.id} teamId={currentTeamId} />
                   </div>
@@ -555,6 +596,7 @@ export function ActivityManager() {
         pageSize={pageSize}
         onPageChange={setCurrentPage}
       />
+
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
