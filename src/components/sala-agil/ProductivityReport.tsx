@@ -1,215 +1,315 @@
 import { useMemo } from "react";
 import { useSprint } from "@/contexts/SprintContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
-import {
-  TrendingUp, Users, Zap, Clock, CheckCircle2,
-  BarChart3, Target, Award,
-} from "lucide-react";
+import { EmptyState } from "@/shared/components/common/EmptyState";
+import { Users, BarChart2, Clock, Bug, ListTodo } from "lucide-react";
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function pct(value: number, total: number) {
-  return total > 0 ? Math.round((value / total) * 100) : 0;
-}
-
-// ── Burndown Row ───────────────────────────────────────────────────────────────
-
-interface BurndownRowProps {
-  label: string;
-  done: number;
-  total: number;
-  color?: string;
-}
-
-function BurndownRow({ label, done, total, color = "bg-primary" }: BurndownRowProps) {
-  const p = pct(done, total);
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between text-xs">
-        <span className="font-medium text-foreground truncate max-w-[160px]">{label}</span>
-        <span className="text-muted-foreground tabular-nums">{done}/{total} pts</span>
-      </div>
-      <div className="relative h-2 w-full rounded-full bg-muted overflow-hidden">
-        <div
-          className={cn("h-full rounded-full transition-all duration-500", color)}
-          style={{ width: `${p}%` }}
-        />
-      </div>
-      <p className="text-right text-[10px] text-muted-foreground">{p}%</p>
-    </div>
-  );
-}
-
-// ── Developer Card ─────────────────────────────────────────────────────────────
-
-interface DevStatProps {
-  name: string;
-  role: string;
-  donePoints: number;
-  totalPoints: number;
-  openActivities: number;
+interface DeveloperProductivity {
+  developerId: string;
+  developerName: string;
+  totalHours: number;
+  taskCount: number;
+  bugCount: number;
   closedActivities: number;
-  hours: number;
-  rank: number;
+  openActivities: number;
 }
 
-function DevCard({ name, role, donePoints, totalPoints, openActivities, closedActivities, hours, rank }: DevStatProps) {
-  const p = pct(donePoints, totalPoints);
-  const rankColors = ["text-yellow-500", "text-slate-400", "text-amber-600"];
-
-  return (
-    <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 rounded-lg transition-colors">
-      <div className="relative shrink-0">
-        <Avatar className="h-9 w-9">
-          <AvatarFallback className="bg-primary/20 text-primary text-sm font-bold">
-            {name.charAt(0).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-        {rank <= 3 && (
-          <Award className={cn("h-3.5 w-3.5 absolute -top-1 -right-1", rankColors[rank - 1] || "text-muted-foreground")} />
-        )}
-      </div>
-      <div className="flex-1 min-w-0 space-y-1">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold truncate">{name}</p>
-          <span className="text-xs text-muted-foreground tabular-nums">{donePoints}pts</span>
-        </div>
-        <p className="text-xs text-muted-foreground truncate">{role}</p>
-        <Progress value={p} className="h-1" />
-      </div>
-      <div className="shrink-0 text-right space-y-0.5">
-        <p className="text-xs font-medium tabular-nums">{hours.toFixed(0)}h</p>
-        <p className="text-[10px] text-muted-foreground">{closedActivities} ativs.</p>
-      </div>
-    </div>
-  );
+interface HuProductivity {
+  huId: string;
+  huCode: string;
+  huTitle: string;
+  totalHours: number;
+  activityCount: number;
+  closedActivities: number;
 }
-
-// ── Main ───────────────────────────────────────────────────────────────────────
 
 export function ProductivityReport() {
-  const { userStories, activities, developers, activeSprint, sprints, workflowColumns } = useSprint();
+  const { activities, userStories, developers, activeSprint } = useSprint();
+  const { currentTeamId } = useAuth();
 
-  const lastColKey = workflowColumns[workflowColumns.length - 1]?.key;
+  const { devMetrics, huMetrics, totalHours, totalActivities, totalBugs, closedActivities } = useMemo(() => {
+    if (!activeSprint) {
+      return {
+        devMetrics: [] as DeveloperProductivity[],
+        huMetrics: [] as HuProductivity[],
+        totalHours: 0,
+        totalActivities: 0,
+        totalBugs: 0,
+        closedActivities: 0,
+      };
+    }
 
-  // ── Dados do sprint ativo (ou tudo se não há sprint ativo)
-  const sprintHUs = useMemo(
-    () => (activeSprint ? userStories.filter((h) => h.sprintId === activeSprint.id) : userStories),
-    [userStories, activeSprint],
-  );
+    const sprintActivities = activities.filter((a) =>
+      userStories.some((hu) => hu.id === a.huId && hu.sprintId === activeSprint.id),
+    );
 
-  const doneHUs = sprintHUs.filter((h) => h.status === lastColKey);
-  const totalPoints = sprintHUs.reduce((s, h) => s + (h.storyPoints || 0), 0);
-  const donePoints = doneHUs.reduce((s, h) => s + (h.storyPoints || 0), 0);
-  const completionPct = pct(donePoints, totalPoints);
+    const devMap = new Map<string, DeveloperProductivity>();
+    const huMap = new Map<string, HuProductivity>();
 
-  // ── Velocity por sprint (últimos 5)
-  const lastSprints = useMemo(() => {
-    return [...sprints]
-      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
-      .slice(-5)
-      .map((s) => {
-        const sus = userStories.filter((h) => h.sprintId === s.id);
-        const done = sus.filter((h) => h.status === lastColKey).reduce((acc, h) => acc + (h.storyPoints || 0), 0);
-        const total = sus.reduce((acc, h) => acc + (h.storyPoints || 0), 0);
-        return { name: s.name, done, total };
-      });
-  }, [sprints, userStories, lastColKey]);
+    let totalH = 0;
+    let totalA = 0;
+    let totalBugsCount = 0;
+    let closedA = 0;
 
-  // ── Stats por dev
-  const devStats = useMemo(() => {
-    return developers
-      .map((dev) => {
-        const devActs = activities.filter((a) => a.assigneeId === dev.id);
-        const closedActs = devActs.filter((a) => a.isClosed);
-        const openActs = devActs.filter((a) => !a.isClosed);
-        const hours = devActs.reduce((s, a) => s + (a.hours || 0), 0);
+    for (const act of sprintActivities) {
+      totalH += act.hours || 0;
+      totalA += 1;
+      if (act.activityType === "bug") totalBugsCount += 1;
+      if (act.isClosed) closedA += 1;
 
-        // pontos das HUs cujas atividades este dev fechou no sprint atual
-        const devHUIds = new Set(closedActs.map((a) => a.userStoryId).filter(Boolean));
-        const devDonePoints = doneHUs
-          .filter((h) => devHUIds.has(h.id))
-          .reduce((s, h) => s + (h.storyPoints || 0), 0);
+      // Por desenvolvedor
+      if (act.assigneeId) {
+        const dev = developers.find((d) => d.id === act.assigneeId);
+        const key = act.assigneeId;
+        if (!devMap.has(key)) {
+          devMap.set(key, {
+            developerId: key,
+            developerName: dev?.name || "Sem responsável",
+            totalHours: 0,
+            taskCount: 0,
+            bugCount: 0,
+            closedActivities: 0,
+            openActivities: 0,
+          });
+        }
+        const entry = devMap.get(key)!;
+        entry.totalHours += act.hours || 0;
+        if (act.activityType === "bug") entry.bugCount += 1;
+        else entry.taskCount += 1;
+        if (act.isClosed) entry.closedActivities += 1;
+        else entry.openActivities += 1;
+      }
 
-        return {
-          id: dev.id,
-          name: dev.name,
-          role: dev.role || "Dev",
-          donePoints: devDonePoints,
-          totalPoints,
-          openActivities: openActs.length,
-          closedActivities: closedActs.length,
-          hours,
-        };
-      })
-      .sort((a, b) => b.donePoints - a.donePoints || b.hours - a.hours);
-  }, [developers, activities, doneHUs, totalPoints]);
+      // Por HU
+      const hu = userStories.find((h) => h.id === act.huId);
+      if (hu) {
+        const key = hu.id;
+        if (!huMap.has(key)) {
+          huMap.set(key, {
+            huId: key,
+            huCode: hu.code,
+            huTitle: hu.title,
+            totalHours: 0,
+            activityCount: 0,
+            closedActivities: 0,
+          });
+        }
+        const entryHu = huMap.get(key)!;
+        entryHu.totalHours += act.hours || 0;
+        entryHu.activityCount += 1;
+        if (act.isClosed) entryHu.closedActivities += 1;
+      }
+    }
 
-  const totalHours = activities.reduce((s, a) => s + (a.hours || 0), 0);
-  const avgVelocity =
-    lastSprints.length > 0
-      ? Math.round(lastSprints.reduce((s, sp) => s + sp.done, 0) / lastSprints.length)
-      : 0;
+    const devMetrics = Array.from(devMap.values()).sort((a, b) => b.totalHours - a.totalHours);
+    const huMetrics = Array.from(huMap.values()).sort((a, b) => b.totalHours - a.totalHours);
 
-  // ── Cores para barras dos devs
-  const devColors = [
-    "bg-primary", "bg-violet-500", "bg-cyan-500",
-    "bg-amber-500", "bg-rose-500", "bg-emerald-500",
-  ];
+    return {
+      devMetrics,
+      huMetrics,
+      totalHours: totalH,
+      totalActivities: totalA,
+      totalBugs: totalBugsCount,
+      closedActivities: closedA,
+    };
+  }, [activities, userStories, developers, activeSprint]);
+
+  if (!activeSprint || !currentTeamId) {
+    return (
+      <EmptyState
+        icon={BarChart2}
+        title="Nenhuma sprint ativa"
+        description="Selecione um time e inicie uma sprint na Sala Ágil para visualizar o relatório de produtividade."
+      />
+    );
+  }
+
+  if (totalActivities === 0) {
+    return (
+      <EmptyState
+        icon={BarChart2}
+        title="Sem atividades registradas"
+        description="Crie atividades vinculadas às User Stories da sprint para acompanhar a produtividade do time."
+      />
+    );
+  }
+
+  const avgHoursPerActivity = totalActivities > 0 ? totalHours / totalActivities : 0;
+  const completionRate = totalActivities > 0 ? (closedActivities / totalActivities) * 100 : 0;
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-[1400px] mx-auto">
+    <div className="space-y-4">
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          Relatório de Produtividade
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {activeSprint ? `Sprint: ${activeSprint.name}` : "Visão geral — todos os sprints"}
-        </p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <BarChart2 className="h-6 w-6 text-primary" />
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">Relatório de Produtividade</h1>
+            <p className="text-xs text-muted-foreground">
+              Visão analítica das horas, atividades e distribuição de esforço da sprint ativa.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Badge variant="outline">
+            Sprint ativa: <span className="font-semibold ml-1">{activeSprint.name}</span>
+          </Badge>
+          <Badge variant="secondary">
+            Atividades: <span className="font-semibold ml-1">{totalActivities}</span>
+          </Badge>
+        </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          {
-            label: "Story Points Entregues",
-            value: `${donePoints}/${totalPoints}`,
-            sub: `${completionPct}% concluído`,
-            icon: Target,
-            cls: "bg-primary/10 text-primary",
-          },
-          {
-            label: "Velocity Médio",
-            value: `${avgVelocity}pts`,
-            sub: `últimos ${lastSprints.length} sprints`,
-            icon: Zap,
-            cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
-          },
-          {
-            label: "Horas Registradas",
-            value: `${totalHours.toFixed(0)}h`,
-            sub: `${activities.length} atividades`,
-            icon: Clock,
-            cls: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
-          },
-          {
-            label: "HUs Concluídas",
-            value: `${doneHUs.length}/${sprintHUs.length}`,
-            sub: `${sprintHUs.length - doneHUs.length} em aberto`,
-            icon: CheckCircle2,
-            cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-          },
-        ].map(({ label, value, sub, icon: Icon, cls }) => (
-          <Card key={label}>
-            <CardContent className="pt-5 pb-4 px-5">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums leading-none">{value}</p>
-                  <p className="mt-1 
+      {/* KPIs gerais */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Clock className="h-4 w-4 text-primary" />
+              Horas Lançadas
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-3">
+            <p className="text-2xl font-semibold">{totalHours.toFixed(1)}h</p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Média de {avgHoursPerActivity.toFixed(2)}h por atividade
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <ListTodo className="h-4 w-4 text-primary" />
+              Atividades Concluídas
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-3">
+            <p className="text-2xl font-semibold">
+              {closedActivities}/{totalActivities}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-1">Taxa de conclusão de {completionRate.toFixed(1)}%</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Bug className="h-4 w-4 text-destructive" />
+              Bugs
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-3">
+            <p className="text-2xl font-semibold text-destructive">{totalBugs}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {totalActivities > 0 ? ((totalBugs / totalActivities) * 100).toFixed(1) : "0.0"}% das atividades
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Users className="h-4 w-4 text-primary" />
+              Colaboradores
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-3">
+            <p className="text-2xl font-semibold">{devMetrics.length}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">Distribuição de esforço entre membros do time</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Produtividade por desenvolvedor */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Users className="h-4 w-4 text-primary" />
+            Produtividade por Membro do Time
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pb-3">
+          {devMetrics.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma atividade atribuída a membros do time nesta sprint.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/60">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Membro</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Horas</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Tarefas</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Bugs</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Concluídas</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Abertas</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {devMetrics.map((dev) => (
+                    <tr key={dev.developerId} className="hover:bg-muted/40">
+                      <td className="px-3 py-2">
+                        <span className="font-medium">{dev.developerName}</span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono">{dev.totalHours.toFixed(1)}h</td>
+                      <td className="px-3 py-2 text-right">{dev.taskCount}</td>
+                      <td className="px-3 py-2 text-right text-destructive">{dev.bugCount}</td>
+                      <td className="px-3 py-2 text-right text-emerald-600">{dev.closedActivities}</td>
+                      <td className="px-3 py-2 text-right text-amber-600">{dev.openActivities}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Produtividade por User Story */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <ListTodo className="h-4 w-4 text-primary" />
+            Distribuição por User Story
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pb-3">
+          {huMetrics.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Nenhuma User Story com atividades registrada para esta sprint.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/60">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">HU</th>
+                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Título</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Horas</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Atividades</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Concluídas</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {huMetrics.map((hu) => (
+                    <tr key={hu.huId} className="hover:bg-muted/40">
+                      <td className="px-3 py-2 font-mono text-[11px]">{hu.huCode}</td>
+                      <td className="px-3 py-2">
+                        <span className="truncate block max-w-[260px]">{hu.huTitle}</span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono">{hu.totalHours.toFixed(1)}h</td>
+                      <td className="px-3 py-2 text-right">{hu.activityCount}</td>
+                      <td className="px-3 py-2 text-right text-emerald-600">{hu.closedActivities}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
