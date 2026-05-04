@@ -44,7 +44,6 @@ export function MetricsDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // mesma base de times que o resto da aplicação
   const visibleTeams = useMemo(() => teams, [teams]);
 
   const effectiveTeamId = filters.teamId === "all" ? currentTeamId || "" : filters.teamId;
@@ -53,6 +52,7 @@ export function MetricsDashboard() {
     async (forceTeamId?: string) => {
       setLoading(true);
       setError(null);
+
       try {
         const teamId = forceTeamId ?? filters.teamId;
 
@@ -72,11 +72,22 @@ export function MetricsDashboard() {
         const newMetrics: TeamMetrics[] = [];
 
         for (const team of teamsToLoad) {
-          const { data: sprintData, error: sprintError } = await supabase
-            .from("sprints")
-            .select("id, name")
-            .eq("team_id", team.id)
-            .eq("status", filters.sprintId === "active" ? "active" : "closed");
+          // monta query base de sprints
+          let sprintQuery = supabase.from("sprints").select("id, name").eq("team_id", team.id);
+
+          // comportamento de acordo com DashboardFilters:
+          // - "active"  -> sprint ativa (is_active = true)
+          // - "all"     -> todas as sprints do time
+          // - qualquer outro valor -> id específico de sprint
+          if (filters.sprintId === "active") {
+            sprintQuery = sprintQuery.eq("is_active", true);
+          } else if (filters.sprintId === "all") {
+            // nada adicional
+          } else if (filters.sprintId) {
+            sprintQuery = sprintQuery.eq("id", filters.sprintId);
+          }
+
+          const { data: sprintData, error: sprintError } = await sprintQuery;
 
           if (sprintError) throw sprintError;
 
@@ -107,7 +118,11 @@ export function MetricsDashboard() {
                 : 0,
           };
 
-          newMetrics.push({ teamId: team.id, teamName: team.name, metrics: metricsForTeam });
+          newMetrics.push({
+            teamId: team.id,
+            teamName: team.name,
+            metrics: metricsForTeam,
+          });
         }
 
         setMetrics(newMetrics);
@@ -118,7 +133,7 @@ export function MetricsDashboard() {
         setLoading(false);
       }
     },
-    [filters.teamId, filters.sprintId, visibleTeams, isAdmin, currentTeamId],
+    [filters.sprintId, filters.teamId, visibleTeams, isAdmin, currentTeamId],
   ); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -160,9 +175,9 @@ export function MetricsDashboard() {
       <DashboardFilters
         filters={filters}
         onChange={handleFiltersChange}
-        sprints={[]} // carregar se for filtrar por sprint específica
+        sprints={[]} // pode ser preenchido depois para filtro por sprint específica
         teams={visibleTeams}
-        members={[]} // reservar para filtro por membro
+        members={[]} // reservado para filtro por membro
         isAdmin={isAdmin}
       />
 
