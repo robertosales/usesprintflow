@@ -164,7 +164,7 @@ export function DashboardHome() {
     return "Boa noite";
   };
 
-  const firstName = profile?.name?.split(" ")[0] || "Dev";
+  const firstName = profile?.display_name?.split(" ")[0] || "Dev";
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-[1400px] mx-auto">
