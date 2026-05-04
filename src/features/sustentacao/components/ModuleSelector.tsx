@@ -90,7 +90,7 @@ export function ModuleSelector() {
       <header className="h-14 border-b border-border flex items-center justify-between px-6">
         <SprintFlowLogo />
         <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground hidden sm:block">{profile?.full_name ?? profile?.email}</span>
+          <span className="text-sm text-muted-foreground hidden sm:block">{profile?.display_name ?? profile?.email}</span>
           <button
             onClick={signOut}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted"
