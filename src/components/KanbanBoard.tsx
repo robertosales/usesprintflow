@@ -12,7 +12,6 @@ import {
 } from "@/types/sprint";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   AlertTriangle,
   ShieldAlert,
@@ -27,6 +26,10 @@ import {
   Bug,
   ArrowRightLeft,
   Flag,
+  Layers,
+  GripVertical,
+  Zap,
+  TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ImpedimentDialog } from "@/components/ImpedimentManager";
@@ -73,10 +76,24 @@ function initials(name: string) {
     .slice(0, 2)
     .toUpperCase();
 }
+
 function hexAlpha(hex: string, a: number) {
   const c = hex.replace("#", "");
   return `rgba(${parseInt(c.slice(0, 2), 16)},${parseInt(c.slice(2, 4), 16)},${parseInt(c.slice(4, 6), 16)},${a})`;
 }
+
+function daysLeft(endDate?: string): number | null {
+  if (!endDate) return null;
+  const diff = Math.ceil((new Date(endDate).getTime() - Date.now()) / 86400000);
+  return diff;
+}
+
+const PRIORITY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  critical: { label: "Crítica", color: "#dc2626", bg: "#fef2f2" },
+  high: { label: "Alta", color: "#ea580c", bg: "#fff7ed" },
+  medium: { label: "Média", color: "#ca8a04", bg: "#fefce8" },
+  low: { label: "Baixa", color: "#16a34a", bg: "#f0fdf4" },
+};
 
 // ── DnD primitives ────────────────────────────────────────────────────────────
 function DroppableZone({
@@ -96,10 +113,25 @@ function DroppableZone({
     <div ref={setNodeRef} className="flex flex-col gap-2 min-h-[60px]">
       {empty ? (
         <div
-          className={`flex items-center justify-center h-14 rounded-lg border-2 border-dashed text-xs transition-colors
-            ${active ? "border-primary/50 bg-primary/5 text-primary" : "border-border/30 text-muted-foreground/50"}`}
+          className={`flex flex-col items-center justify-center gap-1.5 h-20 rounded-xl border-2 border-dashed
+            text-xs transition-all duration-200
+            ${
+              active
+                ? "border-primary/50 bg-primary/5 text-primary scale-[1.01]"
+                : "border-border/30 text-muted-foreground/40"
+            }`}
         >
-          {active ? "Soltar aqui" : "—"}
+          {active ? (
+            <>
+              <Layers className="h-4 w-4" />
+              <span>Soltar aqui</span>
+            </>
+          ) : (
+            <>
+              <Layers className="h-4 w-4 opacity-40" />
+              <span>Vazio</span>
+            </>
+          )}
         </div>
       ) : (
         children
@@ -113,7 +145,7 @@ function DragCard({ id, children }: { id: string; children: React.ReactNode }) {
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1 }}
       {...attributes}
       {...listeners}
     >
@@ -156,117 +188,142 @@ function HUCard({
   const isBug = hu.status === "bug";
   const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
   const assignee = hu.assigneeId ? developers.find((d) => d.id === hu.assigneeId) : null;
+  const priority = hu.priority ? PRIORITY_CONFIG[hu.priority] : null;
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
           className={[
-            "bg-white rounded-lg border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
-            "hover:shadow-[0_3px_10px_rgba(0,0,0,0.1)] transition-all duration-150 overflow-hidden",
+            "group relative bg-card rounded-xl border border-border/50",
+            "shadow-[0_1px_2px_rgba(0,0,0,0.05),0_2px_8px_rgba(0,0,0,0.04)]",
+            "hover:shadow-[0_2px_6px_rgba(0,0,0,0.08),0_6px_20px_rgba(0,0,0,0.06)]",
+            "transition-all duration-200 overflow-hidden",
             "cursor-grab active:cursor-grabbing select-none",
-            blocked ? "ring-1 ring-amber-400/50" : "",
+            blocked ? "ring-1 ring-amber-400/60" : "",
+            overdue && !blocked ? "ring-1 ring-red-400/40" : "",
           ].join(" ")}
         >
-          {/* top accent line */}
-          <div className="h-0.5" style={{ backgroundColor: accentHex }} />
+          {/* Barra de cor lateral esquerda */}
+          <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl" style={{ backgroundColor: accentHex }} />
 
-          {/* body */}
-          <div className="p-3">
-            {/* title */}
-            <p className="text-[13px] font-semibold leading-snug text-gray-800 line-clamp-2 mb-2">{hu.title}</p>
+          {/* Grip handle (visível no hover) */}
+          <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-30 transition-opacity pointer-events-none">
+            <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+          </div>
 
-            {/* epic tag */}
+          {/* Corpo do card */}
+          <div className="pl-4 pr-3 pt-3 pb-2.5">
+            {/* Epic tag */}
             {epic && (
-              <span
-                className="inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-2 py-0.5 mb-2"
-                style={{ backgroundColor: epic.color + "18", color: epic.color, border: `1px solid ${epic.color}40` }}
-              >
-                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: epic.color }} />
-                {epic.name}
-              </span>
+              <div className="mb-2">
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-2 py-0.5 tracking-wide"
+                  style={{
+                    backgroundColor: epic.color + "1a",
+                    color: epic.color,
+                    border: `1px solid ${epic.color}35`,
+                  }}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: epic.color }} />
+                  {epic.name}
+                </span>
+              </div>
             )}
 
-            {/* HU code row */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                </svg>
-                <span className="font-mono font-medium">{hu.code}</span>
-              </div>
+            {/* Título */}
+            <p className="text-[13px] font-semibold leading-snug text-foreground line-clamp-2 mb-3 pr-4">{hu.title}</p>
 
-              <div className="flex items-center gap-1">
-                <SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} />
-                {isBug && (
-                  <span className="flex items-center gap-0.5 text-[10px] bg-red-50 text-red-600 border border-red-200 rounded px-1.5 py-0.5">
-                    <Bug className="h-2.5 w-2.5" /> BUG
+            {/* Linha inferior: código + badges */}
+            <div className="flex items-center justify-between gap-1.5">
+              {/* Código */}
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground font-mono">
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full shrink-0"
+                  style={{ backgroundColor: accentHex }}
+                />
+                {hu.code}
+              </span>
+
+              {/* Badges de status */}
+              <div className="flex items-center gap-1 flex-wrap justify-end">
+                {priority && (
+                  <span
+                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md"
+                    style={{ backgroundColor: priority.bg, color: priority.color }}
+                  >
+                    {priority.label}
                   </span>
                 )}
-                {overdue && <AlertTriangle className="h-3 w-3 text-red-400" />}
-                {blocked && <ShieldAlert className="h-3 w-3 text-amber-500" />}
+                <SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} />
+                {isBug && (
+                  <span className="flex items-center gap-0.5 text-[10px] bg-red-50 text-red-600 border border-red-200 rounded-md px-1.5 py-0.5 font-semibold dark:bg-red-950 dark:text-red-400 dark:border-red-800">
+                    <Bug className="h-2.5 w-2.5" />
+                    BUG
+                  </span>
+                )}
+                {overdue && (
+                  <span title="Atrasada" className="flex items-center">
+                    <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+                  </span>
+                )}
+                {blocked && (
+                  <span title="Impedimento ativo" className="flex items-center">
+                    <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* assignee + hours */}
+            {/* Assignee + horas */}
             {(assignee || estH > 0) && (
-              <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+              <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-border/40">
                 {assignee ? (
                   <div className="flex items-center gap-1.5">
                     <div
-                      className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-bold"
-                      style={{ backgroundColor: hexAlpha(accentHex, 0.15), color: accentHex }}
+                      className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0"
+                      style={{
+                        backgroundColor: hexAlpha(accentHex, 0.15),
+                        color: accentHex,
+                        boxShadow: `0 0 0 1.5px ${hexAlpha(accentHex, 0.3)}`,
+                      }}
                     >
                       {initials(assignee.name)}
                     </div>
-                    <span className="text-[11px] text-gray-500">{assignee.name.split(" ")[0]}</span>
+                    <span className="text-[11px] text-muted-foreground truncate max-w-[80px]">
+                      {assignee.name.split(" ")[0]}
+                    </span>
                   </div>
                 ) : (
                   <div />
                 )}
+
                 {estH > 0 && (
                   <span
-                    className={`flex items-center gap-0.5 text-[11px] font-mono ${over ? "text-red-500" : "text-gray-400"}`}
+                    className={`flex items-center gap-0.5 text-[11px] font-mono tabular-nums
+                      ${over ? "text-red-500 font-semibold" : "text-muted-foreground"}`}
                   >
-                    <Clock className="h-2.5 w-2.5" />
+                    <Clock className="h-2.5 w-2.5 shrink-0" />
                     {totalH}/{estH}h
                   </span>
                 )}
               </div>
             )}
-
-            {/* sprint tag (using HU tags) */}
-            {(hu.tags ?? []).length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {hu.tags!.slice(0, 3).map((tag, i) => (
-                  <span
-                    key={i}
-                    className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                    style={{
-                      backgroundColor: i % 2 === 0 ? "#fff3e0" : "#e8f5e9",
-                      color: i % 2 === 0 ? "#e65100" : "#2e7d32",
-                    }}
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
 
-          {/* impedimentos ativos */}
+          {/* Impedimentos ativos */}
           {activeImps.length > 0 && (
-            <div className="mx-3 mb-2 space-y-1">
+            <div className="px-3 pb-2.5 space-y-1.5">
               {activeImps.slice(0, 1).map((imp) => (
                 <div
                   key={imp.id}
-                  className="flex items-center gap-1.5 text-[11px] bg-amber-50 rounded px-2 py-1 border border-amber-200"
+                  className="flex items-center gap-1.5 text-[11px] bg-amber-50 dark:bg-amber-950/40
+                    rounded-lg px-2.5 py-1.5 border border-amber-200 dark:border-amber-800"
                 >
                   <ShieldAlert className="h-3 w-3 text-amber-500 shrink-0" />
-                  <span className="flex-1 truncate text-amber-800">{imp.reason}</span>
+                  <span className="flex-1 truncate text-amber-800 dark:text-amber-300">{imp.reason}</span>
                   <button
-                    className="text-emerald-600 hover:text-emerald-700 transition-colors"
+                    className="text-emerald-600 hover:text-emerald-500 transition-colors shrink-0"
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -278,36 +335,45 @@ function HUCard({
                 </div>
               ))}
               {activeImps.length > 1 && (
-                <p className="text-[10px] text-amber-600 px-1">+{activeImps.length - 1} impedimento(s)</p>
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 px-1">
+                  +{activeImps.length - 1} impedimento(s)
+                </p>
               )}
             </div>
           )}
 
-          {/* tasks expandidas */}
+          {/* Tarefas expandidas */}
           {expanded && huActs.length > 0 && (
-            <div className="px-3 pb-2 space-y-1 bg-gray-50 border-t border-gray-100">
+            <div className="px-3 pb-2.5 pt-1.5 space-y-1 bg-muted/40 border-t border-border/40">
               {huActs.map((act) => {
                 const dev = developers.find((d) => d.id === act.assigneeId);
+                const typeIcon = act.activityType === "bug" ? "🐛" : act.activityType === "architecture" ? "🏗️" : "📋";
                 return (
                   <div key={act.id} className="flex items-center gap-2 py-0.5 text-xs">
-                    <span className="text-gray-400">
-                      {act.activityType === "bug" ? "🐛" : act.activityType === "architecture" ? "🏗️" : "📋"}
-                    </span>
-                    <span className="flex-1 truncate text-gray-600">{act.title}</span>
-                    {dev && <span className="text-[9px] text-gray-400 shrink-0">{initials(dev.name)}</span>}
-                    <span className="font-mono text-[10px] text-gray-400 shrink-0">{act.hours}h</span>
+                    <span className="text-muted-foreground">{typeIcon}</span>
+                    <span className="flex-1 truncate text-muted-foreground">{act.title}</span>
+                    {dev && (
+                      <span className="text-[9px] text-muted-foreground/60 shrink-0 font-mono">
+                        {initials(dev.name)}
+                      </span>
+                    )}
+                    <span className="font-mono text-[10px] text-muted-foreground/60 shrink-0">{act.hours}h</span>
                   </div>
                 );
               })}
             </div>
           )}
 
-          {/* progress bar */}
+          {/* Barra de progresso */}
           {estH > 0 && (
-            <div className="h-0.5 bg-gray-100">
+            <div className="h-[3px] bg-muted/60">
               <div
-                className={`h-full transition-all ${over ? "bg-red-400" : pct > 80 ? "bg-amber-400" : "bg-emerald-400"}`}
-                style={{ width: `${pct}%` }}
+                className="h-full transition-all duration-500 rounded-r-full"
+                style={{
+                  width: `${pct}%`,
+                  backgroundColor: over ? "#ef4444" : pct > 80 ? "#f59e0b" : accentHex,
+                  opacity: 0.75,
+                }}
               />
             </div>
           )}
@@ -354,25 +420,26 @@ function CollapsedColumn({
     <div
       onClick={onClick}
       title={`Expandir: ${col.label}`}
-      className="flex-shrink-0 w-10 flex flex-col items-center rounded-xl border border-border/60 bg-white
-        shadow-[0_1px_3px_rgba(0,0,0,0.06)] cursor-pointer hover:shadow-md transition-all duration-200 py-3 gap-3"
+      className="flex-shrink-0 w-10 flex flex-col items-center rounded-xl border border-border/50 bg-card
+        shadow-[0_1px_2px_rgba(0,0,0,0.05)] cursor-pointer hover:shadow-md hover:scale-[1.03]
+        transition-all duration-200 py-3 gap-3"
       style={{ borderTop: `3px solid ${accentHex}` }}
     >
-      <ChevronRight className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       <span
         className="text-[11px] font-bold flex-1 text-center leading-tight"
         style={{
           writingMode: "vertical-lr",
           transform: "rotate(180deg)",
           color: accentHex,
-          letterSpacing: "0.04em",
+          letterSpacing: "0.05em",
         }}
       >
         {col.label}
       </span>
       <span
         className="text-[10px] font-bold rounded-full min-w-[18px] text-center py-0.5 px-1"
-        style={{ backgroundColor: hexAlpha(accentHex, 0.12), color: accentHex }}
+        style={{ backgroundColor: hexAlpha(accentHex, 0.15), color: accentHex }}
       >
         {count}
       </span>
@@ -396,6 +463,7 @@ function ExpandedColumn({
   workflowColumns,
   canMove,
   onAddCard,
+  wipLimit,
 }: {
   col: WorkflowColumn;
   hus: UserStory[];
@@ -411,53 +479,88 @@ function ExpandedColumn({
   workflowColumns: WorkflowColumn[];
   canMove: boolean;
   onAddCard?: () => void;
+  wipLimit?: number;
 }) {
+  const overWip = wipLimit && hus.length > wipLimit;
+  const wipPct = wipLimit ? Math.min((hus.length / wipLimit) * 100, 100) : 0;
+
   return (
     <div
       className={[
-        "flex-shrink-0 w-[280px] flex flex-col rounded-xl border border-border/60 bg-white",
-        "shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-all duration-200",
-        dragOver ? "ring-2 ring-primary/30 shadow-md" : "",
+        "flex-shrink-0 w-[272px] flex flex-col rounded-xl border bg-card",
+        "transition-all duration-200",
+        dragOver
+          ? "border-primary/40 shadow-[0_0_0_2px_rgba(1,105,111,0.15),0_4px_16px_rgba(0,0,0,0.1)]"
+          : "border-border/50 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
+        overWip ? "border-orange-300 dark:border-orange-700" : "",
       ].join(" ")}
       style={{ borderTop: `3px solid ${accentHex}` }}
     >
-      {/* header */}
-      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100">
-        <button
-          onClick={onCollapse}
-          className="p-0.5 rounded hover:bg-gray-100 transition-colors"
-          title="Retrair coluna"
-        >
-          <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+      {/* Cabeçalho da coluna */}
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/40">
+        <button onClick={onCollapse} className="p-0.5 rounded hover:bg-muted transition-colors" title="Retrair coluna">
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
 
-        <span className="flex-1 text-[12px] font-bold tracking-wide uppercase truncate" style={{ color: accentHex }}>
+        <span className="flex-1 text-[11px] font-bold tracking-widest uppercase truncate" style={{ color: accentHex }}>
           {col.label}
         </span>
 
-        <span
-          className="text-[11px] font-bold rounded-full h-5 min-w-[20px] px-1.5 flex items-center justify-center"
-          style={{ backgroundColor: hexAlpha(accentHex, 0.12), color: accentHex }}
-        >
-          {hus.length}
-        </span>
+        {/* Contador com indicador WIP */}
+        <div className="flex items-center gap-1">
+          <span
+            className={`text-[11px] font-bold rounded-full h-5 min-w-[20px] px-1.5 flex items-center justify-center
+              ${overWip ? "bg-orange-100 text-orange-600 dark:bg-orange-950 dark:text-orange-400" : ""}`}
+            style={!overWip ? { backgroundColor: hexAlpha(accentHex, 0.12), color: accentHex } : {}}
+          >
+            {hus.length}
+          </span>
+          {wipLimit && <span className="text-[10px] text-muted-foreground/60">/{wipLimit}</span>}
+        </div>
 
         {onAddCard && (
           <button
             onClick={onAddCard}
             title="Adicionar HU nesta coluna"
-            className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
+            className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
         )}
-        <button className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600">
+        <button
+          className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+          title="Configurações da coluna"
+        >
           <Settings2 className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      {/* cards */}
-      <div className="p-2 overflow-y-auto flex-1" style={{ maxHeight: "calc(100vh - 260px)" }}>
+      {/* WIP limit bar */}
+      {wipLimit && (
+        <div className="h-[2px] bg-muted/60">
+          <div
+            className="h-full transition-all duration-500"
+            style={{
+              width: `${wipPct}%`,
+              backgroundColor: overWip ? "#f97316" : hexAlpha(accentHex, 0.5),
+            }}
+          />
+        </div>
+      )}
+
+      {/* Aviso WIP excedido */}
+      {overWip && (
+        <div
+          className="mx-2 mt-2 flex items-center gap-1.5 text-[11px] text-orange-600 dark:text-orange-400
+          bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 rounded-lg px-2.5 py-1.5"
+        >
+          <Zap className="h-3 w-3 shrink-0" />
+          Limite WIP excedido ({hus.length}/{wipLimit})
+        </div>
+      )}
+
+      {/* Cards */}
+      <div className="p-2 overflow-y-auto flex-1 scrollbar-thin" style={{ maxHeight: "calc(100vh - 280px)" }}>
         <DroppableZone id={col.key} empty={hus.length === 0} over={dragOver}>
           {hus.map((hu) => (
             <div key={hu.id} className="mb-2">
@@ -488,6 +591,62 @@ function ExpandedColumn({
             </div>
           ))}
         </DroppableZone>
+      </div>
+    </div>
+  );
+}
+
+// ── Sprint progress bar ────────────────────────────────────────────────────────
+function SprintProgressBar({
+  name,
+  done,
+  total,
+  open,
+  endDate,
+}: {
+  name: string;
+  done: number;
+  total: number;
+  open: number;
+  endDate?: string;
+}) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const days = daysLeft(endDate);
+  const isUrgent = days !== null && days <= 3;
+
+  return (
+    <div className="flex items-center gap-3 px-1">
+      {/* Nome + dias */}
+      <div className="flex items-center gap-2 shrink-0">
+        <span className="text-[12px] font-bold text-foreground">{name}</span>
+        {days !== null && (
+          <span
+            className={`text-[11px] font-semibold px-2 py-0.5 rounded-full
+              ${
+                isUrgent
+                  ? "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
+                  : "bg-muted text-muted-foreground"
+              }`}
+          >
+            {days < 0 ? `${Math.abs(days)}d atrasada` : days === 0 ? "Hoje" : `${days}d restantes`}
+          </span>
+        )}
+      </div>
+
+      {/* Barra de progresso */}
+      <div className="flex-1 flex items-center gap-2 max-w-[220px]">
+        <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-700"
+            style={{
+              width: `${pct}%`,
+              backgroundColor: pct === 100 ? "#16a34a" : pct > 70 ? "#01696f" : "#0d9488",
+            }}
+          />
+        </div>
+        <span className="text-[11px] font-mono text-muted-foreground shrink-0 tabular-nums">
+          {done}/{total}
+        </span>
       </div>
     </div>
   );
@@ -582,100 +741,118 @@ export function KanbanBoard() {
     }
   };
 
+  // Empty state — sem sprint ativa
   if (!activeSprint) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center gap-3 text-gray-400">
-        <svg
-          width="40"
-          height="40"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          className="opacity-40"
-        >
-          <rect x="3" y="3" width="7" height="7" rx="1" />
-          <rect x="14" y="3" width="7" height="7" rx="1" />
-          <rect x="14" y="14" width="7" height="7" rx="1" />
-          <rect x="3" y="14" width="7" height="7" rx="1" />
-        </svg>
-        <p className="font-medium text-gray-500">Nenhuma Sprint ativa</p>
-        <p className="text-sm">Crie e ative uma Sprint na aba Backlog para usar o Board.</p>
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
+        <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mb-2">
+          <Layers className="h-8 w-8 text-muted-foreground/50" />
+        </div>
+        <p className="font-semibold text-foreground">Nenhuma Sprint ativa</p>
+        <p className="text-sm text-muted-foreground max-w-[28ch]">
+          Crie e ative uma Sprint na aba Backlog para usar o Board.
+        </p>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-full gap-3">
-      {/* top bar */}
-      <div className="flex items-center gap-3 px-1">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+      {/* Top bar */}
+      <div className="flex items-center gap-3 px-1 flex-wrap">
+        {/* Busca */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search"
-            className="w-full pl-9 pr-3 h-9 rounded-lg border border-gray-200 bg-white text-sm
-              placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+            placeholder="Buscar HU..."
+            className="w-52 pl-9 pr-8 h-8 rounded-lg border border-border bg-card text-sm
+              placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2
+              focus:ring-primary/20 focus:border-primary/40 transition-all"
           />
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-3 w-3" />
             </button>
           )}
         </div>
-        <Badge variant="outline" className="text-xs font-mono gap-1 h-9 px-3">
-          {activeSprint.name}
-          <span className="text-muted-foreground">· {sprintStories.length} HUs</span>
-        </Badge>
 
+        {/* Sprint progress */}
+        <div className="flex-1 min-w-0">
+          <SprintProgressBar
+            name={activeSprint.name}
+            done={huStats.done}
+            total={huStats.total}
+            open={huStats.open}
+            endDate={activeSprint.endDate}
+          />
+        </div>
+
+        {/* Encerrar sprint */}
         {canCloseSprint && (
           <Button
             size="sm"
             variant="outline"
-            className="h-9 gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/5 hover:text-destructive"
+            className="h-8 gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/5
+              hover:text-destructive shrink-0 text-xs"
             onClick={() => setConfirmCloseSprint(true)}
             title="Encerrar sprint atual"
           >
             <Flag className="h-3.5 w-3.5" />
-            Encerrar Sprint
+            Encerrar
           </Button>
         )}
       </div>
 
-      {/* board */}
+      {/* Board */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={(e) => setActiveId(e.active.id as string)}
+        onDragOver={(e) => {
+          const overId = e.over?.id as string | undefined;
+          if (!overId) {
+            setDragOverCol(null);
+            return;
+          }
+          const col = workflowColumns.find((c) => c.key === overId);
+          if (col) {
+            setDragOverCol(col.key);
+            return;
+          }
+          const hu = sprintStories.find((h) => h.id === overId);
+          if (hu) setDragOverCol(hu.status);
+        }}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-2 pb-4 overflow-x-auto flex-1" style={{ minHeight: 120 }}>
+        <div className="flex gap-2.5 overflow-x-auto pb-4 flex-1 items-start">
           {workflowColumns.map((col) => {
-            const hex = getColumnHex(col);
-            const hus = sprintStories.filter((hu) => (hu.status || workflowColumns[0]?.key) === col.key);
-            const isCollapsed = collapsed.has(col.key);
+            const accentHex = getColumnHex(col);
+            const hus = sprintStories.filter((h) => h.status === col.key);
+            const wipLimit = (col as any).wipLimit as number | undefined;
 
-            if (isCollapsed) {
+            if (collapsed.has(col.key)) {
               return (
                 <CollapsedColumn
                   key={col.key}
                   col={col}
                   count={hus.length}
-                  accentHex={hex}
+                  accentHex={accentHex}
                   onClick={() => toggle(col.key)}
                 />
               );
             }
+
             return (
               <ExpandedColumn
                 key={col.key}
                 col={col}
                 hus={hus}
-                accentHex={hex}
+                accentHex={accentHex}
                 dragOver={dragOverCol === col.key}
                 onCollapse={() => toggle(col.key)}
                 expandedHU={expandedHU}
@@ -686,22 +863,11 @@ export function KanbanBoard() {
                 updateUserStoryStatus={updateUserStoryStatus}
                 workflowColumns={workflowColumns}
                 canMove={canMove}
+                wipLimit={wipLimit}
                 onAddCard={
-                  canCreate && activeSprint
+                  canCreate
                     ? () => {
-                        const title = window.prompt("Título da nova HU:");
-                        if (!title || !title.trim()) return;
-                        addUserStory({
-                          title: title.trim(),
-                          description: "",
-                          storyPoints: 0,
-                          priority: "media",
-                          sprintId: activeSprint.id,
-                          status: col.key,
-                          customFields: {},
-                        } as any)
-                          .then(() => toast.success(`HU criada em "${col.label}"`))
-                          .catch(() => toast.error("Erro ao criar HU"));
+                        toast.info("Use a aba Backlog para criar HUs e associá-las à sprint.");
                       }
                     : undefined
                 }
@@ -710,51 +876,45 @@ export function KanbanBoard() {
           })}
         </div>
 
-        <DragOverlay>
-          {activeHU &&
-            (() => {
-              const col = workflowColumns.find((c) => c.key === activeHU.status);
-              const hex = col ? getColumnHex(col) : "#94a3b8";
-              return (
-                <div className="rotate-2 scale-105 shadow-2xl pointer-events-none opacity-90">
-                  <HUCard
-                    hu={activeHU}
-                    accentHex={hex}
-                    expanded={false}
-                    onExpand={() => {}}
-                    onImpediment={() => {}}
-                    onResolveImpediment={() => {}}
-                    onAddTask={() => {}}
-                  />
-                </div>
-              );
-            })()}
+        {/* Ghost card durante drag */}
+        <DragOverlay dropAnimation={{ duration: 160, easing: "cubic-bezier(0.16,1,0.3,1)" }}>
+          {activeHU && (
+            <div className="w-[272px] opacity-90 rotate-1 scale-[1.02] pointer-events-none">
+              <HUCard
+                hu={activeHU}
+                accentHex={getColumnHex(workflowColumns.find((c) => c.key === activeHU.status) ?? workflowColumns[0])}
+                expanded={false}
+                onExpand={() => {}}
+                onImpediment={() => {}}
+                onResolveImpediment={() => {}}
+                onAddTask={() => {}}
+              />
+            </div>
+          )}
         </DragOverlay>
       </DndContext>
 
-      <ImpedimentDialog huId={impedimentDialog} open={!!impedimentDialog} onClose={() => setImpedimentDialog(null)} />
-      {quickTaskHU && (
-        <QuickActivityDialog open={!!quickTaskHU} onClose={() => setQuickTaskHU(null)} huId={quickTaskHU} />
+      {/* Dialog: Impedimento */}
+      {impedimentDialog && (
+        <ImpedimentDialog huId={impedimentDialog} open={!!impedimentDialog} onClose={() => setImpedimentDialog(null)} />
       )}
 
+      {/* Dialog: Tarefa rápida */}
+      {quickTaskHU && (
+        <QuickActivityDialog huId={quickTaskHU} open={!!quickTaskHU} onClose={() => setQuickTaskHU(null)} />
+      )}
+
+      {/* Confirmar encerramento da sprint */}
       <AlertDialog open={confirmCloseSprint} onOpenChange={setConfirmCloseSprint}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Encerrar a Sprint atual?</AlertDialogTitle>
+            <AlertDialogTitle>Encerrar Sprint?</AlertDialogTitle>
             <AlertDialogDescription>
-              Você está prestes a encerrar a sprint <strong>{activeSprint?.name}</strong>.
-              <br />
-              <span className="block mt-2 text-xs">
-                Resumo: {huStats.total} HU(s) — {huStats.done} concluída(s) · {huStats.open} em aberto.
-              </span>
+              A sprint <strong>{activeSprint.name}</strong> será marcada como encerrada.{" "}
               {huStats.open > 0 && (
-                <span className="block mt-2 text-amber-600 text-xs">
-                  ⚠️ Há HUs em aberto. Considere movê-las para o backlog ou para a próxima sprint antes de encerrar.
-                </span>
+                <span className="text-destructive font-medium">{huStats.open} HU(s) ainda não concluídas. </span>
               )}
-              <span className="block mt-2 text-xs text-muted-foreground">
-                A sprint deixará de ser exibida no board, mas o histórico será preservado.
-              </span>
+              Você poderá criar uma nova sprint no Backlog.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -762,9 +922,9 @@ export function KanbanBoard() {
             <AlertDialogAction
               onClick={handleCloseSprint}
               disabled={closingSprint}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90"
             >
-              {closingSprint ? "Encerrando…" : "Encerrar Sprint"}
+              {closingSprint ? "Encerrando..." : "Encerrar Sprint"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
