@@ -12,6 +12,8 @@ interface Profile {
   avatar_url: string | null;
   module_access: string;
   must_change_password?: boolean;
+  full_name?: string;
+  role?: string;
 }
 
 interface AuthContextType {
