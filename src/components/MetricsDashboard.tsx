@@ -35,8 +35,8 @@ export function MetricsDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Times usados nas métricas da Sala Ágil (module = "sala_agil")
-  const agileTeams = useMemo(() => teams.filter((t) => t.module === "sala_agil"), [teams]);
+  // Mesma base de times usada em outros pontos da aplicação (menu lateral etc.)
+  const visibleTeams = useMemo(() => teams, [teams]);
 
   const effectiveTeamId = filters.teamId === "all" ? currentTeamId || "" : filters.teamId;
 
@@ -47,8 +47,7 @@ export function MetricsDashboard() {
       try {
         const teamId = forceTeamId ?? filters.teamId;
 
-        // base de times do módulo Sala Ágil
-        const baseTeams = agileTeams;
+        const baseTeams = visibleTeams;
 
         const teamsToLoad =
           isAdmin && teamId === "all"
@@ -109,12 +108,12 @@ export function MetricsDashboard() {
         setLoading(false);
       }
     },
-    [filters.teamId, filters.sprintId, agileTeams, isAdmin, currentTeamId],
+    [filters.teamId, filters.sprintId, visibleTeams, isAdmin, currentTeamId],
   ); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (agileTeams.length > 0) loadData();
-  }, [loadData, agileTeams]);
+    if (visibleTeams.length > 0) loadData();
+  }, [loadData, visibleTeams]);
 
   const handleFiltersChange = (newFilters: DashboardFilterState) => {
     setFilters(newFilters);
@@ -122,7 +121,7 @@ export function MetricsDashboard() {
 
   const activeMetrics = effectiveTeamId ? metrics.filter((m) => m.teamId === effectiveTeamId) : metrics;
 
-  const totalTeams = agileTeams.length;
+  const totalTeams = visibleTeams.length;
 
   return (
     <div className="space-y-4">
@@ -130,7 +129,7 @@ export function MetricsDashboard() {
         <div className="flex items-center gap-2">
           <BarChart2 className="h-6 w-6 text-primary" />
           <div>
-            <h1 className="text-xl font-bold tracking-tight">Métricas da Sala Ágil</h1>
+            <h1 className="text-xl font-bold tracking-tight">Métricas</h1>
             <p className="text-xs text-muted-foreground">
               Visão agregada de produtividade, bugs e lead time das sprints do time.
             </p>
@@ -138,11 +137,11 @@ export function MetricsDashboard() {
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Badge variant="outline">
-            {totalTeams} time{totalTeams !== 1 ? "s" : ""} Sala Ágil
+            {totalTeams} time{totalTeams !== 1 ? "s" : ""}
           </Badge>
           {effectiveTeamId && (
             <Badge variant="secondary">
-              Time selecionado: {agileTeams.find((t) => t.id === effectiveTeamId)?.name || "N/A"}
+              Time selecionado: {visibleTeams.find((t) => t.id === effectiveTeamId)?.name || "N/A"}
             </Badge>
           )}
         </div>
@@ -152,7 +151,7 @@ export function MetricsDashboard() {
         filters={filters}
         onChange={handleFiltersChange}
         sprints={[]} // carregue sprints se precisar filtrar por sprint específica
-        teams={agileTeams}
+        teams={visibleTeams}
         members={[]} // se for adicionar filtro por membro, popular aqui
         isAdmin={isAdmin}
       />
@@ -175,7 +174,7 @@ export function MetricsDashboard() {
         <EmptyState
           icon={TrendingUp}
           title="Nenhuma métrica disponível"
-          description="Crie times e sprints na Sala Ágil para visualizar as métricas."
+          description="Crie times e sprints para visualizar as métricas."
         />
       )}
 
@@ -187,7 +186,7 @@ export function MetricsDashboard() {
                 <CardTitle className="flex items-center justify-between gap-2">
                   <span className="truncate">{teamName}</span>
                   <Badge variant="outline" className="text-[10px]">
-                    Time Sala Ágil
+                    Time
                   </Badge>
                 </CardTitle>
               </CardHeader>
