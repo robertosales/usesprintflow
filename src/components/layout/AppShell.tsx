@@ -297,13 +297,13 @@ function Sidebar({
   const { activeSprint } = useSprint();
   const accent = getAccent(module);
   const navItems = module === "sala_agil" ? NAV_SALA_AGIL : NAV_SUSTENTACAO;
-  const userRole = profile?.role ?? "";
+  const userRole = "" ?? "";
   const filtered = navItems.filter((i) => !i.roles || i.roles.includes(userRole) || isAdmin);
   const groups = (["main", "org", "config"] as const)
     .map((g) => ({ key: g, label: GROUP_LABELS[g], items: filtered.filter((i) => i.group === g) }))
     .filter((g) => g.items.length > 0);
 
-  const userInitials = (profile?.full_name ?? profile?.email ?? "U")
+  const userInitials = (profile?.display_name ?? profile?.email ?? "U")
     .split(" ")
     .map((n: string) => n[0])
     .join("")
@@ -425,16 +425,16 @@ function Sidebar({
               {!collapsed && (
                 <div className="flex-1 text-left min-w-0">
                   <p className="text-[12px] font-medium text-white/80 truncate leading-none mb-0.5">
-                    {profile?.full_name ?? "Usuário"}
+                    {profile?.display_name ?? "Usuário"}
                   </p>
-                  <p className="text-[10px] text-white/30 truncate leading-none">{profile?.role ?? ""}</p>
+                  <p className="text-[10px] text-white/30 truncate leading-none">{"" ?? ""}</p>
                 </div>
               )}
               {!collapsed && <ChevronRight className="h-3 w-3 text-white/20 shrink-0" />}
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="end" className="w-48">
-            <DropdownMenuLabel className="text-xs">{profile?.full_name ?? profile?.email}</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-xs">{profile?.display_name ?? profile?.email}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate("/modulos")} className="text-xs gap-2 cursor-pointer">
               <Zap className="h-3.5 w-3.5" /> Trocar módulo
