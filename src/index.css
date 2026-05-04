@@ -1,154 +1,67 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+/* src/index.css  (ou globals.css) */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer base {
-  :root {
-    --background: 220 20% 97%;
-    --foreground: 220 25% 10%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 220 25% 10%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 10%;
-
-    --primary: 173 58% 39%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 220 14% 92%;
-    --secondary-foreground: 220 25% 15%;
-
-    --muted: 220 14% 95%;
-    --muted-foreground: 220 10% 46%;
-
-    --accent: 262 52% 55%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-
-    --success: 142 71% 40%;
-    --success-foreground: 0 0% 100%;
-
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
-
-    --info: 210 92% 55%;
-    --info-foreground: 0 0% 100%;
-
-    --border: 220 13% 89%;
-    --input: 220 13% 89%;
-    --ring: 173 58% 39%;
-
-    --radius: 0.5rem;
-
-    --sidebar-background: 220 25% 10%;
-    --sidebar-foreground: 220 14% 80%;
-    --sidebar-primary: 173 58% 39%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 20% 16%;
-    --sidebar-accent-foreground: 220 14% 90%;
-    --sidebar-border: 220 20% 18%;
-    --sidebar-ring: 173 58% 39%;
-
-    --kanban-aguardando: 220 14% 95%;
-    --kanban-desenvolvimento: 210 92% 95%;
-    --kanban-review: 262 52% 95%;
-    --kanban-teste: 38 92% 95%;
-    --kanban-bug: 0 72% 95%;
-    --kanban-pronto: 142 71% 95%;
-  }
-
-  .dark {
-    --background: 220 25% 7%;
-    --foreground: 220 14% 92%;
-
-    --card: 220 25% 10%;
-    --card-foreground: 220 14% 92%;
-
-    --popover: 220 25% 10%;
-    --popover-foreground: 220 14% 92%;
-
-    --primary: 173 58% 45%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 220 20% 16%;
-    --secondary-foreground: 220 14% 90%;
-
-    --muted: 220 20% 14%;
-    --muted-foreground: 220 10% 55%;
-
-    --accent: 262 52% 60%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 62% 45%;
-    --destructive-foreground: 0 0% 100%;
-
-    --success: 142 71% 45%;
-    --success-foreground: 0 0% 100%;
-
-    --warning: 38 92% 55%;
-    --warning-foreground: 0 0% 100%;
-
-    --info: 210 92% 60%;
-    --info-foreground: 0 0% 100%;
-
-    --border: 220 20% 18%;
-    --input: 220 20% 18%;
-    --ring: 173 58% 45%;
-
-    --sidebar-background: 220 25% 5%;
-    --sidebar-foreground: 220 14% 80%;
-    --sidebar-primary: 173 58% 45%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 20% 12%;
-    --sidebar-accent-foreground: 220 14% 90%;
-    --sidebar-border: 220 20% 12%;
-    --sidebar-ring: 173 58% 45%;
-
-    --kanban-aguardando: 220 20% 14%;
-    --kanban-desenvolvimento: 210 40% 15%;
-    --kanban-review: 262 30% 15%;
-    --kanban-teste: 38 40% 15%;
-    --kanban-bug: 0 40% 15%;
-    --kanban-pronto: 142 40% 15%;
-  }
-}
-
-/* ── Tema âmbar para módulo Sustentação ─────────────────────────── */
-[data-module="sustentacao"] {
-  --primary: 38 92% 50%;
+/* ── Tokens light (padrão) ─────────────────────────────── */
+:root,
+[data-theme="light"] {
+  --background: 240 10% 97%;
+  --foreground: 240 10% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 10%;
+  --primary: 173 98% 22%; /* teal #016a6e */
   --primary-foreground: 0 0% 100%;
-  --ring: 38 92% 50%;
-  --sidebar-primary: 38 92% 50%;
-  --sidebar-ring: 38 92% 50%;
+  --secondary: 240 5% 92%;
+  --secondary-foreground: 240 6% 20%;
+  --muted: 240 5% 90%;
+  --muted-foreground: 240 4% 46%;
+  --accent: 173 40% 92%;
+  --accent-foreground: 173 98% 18%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 6% 87%;
+  --input: 240 6% 87%;
+  --ring: 173 98% 22%;
+  --radius: 0.5rem;
 }
 
-[data-module="sustentacao"].dark {
-  --primary: 38 92% 55%;
-  --primary-foreground: 0 0% 100%;
-  --ring: 38 92% 55%;
-  --sidebar-primary: 38 92% 55%;
-  --sidebar-ring: 38 92% 55%;
+/* ── Tokens dark ────────────────────────────────────────── */
+[data-theme="dark"],
+.dark {
+  --background: 240 10% 8%;
+  --foreground: 240 5% 90%;
+  --card: 240 10% 11%;
+  --card-foreground: 240 5% 90%;
+  --popover: 240 10% 11%;
+  --popover-foreground: 240 5% 90%;
+  --primary: 173 50% 55%; /* teal claro no dark */
+  --primary-foreground: 240 10% 8%;
+  --secondary: 240 8% 18%;
+  --secondary-foreground: 240 5% 80%;
+  --muted: 240 8% 18%;
+  --muted-foreground: 240 5% 55%;
+  --accent: 173 30% 18%;
+  --accent-foreground: 173 50% 65%;
+  --destructive: 0 60% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 8% 20%;
+  --input: 240 8% 20%;
+  --ring: 173 50% 55%;
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-
-  body {
-    @apply bg-background text-foreground font-sans antialiased;
-    font-family: "Inter", sans-serif;
-  }
+/* ── Base ───────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-@layer utilities {
-  .scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
-  }
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: "Satoshi", "Inter", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition:
+    background-color 250ms ease,
+    color 250ms ease;
 }
