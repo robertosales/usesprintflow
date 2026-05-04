@@ -2,39 +2,39 @@ import { useEffect, useState } from "react";
 import { Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-function getCurrentTheme(): "light" | "dark" {
-  return (document.documentElement.getAttribute("data-theme") as "light" | "dark") || "dark";
+function applyTheme(theme: "light" | "dark") {
+  const root = document.documentElement;
+  root.setAttribute("data-theme", theme);
+  root.classList.toggle("dark", theme === "dark");
+  try {
+    sessionStorage.setItem("theme", theme);
+  } catch {}
+}
+
+function getInitialTheme(): "light" | "dark" {
+  try {
+    const saved = sessionStorage.getItem("theme");
+    if (saved === "light" || saved === "dark") return saved;
+  } catch {}
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark">(getCurrentTheme);
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    // Lê o que já está no DOM (definido pelo main.tsx antes do React montar)
+    const fromDOM = document.documentElement.getAttribute("data-theme");
+    if (fromDOM === "light" || fromDOM === "dark") return fromDOM;
+    return getInitialTheme();
+  });
 
-  // Sincroniza se o atributo mudar externamente
+  // Garante que o DOM está em sincronia ao montar
   useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setTheme(getCurrentTheme());
-    });
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme"],
-    });
-    return () => observer.disconnect();
+    applyTheme(theme);
   }, []);
 
   const toggle = () => {
     const next = theme === "dark" ? "light" : "dark";
-    // Atualiza o DOM
-    document.documentElement.setAttribute("data-theme", next);
-    if (next === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-    // Persiste
-    try {
-      sessionStorage.setItem("theme", next);
-    } catch {}
-    // Atualiza estado local (o MutationObserver também faria isso, mas é mais rápido assim)
+    applyTheme(next);
     setTheme(next);
   };
 
