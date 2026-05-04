@@ -76,6 +76,9 @@ function usePersistedState<T>(key: string, defaultValue: T) {
 export function MetricsDashboard() {
   const { isAdmin, teams, currentTeamId } = useAuth();
 
+  // Times apenas da sala ágil
+  const agileTeams = useMemo(() => teams.filter((t: any) => t.context === "sala_agil"), [teams]);
+
   // ✅ Filtros persistidos no sessionStorage — sobrevivem a troca de aba e foco
   const [filters, setFilters] = usePersistedState<DashboardFilterState>("metricas:filters", {
     ...INITIAL_FILTERS,
@@ -120,8 +123,12 @@ export function MetricsDashboard() {
       lastFetchRef.current = now;
       lastTeamIdRef.current = teamId;
 
+      const baseTeams = agileTeams;
+
       const teamsToLoad =
-        isAdmin && teamId === "all" ? teams : teams.filter((t) => t.id === (teamId === "all" ? currentTeamId : teamId));
+        isAdmin && teamId === "all"
+          ? baseTeams
+          : baseTeams.filter((t: any) => t.id === (teamId === "all" ? currentTeamId : teamId));
 
       const allSprints: any[] = [];
       const allHUs: any[] = [];
@@ -157,13 +164,13 @@ export function MetricsDashboard() {
       });
       setLoading(false);
     },
-    [filters.teamId, teams, isAdmin, currentTeamId],
+    [filters.teamId, agileTeams, isAdmin, currentTeamId],
   ); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ✅ Só dispara quando teamId realmente muda
   useEffect(() => {
-    if (teams.length > 0) loadData();
-  }, [filters.teamId, teams]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (agileTeams.length > 0) loadData();
+  }, [filters.teamId, agileTeams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ✅ Bloqueia refetch ao voltar o foco — Page Visibility API
   useEffect(() => {
@@ -489,7 +496,7 @@ export function MetricsDashboard() {
         filters={filters}
         onChange={setFilters}
         sprints={rawData.sprints.map((s: any) => ({ id: s.id, name: s.name, isActive: s.is_active }))}
-        teams={teams}
+        teams={agileTeams}
         members={rawData.developers.map((d: any) => ({ id: d.id, name: d.name }))}
         isAdmin={isAdmin}
       />
