@@ -21,13 +21,11 @@ function getInitialTheme(): "light" | "dark" {
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<"light" | "dark">(() => {
-    // Lê o que já está no DOM (definido pelo main.tsx antes do React montar)
     const fromDOM = document.documentElement.getAttribute("data-theme");
     if (fromDOM === "light" || fromDOM === "dark") return fromDOM;
     return getInitialTheme();
   });
 
-  // Garante que o DOM está em sincronia ao montar
   useEffect(() => {
     applyTheme(theme);
   }, []);
