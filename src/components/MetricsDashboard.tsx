@@ -109,6 +109,15 @@ export function MetricsDashboard() {
     }
   }, [currentTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Normaliza teamId se não existir em agileTeams (evita mostrar ID cru no chip)
+  useEffect(() => {
+    if (filters.teamId === "all") return;
+    const existsInAgile = agileTeams.some((t: any) => t.id === filters.teamId);
+    if (!existsInAgile) {
+      setFilters((prev) => ({ ...prev, teamId: "all" }));
+    }
+  }, [filters.teamId, agileTeams, setFilters]);
+
   // ✅ loadData com useCallback + staleTime + guard de teamId
   const loadData = useCallback(
     async (forceTeamId?: string) => {
