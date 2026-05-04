@@ -5,13 +5,21 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SprintProvider } from "@/contexts/SprintContext";
-import Index from "./pages/Index.tsx";
+
+// Pages
 import Auth from "./pages/Auth.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import ForcePasswordChange from "./pages/ForcePasswordChange.tsx";
-import SustentacaoPage from "./features/sustentacao/SustentacaoPage";
 import { ModuleSelector } from "./features/sustentacao/components/ModuleSelector";
+
+// Sala Ágil
+import Index from "./pages/Index.tsx";
+import { DashboardHome } from "./components/DashboardHome";
+import { ProductivityReport } from "./components/sala-agil/ProductivityReport";
+
+// Sustentação
+import SustentacaoPage from "./features/sustentacao/SustentacaoPage";
 
 const queryClient = new QueryClient();
 
@@ -38,24 +46,23 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   const { session, loading, profile, isAdmin } = useAuth();
   if (loading) return null;
   if (!session) return <>{children}</>;
-  // Admin (by role) or module_access='admin' → module selector
-  if (isAdmin || profile?.module_access === 'admin') return <Navigate to="/modulos" replace />;
-  if (profile?.module_access === 'sustentacao') return <Navigate to="/sustentacao" replace />;
+  if (isAdmin || profile?.module_access === "admin") return <Navigate to="/modulos" replace />;
+  if (profile?.module_access === "sustentacao") return <Navigate to="/sustentacao" replace />;
   return <Navigate to="/sala-agil" replace />;
 }
 
 function ModuleRedirect() {
   const { profile, loading, isAdmin } = useAuth();
   if (loading) return null;
-  if (isAdmin || profile?.module_access === 'admin') return <Navigate to="/modulos" replace />;
-  if (profile?.module_access === 'sustentacao') return <Navigate to="/sustentacao" replace />;
+  if (isAdmin || profile?.module_access === "admin") return <Navigate to="/modulos" replace />;
+  if (profile?.module_access === "sustentacao") return <Navigate to="/sustentacao" replace />;
   return <Navigate to="/sala-agil" replace />;
 }
 
-function ModuleGuard({ module, children }: { module: 'sala_agil' | 'sustentacao'; children: React.ReactNode }) {
+function ModuleGuard({ module, children }: { module: "sala_agil" | "sustentacao"; children: React.ReactNode }) {
   const { profile, isAdmin } = useAuth();
-  const moduleAccess = profile?.module_access || 'sala_agil';
-  if (isAdmin || moduleAccess === 'admin' || moduleAccess === module) {
+  const moduleAccess = profile?.module_access || "sala_agil";
+  if (isAdmin || moduleAccess === "admin" || moduleAccess === module) {
     return <>{children}</>;
   }
   return (
@@ -77,12 +84,64 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
+              {/* Auth */}
+              <Route
+                path="/auth"
+                element={
+                  <AuthRoute>
+                    <Auth />
+                  </AuthRoute>
+                }
+              />
               <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
-              <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
-              <Route path="/sala-agil" element={<ProtectedRoute><ModuleGuard module="sala_agil"><Index /></ModuleGuard></ProtectedRoute>} />
-              <Route path="/sustentacao" element={<ProtectedRoute><ModuleGuard module="sustentacao"><SustentacaoPage /></ModuleGuard></ProtectedRoute>} />
+
+              {/* Root */}
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <ModuleRedirect />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/modulos"
+                element={
+                  <ProtectedRoute>
+                    <ModuleSelector />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Sala Ágil — rotas aninhadas */}
+              <Route
+                path="/sala-agil"
+                element={
+                  <ProtectedRoute>
+                    <ModuleGuard module="sala_agil">
+                      <Index />
+                    </ModuleGuard>
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<DashboardHome />} />
+                <Route path="produtividade" element={<ProductivityReport />} />
+                {/* As demais sub-rotas (kanban, backlog, sprints, etc.)
+                    continuam sendo gerenciadas pelo Index/AppShell existente */}
+              </Route>
+
+              {/* Sustentação */}
+              <Route
+                path="/sustentacao/*"
+                element={
+                  <ProtectedRoute>
+                    <ModuleGuard module="sustentacao">
+                      <SustentacaoPage />
+                    </ModuleGuard>
+                  </ProtectedRoute>
+                }
+              />
+
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
