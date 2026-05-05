@@ -43,6 +43,7 @@ import {
   Moon,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
+import { AxionLogo } from "@/components/AxionLogo";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 
