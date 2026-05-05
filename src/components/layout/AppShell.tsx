@@ -424,13 +424,15 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
 
 // ─── DarkModeToggle ───────────────────────────────────────────────────────────
 function DarkModeToggle() {
-  const [isDark, setIsDark] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem("theme");
-      if (saved) return saved === "dark";
-    } catch {}
-    return document.documentElement.classList.contains("dark");
-  });
+  // Lê do DOM (data-theme) como fonte de verdade
+  const getTheme = (): boolean => document.documentElement.getAttribute("data-theme") === "dark";
+
+  const [isDark, setIsDark] = useState(getTheme);
+
+  // Sincroniza ao montar — garante consistência se outro toggle mudou o estado
+  useEffect(() => {
+    setIsDark(getTheme());
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
