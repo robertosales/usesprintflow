@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Mail, Lock, User, Hexagon } from "lucide-react";
+import { Mail, Lock, User } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
+import { AxionLogo } from "@/components/AxionLogo";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
@@ -80,12 +81,12 @@ const Auth = () => {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-2">
           <div className="flex justify-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <Hexagon className="h-6 w-6 text-primary-foreground" />
-            </div>
+            <AxionLogo size={56} />
           </div>
-          <CardTitle className="text-2xl font-bold">{APP_NAME}</CardTitle>
-          <CardDescription>Gestão Inteligente</CardDescription>
+          <CardTitle className="text-2xl font-bold">
+            Axi<span className="text-[#1f9a52]">o</span>n
+          </CardTitle>
+          <CardDescription>{APP_TAGLINE}</CardDescription>
         </CardHeader>
         <CardContent>
           <Button
