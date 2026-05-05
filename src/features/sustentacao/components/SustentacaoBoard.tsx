@@ -1,12 +1,11 @@
 import { useState, useMemo } from "react";
-import { ChevronDown, ChevronRight, Plus, Settings2, Search, X, Clock, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Search, X, Clock, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 import type { Demanda } from "../types/demanda";
 export type { Demanda };
 
-// ── Constantes de workflow (espelho de DemandaDetail) ─────────────────────────
-// Mantido inline para evitar dependência de @/components/DemandaDetail
+// ── Constantes de workflow ──────────────────────────────────────────────────────
 export const WORKFLOWLABELS: Record<string, string> = {
   filaatendimento: "Fila de Atendimento",
   planejamentoelaboracao: "Planejamento Em Elaboração",
@@ -62,11 +61,11 @@ function slaDaysRemaining(demanda: Demanda): number | null {
   return Math.round((dead.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-// ── Colunas visíveis ──────────────────────────────────────────────────────────
+// ── Colunas visíveis ────────────────────────────────────────────────────────────
 const ALL_COLS = [...FLOWPRINCIPAL, "bloqueada", "rejeitada"] as string[];
 const VISIBLE_COLS = ALL_COLS.filter((v, i, a) => a.indexOf(v) === i);
 
-// ── Demanda Card ──────────────────────────────────────────────────────────────
+// ── Demanda Card ────────────────────────────────────────────────────────────
 function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accentHex: string; onClick?: () => void }) {
   const slaD = slaDaysRemaining(demanda);
   const urgent = slaD !== null && slaD <= 3 && slaD >= 0;
@@ -75,12 +74,14 @@ function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accent
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-lg border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.06)]
-        hover:shadow-[0_3px_10px_rgba(0,0,0,0.10)] transition-all duration-150 overflow-hidden cursor-pointer select-none"
+      // FIX: trocado bg-white/text-gray-* por variáveis de tema (bg-card, text-foreground, etc.)
+      className="bg-card rounded-lg border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.08)]
+        hover:shadow-[0_3px_10px_rgba(0,0,0,0.15)] hover:border-border transition-all duration-150
+        overflow-hidden cursor-pointer select-none"
     >
       <div className="h-0.5" style={{ backgroundColor: accentHex }} />
       <div className="p-3">
-        <p className="text-[13px] font-semibold leading-snug text-gray-800 line-clamp-2 mb-2">
+        <p className="text-[13px] font-semibold leading-snug text-foreground line-clamp-2 mb-2">
           {demanda.descricao ?? demanda.tipo ?? "Demanda"}
         </p>
 
@@ -89,13 +90,14 @@ function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accent
             {demanda.rhm && (
               <span
                 className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: hexAlpha(accentHex, 0.12), color: accentHex }}
+                style={{ backgroundColor: hexAlpha(accentHex, 0.14), color: accentHex }}
               >
                 RHM {demanda.rhm}
               </span>
             )}
             {demanda.projeto && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium truncate max-w-[140px]">
+              // FIX: bg-gray-100/text-gray-600 → bg-muted/text-muted-foreground
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium truncate max-w-[140px]">
                 {demanda.projeto}
               </span>
             )}
@@ -103,7 +105,8 @@ function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accent
         )}
 
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+          {/* FIX: text-gray-400 → text-muted-foreground */}
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <polyline points="14 2 14 8 20 8" />
@@ -113,12 +116,16 @@ function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accent
 
           <div className="flex items-center gap-1">
             {late && (
-              <span className="flex items-center gap-0.5 text-[10px] bg-red-50 text-red-600 border border-red-200 rounded px-1.5 py-0.5">
+              // FIX: bg-red-50/text-red-600/border-red-200 → usa destructive com alpha p/ dark
+              <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5
+                bg-destructive/10 text-destructive border border-destructive/25">
                 <AlertTriangle className="h-2.5 w-2.5" /> SLA
               </span>
             )}
             {urgent && !late && (
-              <span className="flex items-center gap-0.5 text-[10px] bg-amber-50 text-amber-600 border border-amber-200 rounded px-1.5 py-0.5">
+              // FIX: bg-amber-50/text-amber-600/border-amber-200 → warning com alpha
+              <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5
+                bg-warning/10 text-warning border border-warning/25">
                 <Clock className="h-2.5 w-2.5" /> {slaD}d
               </span>
             )}
@@ -126,7 +133,8 @@ function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accent
         </div>
 
         {slaD !== null && !urgent && !late && (
-          <div className="flex items-center gap-1 mt-1.5 text-[10px] text-gray-400">
+          // FIX: text-gray-400 → text-muted-foreground
+          <div className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground">
             <Clock className="h-2.5 w-2.5" />
             <span>{slaD}d restantes</span>
           </div>
@@ -136,7 +144,7 @@ function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accent
   );
 }
 
-// ── Collapsed strip ───────────────────────────────────────────────────────────
+// ── Collapsed strip ────────────────────────────────────────────────────────────
 function CollapsedCol({
   label,
   count,
@@ -151,11 +159,13 @@ function CollapsedCol({
   return (
     <div
       onClick={onClick}
+      // FIX: bg-white → bg-card
       className="flex-shrink-0 w-10 flex flex-col items-center rounded-xl border border-border/60
-        bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] cursor-pointer hover:shadow-md transition-all py-3 gap-3"
+        bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08)] cursor-pointer hover:shadow-md transition-all py-3 gap-3"
       style={{ borderTop: `3px solid ${accentHex}` }}
     >
-      <ChevronRight className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+      {/* FIX: text-gray-400 → text-muted-foreground */}
+      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       <span
         className="text-[11px] font-bold flex-1 text-center leading-tight"
         style={{ writingMode: "vertical-lr", transform: "rotate(180deg)", color: accentHex, letterSpacing: "0.04em" }}
@@ -164,7 +174,7 @@ function CollapsedCol({
       </span>
       <span
         className="text-[10px] font-bold rounded-full min-w-[18px] text-center py-0.5 px-1"
-        style={{ backgroundColor: hexAlpha(accentHex, 0.12), color: accentHex }}
+        style={{ backgroundColor: hexAlpha(accentHex, 0.14), color: accentHex }}
       >
         {count}
       </span>
@@ -172,7 +182,7 @@ function CollapsedCol({
   );
 }
 
-// ── Expanded column ───────────────────────────────────────────────────────────
+// ── Expanded column ────────────────────────────────────────────────────────────
 function ExpandedCol({
   label,
   demandas,
@@ -190,27 +200,32 @@ function ExpandedCol({
 }) {
   return (
     <div
+      // FIX: bg-white → bg-card
       className="flex-shrink-0 w-[280px] flex flex-col rounded-xl border border-border/60
-        bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-all"
+        bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08)] transition-all"
       style={{ borderTop: `3px solid ${accentHex}` }}
     >
-      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100">
-        <button onClick={onCollapse} className="p-0.5 rounded hover:bg-gray-100 transition-colors">
-          <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+      {/* FIX: border-gray-100 → border-border */}
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border">
+        {/* FIX: hover:bg-gray-100 → hover:bg-muted */}
+        <button onClick={onCollapse} className="p-0.5 rounded hover:bg-muted transition-colors">
+          {/* FIX: text-gray-400 → text-muted-foreground */}
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
         <span className="flex-1 text-[12px] font-bold tracking-wide uppercase truncate" style={{ color: accentHex }}>
           {label}
         </span>
         <span
           className="text-[11px] font-bold rounded-full h-5 min-w-[20px] px-1.5 flex items-center justify-center"
-          style={{ backgroundColor: hexAlpha(accentHex, 0.12), color: accentHex }}
+          style={{ backgroundColor: hexAlpha(accentHex, 0.14), color: accentHex }}
         >
           {demandas.length}
         </span>
         {onAdd && (
+          // FIX: hover:bg-gray-100/text-gray-400/hover:text-gray-600 → muted
           <button
             onClick={onAdd}
-            className="p-1 rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
+            className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
@@ -219,7 +234,8 @@ function ExpandedCol({
 
       <div className="p-2 overflow-y-auto flex-1 space-y-2" style={{ maxHeight: "calc(100vh - 260px)" }}>
         {demandas.length === 0 ? (
-          <div className="flex items-center justify-center h-14 rounded-lg border-2 border-dashed border-gray-200 text-xs text-gray-400">
+          // FIX: border-gray-200/text-gray-400 → border-border/text-muted-foreground
+          <div className="flex items-center justify-center h-14 rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground">
             Sem demandas
           </div>
         ) : (
@@ -232,15 +248,10 @@ function ExpandedCol({
   );
 }
 
-// ── Board ─────────────────────────────────────────────────────────────────────
+// ── Board ──────────────────────────────────────────────────────────────────────
 export interface SustentacaoBoardProps {
-  /**
-   * Lista de demandas — busque no contexto/hook do seu projeto e passe aqui:
-   *   const { demandas } = useSustentacao();
-   */
   demandas?: Demanda[];
   onSelectDemanda?: (demanda: Demanda) => void;
-  /** Chamado ao clicar em "+" numa coluna. Recebe o status da coluna. */
   onCreateDemanda?: (situacao?: string) => void;
 }
 
@@ -292,18 +303,20 @@ export function SustentacaoBoard({ demandas: demandasProp, onSelectDemanda, onCr
       {/* top bar */}
       <div className="flex items-center gap-3 px-1">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+          {/* FIX: text-gray-400 → text-muted-foreground */}
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          {/* FIX: border-gray-200/bg-white/placeholder:text-gray-400 → variáveis de tema */}
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar demanda..."
-            className="w-full pl-9 pr-3 h-9 rounded-lg border border-gray-200 bg-white text-sm
-              placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+            className="w-full pl-9 pr-3 h-9 rounded-lg border border-border bg-background text-foreground text-sm
+              placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
           />
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
               <X className="h-3.5 w-3.5" />
             </button>
