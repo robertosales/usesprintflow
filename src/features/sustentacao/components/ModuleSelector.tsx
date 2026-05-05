@@ -2,19 +2,21 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Kanban, Wrench, LogOut, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AxionLogo } from "@/components/AxionLogo";
 
-// Logo SVG reutilizável
-function SprintFlowLogo() {
+// Logo Axion reutilizável
+function AxionBrand() {
   return (
     <div className="flex items-center gap-3 select-none">
-      <svg aria-label="SprintFlow" width="36" height="36" viewBox="0 0 28 28" fill="none">
-        <polygon points="14,2 25,8 25,20 14,26 3,20 3,8" fill="hsl(var(--primary))" opacity="0.15" />
-        <polygon points="14,2 25,8 25,20 14,26 3,20 3,8" stroke="hsl(var(--primary))" strokeWidth="1.5" fill="none" />
-        <path d="M15.5 7L10 15h5l-2.5 6L19 13h-5z" fill="hsl(var(--primary))" />
-      </svg>
-      <span className="text-2xl font-bold tracking-tight">
-        Sprint<span className="text-primary">Flow</span>
-      </span>
+      <AxionLogo size={36} />
+      <div className="leading-tight">
+        <span className="block text-2xl font-bold tracking-tight">
+          Axi<span className="text-[#1f9a52]">o</span>n
+        </span>
+        <span className="block text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          Operações & Fluxo Ágil
+        </span>
+      </div>
     </div>
   );
 }
@@ -88,7 +90,7 @@ export function ModuleSelector() {
     <div className="min-h-screen bg-background flex flex-col">
       {/* Top bar */}
       <header className="h-14 border-b border-border flex items-center justify-between px-6">
-        <SprintFlowLogo />
+        <AxionBrand />
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground hidden sm:block">
             {profile?.display_name ?? profile?.email}
@@ -106,7 +108,7 @@ export function ModuleSelector() {
       {/* Content */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
         <div className="max-w-2xl w-full text-center mb-10">
-          <h1 className="text-2xl font-bold text-foreground mb-2">Bem-vindo ao NexOps</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Bem-vindo ao Axion</h1>
           <p className="text-muted-foreground text-sm">Escolha o módulo para começar</p>
         </div>
 
