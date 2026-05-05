@@ -546,7 +546,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             )}
           >
             {collapsed ? (
-              <HeartSuitIcon className={cn("h-5 w-5 shrink-0", accent.textCls)} />
+              <AxionLogo size={22} />
             ) : (
               <div className="flex items-center gap-2.5">
                 <HeartSuitIcon className={cn("h-5 w-5 shrink-0", accent.textCls)} />
