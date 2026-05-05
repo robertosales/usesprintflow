@@ -81,12 +81,12 @@ const Auth = () => {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-2">
           <div className="flex justify-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <Hexagon className="h-6 w-6 text-primary-foreground" />
-            </div>
+            <AxionLogo size={56} />
           </div>
-          <CardTitle className="text-2xl font-bold">{APP_NAME}</CardTitle>
-          <CardDescription>Gestão Inteligente</CardDescription>
+          <CardTitle className="text-2xl font-bold">
+            Axi<span className="text-[#1f9a52]">o</span>n
+          </CardTitle>
+          <CardDescription>{APP_TAGLINE}</CardDescription>
         </CardHeader>
         <CardContent>
           <Button
