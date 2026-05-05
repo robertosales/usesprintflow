@@ -2,6 +2,18 @@ import { useEffect, useState } from "react";
 import { Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+// Fonte de verdade: lê data-theme do DOM, com fallback para classList e prefers-color-scheme
+function getThemeFromDOM(): "light" | "dark" {
+  const attr = document.documentElement.getAttribute("data-theme");
+  if (attr === "light" || attr === "dark") return attr;
+  if (document.documentElement.classList.contains("dark")) return "dark";
+  try {
+    const saved = sessionStorage.getItem("theme");
+    if (saved === "light" || saved === "dark") return saved;
+  } catch {}
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 function applyTheme(theme: "light" | "dark") {
   const root = document.documentElement;
   root.setAttribute("data-theme", theme);
@@ -11,23 +23,15 @@ function applyTheme(theme: "light" | "dark") {
   } catch {}
 }
 
-function getInitialTheme(): "light" | "dark" {
-  try {
-    const saved = sessionStorage.getItem("theme");
-    if (saved === "light" || saved === "dark") return saved;
-  } catch {}
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    const fromDOM = document.documentElement.getAttribute("data-theme");
-    if (fromDOM === "light" || fromDOM === "dark") return fromDOM;
-    return getInitialTheme();
-  });
+  const [theme, setTheme] = useState<"light" | "dark">(getThemeFromDOM);
 
+  // Sincroniza com o DOM ao montar — garante que o ícone reflita o tema real,
+  // mesmo que outro componente (DarkModeToggle no AppShell) tenha alterado antes.
   useEffect(() => {
-    applyTheme(theme);
+    const current = getThemeFromDOM();
+    setTheme(current);
+    applyTheme(current);
   }, []);
 
   const toggle = () => {
