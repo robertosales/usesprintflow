@@ -90,7 +90,9 @@ export function ModuleSelector() {
       <header className="h-14 border-b border-border flex items-center justify-between px-6">
         <SprintFlowLogo />
         <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground hidden sm:block">{profile?.display_name ?? profile?.email}</span>
+          <span className="text-sm text-muted-foreground hidden sm:block">
+            {profile?.display_name ?? profile?.email}
+          </span>
           <button
             onClick={signOut}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted"
@@ -104,7 +106,7 @@ export function ModuleSelector() {
       {/* Content */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
         <div className="max-w-2xl w-full text-center mb-10">
-          <h1 className="text-2xl font-bold text-foreground mb-2">Bem-vindo ao SprintFlow</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Bem-vindo ao NexOps</h1>
           <p className="text-muted-foreground text-sm">Escolha o módulo para começar</p>
         </div>
 
