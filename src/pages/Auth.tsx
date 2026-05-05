@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Mail, Lock, User, Hexagon } from "lucide-react";
+import { Mail, Lock, User } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { AxionLogo } from "@/components/AxionLogo";
