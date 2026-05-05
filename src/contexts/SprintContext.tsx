@@ -486,20 +486,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const act = activities.find((a) => a.id === id);
     if (act) {
       const huActs = activities.filter((a) => a.huId === act.huId);
-      const allClosed = huActs.every((a) => (a.id === id ? true : a.isClosed));
-      if (allClosed && huActs.length > 0) {
-        const lastCol = workflowColumns[workflowColumns.length - 1]?.key;
-        if (lastCol) {
-          const hu = userStories.find((h) => h.id === act.huId);
-          if (hu && hu.status !== lastCol) {
-            await supabase.from("user_stories").update({ status: lastCol }).eq("id", act.huId);
-            toast.info(
-              `🎉 Todas as atividades concluídas! HU movida para "${workflowColumns[workflowColumns.length - 1]?.label}"`,
-            );
-            await refreshAll();
-          }
-        }
-      }
+      // Auto-move desabilitado: ao concluir uma atividade o card permanece na coluna atual.
+      // Movimentações ocorrem manualmente ou via regras de automação configuradas pelo usuário.
       if (act.activityType === "bug") {
         const hu = userStories.find((h) => h.id === act.huId);
         if (hu && hu.status === "bug") {
