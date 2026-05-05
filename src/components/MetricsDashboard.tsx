@@ -77,7 +77,7 @@ export function MetricsDashboard() {
   const { isAdmin, teams, currentTeamId } = useAuth();
 
   // Times apenas da sala ágil
-  const agileTeams = useMemo(() => teams.filter((t: any) => t.context === "sala_agil"), [teams]);
+  const agileTeams = useMemo(() => teams.filter((t: any) => t.module === "sala_agil"), [teams]);
 
   // ✅ Filtros persistidos no sessionStorage — sobrevivem a troca de aba e foco
   const [filters, setFilters] = usePersistedState<DashboardFilterState>("metricas:filters", {
