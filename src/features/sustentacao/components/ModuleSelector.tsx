@@ -1,8 +1,56 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Kanban, Wrench, LogOut, ChevronRight } from "lucide-react";
+import { Kanban, Wrench, LogOut, ChevronRight, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AxionLogo } from "@/components/AxionLogo";
+import { useState, useEffect } from "react";
+
+// Helpers de tema — mesma lógica do AppShell para manter consistência
+function getThemeIsDark(): boolean {
+  const attr = document.documentElement.getAttribute("data-theme");
+  if (attr === "dark") return true;
+  if (attr === "light") return false;
+  return document.documentElement.classList.contains("dark");
+}
+
+function applyTheme(dark: boolean) {
+  const root = document.documentElement;
+  if (dark) {
+    root.classList.add("dark");
+    root.setAttribute("data-theme", "dark");
+  } else {
+    root.classList.remove("dark");
+    root.setAttribute("data-theme", "light");
+  }
+  try {
+    sessionStorage.setItem("theme", dark ? "dark" : "light");
+  } catch {}
+}
+
+function ThemeToggle() {
+  const [isDark, setIsDark] = useState(getThemeIsDark);
+
+  // Sincroniza com o DOM ao montar
+  useEffect(() => {
+    setIsDark(getThemeIsDark());
+  }, []);
+
+  const toggle = () => {
+    const next = !isDark;
+    applyTheme(next);
+    setIsDark(next);
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
+      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+    >
+      {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </button>
+  );
+}
 
 // Logo Axion reutilizável
 function AxionBrand() {
@@ -14,7 +62,7 @@ function AxionBrand() {
           Axi<span className="text-[#1f9a52]">o</span>n
         </span>
         <span className="block text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-          Operações & Fluxo Ágil
+          Operações &amp; Fluxo Ágil
         </span>
       </div>
     </div>
@@ -91,10 +139,11 @@ export function ModuleSelector() {
       {/* Top bar */}
       <header className="h-14 border-b border-border flex items-center justify-between px-6">
         <AxionBrand />
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground hidden sm:block">
             {profile?.display_name ?? profile?.email}
           </span>
+          <ThemeToggle />
           <button
             onClick={signOut}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted"
