@@ -9,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Mail, Lock, User, Hexagon } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
+import { AxionLogo } from "@/components/AxionLogo";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
