@@ -549,9 +549,9 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
               <AxionLogo size={22} />
             ) : (
               <div className="flex items-center gap-2.5">
-                <HeartSuitIcon className={cn("h-5 w-5 shrink-0", accent.textCls)} />
+                <AxionLogo size={22} />
                 <div className="min-w-0">
-                  <p className="text-[14px] font-bold text-foreground tracking-tight leading-none">SprintFlow</p>
+                  <p className="text-[14px] font-bold text-foreground tracking-tight leading-none">Axion</p>
                   <p className="text-[9px] text-muted-foreground uppercase tracking-widest leading-none mt-0.5">
                     {module === "sala_agil" ? "Sala Ágil" : "Sustentação"}
                   </p>
