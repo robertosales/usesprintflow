@@ -423,15 +423,22 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
 }
 
 // ─── DarkModeToggle ───────────────────────────────────────────────────────────
+// Lê data-theme do DOM como fonte de verdade, com fallback para classList
+function getThemeIsDark(): boolean {
+  const attr = document.documentElement.getAttribute("data-theme");
+  if (attr === "dark") return true;
+  if (attr === "light") return false;
+  return document.documentElement.classList.contains("dark");
+}
+
 function DarkModeToggle() {
-  // Lê do DOM (data-theme) como fonte de verdade
-  const getTheme = (): boolean => document.documentElement.getAttribute("data-theme") === "dark";
+  const [isDark, setIsDark] = useState(getThemeIsDark);
 
-  const [isDark, setIsDark] = useState(getTheme);
-
-  // Sincroniza ao montar — garante consistência se outro toggle mudou o estado
+  // Sincroniza com o DOM ao montar — garante que o ícone reflita o tema real,
+  // mesmo que o main.tsx ou ThemeToggle já tenha alterado data-theme antes desta montagem.
   useEffect(() => {
-    setIsDark(getTheme());
+    const current = getThemeIsDark();
+    setIsDark(current);
   }, []);
 
   useEffect(() => {
