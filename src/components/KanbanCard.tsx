@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { UserStory } from "@/types";
+import { UserStory } from "@/types/sprint";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
