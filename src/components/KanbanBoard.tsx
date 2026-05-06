@@ -164,11 +164,11 @@ export function KanbanBoard({ sprintId }: Props) {
         // Persiste no Supabase (não chama refreshAll)
         reorderUserStories(updates);
       } else {
-        // ── COLUNA DIFERENTE: pedir confirmação ────────────────────────────
-        setConfirmMove({ huId: draggedHu.id, toKey: targetColKey });
+        // ── COLUNA DIFERENTE: mover direto, sem confirmação ───────────────
+        updateUserStoryStatus(draggedHu.id, targetColKey as KanbanStatus);
       }
     },
-    [canMove, sprintStories, workflowColumns, reorderUserStories],
+    [canMove, sprintStories, workflowColumns, reorderUserStories, updateUserStoryStatus],
   );
 
   const handleConfirmMove = useCallback(async () => {
