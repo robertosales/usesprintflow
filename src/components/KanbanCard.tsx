@@ -10,6 +10,14 @@ import { Bug, Plus } from "lucide-react";
 import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { QuickActivityDialog } from "./QuickActivityDialog";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuSeparator,
+  ContextMenuLabel,
+} from "@/components/ui/context-menu";
 
 interface Props {
   hu: UserStory;
@@ -26,7 +34,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 export function KanbanCard({ hu, colHex }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: hu.id });
-  const { developers, epics, activities } = useSprint() as any;
+  const { developers, epics, activities, workflowColumns, updateUserStoryStatus } = useSprint() as any;
   const [quickOpen, setQuickOpen] = useState(false);
 
   const style: React.CSSProperties = {
@@ -51,7 +59,9 @@ export function KanbanCard({ hu, colHex }: Props) {
 
   return (
     <>
-    <Card
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <Card
       ref={setNodeRef}
       style={style}
       className="p-3 hover:shadow-md transition-shadow bg-card border group relative"
@@ -136,6 +146,25 @@ export function KanbanCard({ hu, colHex }: Props) {
         </div>
       </div>
     </Card>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-56">
+        <ContextMenuLabel>Mover para</ContextMenuLabel>
+        <ContextMenuSeparator />
+        {(workflowColumns ?? []).map((c: any) => (
+          <ContextMenuItem
+            key={c.key}
+            disabled={c.key === hu.status}
+            onClick={() => updateUserStoryStatus(hu.id, c.key)}
+          >
+            <span
+              className="inline-block h-2 w-2 rounded-full mr-2"
+              style={{ background: c.hex ?? "#6b7280" }}
+            />
+            {c.label}
+          </ContextMenuItem>
+        ))}
+      </ContextMenuContent>
+    </ContextMenu>
     {quickOpen && (
       <QuickActivityDialog
         open={quickOpen}
