@@ -216,6 +216,8 @@ export interface UserStory {
   votedAt?: string | null;
   votedBy?: string | null;
   orderIndex?: number;
+  /** Posição do card dentro da coluna do Kanban (reordenação drag-and-drop) */
+  position?: number;
   impediments?: Impediment[];
   tags?: string[];
   createdAt?: string;

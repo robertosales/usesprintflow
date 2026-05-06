@@ -49,6 +49,7 @@ interface SprintContextType {
   updateUserStory: (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => Promise<void>;
   removeUserStory: (id: string) => Promise<void>;
   updateUserStoryStatus: (id: string, status: KanbanStatus) => Promise<void>;
+  reorderUserStories: (updates: { id: string; position: number }[]) => Promise<void>;
   addActivity: (act: Omit<Activity, "id" | "endDate" | "createdAt">) => Promise<void>;
   updateActivity: (id: string, act: Partial<Omit<Activity, "id" | "createdAt">>) => Promise<void>;
   removeActivity: (id: string) => Promise<void>;
@@ -115,7 +116,12 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         supabase.from("developers").select("*").eq("team_id", teamId).limit(200),
         supabase.from("sprints").select("*").eq("team_id", teamId).limit(100),
         supabase.from("epics").select("*").eq("team_id", teamId).limit(100),
-        supabase.from("user_stories").select("*").eq("team_id", teamId).limit(500),
+        supabase
+          .from("user_stories")
+          .select("*")
+          .eq("team_id", teamId)
+          .order("position", { ascending: true })
+          .limit(500),
         supabase.from("activities").select("*").eq("team_id", teamId).limit(500),
         supabase.from("impediments").select("*").eq("team_id", teamId).limit(200),
         supabase.from("custom_field_definitions").select("*").eq("team_id", teamId).limit(50),
@@ -193,6 +199,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
           votedBy: h.voted_by || null,
           functionPoints: h.function_points != null ? Number(h.function_points) : null,
           assigneeId: h.assignee_id || null,
+          position: h.position ?? 0,
           impediments: impData
             .filter((imp: any) => imp.hu_id === h.id)
             .map((imp: any) => ({
@@ -259,8 +266,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       );
 
       // ── Colunas do workflow ───────────────────────────────────────────────
-      // normalizeWorkflowColumns garante que `hex` seja sempre resolvido,
-      // independente do formato salvo no banco (dotColor, value, hex direto, etc.)
       const wc = (wcRes.data || []) as any[];
       if (wc.length > 0) {
         const rawCols: WorkflowColumn[] = wc.map((c: any) => ({
@@ -272,7 +277,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
           wipLimit: c.wip_limit ?? null,
           orderIndex: c.sort_order ?? 0,
         }));
-        // normalizeWorkflowColumns resolve o hex de qualquer formato armazenado
         setWorkflowColumnsState(normalizeWorkflowColumns(rawCols));
       } else {
         setWorkflowColumnsState(DEFAULT_KANBAN_COLUMNS);
@@ -353,6 +357,11 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (!teamId) return;
     const count = userStories.length + 1;
     const firstCol = workflowColumns[0]?.key || "aguardando_desenvolvimento";
+    const targetStatus = hu.status || firstCol;
+    // Nova HU vai para o final da coluna destino
+    const lastPosition = userStories
+      .filter((h) => h.status === targetStatus)
+      .reduce((max, h) => Math.max(max, h.position ?? 0), -1) + 1;
     const { error } = await supabase.from("user_stories").insert({
       team_id: teamId,
       sprint_id: hu.sprintId,
@@ -362,7 +371,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       description: hu.description,
       story_points: hu.storyPoints,
       priority: hu.priority,
-      status: hu.status || firstCol,
+      status: targetStatus,
+      position: lastPosition,
       custom_fields: hu.customFields || {},
       start_date: hu.startDate || null,
       end_date: hu.endDate || null,
@@ -418,10 +428,34 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const hu = userStories.find((h) => h.id === id);
     if (hu) {
       const oldStatus = hu.status;
-      await supabase.from("user_stories").update({ status }).eq("id", id);
+      // Ao mover para outra coluna, vai para o final da coluna destino
+      const lastPosition = userStories
+        .filter((h) => h.status === status)
+        .reduce((max, h) => Math.max(max, h.position ?? 0), -1) + 1;
+      await supabase.from("user_stories").update({ status, position: lastPosition }).eq("id", id);
       if (oldStatus !== status) await runAutomations(id, oldStatus, status);
       await refreshAll();
     }
+  };
+
+  /**
+   * Reordena os cards dentro de uma coluna do Kanban.
+   * Atualização otimista: aplica na UI imediatamente, persiste no banco em paralelo.
+   */
+  const reorderUserStories = async (updates: { id: string; position: number }[]) => {
+    // Atualização otimista — UI reflete imediatamente sem aguardar o banco
+    setUserStories((prev) =>
+      prev.map((hu) => {
+        const upd = updates.find((u) => u.id === hu.id);
+        return upd ? { ...hu, position: upd.position } : hu;
+      }),
+    );
+    // Persiste todas as posições no Supabase em paralelo
+    await Promise.all(
+      updates.map(({ id, position }) =>
+        supabase.from("user_stories").update({ position }).eq("id", id),
+      ),
+    );
   };
 
   // ── ACTIVITIES ────────────────────────────────────────────────────────────
@@ -486,8 +520,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const act = activities.find((a) => a.id === id);
     if (act) {
       const huActs = activities.filter((a) => a.huId === act.huId);
-      // Auto-move desabilitado: ao concluir uma atividade o card permanece na coluna atual.
-      // Movimentações ocorrem manualmente ou via regras de automação configuradas pelo usuário.
       if (act.activityType === "bug") {
         const hu = userStories.find((h) => h.id === act.huId);
         if (hu && hu.status === "bug") {
@@ -719,7 +751,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       label: normalized.label,
       color_class: normalized.colorClass || "",
       dot_color: normalized.dotColor || "",
-      hex: normalized.hex, // ← sempre salva hex resolvido
+      hex: normalized.hex,
       sort_order: maxOrder,
     });
     if (error) {
@@ -742,11 +774,10 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (col.colorClass !== undefined) updateData.color_class = col.colorClass;
     if (col.dotColor !== undefined) {
       updateData.dot_color = col.dotColor;
-      // Sempre atualiza o hex derivado quando dotColor muda
       const fakeCol = { key, label: "", colorClass: "", dotColor: col.dotColor, hex: col.hex };
       updateData.hex = getColumnHex(fakeCol as WorkflowColumn);
     }
-    if (col.hex !== undefined) updateData.hex = col.hex; // hex explícito sobrescreve
+    if (col.hex !== undefined) updateData.hex = col.hex;
     if (col.wipLimit !== undefined) updateData.wip_limit = col.wipLimit;
     await supabase.from("workflow_columns").update(updateData).eq("team_id", teamId).eq("key", key);
     await refreshAll();
@@ -793,6 +824,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         updateUserStory,
         removeUserStory,
         updateUserStoryStatus,
+        reorderUserStories,
         addActivity,
         updateActivity,
         removeActivity,
