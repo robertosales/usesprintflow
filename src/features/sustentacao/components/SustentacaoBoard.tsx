@@ -14,10 +14,10 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import type { Demanda } from "../types/demanda";
-import { getResponsavelAtivo, SITUACAO_LABELS } from "../types/demanda";
+import { SITUACAO_LABELS } from "../types/demanda";
 export type { Demanda };
 
-// ── Constantes de workflow (chaves alinhadas com o banco) ─────────────────────
+// ── Constantes de workflow ────────────────────────────────────────────────────
 export const WORKFLOWLABELS: Record<string, string> = SITUACAO_LABELS;
 
 export const FLOWPRINCIPAL = [
@@ -71,6 +71,135 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
+/** Retorna todos os responsáveis únicos da demanda (por papel) */
+function getResponsaveis(demanda: Demanda): { papel: string; nome: string }[] {
+  const mapa: Record<string, string | null | undefined> = {
+    desenvolvedor:  demanda.responsavel_dev,
+    analista:       demanda.responsavel_requisitos,
+    arquiteto:      demanda.responsavel_arquiteto,
+    testador:       demanda.responsavel_teste,
+  };
+  return Object.entries(mapa)
+    .filter(([, nome]) => !!nome)
+    .map(([papel, nome]) => ({ papel, nome: nome! }));
+}
+
+// ── Avatar único com tooltip ──────────────────────────────────────────────────
+function ResponsavelAvatar({
+  nome,
+  accentHex,
+  size = "sm",
+}: {
+  nome: string;
+  accentHex: string;
+  size?: "sm" | "md";
+}) {
+  const dim = size === "md" ? "h-6 w-6 text-[9px]" : "h-5 w-5 text-[8px]";
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            className={`${dim} rounded-full flex items-center justify-center font-bold shrink-0 border border-background ring-1`}
+            style={{
+              backgroundColor: hexAlpha(accentHex, 0.18),
+              color: accentHex,
+              ringColor: accentHex,
+            }}
+          >
+            {getInitials(nome)}
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs max-w-[180px]">
+          {nome}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+// ── Grupo de avatares: último em destaque, +N expansível ─────────────────────
+function ResponsaveisGroup({
+  responsaveis,
+  accentHex,
+}: {
+  responsaveis: { papel: string; nome: string }[];
+  accentHex: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (responsaveis.length === 0) {
+    return (
+      <div className="h-5 w-5 rounded-full flex items-center justify-center opacity-30">
+        <User className="h-3 w-3 text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // O último responsável fica em destaque (mais recente / mais relevante)
+  const ultimo = responsaveis[responsaveis.length - 1];
+  const demais = responsaveis.slice(0, -1);
+
+  if (!expanded) {
+    return (
+      <div className="flex items-center gap-0.5">
+        {/* +N botão quando há mais de 1 */}
+        {demais.length > 0 && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpanded(true);
+                  }}
+                  className="h-5 min-w-[20px] px-1 rounded-full text-[8px] font-bold border transition-colors"
+                  style={{
+                    backgroundColor: hexAlpha(accentHex, 0.1),
+                    color: accentHex,
+                    borderColor: hexAlpha(accentHex, 0.3),
+                  }}
+                >
+                  +{demais.length}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                <div className="space-y-0.5">
+                  {demais.map((r) => (
+                    <div key={r.papel}>{r.nome}</div>
+                  ))}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+        {/* Último responsável em destaque */}
+        <ResponsavelAvatar nome={ultimo.nome} accentHex={accentHex} size="md" />
+      </div>
+    );
+  }
+
+  // Expandido: lista todos
+  return (
+    <div
+      className="flex items-center gap-0.5 flex-wrap max-w-[140px]"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {responsaveis.map((r) => (
+        <ResponsavelAvatar key={r.papel} nome={r.nome} accentHex={accentHex} size="sm" />
+      ))}
+      <button
+        onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
+        className="h-5 w-5 rounded-full flex items-center justify-center text-[8px] font-bold border transition-colors"
+        style={{ color: accentHex, borderColor: hexAlpha(accentHex, 0.3) }}
+        title="Recolher"
+      >
+        ‹
+      </button>
+    </div>
+  );
+}
+
 // ── Colunas visíveis ──────────────────────────────────────────────────────────
 const ALL_COLS = [...FLOWPRINCIPAL, "bloqueada", "rejeitada"] as string[];
 const VISIBLE_COLS = ALL_COLS.filter((v, i, a) => a.indexOf(v) === i);
@@ -90,7 +219,7 @@ function DemandaCard({
   const slaD = slaDaysRemaining(demanda);
   const urgent = slaD !== null && slaD <= 3 && slaD >= 0;
   const late   = slaD !== null && slaD < 0;
-  const responsavel = getResponsavelAtivo(demanda);
+  const responsaveis = getResponsaveis(demanda);
 
   return (
     <ContextMenu>
@@ -127,16 +256,8 @@ function DemandaCard({
               </div>
             )}
 
-            {/* Footer: ID + SLA + Avatar */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                </svg>
-                <span className="font-mono font-medium">#{String(demanda.id ?? "").slice(0, 8)}</span>
-              </div>
-
+            {/* Footer: SLA + Avatares (sem #ID) */}
+            <div className="flex items-center justify-between mt-1">
               <div className="flex items-center gap-1.5">
                 {/* SLA badges */}
                 {late && (
@@ -151,42 +272,16 @@ function DemandaCard({
                     <Clock className="h-2.5 w-2.5" /> {slaD}d
                   </span>
                 )}
-
-                {/* Avatar do responsável com tooltip */}
-                {responsavel ? (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div
-                          className="h-5 w-5 rounded-full flex items-center justify-center text-[8px] font-bold shrink-0"
-                          style={{
-                            backgroundColor: hexAlpha(accentHex, 0.18),
-                            color: accentHex,
-                          }}
-                        >
-                          {getInitials(responsavel)}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs">
-                        {responsavel}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : (
-                  <div className="h-5 w-5 rounded-full flex items-center justify-center opacity-30">
-                    <User className="h-3 w-3 text-muted-foreground" />
-                  </div>
+                {slaD !== null && !urgent && !late && (
+                  <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                    <Clock className="h-2.5 w-2.5" /> {slaD}d
+                  </span>
                 )}
               </div>
-            </div>
 
-            {/* SLA restante (não urgente) */}
-            {slaD !== null && !urgent && !late && (
-              <div className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground">
-                <Clock className="h-2.5 w-2.5" />
-                <span>{slaD}d restantes</span>
-              </div>
-            )}
+              {/* Grupo de avatares de responsáveis */}
+              <ResponsaveisGroup responsaveis={responsaveis} accentHex={accentHex} />
+            </div>
           </div>
         </div>
       </ContextMenuTrigger>
