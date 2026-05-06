@@ -13,6 +13,7 @@ import { QuickActivityDialog } from "./QuickActivityDialog";
 
 interface Props {
   hu: UserStory;
+  colHex?: string;
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -22,7 +23,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   critical: "bg-red-100 text-red-700 border-red-300",
 };
 
-export function KanbanCard({ hu }: Props) {
+export function KanbanCard({ hu, colHex }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: hu.id });
   const { developers, epics, activities } = useSprint() as any;
@@ -32,6 +33,12 @@ export function KanbanCard({ hu }: Props) {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
+    ...(colHex
+      ? {
+          background: `color-mix(in srgb, ${colHex} 8%, var(--card))`,
+          borderLeft: `3px solid ${colHex}`,
+        }
+      : {}),
   };
 
   const assignee = hu.assigneeId ? developers.find((d: any) => d.id === hu.assigneeId) : null;
@@ -74,11 +81,8 @@ export function KanbanCard({ hu }: Props) {
             </Badge>
           )}
         </div>
-        <p className="text-xs font-medium text-foreground line-clamp-3 leading-snug">
-          {hu.title}
-        </p>
         {epic && (
-          <div className="mt-1.5 flex items-center gap-1">
+          <div className="mb-1 flex items-center gap-1">
             <span
               className="inline-block h-2 w-2 rounded-full shrink-0"
               style={{ background: epic.color }}
@@ -86,6 +90,9 @@ export function KanbanCard({ hu }: Props) {
             <span className="text-[10px] text-muted-foreground truncate">{epic.name}</span>
           </div>
         )}
+        <p className="text-xs font-medium text-foreground line-clamp-3 leading-snug">
+          {hu.title}
+        </p>
       </div>
 
       {/* Footer: hours + avatar + add button */}
