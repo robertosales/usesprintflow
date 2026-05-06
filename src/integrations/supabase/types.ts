@@ -1879,6 +1879,7 @@ export type Database = {
           function_points: number | null
           id: string
           planning_status: string | null
+          position: number
           priority: string
           size_reference: string | null
           sprint_id: string | null
@@ -1905,6 +1906,7 @@ export type Database = {
           function_points?: number | null
           id?: string
           planning_status?: string | null
+          position?: number
           priority?: string
           size_reference?: string | null
           sprint_id?: string | null
@@ -1931,6 +1933,7 @@ export type Database = {
           function_points?: number | null
           id?: string
           planning_status?: string | null
+          position?: number
           priority?: string
           size_reference?: string | null
           sprint_id?: string | null
