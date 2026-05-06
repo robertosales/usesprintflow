@@ -103,6 +103,19 @@ function SustentacaoSection({ active }: { active: string }) {
     [moveTo],
   );
 
+  // Handler chamado pelo context menu "Mover para" do SustentacaoBoard
+  const handleMoveDemanda = useCallback(
+    async (demanda: Demanda, targetKey: string) => {
+      try {
+        await moveTo(demanda, targetKey);
+        toast.success("Demanda movida com sucesso!");
+      } catch (e: any) {
+        toast.error("Erro ao mover demanda: " + (e?.message ?? ""));
+      }
+    },
+    [moveTo],
+  );
+
   if (selected && active === "board") {
     return (
       <DemandaDetail
@@ -127,6 +140,7 @@ function SustentacaoSection({ active }: { active: string }) {
             demandas={demandas}
             onCreateDemanda={handleCreateDemanda}
             onSelectDemanda={handleSelectDemanda}
+            onMoveDemanda={handleMoveDemanda}
           />
           <DemandaForm
             open={showCreate}
