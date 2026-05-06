@@ -15,9 +15,9 @@ import {
   verticalListSortingStrategy,
   arrayMove,
 } from "@dnd-kit/sortable";
-import { useSprintContext } from "@/features/agil/context/SprintContext";
+import { useSprintContext } from "@/contexts/SprintContext";
 import { KanbanCard } from "./KanbanCard";
-import { KanbanStatus } from "@/types";
+import { KanbanStatus } from "@/types/sprint";
 import { toast } from "sonner";
 import { Search, ChevronDown, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -31,8 +31,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useRole } from "@/hooks/useRole";
-import { WorkflowColumn } from "@/types";
+import { usePermissions } from "@/hooks/usePermissions";
+import { WorkflowColumn } from "@/types/sprint";
 import { Button } from "./ui/button";
 
 // Mapa de cores padrão por coluna
