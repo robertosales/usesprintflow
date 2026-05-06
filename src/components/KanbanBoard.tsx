@@ -19,7 +19,7 @@ import { useSprint } from "@/contexts/SprintContext";
 import { KanbanCard } from "./KanbanCard";
 import { KanbanStatus } from "@/types/sprint";
 import { toast } from "sonner";
-import { Search, ChevronDown, ChevronRight } from "lucide-react";
+import { Search, ChevronRight, LayoutList } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
@@ -32,7 +32,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { WorkflowColumn } from "@/types/sprint";
-import { Button } from "./ui/button";
 
 // Mapa de cores padrao por coluna
 const COLUMN_COLORS: Record<string, string> = {
@@ -66,16 +65,17 @@ export function KanbanBoard({ sprintId }: Props) {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [confirmMove, setConfirmMove] = useState<{ huId: string; toKey: string } | null>(null);
-  const [expandedCols, setExpandedCols] = useState<Set<string>>(new Set(workflowColumns.map((c) => c.key)));
+  const [expandedCols, setExpandedCols] = useState<Set<string>>(
+    new Set((workflowColumns ?? []).map((c: WorkflowColumn) => c.key)),
+  );
 
-  // Estado local de posicoes - atualizado otimisticamente no drag
+  // Estado local de posicoes
   const [localPositions, setLocalPositions] = useState<Record<string, number>>({});
 
-  // Sincroniza com o banco quando userStories muda (ex: outro usuario move card)
   useEffect(() => {
     setLocalPositions((prev) => {
       const next = { ...prev };
-      userStories.forEach((h) => {
+      userStories.forEach((h: any) => {
         if (!activeId) next[h.id] = h.position ?? 0;
       });
       return next;
@@ -88,32 +88,30 @@ export function KanbanBoard({ sprintId }: Props) {
 
   const sprintStories = useMemo(() => {
     const base = sprintId
-      ? userStories.filter((h) => h.sprintId === sprintId)
+      ? userStories.filter((h: any) => h.sprintId === sprintId)
       : userStories;
     const q = searchQuery.trim().toLowerCase();
     const filtered = q
-      ? base.filter((h) => h.title.toLowerCase().includes(q) || h.code.toLowerCase().includes(q))
+      ? base.filter((h: any) => h.title.toLowerCase().includes(q) || h.code.toLowerCase().includes(q))
       : base;
     return [...filtered].sort(
-      (a, b) => (localPositions[a.id] ?? a.position ?? 0) - (localPositions[b.id] ?? b.position ?? 0),
+      (a: any, b: any) =>
+        (localPositions[a.id] ?? a.position ?? 0) - (localPositions[b.id] ?? b.position ?? 0),
     );
   }, [userStories, sprintId, searchQuery, localPositions]);
 
-  const handleDragStart = useCallback(
-    (event: DragStartEvent) => {
-      setActiveId(String(event.active.id));
-    },
-    [],
-  );
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(String(event.active.id));
+  }, []);
 
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
       const { over } = event;
       if (!over) { setDragOverCol(null); return; }
       const overId = String(over.id);
-      const colKey = workflowColumns.find((c) => c.key === overId)?.key;
+      const colKey = (workflowColumns ?? []).find((c: WorkflowColumn) => c.key === overId)?.key;
       if (colKey) { setDragOverCol(colKey); return; }
-      const overHu = sprintStories.find((h) => h.id === overId);
+      const overHu = sprintStories.find((h: any) => h.id === overId);
       setDragOverCol(overHu?.status ?? null);
     },
     [workflowColumns, sprintStories],
@@ -123,38 +121,31 @@ export function KanbanBoard({ sprintId }: Props) {
     (event: DragEndEvent) => {
       setActiveId(null);
       setDragOverCol(null);
-
       const { active, over } = event;
       if (!over || !canMove) return;
-
       const activeIdStr = String(active.id);
       const overIdStr = String(over.id);
       if (activeIdStr === overIdStr) return;
-
-      const draggedHu = sprintStories.find((h) => h.id === activeIdStr);
+      const draggedHu = sprintStories.find((h: any) => h.id === activeIdStr);
       if (!draggedHu) return;
-
       const targetColKey =
-        workflowColumns.find((c) => c.key === overIdStr)?.key ??
-        sprintStories.find((h) => h.id === overIdStr)?.status;
+        (workflowColumns ?? []).find((c: WorkflowColumn) => c.key === overIdStr)?.key ??
+        sprintStories.find((h: any) => h.id === overIdStr)?.status;
       if (!targetColKey) return;
-
       if (draggedHu.status === targetColKey) {
-        // MESMA COLUNA: reordenar verticalmente
-        const colItems = sprintStories.filter((h) => h.status === draggedHu.status);
-        const oldIdx = colItems.findIndex((h) => h.id === activeIdStr);
-        const newIdx = colItems.findIndex((h) => h.id === overIdStr);
+        const colItems = sprintStories.filter((h: any) => h.status === draggedHu.status);
+        const oldIdx = colItems.findIndex((h: any) => h.id === activeIdStr);
+        const newIdx = colItems.findIndex((h: any) => h.id === overIdStr);
         if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
         const reordered = arrayMove(colItems, oldIdx, newIdx);
-        const updates = reordered.map((h, idx) => ({ id: h.id, position: idx }));
+        const updates = reordered.map((h: any, idx: number) => ({ id: h.id, position: idx }));
         setLocalPositions((prev) => {
           const next = { ...prev };
-          updates.forEach(({ id, position }) => { next[id] = position; });
+          updates.forEach(({ id, position }: any) => { next[id] = position; });
           return next;
         });
         reorderUserStories(updates);
       } else {
-        // COLUNA DIFERENTE: pedir confirmacao
         setConfirmMove({ huId: draggedHu.id, toKey: targetColKey });
       }
     },
@@ -173,7 +164,16 @@ export function KanbanBoard({ sprintId }: Props) {
     }
   }, [confirmMove, updateUserStoryStatus]);
 
-  const activeHu = activeId ? sprintStories.find((h) => h.id === activeId) : null;
+  const activeHu = activeId ? sprintStories.find((h: any) => h.id === activeId) : null;
+
+  function toggleCol(key: string) {
+    setExpandedCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   return (
     <>
@@ -196,43 +196,92 @@ export function KanbanBoard({ sprintId }: Props) {
         onDragEnd={handleDragEnd}
       >
         <div className="flex gap-3 overflow-x-auto pb-4 items-start">
-          {workflowColumns.map((col) => {
+          {(workflowColumns ?? []).map((col: WorkflowColumn) => {
             const colHex = getColumnHex(col);
-            const colItems = sprintStories.filter((h) => h.status === col.key);
+            const colItems = sprintStories.filter((h: any) => h.status === col.key);
             const isExpanded = expandedCols.has(col.key);
             const isOver = dragOverCol === col.key;
 
+            /* ── COLUNA COLAPSADA: barra vertical compacta ── */
+            if (!isExpanded) {
+              return (
+                <div
+                  key={col.key}
+                  onClick={() => toggleCol(col.key)}
+                  title={`Expandir ${col.label}`}
+                  className="flex flex-col items-center rounded-xl border cursor-pointer select-none
+                    transition-all duration-200 hover:opacity-80 shrink-0"
+                  style={{
+                    width: 44,
+                    minHeight: 180,
+                    background: `color-mix(in srgb, ${colHex} 5%, var(--background))`,
+                    borderColor: `color-mix(in srgb, ${colHex} 30%, transparent)`,
+                  }}
+                >
+                  {/* Topo colorido + chevron */}
+                  <div
+                    className="w-full flex items-center justify-center rounded-t-xl py-2"
+                    style={{ background: colHex }}
+                  >
+                    <ChevronRight className="h-4 w-4 text-white" />
+                  </div>
+
+                  {/* Nome rotacionado */}
+                  <div className="flex-1 flex items-center justify-center py-3">
+                    <span
+                      className="text-[11px] font-semibold uppercase tracking-widest whitespace-nowrap"
+                      style={{
+                        writingMode: "vertical-rl" as React.CSSProperties["writingMode"],
+                        transform: "rotate(180deg)",
+                        color: colHex,
+                        maxHeight: 200,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {col.label}
+                    </span>
+                  </div>
+
+                  {/* Contador na base */}
+                  <div className="pb-3 flex flex-col items-center gap-1">
+                    <LayoutList className="h-3 w-3" style={{ color: colHex, opacity: 0.6 }} />
+                    <span
+                      className="text-[11px] font-bold tabular-nums"
+                      style={{ color: colHex }}
+                    >
+                      {colItems.length}
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
+            /* ── COLUNA EXPANDIDA: layout normal ── */
             return (
               <div
                 key={col.key}
-                className={`flex flex-col rounded-xl border transition-all duration-200 ${
+                className={`flex flex-col rounded-xl border transition-all duration-200 shrink-0 ${
                   isOver ? "ring-2 ring-offset-1" : "ring-0"
                 }`}
                 style={{
-                  minWidth: 240,
                   width: 260,
                   background: `color-mix(in srgb, ${colHex} 5%, var(--background))`,
                   borderColor: `color-mix(in srgb, ${colHex} 30%, transparent)`,
                   ...(isOver ? { "--tw-ring-color": colHex } as React.CSSProperties : {}),
                 }}
               >
-                {/* Cabecalho da coluna */}
+                {/* Cabecalho */}
                 <div
                   className="flex items-center justify-between px-3 py-2.5 rounded-t-xl cursor-pointer select-none"
                   style={{ borderBottom: `2px solid ${colHex}` }}
-                  onClick={() =>
-                    setExpandedCols((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(col.key)) next.delete(col.key);
-                      else next.add(col.key);
-                      return next;
-                    })
-                  }
+                  onClick={() => toggleCol(col.key)}
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    {isExpanded
-                      ? <ChevronDown className="h-3 w-3 shrink-0" style={{ color: colHex }} />
-                      : <ChevronRight className="h-3 w-3 shrink-0" style={{ color: colHex }} />}
+                    <ChevronRight
+                      className="h-3 w-3 shrink-0 rotate-90"
+                      style={{ color: colHex }}
+                    />
                     <span
                       className="text-xs font-semibold truncate uppercase tracking-wider"
                       style={{ color: colHex }}
@@ -252,50 +301,46 @@ export function KanbanBoard({ sprintId }: Props) {
                 </div>
 
                 {/* Lista de cards */}
-                {isExpanded && (
-                  <SortableContext
-                    items={colItems.map((h) => h.id)}
-                    strategy={verticalListSortingStrategy}
+                <SortableContext
+                  items={colItems.map((h: any) => h.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div
+                    id={col.key}
+                    className="flex flex-col gap-2 p-2 min-h-[80px] max-h-[calc(100vh-260px)] overflow-y-auto"
                   >
-                    <div
-                      id={col.key}
-                      className="flex flex-col gap-2 p-2 min-h-[80px] max-h-[calc(100vh-260px)] overflow-y-auto"
-                    >
-                      {colItems.map((hu) => {
-                        const isDragging = hu.id === activeId;
-                        return (
-                          <div
-                            key={hu.id}
-                            style={{ opacity: isDragging ? 0.3 : 1, transition: "opacity 0.15s" }}
-                          >
-                            <KanbanCard hu={hu} colHex={colHex} />
-                          </div>
-                        );
-                      })}
-
-                      {/* Drop zone vazia */}
-                      {colItems.length === 0 && (
+                    {colItems.map((hu: any) => {
+                      const isDragging = hu.id === activeId;
+                      return (
                         <div
-                          className="flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-[11px] text-muted-foreground/50 transition-colors"
-                          style={{
-                            borderColor: isOver
-                              ? `color-mix(in srgb, ${colHex} 50%, transparent)`
-                              : undefined,
-                            color: isOver ? colHex : undefined,
-                          }}
+                          key={hu.id}
+                          style={{ opacity: isDragging ? 0.3 : 1, transition: "opacity 0.15s" }}
                         >
-                          {isOver ? "Soltar aqui" : "Sem cards"}
+                          <KanbanCard hu={hu} colHex={colHex} />
                         </div>
-                      )}
-                    </div>
-                  </SortableContext>
-                )}
+                      );
+                    })}
+
+                    {colItems.length === 0 && (
+                      <div
+                        className="flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-[11px] text-muted-foreground/50 transition-colors"
+                        style={{
+                          borderColor: isOver
+                            ? `color-mix(in srgb, ${colHex} 50%, transparent)`
+                            : undefined,
+                          color: isOver ? colHex : undefined,
+                        }}
+                      >
+                        {isOver ? "Soltar aqui" : "Sem cards"}
+                      </div>
+                    )}
+                  </div>
+                </SortableContext>
               </div>
             );
           })}
         </div>
 
-        {/* Overlay do card sendo arrastado */}
         <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
           {activeHu && (
             <div
@@ -308,7 +353,6 @@ export function KanbanBoard({ sprintId }: Props) {
         </DragOverlay>
       </DndContext>
 
-      {/* Dialog de confirmacao de mudanca de coluna */}
       <AlertDialog open={!!confirmMove} onOpenChange={(o) => !o && setConfirmMove(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -316,7 +360,7 @@ export function KanbanBoard({ sprintId }: Props) {
             <AlertDialogDescription>
               Deseja mover este card para a coluna{" "}
               <strong>
-                {workflowColumns.find((c) => c.key === confirmMove?.toKey)?.label ?? confirmMove?.toKey}
+                {(workflowColumns ?? []).find((c: WorkflowColumn) => c.key === confirmMove?.toKey)?.label ?? confirmMove?.toKey}
               </strong>
               ?
             </AlertDialogDescription>
