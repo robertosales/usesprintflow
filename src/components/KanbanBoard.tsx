@@ -19,7 +19,7 @@ import { useSprint } from "@/contexts/SprintContext";
 import { KanbanCard } from "./KanbanCard";
 import { KanbanStatus } from "@/types/sprint";
 import { toast } from "sonner";
-import { Search, ChevronDown, ChevronRight, ChevronLeft } from "lucide-react";
+import { Search, ChevronDown, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
@@ -34,7 +34,7 @@ import {
 import { WorkflowColumn } from "@/types/sprint";
 import { Button } from "./ui/button";
 
-// Mapa de cores padrão por coluna
+// Mapa de cores padrao por coluna
 const COLUMN_COLORS: Record<string, string> = {
   backlog:     "#6b7280",
   todo:        "#3b82f6",
@@ -68,15 +68,14 @@ export function KanbanBoard({ sprintId }: Props) {
   const [confirmMove, setConfirmMove] = useState<{ huId: string; toKey: string } | null>(null);
   const [expandedCols, setExpandedCols] = useState<Set<string>>(new Set(workflowColumns.map((c) => c.key)));
 
-  // Estado local de posições — atualizado otimisticamente no drag
+  // Estado local de posicoes - atualizado otimisticamente no drag
   const [localPositions, setLocalPositions] = useState<Record<string, number>>({});
 
-  // Sincroniza com o banco quando userStories muda (ex: outro usuário move card)
+  // Sincroniza com o banco quando userStories muda (ex: outro usuario move card)
   useEffect(() => {
     setLocalPositions((prev) => {
       const next = { ...prev };
       userStories.forEach((h) => {
-        // Só atualiza se não há drag ativo (activeId nulo)
         if (!activeId) next[h.id] = h.position ?? 0;
       });
       return next;
@@ -87,7 +86,6 @@ export function KanbanBoard({ sprintId }: Props) {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
-  // Cards do sprint atual, filtrados por busca e ordenados por localPositions
   const sprintStories = useMemo(() => {
     const base = sprintId
       ? userStories.filter((h) => h.sprintId === sprintId)
@@ -96,7 +94,6 @@ export function KanbanBoard({ sprintId }: Props) {
     const filtered = q
       ? base.filter((h) => h.title.toLowerCase().includes(q) || h.code.toLowerCase().includes(q))
       : base;
-    // [...filtered] evita mutar o array original do estado React
     return [...filtered].sort(
       (a, b) => (localPositions[a.id] ?? a.position ?? 0) - (localPositions[b.id] ?? b.position ?? 0),
     );
@@ -143,32 +140,25 @@ export function KanbanBoard({ sprintId }: Props) {
       if (!targetColKey) return;
 
       if (draggedHu.status === targetColKey) {
-        // ── MESMA COLUNA: reordenar verticalmente ──────────────────────────
-        // sprintStories já ordenado por localPositions — sem re-sort
+        // MESMA COLUNA: reordenar verticalmente
         const colItems = sprintStories.filter((h) => h.status === draggedHu.status);
-
         const oldIdx = colItems.findIndex((h) => h.id === activeIdStr);
         const newIdx = colItems.findIndex((h) => h.id === overIdStr);
         if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
-
         const reordered = arrayMove(colItems, oldIdx, newIdx);
         const updates = reordered.map((h, idx) => ({ id: h.id, position: idx }));
-
-        // Atualiza localPositions IMEDIATAMENTE — evita flash de reorder
         setLocalPositions((prev) => {
           const next = { ...prev };
           updates.forEach(({ id, position }) => { next[id] = position; });
           return next;
         });
-
-        // Persiste no Supabase (não chama refreshAll)
         reorderUserStories(updates);
       } else {
-        // ── COLUNA DIFERENTE: mover direto, sem confirmação ───────────────
-        updateUserStoryStatus(draggedHu.id, targetColKey as KanbanStatus);
+        // COLUNA DIFERENTE: pedir confirmacao
+        setConfirmMove({ huId: draggedHu.id, toKey: targetColKey });
       }
     },
-    [canMove, sprintStories, workflowColumns, reorderUserStories, updateUserStoryStatus],
+    [canMove, sprintStories, workflowColumns, reorderUserStories],
   );
 
   const handleConfirmMove = useCallback(async () => {
@@ -208,7 +198,6 @@ export function KanbanBoard({ sprintId }: Props) {
         <div className="flex gap-3 overflow-x-auto pb-4 items-start">
           {workflowColumns.map((col) => {
             const colHex = getColumnHex(col);
-            // sprintStories já ordenado por localPositions
             const colItems = sprintStories.filter((h) => h.status === col.key);
             const isExpanded = expandedCols.has(col.key);
             const isOver = dragOverCol === col.key;
@@ -217,20 +206,17 @@ export function KanbanBoard({ sprintId }: Props) {
               <div
                 key={col.key}
                 className={`flex flex-col rounded-xl border transition-all duration-200 ${
-                  isOver
-                    ? "ring-2 ring-offset-1"
-                    : "ring-0"
+                  isOver ? "ring-2 ring-offset-1" : "ring-0"
                 }`}
                 style={{
-                  minWidth: isExpanded ? 240 : 44,
-                  width: isExpanded ? 260 : 44,
+                  minWidth: 240,
+                  width: 260,
                   background: `color-mix(in srgb, ${colHex} 5%, var(--background))`,
                   borderColor: `color-mix(in srgb, ${colHex} 30%, transparent)`,
                   ...(isOver ? { "--tw-ring-color": colHex } as React.CSSProperties : {}),
                 }}
               >
-                {/* Cabeçalho da coluna */}
-                {isExpanded ? (
+                {/* Cabecalho da coluna */}
                 <div
                   className="flex items-center justify-between px-3 py-2.5 rounded-t-xl cursor-pointer select-none"
                   style={{ borderBottom: `2px solid ${colHex}` }}
@@ -244,7 +230,9 @@ export function KanbanBoard({ sprintId }: Props) {
                   }
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <ChevronLeft className="h-3 w-3 shrink-0" style={{ color: colHex }} />
+                    {isExpanded
+                      ? <ChevronDown className="h-3 w-3 shrink-0" style={{ color: colHex }} />
+                      : <ChevronRight className="h-3 w-3 shrink-0" style={{ color: colHex }} />}
                     <span
                       className="text-xs font-semibold truncate uppercase tracking-wider"
                       style={{ color: colHex }}
@@ -262,41 +250,6 @@ export function KanbanBoard({ sprintId }: Props) {
                     {colItems.length}
                   </span>
                 </div>
-                ) : (
-                  <div
-                    className="flex flex-col items-center gap-2 py-2 cursor-pointer select-none rounded-xl"
-                    onClick={() =>
-                      setExpandedCols((prev) => {
-                        const next = new Set(prev);
-                        next.add(col.key);
-                        return next;
-                      })
-                    }
-                    title={col.label}
-                  >
-                    <ChevronRight className="h-4 w-4" style={{ color: colHex }} />
-                    <div
-                      className="flex-1 flex items-center justify-center px-1 py-3 rounded-md min-h-[180px]"
-                      style={{ background: colHex }}
-                    >
-                      <span
-                        className="text-[11px] font-semibold uppercase tracking-wider whitespace-nowrap text-white"
-                        style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
-                      >
-                        {col.label}
-                      </span>
-                    </div>
-                    <span
-                      className="text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded-full"
-                      style={{
-                        background: `color-mix(in srgb, ${colHex} 18%, transparent)`,
-                        color: colHex,
-                      }}
-                    >
-                      {colItems.length}
-                    </span>
-                  </div>
-                )}
 
                 {/* Lista de cards */}
                 {isExpanded && (
@@ -355,7 +308,7 @@ export function KanbanBoard({ sprintId }: Props) {
         </DragOverlay>
       </DndContext>
 
-      {/* Dialog de confirmação de mudança de coluna */}
+      {/* Dialog de confirmacao de mudanca de coluna */}
       <AlertDialog open={!!confirmMove} onOpenChange={(o) => !o && setConfirmMove(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
