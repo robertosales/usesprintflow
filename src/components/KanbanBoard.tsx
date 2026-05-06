@@ -280,58 +280,71 @@ function HUCard({
           {/* Expanded area */}
           {expanded && (
             <div className="px-4 pb-3 pt-1 border-t border-border/20 space-y-2">
-              {hu.description && (
-                <p className="text-[11px] text-muted-foreground leading-relaxed">{hu.description}</p>
-              )}
+              {/* Impedimentos ativos */}
               {activeImps.length > 0 && (
                 <div className="space-y-1">
                   {activeImps.map((imp) => (
-                    <div key={imp.id} className="flex items-start justify-between gap-2 p-2 rounded-lg bg-amber-50 border border-amber-100">
-                      <div className="flex items-start gap-1.5">
-                        <AlertTriangle className="h-3 w-3 text-amber-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-[10px] font-semibold text-amber-700">
-                            {IMPEDIMENT_CRITICALITY_LABELS[imp.criticality]} — {imp.reason}
-                          </p>
-                        </div>
+                    <div key={imp.id} className="flex items-start justify-between gap-2 text-[11px] bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                      <div className="flex-1 min-w-0">
+                        <span className="font-semibold text-amber-700">
+                          {IMPEDIMENT_CRITICALITY_LABELS[imp.criticality] ?? imp.criticality}
+                        </span>
+                        <span className="text-amber-600 ml-1 truncate">{imp.reason}</span>
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); onResolveImpediment(imp.id); }}
-                        className="text-[10px] text-emerald-600 hover:text-emerald-700 font-semibold whitespace-nowrap"
+                        className="flex-shrink-0 text-amber-600 hover:text-amber-800 transition-colors"
+                        title="Resolver impedimento"
                       >
-                        Resolver
+                        <CheckCircle2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))}
                 </div>
               )}
-              <div className="flex gap-2 pt-1">
-                <Button size="sm" variant="outline" className="h-6 text-[11px] px-2 gap-1" onClick={(e) => { e.stopPropagation(); onAddTask(); }}>
-                  <Plus className="h-3 w-3" /> Atividade
-                </Button>
-                <Button size="sm" variant="outline" className="h-6 text-[11px] px-2 gap-1" onClick={(e) => { e.stopPropagation(); onImpediment(); }}>
+
+              {/* Ações */}
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onImpediment(); }}
+                  className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+                >
                   <ShieldAlert className="h-3 w-3" /> Impedimento
-                </Button>
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onAddTask(); }}
+                  className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-background text-muted-foreground border border-border/50 hover:bg-muted/50 transition-colors"
+                >
+                  <Zap className="h-3 w-3" /> Atividade
+                </button>
               </div>
             </div>
           )}
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-52">
-        <ContextMenuItem onClick={onAddTask} className="gap-2 text-xs">
-          <Plus className="h-3.5 w-3.5" /> Nova atividade
+
+      {/* Context menu */}
+      <ContextMenuContent className="w-48">
+        <ContextMenuItem onClick={onExpand}>
+          {expanded ? "Recolher card" : "Expandir card"}
         </ContextMenuItem>
-        <ContextMenuItem onClick={onImpediment} className="gap-2 text-xs">
-          <ShieldAlert className="h-3.5 w-3.5" /> Registrar impedimento
+        <ContextMenuItem onClick={onImpediment}>
+          <ShieldAlert className="h-3.5 w-3.5 mr-2 text-amber-500" />
+          Registrar impedimento
+        </ContextMenuItem>
+        <ContextMenuItem onClick={onAddTask}>
+          <Zap className="h-3.5 w-3.5 mr-2" />
+          Adicionar atividade
         </ContextMenuItem>
         {moveOptions && moveOptions.length > 0 && onMove && (
           <ContextMenuSub>
-            <ContextMenuSubTrigger className="gap-2 text-xs">
-              <ArrowRightLeft className="h-3.5 w-3.5" /> Mover para
+            <ContextMenuSubTrigger>
+              <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />
+              Mover para
             </ContextMenuSubTrigger>
-            <ContextMenuSubContent>
+            <ContextMenuSubContent className="w-44">
               {moveOptions.map((opt) => (
-                <ContextMenuItem key={opt.key} onClick={() => onMove(opt.key)} className="text-xs">
+                <ContextMenuItem key={opt.key} onClick={() => onMove(opt.key)}>
                   {opt.label}
                 </ContextMenuItem>
               ))}
@@ -374,7 +387,289 @@ export function KanbanBoard({
 
   const canMove = role === "admin" || role === "scrum_master" || role === "developer";
 
+  // Cards do sprint atual, filtrados por busca e ordenados por position
   const sprintStories = useMemo(() => {
     const base = sprintId
       ? userStories.filter((h) => h.sprintId === sprintId)
-      : userStori
+      : userStories;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return base.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+    return base
+      .filter((h) => h.title.toLowerCase().includes(q) || h.code.toLowerCase().includes(q))
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  }, [userStories, sprintId, searchQuery]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  // ── Drag handlers ──────────────────────────────────────────────────────────
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(String(event.active.id));
+  }, []);
+
+  const handleDragOver = useCallback(
+    (event: DragOverEvent) => {
+      const { over } = event;
+      if (!over) { setDragOverCol(null); return; }
+      const overId = String(over.id);
+      const isCol = workflowColumns.some((c) => c.key === overId);
+      if (isCol) { setDragOverCol(overId); return; }
+      const overHu = sprintStories.find((h) => h.id === overId);
+      setDragOverCol(overHu?.status ?? null);
+    },
+    [workflowColumns, sprintStories],
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      setActiveId(null);
+      setDragOverCol(null);
+      if (!over || !canMove) return;
+
+      const activeIdStr = String(active.id);
+      const overIdStr = String(over.id);
+      if (activeIdStr === overIdStr) return;
+
+      const draggedHu = sprintStories.find((h) => h.id === activeIdStr);
+      if (!draggedHu) return;
+
+      const isOverCol = workflowColumns.some((c) => c.key === overIdStr);
+      const overHu = sprintStories.find((h) => h.id === overIdStr);
+      const targetColKey = isOverCol ? overIdStr : (overHu?.status ?? null);
+      if (!targetColKey) return;
+
+      if (draggedHu.status === targetColKey) {
+        // ── MESMA COLUNA: reordenar verticalmente ──────────────────────────
+        const colItems = sprintStories
+          .filter((h) => h.status === draggedHu.status)
+          .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+        const oldIdx = colItems.findIndex((h) => h.id === activeIdStr);
+        const newIdx = colItems.findIndex((h) => h.id === overIdStr);
+        if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
+
+        const reordered = arrayMove(colItems, oldIdx, newIdx);
+        const updates = reordered.map((h, idx) => ({ id: h.id, position: idx }));
+        reorderUserStories(updates);
+      } else {
+        // ── COLUNA DIFERENTE: pedir confirmação ────────────────────────────
+        setConfirmMove({ huId: draggedHu.id, toKey: targetColKey });
+      }
+    },
+    [canMove, sprintStories, workflowColumns, reorderUserStories],
+  );
+
+  const activeHu = activeId ? sprintStories.find((h) => h.id === activeId) : null;
+
+  return (
+    <>
+      {/* Barra de busca */}
+      <div className="flex items-center gap-2 mb-4 px-1">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar HU..."
+            className="w-full pl-8 pr-8 py-1.5 text-sm bg-background border border-border/50 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/40"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+              <X className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-muted-foreground" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex gap-3 overflow-x-auto pb-4 min-h-0">
+          {workflowColumns.map((col) => {
+            const colHex = getColumnHex(col);
+            const colItems = sprintStories
+              .filter((h) => h.status === col.key)
+              .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+            const isExpanded = expandedCols.has(col.key);
+            const isOver = dragOverCol === col.key;
+
+            return (
+              <div
+                key={col.key}
+                className={[
+                  "flex flex-col flex-shrink-0 rounded-xl transition-all duration-200",
+                  "border border-border/40 bg-muted/30",
+                  isExpanded ? "w-[280px]" : "w-12",
+                  isOver ? "ring-2 ring-primary/30 bg-primary/5" : "",
+                ].join(" ")}
+              >
+                {/* Cabeçalho da coluna */}
+                <div
+                  className="flex items-center justify-between px-3 py-2.5 cursor-pointer select-none"
+                  onClick={() =>
+                    setExpandedCols((prev) => {
+                      const next = new Set(prev);
+                      next.has(col.key) ? next.delete(col.key) : next.add(col.key);
+                      return next;
+                    })
+                  }
+                >
+                  {isExpanded ? (
+                    <>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: colHex }} />
+                        <span className="text-xs font-semibold text-foreground truncate">{col.label}</span>
+                        <span className="text-[10px] font-medium text-muted-foreground bg-background/60 rounded-full px-1.5 py-0.5 border border-border/40">
+                          {colItems.length}
+                          {col.wipLimit ? `/${col.wipLimit}` : ""}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {onOpenWorkflow && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onOpenWorkflow(); }}
+                            className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-background/80 text-muted-foreground hover:text-foreground transition-colors"
+                            title="Configurar workflow"
+                          >
+                            <Settings2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center w-full gap-1.5 py-1">
+                      <div className="h-2 w-2 rounded-full" style={{ backgroundColor: colHex }} />
+                      <span
+                        className="text-[10px] font-semibold text-muted-foreground"
+                        style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", letterSpacing: "0.05em" }}
+                      >
+                        {col.label}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground/60">{colItems.length}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Lista de cards */}
+                {isExpanded && (
+                  <SortableContext
+                    items={colItems.map((h) => h.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="flex flex-col gap-2 px-2 pb-3 min-h-[60px]">
+                      {colItems.map((hu) => {
+                        const moveOptions = workflowColumns
+                          .filter((c) => c.key !== hu.status)
+                          .map((c) => ({ key: c.key, label: c.label }));
+                        return (
+                          <DragCard key={hu.id} id={hu.id}>
+                            <HUCard
+                              hu={hu}
+                              accentHex={colHex}
+                              expanded={expandedCards.has(hu.id)}
+                              onExpand={() =>
+                                setExpandedCards((prev) => {
+                                  const next = new Set(prev);
+                                  next.has(hu.id) ? next.delete(hu.id) : next.add(hu.id);
+                                  return next;
+                                })
+                              }
+                              onImpediment={() => setImpedimentHuId(hu.id)}
+                              onResolveImpediment={(impId) => resolveImpediment(hu.id, impId)}
+                              onAddTask={() => setQuickActivityHuId(hu.id)}
+                              moveOptions={moveOptions}
+                              onMove={(key) => setConfirmMove({ huId: hu.id, toKey: key })}
+                            />
+                          </DragCard>
+                        );
+                      })}
+                      {colItems.length === 0 && (
+                        <div className="flex items-center justify-center h-16 rounded-lg border border-dashed border-border/40 text-xs text-muted-foreground/50">
+                          Arraste um card aqui
+                        </div>
+                      )}
+                    </div>
+                  </SortableContext>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Ghost card durante o drag */}
+        <DragOverlay dropAnimation={{ duration: 150, easing: "cubic-bezier(0.18,0.67,0.6,1.22)" }}>
+          {activeHu && (
+            <div className="rotate-1 opacity-90 scale-[1.02] shadow-xl">
+              <HUCard
+                hu={activeHu}
+                accentHex={getColumnHex(
+                  workflowColumns.find((c) => c.key === activeHu.status) ?? workflowColumns[0],
+                )}
+                expanded={false}
+                onExpand={() => {}}
+                onImpediment={() => {}}
+                onResolveImpediment={() => {}}
+                onAddTask={() => {}}
+              />
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
+
+      {/* Diálogo de impedimento */}
+      {impedimentHuId && (
+        <ImpedimentDialog
+          huId={impedimentHuId}
+          open={!!impedimentHuId}
+          onClose={() => setImpedimentHuId(null)}
+        />
+      )}
+
+      {/* Diálogo de atividade rápida */}
+      {quickActivityHuId && (
+        <QuickActivityDialog
+          huId={quickActivityHuId}
+          open={!!quickActivityHuId}
+          onClose={() => setQuickActivityHuId(null)}
+        />
+      )}
+
+      {/* Confirmação de mover para outra coluna */}
+      {confirmMove && (
+        <AlertDialog open={!!confirmMove} onOpenChange={() => setConfirmMove(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <ArrowRightLeft className="h-4 w-4" />
+                Mover HU para outra coluna
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Deseja mover esta HU para a coluna{" "}
+                <strong>{workflowColumns.find((c) => c.key === confirmMove.toKey)?.label}</strong>?
+                Esta ação irá alterar o status da HU.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setConfirmMove(null)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={async () => {
+                  await updateUserStoryStatus(confirmMove.huId, confirmMove.toKey as any);
+                  setConfirmMove(null);
+                  toast.success("HU movida com sucesso!");
+                }}
+              >
+                Confirmar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+    </>
+  );
+}
