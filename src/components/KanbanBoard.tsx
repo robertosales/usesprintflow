@@ -19,7 +19,7 @@ import { useSprint } from "@/contexts/SprintContext";
 import { KanbanCard } from "./KanbanCard";
 import { KanbanStatus } from "@/types/sprint";
 import { toast } from "sonner";
-import { Search, ChevronDown, ChevronRight } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, ChevronLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
@@ -222,14 +222,15 @@ export function KanbanBoard({ sprintId }: Props) {
                     : "ring-0"
                 }`}
                 style={{
-                  minWidth: 240,
-                  width: 260,
+                  minWidth: isExpanded ? 240 : 44,
+                  width: isExpanded ? 260 : 44,
                   background: `color-mix(in srgb, ${colHex} 5%, var(--background))`,
                   borderColor: `color-mix(in srgb, ${colHex} 30%, transparent)`,
                   ...(isOver ? { "--tw-ring-color": colHex } as React.CSSProperties : {}),
                 }}
               >
                 {/* Cabeçalho da coluna */}
+                {isExpanded ? (
                 <div
                   className="flex items-center justify-between px-3 py-2.5 rounded-t-xl cursor-pointer select-none"
                   style={{ borderBottom: `2px solid ${colHex}` }}
@@ -243,9 +244,7 @@ export function KanbanBoard({ sprintId }: Props) {
                   }
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    {isExpanded
-                      ? <ChevronDown className="h-3 w-3 shrink-0" style={{ color: colHex }} />
-                      : <ChevronRight className="h-3 w-3 shrink-0" style={{ color: colHex }} />}
+                    <ChevronLeft className="h-3 w-3 shrink-0" style={{ color: colHex }} />
                     <span
                       className="text-xs font-semibold truncate uppercase tracking-wider"
                       style={{ color: colHex }}
@@ -263,6 +262,41 @@ export function KanbanBoard({ sprintId }: Props) {
                     {colItems.length}
                   </span>
                 </div>
+                ) : (
+                  <div
+                    className="flex flex-col items-center gap-2 py-2 cursor-pointer select-none rounded-xl"
+                    onClick={() =>
+                      setExpandedCols((prev) => {
+                        const next = new Set(prev);
+                        next.add(col.key);
+                        return next;
+                      })
+                    }
+                    title={col.label}
+                  >
+                    <ChevronRight className="h-4 w-4" style={{ color: colHex }} />
+                    <div
+                      className="flex-1 flex items-center justify-center px-1 py-3 rounded-md min-h-[180px]"
+                      style={{ background: colHex }}
+                    >
+                      <span
+                        className="text-[11px] font-semibold uppercase tracking-wider whitespace-nowrap text-white"
+                        style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+                      >
+                        {col.label}
+                      </span>
+                    </div>
+                    <span
+                      className="text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded-full"
+                      style={{
+                        background: `color-mix(in srgb, ${colHex} 18%, transparent)`,
+                        color: colHex,
+                      }}
+                    >
+                      {colItems.length}
+                    </span>
+                  </div>
+                )}
 
                 {/* Lista de cards */}
                 {isExpanded && (
@@ -281,7 +315,7 @@ export function KanbanBoard({ sprintId }: Props) {
                             key={hu.id}
                             style={{ opacity: isDragging ? 0.3 : 1, transition: "opacity 0.15s" }}
                           >
-                            <KanbanCard hu={hu} />
+                            <KanbanCard hu={hu} colHex={colHex} />
                           </div>
                         );
                       })}
@@ -302,32 +336,6 @@ export function KanbanBoard({ sprintId }: Props) {
                       )}
                     </div>
                   </SortableContext>
-                )}
-
-                {/* Sumário quando colapsado */}
-                {!isExpanded && colItems.length > 0 && (
-                  <div className="px-3 py-2 flex items-center gap-1.5">
-                    <span className="text-[9px] text-muted-foreground/60">{colItems.length}</span>
-                    <div className="flex gap-1 flex-wrap">
-                      {colItems.slice(0, 4).map((hu) => (
-                        <div
-                          key={hu.id}
-                          className="h-1.5 rounded-full"
-                          style={{
-                            width: 24,
-                            background: colHex,
-                            opacity: 0.5,
-                          }}
-                          title={hu.title}
-                        />
-                      ))}
-                      {colItems.length > 4 && (
-                        <span className="text-[9px] text-muted-foreground/40">
-                          +{colItems.length - 4}
-                        </span>
-                      )}
-                    </div>
-                  </div>
                 )}
               </div>
             );
