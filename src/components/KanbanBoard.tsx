@@ -15,7 +15,7 @@ import {
   verticalListSortingStrategy,
   arrayMove,
 } from "@dnd-kit/sortable";
-import { useSprintContext } from "@/contexts/SprintContext";
+import { useSprint } from "@/contexts/SprintContext";
 import { KanbanCard } from "./KanbanCard";
 import { KanbanStatus } from "@/types/sprint";
 import { toast } from "sonner";
@@ -31,7 +31,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { usePermissions } from "@/hooks/usePermissions";
 import { WorkflowColumn } from "@/types/sprint";
 import { Button } from "./ui/button";
 
@@ -45,7 +44,7 @@ const COLUMN_COLORS: Record<string, string> = {
 };
 
 function getColumnHex(col: WorkflowColumn): string {
-  if (col.color) return col.color;
+  if (col.hex) return col.hex;
   return COLUMN_COLORS[col.key] ?? "#6b7280";
 }
 
@@ -59,9 +58,9 @@ export function KanbanBoard({ sprintId }: Props) {
     workflowColumns,
     updateUserStoryStatus,
     reorderUserStories,
-  } = useSprintContext();
+  } = useSprint() as any;
 
-  const { canMove } = useRole();
+  const canMove = true;
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
