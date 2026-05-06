@@ -1,50 +1,50 @@
 import { useState, useMemo } from "react";
-import { ChevronDown, ChevronRight, Plus, Search, X, Clock, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Search, X, Clock, AlertTriangle, ArrowRightLeft, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import type { Demanda } from "../types/demanda";
+import { getResponsavelAtivo, SITUACAO_LABELS } from "../types/demanda";
 export type { Demanda };
 
-// ── Constantes de workflow ──────────────────────────────────────────────────────
-export const WORKFLOWLABELS: Record<string, string> = {
-  filaatendimento: "Fila de Atendimento",
-  planejamentoelaboracao: "Planejamento Em Elaboração",
-  planejamentoagaprovacao: "Planejamento Ag. Aprovação",
-  planejamentoaprovada: "Planejamento Aprovada p/ Exec",
-  emexecucao: "Em Execução",
-  bloqueada: "Bloqueada",
-  homaghomologacao: "Hom Ag. Homologação",
-  homhomologada: "Hom Homologada",
-  rejeitada: "Rejeitada",
-  filaproducao: "Fila para Produção / Infra",
-  agaceitefinal: "Ag. Aceite Final",
-};
+// ── Constantes de workflow (chaves alinhadas com o banco) ─────────────────────
+export const WORKFLOWLABELS: Record<string, string> = SITUACAO_LABELS;
 
 export const FLOWPRINCIPAL = [
-  "filaatendimento",
-  "planejamentoelaboracao",
-  "planejamentoagaprovacao",
-  "planejamentoaprovada",
-  "emexecucao",
-  "homaghomologacao",
-  "homhomologada",
-  "filaproducao",
-  "agaceitefinal",
+  "fila_atendimento",
+  "planejamento_elaboracao",
+  "planejamento_ag_aprovacao",
+  "planejamento_aprovada",
+  "em_execucao",
+  "hom_ag_homologacao",
+  "hom_homologada",
+  "fila_producao",
+  "ag_aceite_final",
 ] as const;
 
 // ── Cores por coluna ──────────────────────────────────────────────────────────
 const COLUMN_COLORS: Record<string, { hex: string }> = {
-  filaatendimento: { hex: "#64748b" },
-  planejamentoelaboracao: { hex: "#3b82f6" },
-  planejamentoagaprovacao: { hex: "#6366f1" },
-  planejamentoaprovada: { hex: "#8b5cf6" },
-  emexecucao: { hex: "#f59e0b" },
-  bloqueada: { hex: "#ef4444" },
-  homaghomologacao: { hex: "#06b6d4" },
-  homhomologada: { hex: "#14b8a6" },
-  rejeitada: { hex: "#f43f5e" },
-  filaproducao: { hex: "#f97316" },
-  agaceitefinal: { hex: "#10b981" },
+  fila_atendimento:          { hex: "#64748b" },
+  planejamento_elaboracao:   { hex: "#3b82f6" },
+  planejamento_ag_aprovacao: { hex: "#6366f1" },
+  planejamento_aprovada:     { hex: "#8b5cf6" },
+  em_execucao:               { hex: "#f59e0b" },
+  bloqueada:                 { hex: "#ef4444" },
+  hom_ag_homologacao:        { hex: "#06b6d4" },
+  hom_homologada:            { hex: "#14b8a6" },
+  rejeitada:                 { hex: "#f43f5e" },
+  fila_producao:             { hex: "#f97316" },
+  ag_aceite_final:           { hex: "#10b981" },
 };
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -61,90 +61,175 @@ function slaDaysRemaining(demanda: Demanda): number | null {
   return Math.round((dead.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-// ── Colunas visíveis ────────────────────────────────────────────────────────────
+function getInitials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+// ── Colunas visíveis ──────────────────────────────────────────────────────────
 const ALL_COLS = [...FLOWPRINCIPAL, "bloqueada", "rejeitada"] as string[];
 const VISIBLE_COLS = ALL_COLS.filter((v, i, a) => a.indexOf(v) === i);
 
-// ── Demanda Card ────────────────────────────────────────────────────────────
-function DemandaCard({ demanda, accentHex, onClick }: { demanda: Demanda; accentHex: string; onClick?: () => void }) {
+// ── Demanda Card ──────────────────────────────────────────────────────────────
+function DemandaCard({
+  demanda,
+  accentHex,
+  onClick,
+  onMove,
+}: {
+  demanda: Demanda;
+  accentHex: string;
+  onClick?: () => void;
+  onMove?: (targetKey: string) => void;
+}) {
   const slaD = slaDaysRemaining(demanda);
   const urgent = slaD !== null && slaD <= 3 && slaD >= 0;
-  const late = slaD !== null && slaD < 0;
+  const late   = slaD !== null && slaD < 0;
+  const responsavel = getResponsavelAtivo(demanda);
 
   return (
-    <div
-      onClick={onClick}
-      // FIX: trocado bg-white/text-gray-* por variáveis de tema (bg-card, text-foreground, etc.)
-      className="bg-card rounded-lg border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.08)]
-        hover:shadow-[0_3px_10px_rgba(0,0,0,0.15)] hover:border-border transition-all duration-150
-        overflow-hidden cursor-pointer select-none"
-    >
-      <div className="h-0.5" style={{ backgroundColor: accentHex }} />
-      <div className="p-3">
-        <p className="text-[13px] font-semibold leading-snug text-foreground line-clamp-2 mb-2">
-          {demanda.descricao ?? demanda.tipo ?? "Demanda"}
-        </p>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          onClick={onClick}
+          className="bg-card rounded-lg border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.08)]
+            hover:shadow-[0_3px_10px_rgba(0,0,0,0.15)] hover:border-border transition-all duration-150
+            overflow-hidden cursor-pointer select-none"
+        >
+          <div className="h-0.5" style={{ backgroundColor: accentHex }} />
+          <div className="p-3">
+            {/* Título */}
+            <p className="text-[13px] font-semibold leading-snug text-foreground line-clamp-2 mb-2">
+              {demanda.descricao ?? demanda.tipo ?? "Demanda"}
+            </p>
 
-        {(demanda.rhm || demanda.projeto) && (
-          <div className="flex flex-wrap gap-1 mb-2">
-            {demanda.rhm && (
-              <span
-                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: hexAlpha(accentHex, 0.14), color: accentHex }}
-              >
-                RHM {demanda.rhm}
-              </span>
+            {/* RHM + Projeto */}
+            {(demanda.rhm || demanda.projeto) && (
+              <div className="flex flex-wrap gap-1 mb-2">
+                {demanda.rhm && (
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ backgroundColor: hexAlpha(accentHex, 0.14), color: accentHex }}
+                  >
+                    RHM {demanda.rhm}
+                  </span>
+                )}
+                {demanda.projeto && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium truncate max-w-[140px]">
+                    {demanda.projeto}
+                  </span>
+                )}
+              </div>
             )}
-            {demanda.projeto && (
-              // FIX: bg-gray-100/text-gray-600 → bg-muted/text-muted-foreground
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium truncate max-w-[140px]">
-                {demanda.projeto}
-              </span>
-            )}
-          </div>
-        )}
 
-        <div className="flex items-center justify-between">
-          {/* FIX: text-gray-400 → text-muted-foreground */}
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-            </svg>
-            <span className="font-mono font-medium">#{String(demanda.id ?? "").slice(0, 8)}</span>
-          </div>
+            {/* Footer: ID + SLA + Avatar */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </svg>
+                <span className="font-mono font-medium">#{String(demanda.id ?? "").slice(0, 8)}</span>
+              </div>
 
-          <div className="flex items-center gap-1">
-            {late && (
-              // FIX: bg-red-50/text-red-600/border-red-200 → usa destructive com alpha p/ dark
-              <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5
-                bg-destructive/10 text-destructive border border-destructive/25">
-                <AlertTriangle className="h-2.5 w-2.5" /> SLA
-              </span>
-            )}
-            {urgent && !late && (
-              // FIX: bg-amber-50/text-amber-600/border-amber-200 → warning com alpha
-              <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5
-                bg-warning/10 text-warning border border-warning/25">
-                <Clock className="h-2.5 w-2.5" /> {slaD}d
-              </span>
+              <div className="flex items-center gap-1.5">
+                {/* SLA badges */}
+                {late && (
+                  <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5
+                    bg-destructive/10 text-destructive border border-destructive/25">
+                    <AlertTriangle className="h-2.5 w-2.5" /> SLA
+                  </span>
+                )}
+                {urgent && !late && (
+                  <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5
+                    bg-warning/10 text-warning border border-warning/25">
+                    <Clock className="h-2.5 w-2.5" /> {slaD}d
+                  </span>
+                )}
+
+                {/* Avatar do responsável com tooltip */}
+                {responsavel ? (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          className="h-5 w-5 rounded-full flex items-center justify-center text-[8px] font-bold shrink-0"
+                          style={{
+                            backgroundColor: hexAlpha(accentHex, 0.18),
+                            color: accentHex,
+                          }}
+                        >
+                          {getInitials(responsavel)}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">
+                        {responsavel}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : (
+                  <div className="h-5 w-5 rounded-full flex items-center justify-center opacity-30">
+                    <User className="h-3 w-3 text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* SLA restante (não urgente) */}
+            {slaD !== null && !urgent && !late && (
+              <div className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground">
+                <Clock className="h-2.5 w-2.5" />
+                <span>{slaD}d restantes</span>
+              </div>
             )}
           </div>
         </div>
+      </ContextMenuTrigger>
 
-        {slaD !== null && !urgent && !late && (
-          // FIX: text-gray-400 → text-muted-foreground
-          <div className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground">
-            <Clock className="h-2.5 w-2.5" />
-            <span>{slaD}d restantes</span>
-          </div>
+      {/* Context Menu */}
+      <ContextMenuContent className="w-52">
+        <ContextMenuItem onClick={onClick}>Abrir detalhes</ContextMenuItem>
+
+        {onMove && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>
+                <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />
+                Mover para
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent className="max-h-[60vh] overflow-y-auto w-52">
+                {VISIBLE_COLS.map((key) => (
+                  <ContextMenuItem
+                    key={key}
+                    disabled={key === demanda.situacao}
+                    onClick={() => onMove(key)}
+                  >
+                    <span
+                      className="inline-block h-2 w-2 rounded-full mr-2 shrink-0"
+                      style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }}
+                    />
+                    {WORKFLOWLABELS[key] ?? key}
+                    {key === demanda.situacao && (
+                      <span className="ml-auto text-[10px] text-muted-foreground">(atual)</span>
+                    )}
+                  </ContextMenuItem>
+                ))}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+          </>
         )}
-      </div>
-    </div>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
-// ── Collapsed strip ────────────────────────────────────────────────────────────
+// ── Collapsed strip ───────────────────────────────────────────────────────────
 function CollapsedCol({
   label,
   count,
@@ -159,12 +244,10 @@ function CollapsedCol({
   return (
     <div
       onClick={onClick}
-      // FIX: bg-white → bg-card
       className="flex-shrink-0 w-10 flex flex-col items-center rounded-xl border border-border/60
         bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08)] cursor-pointer hover:shadow-md transition-all py-3 gap-3"
       style={{ borderTop: `3px solid ${accentHex}` }}
     >
-      {/* FIX: text-gray-400 → text-muted-foreground */}
       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       <span
         className="text-[11px] font-bold flex-1 text-center leading-tight"
@@ -182,34 +265,34 @@ function CollapsedCol({
   );
 }
 
-// ── Expanded column ────────────────────────────────────────────────────────────
+// ── Expanded column ───────────────────────────────────────────────────────────
 function ExpandedCol({
   label,
+  colKey,
   demandas,
   accentHex,
   onCollapse,
   onCardClick,
   onAdd,
+  onMove,
 }: {
   label: string;
+  colKey: string;
   demandas: Demanda[];
   accentHex: string;
   onCollapse: () => void;
   onCardClick?: (d: Demanda) => void;
   onAdd?: () => void;
+  onMove?: (demanda: Demanda, targetKey: string) => void;
 }) {
   return (
     <div
-      // FIX: bg-white → bg-card
       className="flex-shrink-0 w-[280px] flex flex-col rounded-xl border border-border/60
         bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08)] transition-all"
       style={{ borderTop: `3px solid ${accentHex}` }}
     >
-      {/* FIX: border-gray-100 → border-border */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border">
-        {/* FIX: hover:bg-gray-100 → hover:bg-muted */}
         <button onClick={onCollapse} className="p-0.5 rounded hover:bg-muted transition-colors">
-          {/* FIX: text-gray-400 → text-muted-foreground */}
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
         <span className="flex-1 text-[12px] font-bold tracking-wide uppercase truncate" style={{ color: accentHex }}>
@@ -222,7 +305,6 @@ function ExpandedCol({
           {demandas.length}
         </span>
         {onAdd && (
-          // FIX: hover:bg-gray-100/text-gray-400/hover:text-gray-600 → muted
           <button
             onClick={onAdd}
             className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
@@ -234,13 +316,18 @@ function ExpandedCol({
 
       <div className="p-2 overflow-y-auto flex-1 space-y-2" style={{ maxHeight: "calc(100vh - 260px)" }}>
         {demandas.length === 0 ? (
-          // FIX: border-gray-200/text-gray-400 → border-border/text-muted-foreground
           <div className="flex items-center justify-center h-14 rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground">
             Sem demandas
           </div>
         ) : (
           demandas.map((d) => (
-            <DemandaCard key={d.id as string} demanda={d} accentHex={accentHex} onClick={() => onCardClick?.(d)} />
+            <DemandaCard
+              key={d.id as string}
+              demanda={d}
+              accentHex={accentHex}
+              onClick={() => onCardClick?.(d)}
+              onMove={onMove ? (targetKey) => onMove(d, targetKey) : undefined}
+            />
           ))
         )}
       </div>
@@ -248,14 +335,20 @@ function ExpandedCol({
   );
 }
 
-// ── Board ──────────────────────────────────────────────────────────────────────
+// ── Board ─────────────────────────────────────────────────────────────────────
 export interface SustentacaoBoardProps {
   demandas?: Demanda[];
   onSelectDemanda?: (demanda: Demanda) => void;
   onCreateDemanda?: (situacao?: string) => void;
+  onMoveDemanda?: (demanda: Demanda, targetKey: string) => void;
 }
 
-export function SustentacaoBoard({ demandas: demandasProp, onSelectDemanda, onCreateDemanda }: SustentacaoBoardProps) {
+export function SustentacaoBoard({
+  demandas: demandasProp,
+  onSelectDemanda,
+  onCreateDemanda,
+  onMoveDemanda,
+}: SustentacaoBoardProps) {
   const demandas = demandasProp ?? [];
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -273,25 +366,17 @@ export function SustentacaoBoard({ demandas: demandasProp, onSelectDemanda, onCr
     const q = search.toLowerCase();
     return safe.filter(
       (d) =>
-        String(d.descricao ?? "")
-          .toLowerCase()
-          .includes(q) ||
-        String(d.projeto ?? "")
-          .toLowerCase()
-          .includes(q) ||
-        String(d.rhm ?? "")
-          .toLowerCase()
-          .includes(q),
+        String(d.descricao ?? "").toLowerCase().includes(q) ||
+        String(d.projeto   ?? "").toLowerCase().includes(q) ||
+        String(d.rhm       ?? "").toLowerCase().includes(q),
     );
   }, [demandas, search]);
 
   const byStatus = useMemo(() => {
     const map: Record<string, Demanda[]> = {};
-    (VISIBLE_COLS ?? []).forEach((k) => {
-      map[k] = [];
-    });
-    (demandas ?? []).filter(Boolean).forEach((d) => {
-      const key = (d.situacao as string) ?? "filaatendimento";
+    VISIBLE_COLS.forEach((k) => { map[k] = []; });
+    demandas.filter(Boolean).forEach((d) => {
+      const key = (d.situacao as string) ?? "fila_atendimento";
       if (!map[key]) map[key] = [];
       map[key].push(d);
     });
@@ -303,9 +388,7 @@ export function SustentacaoBoard({ demandas: demandasProp, onSelectDemanda, onCr
       {/* top bar */}
       <div className="flex items-center gap-3 px-1">
         <div className="relative flex-1 max-w-sm">
-          {/* FIX: text-gray-400 → text-muted-foreground */}
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          {/* FIX: border-gray-200/bg-white/placeholder:text-gray-400 → variáveis de tema */}
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -349,12 +432,14 @@ export function SustentacaoBoard({ demandas: demandasProp, onSelectDemanda, onCr
           return (
             <ExpandedCol
               key={key}
+              colKey={key}
               label={label}
               demandas={items}
               accentHex={color.hex}
               onCollapse={() => toggle(key)}
               onCardClick={onSelectDemanda}
               onAdd={onCreateDemanda ? () => onCreateDemanda(key) : undefined}
+              onMove={onMoveDemanda}
             />
           );
         })}
