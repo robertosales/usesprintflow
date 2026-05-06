@@ -20,6 +20,19 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
 } from "@/components/ui/context-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 
 interface Props {
   hu: UserStory;
@@ -39,6 +52,8 @@ export function KanbanCard({ hu, colHex }: Props) {
   const { developers, epics, activities, workflowColumns, updateUserStoryStatus, addImpediment } = useSprint() as any;
   const [quickOpen, setQuickOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [impedimentOpen, setImpedimentOpen] = useState(false);
+  const [impedimentReason, setImpedimentReason] = useState("");
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -59,6 +74,24 @@ export function KanbanCard({ hu, colHex }: Props) {
   const initials = assignee?.name
     ? assignee.name.split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase()
     : "?";
+
+  async function handleConfirmImpediment() {
+    const reason = impedimentReason.trim();
+    if (!reason) {
+      toast.error("Informe o motivo do impedimento.");
+      return;
+    }
+    try {
+      if (typeof addImpediment === "function") {
+        await addImpediment(hu.id, { reason });
+      }
+      toast.success("Impedimento registrado.");
+      setImpedimentOpen(false);
+      setImpedimentReason("");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Erro ao registrar impedimento.");
+    }
+  }
 
   return (
     <>
@@ -177,7 +210,7 @@ export function KanbanCard({ hu, colHex }: Props) {
         </Card>
       </ContextMenuTrigger>
 
-      {/* Context menu corrigido com submenus */}
+      {/* Context menu */}
       <ContextMenuContent className="w-52">
         {/* Toggle de expansao de atividades */}
         {huActivities.length > 0 && (
@@ -194,15 +227,11 @@ export function KanbanCard({ hu, colHex }: Props) {
           Adicionar tarefa
         </ContextMenuItem>
 
-        {/* Reportar impedimento */}
+        {/* Reportar impedimento — abre dialog para preencher motivo */}
         <ContextMenuItem
           onClick={() => {
-            if (typeof addImpediment === "function") {
-              addImpediment(hu.id, {
-                description: "Impedimento reportado via Kanban",
-                reportedAt: new Date().toISOString(),
-              });
-            }
+            setImpedimentReason("");
+            setImpedimentOpen(true);
           }}
         >
           <AlertTriangle className="h-3.5 w-3.5 mr-2 text-amber-500" />
@@ -235,6 +264,53 @@ export function KanbanCard({ hu, colHex }: Props) {
         </ContextMenuSub>
       </ContextMenuContent>
     </ContextMenu>
+
+    {/* Dialog de impedimento */}
+    <AlertDialog
+      open={impedimentOpen}
+      onOpenChange={(o) => {
+        if (!o) {
+          setImpedimentOpen(false);
+          setImpedimentReason("");
+        }
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Reportar impedimento</AlertDialogTitle>
+          <AlertDialogDescription>
+            Descreva o impedimento para o card{" "}
+            <strong>{hu.code}</strong> — {hu.title}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="py-2">
+          <Label htmlFor="impediment-reason" className="text-sm mb-1.5 block">
+            Motivo <span className="text-destructive">*</span>
+          </Label>
+          <Textarea
+            id="impediment-reason"
+            placeholder="Descreva o impedimento..."
+            value={impedimentReason}
+            onChange={(e) => setImpedimentReason(e.target.value)}
+            rows={3}
+            className="resize-none text-sm"
+            autoFocus
+          />
+        </div>
+
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleConfirmImpediment}
+            disabled={!impedimentReason.trim()}
+            className="bg-amber-500 hover:bg-amber-600 text-white"
+          >
+            Registrar impedimento
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
     {quickOpen && (
       <QuickActivityDialog
