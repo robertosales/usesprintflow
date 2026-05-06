@@ -272,7 +272,7 @@ export function KanbanBoard({ sprintId }: Props) {
                   >
                     <div
                       id={col.key}
-                      className="flex flex-col gap-2 p-2 min-h-[80px]"
+                      className="flex flex-col gap-2 p-2 min-h-[80px] max-h-[calc(100vh-260px)] overflow-y-auto"
                     >
                       {colItems.map((hu) => {
                         const isDragging = hu.id === activeId;
