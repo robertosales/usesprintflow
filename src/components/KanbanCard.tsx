@@ -46,6 +46,39 @@ const PRIORITY_COLORS: Record<string, string> = {
   critical: "bg-red-100 text-red-700 border-red-300",
 };
 
+/** Paleta de cores para avatares — vibrantes e com bom contraste no texto branco */
+const AVATAR_COLORS = [
+  "#16a34a", // green-600
+  "#0891b2", // cyan-600
+  "#7c3aed", // violet-600
+  "#db2777", // pink-600
+  "#ea580c", // orange-600
+  "#0284c7", // sky-600
+  "#9333ea", // purple-600
+  "#dc2626", // red-600
+  "#ca8a04", // yellow-600
+  "#0d9488", // teal-600
+  "#2563eb", // blue-600
+  "#c026d3", // fuchsia-600
+];
+
+/** Gera uma cor consistente para um nome usando hash simples */
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+/** Retorna iniciais: primeira letra do primeiro nome + primeira letra do último nome */
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export function KanbanCard({ hu, colHex }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: hu.id });
@@ -71,9 +104,9 @@ export function KanbanCard({ hu, colHex }: Props) {
   const epic = hu.epicId ? epics.find((e: any) => e.id === hu.epicId) : null;
   const huActivities = (activities ?? []).filter((a: any) => a.huId === hu.id);
   const hasOpenBug = huActivities.some((a: any) => a.activityType === "bug" && !a.isClosed);
-  const initials = assignee?.name
-    ? assignee.name.split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase()
-    : "?";
+
+  const initials = assignee?.name ? getInitials(assignee.name) : "?";
+  const avatarBg = assignee?.name ? getAvatarColor(assignee.name) : "#6b7280";
 
   async function handleConfirmImpediment() {
     const reason = impedimentReason.trim();
@@ -146,9 +179,7 @@ export function KanbanCard({ hu, colHex }: Props) {
             <div className="mt-2 flex flex-col gap-1 border-t pt-2">
               {huActivities.map((a: any) => {
                 const dev = developers.find((d: any) => d.id === a.assigneeId);
-                const devInitials = dev?.name
-                  ? dev.name.split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase()
-                  : null;
+                const devInitials = dev?.name ? getInitials(dev.name) : null;
                 return (
                   <div
                     key={a.id}
@@ -194,7 +225,12 @@ export function KanbanCard({ hu, colHex }: Props) {
                         {assignee.avatarUrl || assignee.avatar ? (
                           <AvatarImage src={assignee.avatarUrl ?? assignee.avatar} alt={assignee.name} />
                         ) : null}
-                        <AvatarFallback className="text-[8px]">{initials}</AvatarFallback>
+                        <AvatarFallback
+                          className="text-[8px] font-semibold text-white"
+                          style={{ backgroundColor: avatarBg }}
+                        >
+                          {initials}
+                        </AvatarFallback>
                       </Avatar>
                     </TooltipTrigger>
                     <TooltipContent>{assignee.name}</TooltipContent>
