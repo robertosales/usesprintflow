@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { ReportSelector } from './ReportSelector';
-import { ReportConfigModal } from './ReportConfigModal';
 import { BillingReport } from './reports/BillingReport';
 import { IndividualReport } from './reports/IndividualReport';
 import { SprintReport } from './reports/SprintReport';
+import { QualityReport } from './reports/QualityReport';
+import { VelocityReport } from './reports/VelocityReport';
 import { ReportType, REPORT_META } from './types';
 import { ReportData } from './ReportExporter';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
-// ── Placeholder para relatórios ainda não implementados ───────────────────────
 function ComingSoon({ type }: { type: ReportType }) {
   const meta = REPORT_META.find(r => r.type === type)!;
   return (
@@ -29,6 +29,8 @@ interface Props {
   currentUserName?: string;
 }
 
+const IMPLEMENTED: ReportType[] = ['individual', 'sprint', 'quality', 'velocity', 'billing'];
+
 export function ReportsCenter({
   sprints = [],
   developers = [],
@@ -36,13 +38,10 @@ export function ReportsCenter({
   currentUserName = 'Usuário',
 }: Props) {
   const [selected, setSelected] = useState<ReportType | null>(null);
-
-  // billingData serve de base para todos os relatórios que usam ReportData
   const reportData: ReportData | undefined = billingData;
 
   return (
     <div className="space-y-0">
-      {/* Seletor de tipo de relatório */}
       <div className="bg-white border-b">
         <div className="px-4 pt-3 pb-1">
           <h2 className="text-sm font-semibold text-foreground">Selecione o relatório</h2>
@@ -53,7 +52,6 @@ export function ReportsCenter({
 
       <Separator />
 
-      {/* Conteúdo do relatório selecionado */}
       <div className="p-4">
         {!selected && (
           <div className="flex flex-col items-center justify-center gap-2 py-20 text-center">
@@ -62,33 +60,27 @@ export function ReportsCenter({
           </div>
         )}
 
-        {/* R1 — Desempenho Individual */}
         {selected === 'individual' && reportData && (
-          <IndividualReport
-            data={reportData}
-            emittedBy={currentUserName}
-          />
+          <IndividualReport data={reportData} emittedBy={currentUserName} />
         )}
 
-        {/* R2 — Sprint Report */}
         {selected === 'sprint' && reportData && (
-          <SprintReport
-            data={reportData}
-            emittedBy={currentUserName}
-          />
+          <SprintReport data={reportData} emittedBy={currentUserName} />
         )}
 
-        {/* R8 — Faturamento */}
+        {selected === 'quality' && reportData && (
+          <QualityReport data={reportData} emittedBy={currentUserName} />
+        )}
+
+        {selected === 'velocity' && reportData && (
+          <VelocityReport data={reportData} emittedBy={currentUserName} />
+        )}
+
         {selected === 'billing' && billingData && (
-          <BillingReport
-            data={billingData}
-            sprints={sprints}
-            emittedBy={currentUserName}
-          />
+          <BillingReport data={billingData} sprints={sprints} emittedBy={currentUserName} />
         )}
 
-        {/* ComingSoon para R3–R7 */}
-        {selected && !['individual', 'sprint', 'billing'].includes(selected) && (
+        {selected && !IMPLEMENTED.includes(selected) && (
           <ComingSoon type={selected} />
         )}
       </div>
