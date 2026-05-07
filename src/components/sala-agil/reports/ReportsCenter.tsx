@@ -2,11 +2,14 @@ import { useState } from 'react';
 import { ReportSelector } from './ReportSelector';
 import { ReportConfigModal } from './ReportConfigModal';
 import { BillingReport } from './reports/BillingReport';
+import { IndividualReport } from './reports/IndividualReport';
+import { SprintReport } from './reports/SprintReport';
 import { ReportType, REPORT_META } from './types';
+import { ReportData } from './ReportExporter';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
-// ── Placeholder para relatórios ainda não implementados
+// ── Placeholder para relatórios ainda não implementados ───────────────────────
 function ComingSoon({ type }: { type: ReportType }) {
   const meta = REPORT_META.find(r => r.type === type)!;
   return (
@@ -20,15 +23,22 @@ function ComingSoon({ type }: { type: ReportType }) {
 }
 
 interface Props {
-  // Dados reais virão do componente pai (MetricsDashboard)
   sprints?: { id: string; name: string }[];
   developers?: { id: string; name: string; role: string }[];
-  billingData?: any;
+  billingData?: ReportData;
   currentUserName?: string;
 }
 
-export function ReportsCenter({ sprints = [], developers = [], billingData, currentUserName = 'Usuário' }: Props) {
+export function ReportsCenter({
+  sprints = [],
+  developers = [],
+  billingData,
+  currentUserName = 'Usuário',
+}: Props) {
   const [selected, setSelected] = useState<ReportType | null>(null);
+
+  // billingData serve de base para todos os relatórios que usam ReportData
+  const reportData: ReportData | undefined = billingData;
 
   return (
     <div className="space-y-0">
@@ -52,6 +62,23 @@ export function ReportsCenter({ sprints = [], developers = [], billingData, curr
           </div>
         )}
 
+        {/* R1 — Desempenho Individual */}
+        {selected === 'individual' && reportData && (
+          <IndividualReport
+            data={reportData}
+            emittedBy={currentUserName}
+          />
+        )}
+
+        {/* R2 — Sprint Report */}
+        {selected === 'sprint' && reportData && (
+          <SprintReport
+            data={reportData}
+            emittedBy={currentUserName}
+          />
+        )}
+
+        {/* R8 — Faturamento */}
         {selected === 'billing' && billingData && (
           <BillingReport
             data={billingData}
@@ -60,7 +87,10 @@ export function ReportsCenter({ sprints = [], developers = [], billingData, curr
           />
         )}
 
-        {selected && selected !== 'billing' && <ComingSoon type={selected} />}
+        {/* ComingSoon para R3–R7 */}
+        {selected && !['individual', 'sprint', 'billing'].includes(selected) && (
+          <ComingSoon type={selected} />
+        )}
       </div>
     </div>
   );
