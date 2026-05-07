@@ -1,14 +1,41 @@
-import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 import { Toaster as Sonner, toast } from "sonner";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
+// Lê o tema diretamente do DOM (data-theme ou classList.dark)
+// O projeto gerencia o tema manualmente — não usa next-themes
+function useAppTheme(): "light" | "dark" {
+  const getTheme = (): "light" | "dark" => {
+    const attr = document.documentElement.getAttribute("data-theme");
+    if (attr === "dark" || attr === "light") return attr;
+    return document.documentElement.classList.contains("dark") ? "dark" : "light";
+  };
+
+  const [theme, setTheme] = useState<"light" | "dark">(getTheme);
+
+  useEffect(() => {
+    // Sincroniza na montagem
+    setTheme(getTheme());
+
+    // Observa mudanças de atributo/classe no <html> para reagir ao toggle
+    const observer = new MutationObserver(() => setTheme(getTheme()));
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme", "class"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  return theme;
+}
+
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme();
+  const theme = useAppTheme();
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={theme}
       className="toaster group"
       toastOptions={{
         classNames: {
