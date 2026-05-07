@@ -20,13 +20,15 @@ import {
   User,
   Bug,
   Rocket,
+  FileBarChart2,
 } from "lucide-react";
 import { DashboardFilters, DashboardFilterState, INITIAL_FILTERS } from "@/components/dashboard/DashboardFilters";
 import { IndividualPerformance } from "@/components/dashboard/IndividualPerformance";
 import { TeamPerformance } from "@/components/dashboard/TeamPerformance";
 import { QualityPanel } from "@/components/dashboard/QualityPanel";
 import { ReleasesPanel } from "@/components/dashboard/ReleasesPanel";
-import { ExportButton } from "@/components/dashboard/ExportButton";
+import { ReportsCenter } from "@/components/sala-agil/reports/ReportsCenter";
+import { ReportData } from "@/components/sala-agil/reports/ReportExporter";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -74,7 +76,7 @@ function usePersistedState<T>(key: string, defaultValue: T) {
 // ─── MetricsDashboard ─────────────────────────────────────────────────────────
 
 export function MetricsDashboard() {
-  const { isAdmin, teams, currentTeamId } = useAuth();
+  const { isAdmin, teams, currentTeamId, user } = useAuth();
 
   // Times apenas da sala ágil
   const agileTeams = useMemo(() => teams.filter((t: any) => t.module === "sala_agil"), [teams]);
@@ -469,25 +471,52 @@ export function MetricsDashboard() {
     return { velocity: prevVelocity, commitment: prevCommitment, cycleTime: prevCycleTime, hours: prevDoneHrs };
   }, [rawData, filtered]);
 
-  const getTeamExportData = () => ({
-    title: getReportConfig("agil_desempenho_time").tituloExportacao,
-    headers: ["Métrica", "Valor"],
-    rows: [
-      ["Velocity (SP Concluídos)", teamOverview.completedPoints],
-      ["Total Story Points", teamOverview.totalPoints],
-      ["HUs Concluídas", teamOverview.completedHUs],
-      ["Total HUs", teamOverview.totalHUs],
-      ["Sprint Commitment Accuracy", `${teamOverview.commitmentAccuracy}%`],
-      ["Cycle Time Médio (dias)", teamOverview.cycleTimeDays],
-      ["Total Horas", teamOverview.totalHours],
-      ["Horas Concluídas", teamOverview.completedHours],
-      ["Total Atividades", teamOverview.totalActivities],
-      ["Atividades Concluídas", teamOverview.completedActivities],
-      ["Membros", teamOverview.devCount],
-      ["HUs Atrasadas", teamOverview.overdueCount],
-      ["HUs Impedidas", teamOverview.blockedCount],
-    ],
-  });
+  // ─── billingData para ReportsCenter ─────────────────────────────────────────
+  const billingData = useMemo((): ReportData => {
+    const sprint = filtered.sprints[0];
+    return {
+      sprintName: sprint?.name ?? "Sem sprint",
+      periodStart: sprint?.start_date
+        ? new Date(sprint.start_date).toLocaleDateString("pt-BR")
+        : "",
+      periodEnd: sprint?.end_date
+        ? new Date(sprint.end_date).toLocaleDateString("pt-BR")
+        : "",
+      teamName: agileTeams.find((t: any) => t.id === filters.teamId)?.name ?? "NexOps",
+      developers: filtered.developers.map((d: any) => ({
+        id: d.id,
+        name: d.name,
+        role: d.role || "developer",
+      })),
+      activities: filtered.activities.map((a: any) => {
+        const hu = filtered.hus.find((h: any) => h.id === a.hu_id);
+        const dev = filtered.developers.find((d: any) => d.id === a.assignee_id);
+        return {
+          id: a.id,
+          code: a.code || `ATI-${a.id.slice(0, 4).toUpperCase()}`,
+          title: a.title,
+          type: a.activity_type || "task",
+          status: a.is_closed ? "Concluída" : "Em Progresso",
+          startDate: a.start_date
+            ? new Date(a.start_date).toLocaleDateString("pt-BR")
+            : "",
+          endDate: a.end_date
+            ? new Date(a.end_date).toLocaleDateString("pt-BR")
+            : "",
+          hours: Number(a.hours) || 0,
+          huCode: hu?.code || "?",
+          developerName: dev?.name || "Desconhecido",
+          developerRole: dev?.role || "developer",
+        };
+      }),
+    };
+  }, [filtered, agileTeams, filters.teamId]);
+
+  // ─── sprints para ReportsCenter ──────────────────────────────────────────────
+  const sprintsForReports = useMemo(
+    () => rawData.sprints.map((s: any) => ({ id: s.id, name: s.name })),
+    [rawData.sprints],
+  );
 
   if (loading)
     return (
@@ -510,19 +539,16 @@ export function MetricsDashboard() {
         isAdmin={isAdmin}
       />
 
-      {/* Sprint info */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-primary" />
-          <span className="text-sm font-semibold">{teamOverview.sprintName}</span>
-          {teamOverview.sprintStart && (
-            <Badge variant="outline" className="text-[10px] font-mono">
-              {new Date(teamOverview.sprintStart).toLocaleDateString("pt-BR")} —{" "}
-              {new Date(teamOverview.sprintEnd).toLocaleDateString("pt-BR")}
-            </Badge>
-          )}
-        </div>
-        <ExportButton getData={getTeamExportData} />
+      {/* Sprint info — sem ExportButton (movido para ReportsCenter) */}
+      <div className="flex items-center gap-2">
+        <BarChart3 className="h-5 w-5 text-primary" />
+        <span className="text-sm font-semibold">{teamOverview.sprintName}</span>
+        {teamOverview.sprintStart && (
+          <Badge variant="outline" className="text-[10px] font-mono">
+            {new Date(teamOverview.sprintStart).toLocaleDateString("pt-BR")} —{" "}
+            {new Date(teamOverview.sprintEnd).toLocaleDateString("pt-BR")}
+          </Badge>
+        )}
       </div>
 
       {/* KPI Cards */}
@@ -588,9 +614,9 @@ export function MetricsDashboard() {
         />
       </div>
 
-      {/* ✅ Aba ativa persistida — não reseta ao voltar ao foco */}
+      {/* ✅ Abas — Individual | Time | Qualidade | Impedimentos | Releases | Relatórios */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid grid-cols-5 w-full max-w-2xl">
+        <TabsList className="grid grid-cols-6 w-full max-w-3xl">
           <TabsTrigger value="individual" className="text-xs gap-1">
             <User className="h-3.5 w-3.5" /> Individual
           </TabsTrigger>
@@ -605,6 +631,9 @@ export function MetricsDashboard() {
           </TabsTrigger>
           <TabsTrigger value="releases" className="text-xs gap-1">
             <Rocket className="h-3.5 w-3.5" /> Releases
+          </TabsTrigger>
+          <TabsTrigger value="reports" className="text-xs gap-1 text-primary">
+            <FileBarChart2 className="h-3.5 w-3.5" /> Relatórios
           </TabsTrigger>
         </TabsList>
 
@@ -647,6 +676,20 @@ export function MetricsDashboard() {
           <ReleasesPanel
             teamId={effectiveTeamId}
             sprints={rawData.sprints.map((s: any) => ({ id: s.id, name: s.name }))}
+          />
+        </TabsContent>
+
+        {/* ── Nova aba: Relatórios ───────────────────────────────────── */}
+        <TabsContent value="reports" className="mt-0 p-0">
+          <ReportsCenter
+            sprints={sprintsForReports}
+            developers={filtered.developers.map((d: any) => ({
+              id: d.id,
+              name: d.name,
+              role: d.role || "developer",
+            }))}
+            billingData={billingData}
+            currentUserName={(user as any)?.user_metadata?.name ?? (user as any)?.email ?? "Usuário"}
           />
         </TabsContent>
       </Tabs>
