@@ -5,22 +5,12 @@ import { IndividualReport } from './reports/IndividualReport';
 import { SprintReport } from './reports/SprintReport';
 import { QualityReport } from './reports/QualityReport';
 import { VelocityReport } from './reports/VelocityReport';
-import { ReportType, REPORT_META } from './types';
+import { BurndownReport } from './reports/BurndownReport';
+import { ImpedimentReport } from './reports/ImpedimentReport';
+import { ReleaseNotesReport } from './reports/ReleaseNotesReport';
+import { ReportType } from './types';
 import { ReportData } from './ReportExporter';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-
-function ComingSoon({ type }: { type: ReportType }) {
-  const meta = REPORT_META.find(r => r.type === type)!;
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
-      <span className="text-5xl">{meta.icon}</span>
-      <h3 className="text-lg font-semibold">{meta.title}</h3>
-      <p className="text-sm text-muted-foreground max-w-xs">{meta.description}</p>
-      <Badge variant="outline" className="mt-2">Em desenvolvimento</Badge>
-    </div>
-  );
-}
 
 interface Props {
   sprints?: { id: string; name: string }[];
@@ -29,8 +19,6 @@ interface Props {
   currentUserName?: string;
 }
 
-const IMPLEMENTED: ReportType[] = ['individual', 'sprint', 'quality', 'velocity', 'billing'];
-
 export function ReportsCenter({
   sprints = [],
   developers = [],
@@ -38,7 +26,7 @@ export function ReportsCenter({
   currentUserName = 'Usuário',
 }: Props) {
   const [selected, setSelected] = useState<ReportType | null>(null);
-  const reportData: ReportData | undefined = billingData;
+  const data: ReportData | undefined = billingData;
 
   return (
     <div className="space-y-0">
@@ -60,28 +48,29 @@ export function ReportsCenter({
           </div>
         )}
 
-        {selected === 'individual' && reportData && (
-          <IndividualReport data={reportData} emittedBy={currentUserName} />
+        {selected === 'individual' && data && (
+          <IndividualReport data={data} emittedBy={currentUserName} />
         )}
-
-        {selected === 'sprint' && reportData && (
-          <SprintReport data={reportData} emittedBy={currentUserName} />
+        {selected === 'sprint' && data && (
+          <SprintReport data={data} emittedBy={currentUserName} />
         )}
-
-        {selected === 'quality' && reportData && (
-          <QualityReport data={reportData} emittedBy={currentUserName} />
+        {selected === 'quality' && data && (
+          <QualityReport data={data} emittedBy={currentUserName} />
         )}
-
-        {selected === 'velocity' && reportData && (
-          <VelocityReport data={reportData} emittedBy={currentUserName} />
+        {selected === 'velocity' && data && (
+          <VelocityReport data={data} emittedBy={currentUserName} />
         )}
-
+        {selected === 'burndown' && data && (
+          <BurndownReport data={data} emittedBy={currentUserName} />
+        )}
+        {selected === 'impediment' && data && (
+          <ImpedimentReport data={data} emittedBy={currentUserName} />
+        )}
+        {selected === 'release' && data && (
+          <ReleaseNotesReport data={data} emittedBy={currentUserName} />
+        )}
         {selected === 'billing' && billingData && (
           <BillingReport data={billingData} sprints={sprints} emittedBy={currentUserName} />
-        )}
-
-        {selected && !IMPLEMENTED.includes(selected) && (
-          <ComingSoon type={selected} />
         )}
       </div>
     </div>
