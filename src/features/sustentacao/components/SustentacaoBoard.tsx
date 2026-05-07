@@ -28,8 +28,7 @@ import type { Demanda } from "../types/demanda";
 import { SITUACAO_LABELS } from "../types/demanda";
 export type { Demanda };
 
-// ── Constantes de workflow ────────────────────────────────────────────────
-ex port const WORKFLOWLABELS: Record<string, string> = SITUACAO_LABELS;
+export const WORKFLOWLABELS: Record<string, string> = SITUACAO_LABELS;
 
 export const FLOWPRINCIPAL = [
   "fila_atendimento",
@@ -43,7 +42,6 @@ export const FLOWPRINCIPAL = [
   "ag_aceite_final",
 ] as const;
 
-// ── Cores por coluna ────────────────────────────────────────────────
 const COLUMN_COLORS: Record<string, { hex: string }> = {
   fila_atendimento:          { hex: "#64748b" },
   planejamento_elaboracao:   { hex: "#3b82f6" },
@@ -58,7 +56,6 @@ const COLUMN_COLORS: Record<string, { hex: string }> = {
   ag_aceite_final:           { hex: "#10b981" },
 };
 
-// ── helpers ─────────────────────────────────────────────────────────
 function hexAlpha(hex: string, a: number) {
   const c = hex.replace("#", "");
   return `rgba(${parseInt(c.slice(0, 2), 16)},${parseInt(c.slice(2, 4), 16)},${parseInt(c.slice(4, 6), 16)},${a})`;
@@ -91,7 +88,6 @@ function getResponsaveis(demanda: Demanda): { papel: string; nome: string }[] {
     .map(([papel, nome]) => ({ papel, nome: nome! }));
 }
 
-// ── Avatar único com tooltip ────────────────────────────────────────────────
 function ResponsavelAvatar({
   nome,
   accentHex,
@@ -124,7 +120,6 @@ function ResponsavelAvatar({
   );
 }
 
-// ── Grupo de avatares ─────────────────────────────────────────────────────────
 function ResponsaveisGroup({
   responsaveis,
   accentHex,
@@ -199,11 +194,9 @@ function ResponsaveisGroup({
   );
 }
 
-// ── Colunas visíveis ─────────────────────────────────────────────────────────────
 const ALL_COLS = [...FLOWPRINCIPAL, "bloqueada", "rejeitada"] as string[];
 const VISIBLE_COLS = ALL_COLS.filter((v, i, a) => a.indexOf(v) === i);
 
-// ── Demanda Card ───────────────────────────────────────────────────────────────
 function DemandaCard({
   demanda,
   accentHex,
@@ -215,7 +208,6 @@ function DemandaCard({
   accentHex: string;
   onClick?: () => void;
   onMove?: (targetKey: string) => void;
-  /** Abre a demanda diretamente na aba de atividades */
   onNovaAtividade?: () => void;
 }) {
   const slaD = slaDaysRemaining(demanda);
@@ -431,10 +423,8 @@ function ExpandedCol({
   );
 }
 
-// ── Props públicas do Board ───────────────────────────────────────────────────────────────
 export interface SustentacaoBoardProps {
   demandas?: Demanda[];
-  /** Segundo argumento opcional: aba inicial a ser exibida no DemandaDetail */
   onSelectDemanda?: (demanda: Demanda, initialTab?: string) => void;
   onCreateDemanda?: (situacao?: string) => void;
   onMoveDemanda?: (demanda: Demanda, targetKey: string) => void;
@@ -481,7 +471,6 @@ export function SustentacaoBoard({
 
   return (
     <div className="flex flex-col h-full gap-3">
-      {/* Barra de busca */}
       <div className="flex items-center gap-3 px-1">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -505,7 +494,6 @@ export function SustentacaoBoard({
         </Badge>
       </div>
 
-      {/* Colunas do board */}
       <div className="flex gap-2 pb-4 overflow-x-auto flex-1" style={{ minHeight: 120 }}>
         {VISIBLE_COLS.map((key) => {
           const label = WORKFLOWLABELS[key] ?? key;
