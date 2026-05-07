@@ -37,6 +37,8 @@ interface NovaAtividadeDialogProps {
   onClose: () => void;
   /** Quando informado, o dialog entra em modo edição (somente admin) */
   editHour?: DemandaHour | null;
+  /** Chamado após salvar com sucesso — use para recarregar a tabela no pai */
+  onSuccess?: () => void;
 }
 
 /** Busca responsáveis da demanda com display_name via join. */
@@ -53,7 +55,6 @@ async function fetchMembros(demandaId: string): Promise<Membro[]> {
   }));
 }
 
-/** Iniciais de até 2 palavras para o avatar. */
 function initials(name: string) {
   return name
     .split(" ")
@@ -70,7 +71,13 @@ const PAPEL_COLORS: Record<string, string> = {
   gestor: "bg-rose-500",
 };
 
-export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAtividadeDialogProps) {
+export function NovaAtividadeDialog({
+  demanda,
+  open,
+  onClose,
+  editHour,
+  onSuccess,
+}: NovaAtividadeDialogProps) {
   const { add, update, loading } = useHours(demanda?.id ?? null);
   const isEditing = !!editHour;
 
@@ -80,7 +87,6 @@ export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAt
   const [membros, setMembros] = useState<Membro[]>([]);
   const [targetUserId, setTargetUserId] = useState<string>("");
 
-  // Carrega responsáveis sempre que abrir em modo edição
   useEffect(() => {
     if (open && isEditing && demanda?.id) {
       fetchMembros(demanda.id).then(setMembros);
@@ -89,13 +95,12 @@ export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAt
     }
   }, [open, isEditing, demanda?.id]);
 
-  // Pré-preenche campos quando entra em modo edição
   useEffect(() => {
     if (editHour) {
       setFase(editHour.fase);
       setHoras(String(editHour.horas));
       setDescricao(editHour.descricao ?? "");
-      setTargetUserId(editHour.user_id); // pré-seleciona quem lançou
+      setTargetUserId(editHour.user_id);
     } else {
       setFase("execucao");
       setHoras("1");
@@ -128,12 +133,14 @@ export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAt
         fase,
         horas: h,
         descricao: descricao.trim(),
-        // só envia user_id se foi alterado e é válido
         ...(targetUserId && targetUserId !== editHour.user_id ? { user_id: targetUserId } : {}),
       });
     } else {
       await add({ fase, horas: h, descricao: descricao.trim() });
     }
+
+    // Notifica o componente pai para recarregar a tabela
+    onSuccess?.();
     handleClose();
   };
 

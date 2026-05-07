@@ -1060,7 +1060,6 @@ export function DemandaDetail({
                           <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Descrição</th>
                           <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Lançado por</th>
                           <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Horas</th>
-                          {/* Coluna de ações — visível apenas para admin */}
                           {isAdmin && <th className="px-3 py-2" />}
                         </tr>
                       </thead>
@@ -1075,7 +1074,6 @@ export function DemandaDetail({
                             {isAdmin && (
                               <td className="px-3 py-2">
                                 <div className="flex items-center justify-end gap-1">
-                                  {/* Editar — somente admin */}
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -1085,7 +1083,6 @@ export function DemandaDetail({
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
                                   </Button>
-                                  {/* Excluir — somente admin */}
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -1274,18 +1271,26 @@ export function DemandaDetail({
       />
 
       {/* Dialog de edição de atividade — somente admin */}
+      {/* onSuccess repassa reloadHours do DemandaDetail para garantir atualização imediata da tabela */}
       <NovaAtividadeDialog
         demanda={demanda as Demanda}
         open={showEditHourDialog}
         onClose={() => { setShowEditHourDialog(false); setEditHour(null); }}
         editHour={editHour}
+        onSuccess={reloadHours}
       />
 
       <ConfirmDialog
         open={!!deleteHourId}
         title="Remover lançamento?"
         description="Esta ação não pode ser desfeita."
-        onConfirm={async () => { if (deleteHourId) { await removeHour(deleteHourId); setDeleteHourId(null); } }}
+        onConfirm={async () => {
+          if (deleteHourId) {
+            await removeHour(deleteHourId);
+            setDeleteHourId(null);
+            await reloadHours();
+          }
+        }}
         onOpenChange={() => setDeleteHourId(null)}
       />
       <ConfirmDialog
