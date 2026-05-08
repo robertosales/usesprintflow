@@ -69,10 +69,10 @@ export function BillingReport({ data, sprints, emittedBy }: Props) {
             <div className="flex items-center justify-between px-5 py-3 bg-muted/30 border-b">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-xs font-bold text-white">
-                  {dev.name.split(' ').map(n=>n[0]).slice(0,2).join('')}
+                  {getInitials(dev.name)}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold">{dev.name}</p>
+                  <p className="text-sm font-semibold">{formatPersonName(dev.name)}</p>
                   <p className="text-xs text-muted-foreground">{dev.role}</p>
                 </div>
               </div>

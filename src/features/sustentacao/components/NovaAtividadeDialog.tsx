@@ -55,13 +55,8 @@ async function fetchMembros(demandaId: string): Promise<Membro[]> {
   }));
 }
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
-}
+import { getInitials as initials, formatPersonName } from "@/lib/personName";
+import { parseHmToMinutes, minutesToHm, isValidHm, minutesToHoursDecimal } from "@/lib/duration";
 
 const PAPEL_COLORS: Record<string, string> = {
   desenvolvedor: "bg-blue-500",

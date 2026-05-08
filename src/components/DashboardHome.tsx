@@ -311,10 +311,10 @@ export function DashboardHome() {
                   return (
                     <li key={dev.id} className="flex items-center gap-3 px-5 py-2.5">
                       <div className="shrink-0 h-7 w-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
-                        {dev.name.charAt(0).toUpperCase()}
+                        {getInitials(dev.name)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{dev.name}</p>
+                        <p className="text-sm font-medium truncate">{formatPersonName(dev.name)}</p>
                         <p className="text-xs text-muted-foreground truncate">{dev.role}</p>
                       </div>
                       {myActs > 0 && (

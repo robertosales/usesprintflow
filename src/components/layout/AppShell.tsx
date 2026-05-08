@@ -528,13 +528,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
   const moduleAccess = profile?.module_access ?? "sala_agil";
   const canSwitch = isAdmin || moduleAccess === "admin";
   const accent = ACCENT[module];
-  const userInitials = (() => {
-    const name = (profile?.full_name ?? profile?.display_name ?? "U").trim();
-    const parts = name.split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return "U";
-    if (parts.length === 1) return parts[0][0].toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  })();
+  const userInitials = getInitials(profile?.full_name ?? profile?.display_name ?? "U");
   const sidebarWidth = collapsed ? "w-[56px]" : "w-[220px]";
 
   return (

@@ -261,15 +261,10 @@ export function DeveloperManager() {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-sm">
-                      {dev.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")
-                        .slice(0, 2)
-                        .toUpperCase()}
+                      {getInitials(dev.name)}
                     </div>
                     <div>
-                      <p className="font-semibold text-sm">{dev.name}</p>
+                      <p className="font-semibold text-sm">{formatPersonName(dev.name)}</p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                         <Mail className="h-3 w-3" /> {dev.email}
                       </p>
