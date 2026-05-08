@@ -22,13 +22,19 @@ import {
 } from "@/types/sprint";
 import { toast } from "sonner";
 
-interface AddImpedimentData {
+export interface AddImpedimentData {
   reason: string;
   type: ImpedimentType;
   criticality: ImpedimentCriticality;
   hasTicket: boolean;
   ticketUrl?: string;
   ticketId?: string;
+}
+
+/** Target do impedimento: HU ou Sprint (pelo menos um deve estar preenchido) */
+export interface ImpedimentTarget {
+  huId?: string;
+  sprintId?: string;
 }
 
 interface SprintContextType {
@@ -55,8 +61,11 @@ interface SprintContextType {
   removeActivity: (id: string) => Promise<void>;
   closeActivity: (id: string) => Promise<void>;
   reopenActivity: (id: string) => Promise<void>;
-  addImpediment: (huId: string, data: AddImpedimentData) => Promise<void>;
-  resolveImpediment: (huId: string, impedimentId: string, resolution?: string) => Promise<void>;
+  /** Adiciona impedimento em uma HU (retrocompat) ou em uma Sprint */
+  addImpediment: (target: ImpedimentTarget | string, data: AddImpedimentData) => Promise<void>;
+  /** Helper direto para impedimentos de sprint */
+  addSprintImpediment: (sprintId: string, data: AddImpedimentData) => Promise<void>;
+  resolveImpediment: (huIdOrNull: string | null, impedimentId: string, resolution?: string) => Promise<void>;
   addSprint: (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => Promise<void>;
   updateSprint: (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => Promise<void>;
   removeSprint: (id: string) => Promise<void>;
@@ -165,7 +174,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       setImpediments(
         impData.map((imp: any) => ({
           id: imp.id,
-          huId: imp.hu_id,
+          huId: imp.hu_id ?? undefined,
+          sprintId: imp.sprint_id ?? undefined,
           reason: imp.reason,
           type: imp.type,
           criticality: imp.criticality,
@@ -204,7 +214,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
             .filter((imp: any) => imp.hu_id === h.id)
             .map((imp: any) => ({
               id: imp.id,
-              huId: imp.hu_id,
+              huId: imp.hu_id ?? undefined,
+              sprintId: imp.sprint_id ?? undefined,
               reason: imp.reason,
               type: imp.type,
               criticality: imp.criticality,
@@ -265,7 +276,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         })),
       );
 
-      // ── Colunas do workflow ───────────────────────────────────────────────
       const wc = (wcRes.data || []) as any[];
       if (wc.length > 0) {
         const rawCols: WorkflowColumn[] = wc.map((c: any) => ({
@@ -331,19 +341,13 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       role: dev.role,
       avatar: dev.avatar,
     });
-    if (error) {
-      toast.error("Erro ao adicionar desenvolvedor");
-      return;
-    }
+    if (error) { toast.error("Erro ao adicionar desenvolvedor"); return; }
     await refreshAll();
   };
 
   const updateDeveloper = async (id: string, dev: Partial<Omit<Developer, "id">>) => {
     const { error } = await supabase.from("developers").update(dev).eq("id", id);
-    if (error) {
-      toast.error("Erro ao atualizar");
-      return;
-    }
+    if (error) { toast.error("Erro ao atualizar"); return; }
     await refreshAll();
   };
 
@@ -358,7 +362,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const count = userStories.length + 1;
     const firstCol = workflowColumns[0]?.key || "aguardando_desenvolvimento";
     const targetStatus = hu.status || firstCol;
-    // Nova HU vai para o final da coluna destino
     const lastPosition = userStories
       .filter((h) => h.status === targetStatus)
       .reduce((max, h) => Math.max(max, h.position ?? 0), -1) + 1;
@@ -381,10 +384,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       function_points: (hu as any).functionPoints || null,
       assignee_id: (hu as any).assigneeId || null,
     });
-    if (error) {
-      toast.error("Erro ao criar HU");
-      return;
-    }
+    if (error) { toast.error("Erro ao criar HU"); return; }
     await refreshAll();
   };
 
@@ -408,14 +408,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if ((hu as any).functionPoints !== undefined) updateData.function_points = (hu as any).functionPoints ?? null;
     if ("assigneeId" in hu) updateData.assignee_id = (hu as any).assigneeId ?? null;
     const { data, error } = await supabase.from("user_stories").update(updateData).eq("id", id).select();
-    if (error) {
-      toast.error("Erro ao atualizar HU: " + error.message);
-      return;
-    }
-    if (!data || data.length === 0) {
-      toast.error("Erro ao atualizar HU: nenhuma linha afetada");
-      return;
-    }
+    if (error) { toast.error("Erro ao atualizar HU: " + error.message); return; }
+    if (!data || data.length === 0) { toast.error("Erro ao atualizar HU: nenhuma linha afetada"); return; }
     await refreshAll();
   };
 
@@ -428,7 +422,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const hu = userStories.find((h) => h.id === id);
     if (hu) {
       const oldStatus = hu.status;
-      // Ao mover para outra coluna, vai para o final da coluna destino
       const lastPosition = userStories
         .filter((h) => h.status === status)
         .reduce((max, h) => Math.max(max, h.position ?? 0), -1) + 1;
@@ -438,19 +431,13 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  /**
-   * Reordena os cards dentro de uma coluna do Kanban.
-   * Atualização otimista: aplica na UI imediatamente, persiste no banco em paralelo.
-   */
   const reorderUserStories = async (updates: { id: string; position: number }[]) => {
-    // Atualização otimista — UI reflete imediatamente sem aguardar o banco
     setUserStories((prev) =>
       prev.map((hu) => {
         const upd = updates.find((u) => u.id === hu.id);
         return upd ? { ...hu, position: upd.position } : hu;
       }),
     );
-    // Persiste todas as posições no Supabase em paralelo
     await Promise.all(
       updates.map(({ id, position }) =>
         supabase.from("user_stories").update({ position }).eq("id", id),
@@ -473,10 +460,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       start_date: act.startDate,
       end_date: endDate,
     });
-    if (error) {
-      toast.error("Erro ao criar atividade");
-      return;
-    }
+    if (error) { toast.error("Erro ao criar atividade"); return; }
     if (act.activityType === "bug") {
       const hu = userStories.find((h) => h.id === act.huId);
       const bugCol = workflowColumns.find((c) => c.key === "bug");
@@ -502,10 +486,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const newHours = act.hours || existing.hours;
     if (act.startDate || act.hours) updateData.end_date = calculateEndDate(newStart, newHours);
     const { error } = await supabase.from("activities").update(updateData).eq("id", id);
-    if (error) {
-      toast.error("Erro ao atualizar atividade");
-      return;
-    }
+    if (error) { toast.error("Erro ao atualizar atividade"); return; }
     await refreshAll();
   };
 
@@ -543,26 +524,49 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   };
 
   // ── IMPEDIMENTS ───────────────────────────────────────────────────────────
-  const addImpediment = async (huId: string, data: AddImpedimentData) => {
+
+  /**
+   * Adiciona impedimento em HU ou Sprint.
+   * Para retrocompatibilidade, aceita huId como string direta (código legado).
+   */
+  const addImpediment = async (
+    target: ImpedimentTarget | string,
+    data: AddImpedimentData,
+  ) => {
     if (!teamId) return;
+    // Retrocompat: se target for string, trata como huId
+    const huId   = typeof target === "string" ? target : (target.huId ?? null);
+    const sprintId = typeof target === "string" ? null   : (target.sprintId ?? null);
+
+    if (!huId && !sprintId) {
+      toast.error("Informe uma HU ou Sprint para o impedimento");
+      return;
+    }
+
     const { error } = await supabase.from("impediments").insert({
-      team_id: teamId,
-      hu_id: huId,
-      reason: data.reason,
-      type: data.type,
+      team_id:     teamId,
+      hu_id:       huId,
+      sprint_id:   sprintId,
+      reason:      data.reason,
+      type:        data.type,
       criticality: data.criticality,
-      has_ticket: data.hasTicket,
-      ticket_url: data.ticketUrl,
-      ticket_id: data.ticketId,
+      has_ticket:  data.hasTicket,
+      ticket_url:  data.ticketUrl ?? null,
+      ticket_id:   data.ticketId  ?? null,
     });
     if (error) {
-      toast.error("Erro ao adicionar impedimento");
+      toast.error("Erro ao adicionar impedimento: " + error.message);
       return;
     }
     await refreshAll();
   };
 
-  const resolveImpediment = async (_huId: string, impedimentId: string, resolution?: string) => {
+  /** Helper conveniente para impedimentos diretos na sprint */
+  const addSprintImpediment = async (sprintId: string, data: AddImpedimentData) => {
+    await addImpediment({ sprintId }, data);
+  };
+
+  const resolveImpediment = async (_: string | null, impedimentId: string, resolution?: string) => {
     await supabase
       .from("impediments")
       .update({ resolved_at: new Date().toISOString(), resolution: resolution || null })
@@ -582,10 +586,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       goal: sprint.goal,
       is_active: true,
     });
-    if (error) {
-      toast.error("Erro ao criar sprint");
-      return;
-    }
+    if (error) { toast.error("Erro ao criar sprint"); return; }
     await refreshAll();
   };
 
@@ -597,10 +598,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (sprint.goal !== undefined) updateData.goal = sprint.goal;
     if (sprint.isActive !== undefined) updateData.is_active = sprint.isActive;
     const { error } = await supabase.from("sprints").update(updateData).eq("id", id);
-    if (error) {
-      toast.error("Erro ao atualizar sprint");
-      return;
-    }
+    if (error) { toast.error("Erro ao atualizar sprint"); return; }
     await refreshAll();
   };
 
@@ -625,19 +623,13 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       description: epic.description,
       color: epic.color,
     });
-    if (error) {
-      toast.error("Erro ao criar épico");
-      return;
-    }
+    if (error) { toast.error("Erro ao criar épico"); return; }
     await refreshAll();
   };
 
   const updateEpic = async (id: string, epic: Partial<Omit<Epic, "id" | "createdAt">>) => {
     const { error } = await supabase.from("epics").update(epic).eq("id", id);
-    if (error) {
-      toast.error("Erro ao atualizar épico");
-      return;
-    }
+    if (error) { toast.error("Erro ao atualizar épico"); return; }
     await refreshAll();
   };
 
@@ -656,10 +648,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       options: field.options || null,
       required: field.required,
     });
-    if (error) {
-      toast.error("Erro ao criar campo");
-      return;
-    }
+    if (error) { toast.error("Erro ao criar campo"); return; }
     await refreshAll();
   };
 
@@ -670,10 +659,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (field.options !== undefined) updateData.options = field.options;
     if (field.required !== undefined) updateData.required = field.required;
     const { error } = await supabase.from("custom_field_definitions").update(updateData).eq("id", id);
-    if (error) {
-      toast.error("Erro ao atualizar campo");
-      return;
-    }
+    if (error) { toast.error("Erro ao atualizar campo"); return; }
     await refreshAll();
   };
 
@@ -697,20 +683,14 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       action_target_status: rule.action.targetStatus || null,
       action_message: rule.action.message || null,
     });
-    if (error) {
-      toast.error("Erro ao criar automação");
-      return;
-    }
+    if (error) { toast.error("Erro ao criar automação"); return; }
     await refreshAll();
   };
 
   const updateAutomationRule = async (id: string, rule: Partial<Omit<AutomationRule, "id" | "createdAt">>) => {
     const updateData: any = {};
     if (rule.name !== undefined) updateData.name = rule.name;
-    if (rule.enabled !== undefined) {
-      updateData.enabled = rule.enabled;
-      updateData.is_active = rule.enabled;
-    }
+    if (rule.enabled !== undefined) { updateData.enabled = rule.enabled; updateData.is_active = rule.enabled; }
     if ((rule as any).isActive !== undefined && rule.enabled === undefined) {
       updateData.enabled = (rule as any).isActive;
       updateData.is_active = (rule as any).isActive;
@@ -726,10 +706,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       if (rule.action.message !== undefined) updateData.action_message = rule.action.message;
     }
     const { error } = await supabase.from("automation_rules").update(updateData).eq("id", id);
-    if (error) {
-      toast.error("Erro ao atualizar automação");
-      return;
-    }
+    if (error) { toast.error("Erro ao atualizar automação"); return; }
     await refreshAll();
   };
 
@@ -754,10 +731,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       hex: normalized.hex,
       sort_order: maxOrder,
     });
-    if (error) {
-      toast.error("Erro ao adicionar coluna");
-      return;
-    }
+    if (error) { toast.error("Erro ao adicionar coluna"); return; }
     await refreshAll();
   };
 
@@ -831,6 +805,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         closeActivity,
         reopenActivity,
         addImpediment,
+        addSprintImpediment,
         resolveImpediment,
         addSprint,
         updateSprint,
