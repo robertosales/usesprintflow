@@ -59,7 +59,6 @@ const COLUMN_COLORS: Record<string, { hex: string }> = {
   ag_aceite_final:           { hex: "#10b981" },
 };
 
-// Cor por papel do responsável
 const PAPEL_COLORS: Record<string, string> = {
   desenvolvedor:  "#3b82f6",
   analista:       "#10b981",
@@ -91,17 +90,35 @@ function slaDaysRemaining(demanda: Demanda): number | null {
 
 import { getInitials, formatDisplayName } from "@/lib/nameUtils";
 
-// Retorna todos os responsáveis preenchidos, com papel e nome
-function getResponsaveis(demanda: Demanda): { papel: string; nome: string }[] {
-  const mapa: [string, string | null | undefined][] = [
+/**
+ * Retorna TODOS os responsáveis preenchidos da demanda.
+ * Usa nome como chave única para evitar conflito quando há
+ * múltiplos responsáveis com o mesmo papel (ex: 2 desenvolvedores).
+ * A ordem é: dev_principal, dev_secundario (se houver), analista, arquiteto, testador.
+ * O ÚLTIMO do array é sempre o "mais recente" exibido no recolhido.
+ */
+function getResponsaveis(demanda: Demanda): { papel: string; nome: string; key: string }[] {
+  // Campos disponíveis na interface Demanda
+  const campos: [string, string | null | undefined][] = [
     ["desenvolvedor",  demanda.responsavel_dev],
     ["analista",       demanda.responsavel_requisitos],
     ["arquiteto",      demanda.responsavel_arquiteto],
     ["testador",       demanda.responsavel_teste],
   ];
-  return mapa
-    .filter(([, nome]) => !!nome)
-    .map(([papel, nome]) => ({ papel, nome: nome! }));
+
+  const result: { papel: string; nome: string; key: string }[] = [];
+  const seen = new Set<string>();
+
+  campos.forEach(([papel, nome]) => {
+    if (!nome) return;
+    // Garante unicidade pelo nome (chave única para React e para o filtro)
+    if (!seen.has(nome)) {
+      seen.add(nome);
+      result.push({ papel, nome, key: `${papel}-${nome}` });
+    }
+  });
+
+  return result;
 }
 
 // ── Avatar individual com tooltip nome + papel ────────────────────
@@ -109,12 +126,12 @@ function ResponsavelAvatar({
   nome,
   papel,
   size = "sm",
-  isLast = false,
+  highlight = false,
 }: {
   nome: string;
   papel: string;
   size?: "sm" | "md";
-  isLast?: boolean;
+  highlight?: boolean;
 }) {
   const color = PAPEL_COLORS[papel] ?? "#64748b";
   const dim = size === "md" ? "h-6 w-6 text-[9px]" : "h-5 w-5 text-[8px]";
@@ -127,8 +144,8 @@ function ResponsavelAvatar({
             style={{
               backgroundColor: hexAlpha(color, 0.2),
               color: color,
-              borderColor: isLast ? color : hexAlpha(color, 0.4),
-              boxShadow: isLast ? `0 0 0 2px ${hexAlpha(color, 0.25)}` : undefined,
+              borderColor: highlight ? color : hexAlpha(color, 0.4),
+              boxShadow: highlight ? `0 0 0 2px ${hexAlpha(color, 0.25)}` : undefined,
             }}
           >
             {getInitials(nome)}
@@ -147,7 +164,7 @@ function ResponsavelAvatar({
 function ResponsaveisGroup({
   responsaveis,
 }: {
-  responsaveis: { papel: string; nome: string }[];
+  responsaveis: { papel: string; nome: string; key: string }[];
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -159,20 +176,21 @@ function ResponsaveisGroup({
     );
   }
 
-  // Último adicionado = último do array
+  // ÚLTIMO DO ARRAY = mais recente (exibido no recolhido com destaque)
   const ultimo = responsaveis[responsaveis.length - 1];
-  const demais = responsaveis.slice(0, -1);
+  const demais = responsaveis.slice(0, -1); // os anteriores ficam na flag
   const ultimoColor = PAPEL_COLORS[ultimo.papel] ?? "#64748b";
 
-  // ESTADO RECOLHIDO
+  // ── ESTADO RECOLHIDO ──────────────────────────────────────────
   if (!expanded) {
     return (
       <div className="flex items-center gap-1">
+        {/* Avatar do último + flag +N se houver mais */}
         <ResponsavelAvatar
           nome={ultimo.nome}
           papel={ultimo.papel}
           size="md"
-          isLast
+          highlight
         />
         {demais.length > 0 && (
           <TooltipProvider>
@@ -191,10 +209,10 @@ function ResponsaveisGroup({
                   +{demais.length} <ChevronDown className="inline h-2.5 w-2.5" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs max-w-[180px] space-y-0.5">
+              <TooltipContent side="top" className="text-xs max-w-[200px] space-y-0.5">
                 <div className="font-semibold mb-1 text-muted-foreground">Outros responsáveis:</div>
                 {demais.map((r) => (
-                  <div key={r.papel} className="flex items-center gap-1.5">
+                  <div key={r.key} className="flex items-center gap-1.5">
                     <span
                       className="inline-block h-1.5 w-1.5 rounded-full shrink-0"
                       style={{ background: PAPEL_COLORS[r.papel] ?? "#64748b" }}
@@ -203,7 +221,7 @@ function ResponsaveisGroup({
                     <span className="text-muted-foreground">· {PAPEL_LABELS[r.papel] ?? r.papel}</span>
                   </div>
                 ))}
-                <div className="text-muted-foreground mt-1 text-[10px]">Clique para expandir</div>
+                <div className="text-muted-foreground mt-1 text-[10px]">Clique para ver todos</div>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -212,7 +230,7 @@ function ResponsaveisGroup({
     );
   }
 
-  // ESTADO EXPANDIDO
+  // ── ESTADO EXPANDIDO ──────────────────────────────────────────
   return (
     <div
       className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-muted/40 p-1.5 w-full"
@@ -232,8 +250,10 @@ function ResponsaveisGroup({
         const color = PAPEL_COLORS[r.papel] ?? "#64748b";
         const isUltimo = i === responsaveis.length - 1;
         return (
-          <div key={r.papel} className="flex items-center gap-1.5 py-0.5">
-            <ResponsavelAvatar nome={r.nome} papel={r.papel} size="sm" isLast={isUltimo} />
+          // FIX: usa r.key (papel+nome) em vez de r.papel para evitar conflito
+          // quando dois responsáveis têm o mesmo papel (ex: 2 desenvolvedores)
+          <div key={r.key} className="flex items-center gap-1.5 py-0.5">
+            <ResponsavelAvatar nome={r.nome} papel={r.papel} size="sm" highlight={isUltimo} />
             <div className="flex flex-col min-w-0 flex-1">
               <span className="text-[10px] font-medium text-foreground truncate">
                 {formatDisplayName(r.nome)}
@@ -287,12 +307,10 @@ function DemandaCard({
         >
           <div className="h-0.5" style={{ backgroundColor: accentHex }} />
           <div className="p-3 flex flex-col gap-2">
-            {/* Título */}
             <p className="text-[13px] font-semibold leading-snug text-foreground line-clamp-2">
               {demanda.descricao ?? demanda.tipo ?? "Demanda"}
             </p>
 
-            {/* RHM + Projeto */}
             {(demanda.rhm || demanda.projeto) && (
               <div className="flex flex-wrap gap-1">
                 {demanda.rhm && (
@@ -311,9 +329,7 @@ function DemandaCard({
               </div>
             )}
 
-            {/* Footer: SLA + botão atividade + responsáveis */}
             <div className="flex items-start justify-between gap-2 mt-0.5">
-              {/* SLA */}
               <div className="flex items-center gap-1.5 pt-0.5">
                 {late && (
                   <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5 bg-destructive/10 text-destructive border border-destructive/25">
@@ -348,7 +364,6 @@ function DemandaCard({
                 )}
               </div>
 
-              {/* Responsáveis (recolhido/expandido) */}
               <div className="flex-1 min-w-0 flex justify-end">
                 <ResponsaveisGroup responsaveis={responsaveis} />
               </div>
@@ -494,7 +509,8 @@ export function SustentacaoBoard({
       return n;
     });
 
-  // Lista única de responsáveis para o filtro de avatares
+  // FIX: usa nome como chave única — garante que RS e GT aparecem ambos
+  // mesmo sendo os dois do papel "desenvolvedor"
   const responsaveisFilter = useMemo<ResponsavelFilterItem[]>(() => {
     const map = new Map<string, ResponsavelFilterItem>();
     demandas.forEach((d) => {
@@ -509,7 +525,6 @@ export function SustentacaoBoard({
           map.set(nome, {
             userId: nome,
             name: nome,
-            // passa a cor do papel para o KanbanResponsavelFilter exibir o avatar colorido
             color: PAPEL_COLORS[papel],
           } as ResponsavelFilterItem & { color?: string });
         }
@@ -556,7 +571,6 @@ export function SustentacaoBoard({
 
   return (
     <div className="flex flex-col h-full gap-3">
-      {/* Barra de busca + filtro por responsável */}
       <div className="flex items-center gap-3 px-1 flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -576,7 +590,6 @@ export function SustentacaoBoard({
           )}
         </div>
 
-        {/* Filtro visual por avatar de responsável */}
         {responsaveisFilter.length > 0 && (
           <KanbanResponsavelFilter
             responsaveis={responsaveisFilter}
