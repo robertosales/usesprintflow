@@ -11,33 +11,28 @@ import { Textarea } from "@/components/ui/textarea";
 import { Zap, Plus, Calendar, Target, Trash2, Pencil, AlertTriangle, Info } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
+  ContextMenu, ContextMenuContent, ContextMenuItem,
+  ContextMenuSeparator, ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
+/** Retorna a data de hoje no formato yyyy-MM-dd */
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function SprintManager() {
-  const { sprints, addSprint, updateSprint, setActiveSprint, removeSprint, activeSprint, userStories, activities, workflowColumns, addImpediment } = useSprint() as any;
+  const { sprints, addSprint, updateSprint, setActiveSprint, removeSprint, userStories, workflowColumns, addImpediment } = useSprint() as any;
   const { hasPermission } = useAuth();
   const [open, setOpen] = useState(false);
   const canCreate = hasPermission('create_sprint');
   const canEdit   = hasPermission('edit_sprint');
   const canDelete = hasPermission('delete_sprint');
 
-  // Form de criar/editar sprint
   const [editId, setEditId]       = useState<string | null>(null);
   const [name, setName]           = useState("");
   const [startDate, setStartDate] = useState("");
@@ -45,14 +40,12 @@ export function SprintManager() {
   const [goal, setGoal]           = useState("");
   const [errors, setErrors]       = useState<Record<string, string>>({});
 
-  // Estado do context menu por sprint
-  const [impedimentSprintId, setImpedimentSprintId] = useState<string | null>(null);
-  const [impedimentReason, setImpedimentReason]     = useState("");
-  const [detailSprint, setDetailSprint]             = useState<any | null>(null);
+  const [impedimentSprintId, setImpedimentSprintId]   = useState<string | null>(null);
+  const [impedimentReason, setImpedimentReason]       = useState("");
+  const [impedimentStartedAt, setImpedimentStartedAt] = useState(todayISO);
+  const [detailSprint, setDetailSprint]               = useState<any | null>(null);
 
-  const resetForm = () => {
-    setName(""); setStartDate(""); setEndDate(""); setGoal(""); setErrors({}); setEditId(null);
-  };
+  const resetForm = () => { setName(""); setStartDate(""); setEndDate(""); setGoal(""); setErrors({}); setEditId(null); };
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -67,62 +60,45 @@ export function SprintManager() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    if (editId) {
-      updateSprint(editId, { name: name.trim(), startDate, endDate, goal: goal.trim() });
-      toast.success("Sprint atualizada!");
-    } else {
-      addSprint({ name: name.trim(), startDate, endDate, goal: goal.trim() });
-      toast.success("Sprint criada e ativada!");
-    }
-    resetForm();
-    setOpen(false);
+    if (editId) { updateSprint(editId, { name: name.trim(), startDate, endDate, goal: goal.trim() }); toast.success("Sprint atualizada!"); }
+    else { addSprint({ name: name.trim(), startDate, endDate, goal: goal.trim() }); toast.success("Sprint criada e ativada!"); }
+    resetForm(); setOpen(false);
   };
 
   const openEdit = (sprintId: string) => {
     const s = sprints.find((sp: any) => sp.id === sprintId);
     if (!s) return;
-    setEditId(s.id);
-    setName(s.name);
-    setStartDate(s.startDate);
-    setEndDate(s.endDate);
-    setGoal(s.goal);
-    setErrors({});
+    setEditId(s.id); setName(s.name); setStartDate(s.startDate); setEndDate(s.endDate); setGoal(s.goal); setErrors({});
     setOpen(true);
   };
 
   const handleRemoveSprint = (sprintId: string) => {
     const sprintHUs = userStories.filter((hu: any) => hu.sprintId === sprintId);
-    if (sprintHUs.length > 0) {
-      toast.error(`Não é possível excluir: esta Sprint possui ${sprintHUs.length} HU(s) vinculada(s). Remova-as primeiro.`);
-      return;
-    }
-    removeSprint(sprintId);
-    toast.info("Sprint removida");
+    if (sprintHUs.length > 0) { toast.error(`Não é possível excluir: esta Sprint possui ${sprintHUs.length} HU(s) vinculada(s). Remova-as primeiro.`); return; }
+    removeSprint(sprintId); toast.info("Sprint removida");
   };
 
   const getSprintProgress = (sprintId: string) => {
     const sprintHUs = userStories.filter((hu: any) => hu.sprintId === sprintId);
     if (sprintHUs.length === 0) return { totalPoints: 0, completedPoints: 0, percent: 0 };
     const lastCol = workflowColumns[workflowColumns.length - 1]?.key;
-    const totalPoints      = sprintHUs.reduce((s: number, hu: any) => s + hu.storyPoints, 0);
-    const completedPoints  = sprintHUs.filter((hu: any) => hu.status === lastCol).reduce((s: number, hu: any) => s + hu.storyPoints, 0);
-    const percent = totalPoints > 0 ? Math.round((completedPoints / totalPoints) * 100) : 0;
-    return { totalPoints, completedPoints, percent };
+    const totalPoints     = sprintHUs.reduce((s: number, hu: any) => s + hu.storyPoints, 0);
+    const completedPoints = sprintHUs.filter((hu: any) => hu.status === lastCol).reduce((s: number, hu: any) => s + hu.storyPoints, 0);
+    return { totalPoints, completedPoints, percent: totalPoints > 0 ? Math.round((completedPoints / totalPoints) * 100) : 0 };
   };
 
   async function handleConfirmImpediment() {
     const reason = impedimentReason.trim();
-    if (!reason) {
-      toast.error("Informe o motivo do impedimento.");
-      return;
-    }
+    if (!reason) { toast.error("Informe o motivo do impedimento."); return; }
     try {
       if (typeof addImpediment === "function") {
-        await addImpediment(null, { reason, sprintId: impedimentSprintId });
+        await addImpediment({ sprintId: impedimentSprintId }, {
+          reason,
+          startedAt: impedimentStartedAt || undefined,
+        });
       }
       toast.success("Impedimento registrado na sprint.");
-      setImpedimentSprintId(null);
-      setImpedimentReason("");
+      setImpedimentSprintId(null); setImpedimentReason(""); setImpedimentStartedAt(todayISO());
     } catch (err: any) {
       toast.error(err?.message ?? "Erro ao registrar impedimento.");
     }
@@ -142,12 +118,7 @@ export function SprintManager() {
               <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> Nova Sprint</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-primary" />
-                  {editId ? "Editar Sprint" : "Criar Sprint"}
-                </DialogTitle>
-              </DialogHeader>
+              <DialogHeader><DialogTitle className="flex items-center gap-2"><Zap className="h-5 w-5 text-primary" />{editId ? "Editar Sprint" : "Criar Sprint"}</DialogTitle></DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label>Nome <span className="text-destructive">*</span></Label>
@@ -170,9 +141,7 @@ export function SprintManager() {
                   <Label>Objetivo da Sprint</Label>
                   <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="O que esperamos entregar nessa sprint?" className="mt-1" />
                 </div>
-                <Button type="submit" className="w-full gap-2">
-                  <Zap className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Iniciar Sprint"}
-                </Button>
+                <Button type="submit" className="w-full gap-2"><Zap className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Iniciar Sprint"}</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -187,9 +156,7 @@ export function SprintManager() {
             <ContextMenu key={sprint.id}>
               <ContextMenuTrigger asChild>
                 <Card
-                  className={`cursor-pointer transition-all hover:shadow-md min-w-[280px] group ${
-                    sprint.isActive ? "ring-2 ring-primary shadow-md" : "opacity-70 hover:opacity-100"
-                  }`}
+                  className={`cursor-pointer transition-all hover:shadow-md min-w-[280px] group ${ sprint.isActive ? "ring-2 ring-primary shadow-md" : "opacity-70 hover:opacity-100" }`}
                   onClick={() => setActiveSprint(sprint.id)}
                 >
                   <CardContent className="p-4">
@@ -197,24 +164,8 @@ export function SprintManager() {
                       <span className="font-semibold text-sm">{sprint.name}</span>
                       <div className="flex items-center gap-1">
                         {sprint.isActive && <Badge className="bg-primary text-primary-foreground text-[10px]">Ativa</Badge>}
-                        {canEdit && (
-                          <Button
-                            variant="ghost" size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                            onClick={(e) => { e.stopPropagation(); openEdit(sprint.id); }}
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                        )}
-                        {canDelete && (
-                          <Button
-                            variant="ghost" size="icon"
-                            className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100"
-                            onClick={(e) => { e.stopPropagation(); handleRemoveSprint(sprint.id); }}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        )}
+                        {canEdit && <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); openEdit(sprint.id); }}><Pencil className="h-3 w-3" /></Button>}
+                        {canDelete && <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); handleRemoveSprint(sprint.id); }}><Trash2 className="h-3 w-3" /></Button>}
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -234,35 +185,20 @@ export function SprintManager() {
                           <span className="font-semibold">{progress.percent}%</span>
                         </div>
                         <Progress value={progress.percent} className="h-1.5" />
-                        <div className="text-[10px] text-muted-foreground">
-                          {sprintHUs.length} HU{sprintHUs.length !== 1 ? "s" : ""}
-                        </div>
+                        <div className="text-[10px] text-muted-foreground">{sprintHUs.length} HU{sprintHUs.length !== 1 ? "s" : ""}</div>
                       </div>
                     )}
                   </CardContent>
                 </Card>
               </ContextMenuTrigger>
 
-              {/* ─── Context Menu da Sprint ─── */}
               <ContextMenuContent className="w-52">
-                <ContextMenuItem
-                  onClick={(e) => { e.stopPropagation(); setDetailSprint(sprint); }}
-                >
-                  <Info className="h-3.5 w-3.5 mr-2 text-blue-500" />
-                  Detalhar Sprint
+                <ContextMenuItem onClick={(e) => { e.stopPropagation(); setDetailSprint(sprint); }}>
+                  <Info className="h-3.5 w-3.5 mr-2 text-blue-500" />Detalhar Sprint
                 </ContextMenuItem>
-
                 <ContextMenuSeparator />
-
-                <ContextMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setImpedimentReason("");
-                    setImpedimentSprintId(sprint.id);
-                  }}
-                >
-                  <AlertTriangle className="h-3.5 w-3.5 mr-2 text-amber-500" />
-                  Inserir Impedimento
+                <ContextMenuItem onClick={(e) => { e.stopPropagation(); setImpedimentReason(""); setImpedimentStartedAt(todayISO()); setImpedimentSprintId(sprint.id); }}>
+                  <AlertTriangle className="h-3.5 w-3.5 mr-2 text-amber-500" />Inserir Impedimento
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>
@@ -280,33 +216,43 @@ export function SprintManager() {
         )}
       </div>
 
-      {/* ─── Dialog: Inserir Impedimento na Sprint ─── */}
-      <AlertDialog
-        open={!!impedimentSprintId}
-        onOpenChange={(o) => { if (!o) { setImpedimentSprintId(null); setImpedimentReason(""); } }}
-      >
+      {/* Dialog: Inserir Impedimento na Sprint */}
+      <AlertDialog open={!!impedimentSprintId} onOpenChange={(o) => { if (!o) { setImpedimentSprintId(null); setImpedimentReason(""); setImpedimentStartedAt(todayISO()); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Inserir Impedimento</AlertDialogTitle>
             <AlertDialogDescription>
-              Registrar um impedimento direto na sprint{" "}
-              <strong>{sprints.find((s: any) => s.id === impedimentSprintId)?.name}</strong>.
+              Registrar um impedimento direto na sprint <strong>{sprints.find((s: any) => s.id === impedimentSprintId)?.name}</strong>.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          <div className="py-2">
-            <Label htmlFor="sprint-impediment-reason" className="text-sm mb-1.5 block">
-              Motivo <span className="text-destructive">*</span>
-            </Label>
-            <Textarea
-              id="sprint-impediment-reason"
-              placeholder="Descreva o impedimento..."
-              value={impedimentReason}
-              onChange={(e) => setImpedimentReason(e.target.value)}
-              rows={3}
-              className="resize-none text-sm"
-              autoFocus
-            />
+          <div className="py-2 space-y-3">
+            <div>
+              <Label htmlFor="sprint-impediment-reason" className="text-sm mb-1.5 block">
+                Motivo <span className="text-destructive">*</span>
+              </Label>
+              <Textarea
+                id="sprint-impediment-reason"
+                placeholder="Descreva o impedimento..."
+                value={impedimentReason}
+                onChange={(e) => setImpedimentReason(e.target.value)}
+                rows={3}
+                className="resize-none text-sm"
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label htmlFor="sprint-impediment-started" className="text-sm mb-1.5 block">
+                Data de início do impedimento
+              </Label>
+              <Input
+                id="sprint-impediment-started"
+                type="date"
+                value={impedimentStartedAt}
+                onChange={(e) => setImpedimentStartedAt(e.target.value)}
+                className="text-sm"
+              />
+            </div>
           </div>
 
           <AlertDialogFooter>
@@ -322,7 +268,7 @@ export function SprintManager() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ─── Dialog: Detalhar Sprint ─── */}
+      {/* Dialog: Detalhar Sprint */}
       <Dialog open={!!detailSprint} onOpenChange={(o) => { if (!o) setDetailSprint(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -332,7 +278,6 @@ export function SprintManager() {
               {detailSprint?.isActive && <Badge className="bg-primary text-primary-foreground text-[10px] ml-1">Ativa</Badge>}
             </DialogTitle>
           </DialogHeader>
-
           {detailSprint && (() => {
             const progress  = getSprintProgress(detailSprint.id);
             const sprintHUs = userStories.filter((hu: any) => hu.sprintId === detailSprint.id);
@@ -344,35 +289,25 @@ export function SprintManager() {
                   <Calendar className="h-4 w-4" />
                   {new Date(detailSprint.startDate).toLocaleDateString("pt-BR")} — {new Date(detailSprint.endDate).toLocaleDateString("pt-BR")}
                 </div>
-
                 {detailSprint.goal && (
                   <div className="rounded-md border bg-muted/40 p-3 text-sm">
                     <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">Objetivo</p>
                     <p>{detailSprint.goal}</p>
                   </div>
                 )}
-
                 <div className="grid grid-cols-3 gap-3 text-center">
-                  {[
-                    { label: "HUs",       value: sprintHUs.length },
-                    { label: "Concluídas", value: done },
-                    { label: "Progresso",  value: `${progress.percent}%` },
-                  ].map(({ label, value }) => (
+                  {[{ label: "HUs", value: sprintHUs.length }, { label: "Concluídas", value: done }, { label: "Progresso", value: `${progress.percent}%` }].map(({ label, value }) => (
                     <div key={label} className="rounded-md border bg-muted/30 p-3">
                       <p className="text-xl font-bold">{value}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
                     </div>
                   ))}
                 </div>
-
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Progresso por pontos</p>
                   <Progress value={progress.percent} className="h-2" />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {progress.completedPoints} / {progress.totalPoints} pts
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">{progress.completedPoints} / {progress.totalPoints} pts</p>
                 </div>
-
                 {sprintHUs.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">HUs por status</p>
@@ -382,10 +317,7 @@ export function SprintManager() {
                         if (count === 0) return null;
                         return (
                           <div key={col.key} className="flex items-center gap-2 text-xs">
-                            <span
-                              className="inline-block h-2 w-2 rounded-full shrink-0"
-                              style={{ background: col.hex ?? "#6b7280" }}
-                            />
+                            <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ background: col.hex ?? "#6b7280" }} />
                             <span className="flex-1 text-muted-foreground">{col.label}</span>
                             <span className="font-semibold">{count}</span>
                           </div>

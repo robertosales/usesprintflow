@@ -11,26 +11,15 @@ import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { QuickActivityDialog } from "./QuickActivityDialog";
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-  ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
+  ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger,
+  ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger,
 } from "@/components/ui/context-menu";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { formatPersonName, getInitials } from "@/lib/personName";
@@ -47,74 +36,61 @@ const PRIORITY_COLORS: Record<string, string> = {
   critical: "bg-red-100 text-red-700 border-red-300",
 };
 
-/** Paleta de cores para avatares — vibrantes e com bom contraste no texto branco */
 const AVATAR_COLORS = [
-  "#16a34a", // green-600
-  "#0891b2", // cyan-600
-  "#7c3aed", // violet-600
-  "#db2777", // pink-600
-  "#ea580c", // orange-600
-  "#0284c7", // sky-600
-  "#9333ea", // purple-600
-  "#dc2626", // red-600
-  "#ca8a04", // yellow-600
-  "#0d9488", // teal-600
-  "#2563eb", // blue-600
-  "#c026d3", // fuchsia-600
+  "#16a34a", "#0891b2", "#7c3aed", "#db2777", "#ea580c",
+  "#0284c7", "#9333ea", "#dc2626", "#ca8a04", "#0d9488",
+  "#2563eb", "#c026d3",
 ];
 
-/** Gera uma cor consistente para um nome usando hash simples */
 function getAvatarColor(name: string): string {
   let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
+/** Retorna a data de hoje no formato yyyy-MM-dd */
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function KanbanCard({ hu, colHex }: Props) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: hu.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: hu.id });
   const { developers, epics, activities, workflowColumns, updateUserStoryStatus, addImpediment } = useSprint() as any;
-  const [quickOpen, setQuickOpen] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [quickOpen, setQuickOpen]           = useState(false);
+  const [expanded, setExpanded]             = useState(false);
   const [impedimentOpen, setImpedimentOpen] = useState(false);
   const [impedimentReason, setImpedimentReason] = useState("");
+  const [impedimentStartedAt, setImpedimentStartedAt] = useState(todayISO);
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
-    ...(colHex
-      ? {
-          background: `color-mix(in srgb, ${colHex} 8%, var(--card))`,
-          borderLeft: `3px solid ${colHex}`,
-        }
-      : {}),
+    ...(colHex ? { background: `color-mix(in srgb, ${colHex} 8%, var(--card))`, borderLeft: `3px solid ${colHex}` } : {}),
   };
 
   const assignee = hu.assigneeId ? developers.find((d: any) => d.id === hu.assigneeId) : null;
   const epic = hu.epicId ? epics.find((e: any) => e.id === hu.epicId) : null;
   const huActivities = (activities ?? []).filter((a: any) => a.huId === hu.id);
   const hasOpenBug = huActivities.some((a: any) => a.activityType === "bug" && !a.isClosed);
-
   const assigneeShort = assignee?.name ? formatPersonName(assignee.name) : null;
-  const initials = assignee?.name ? getInitials(assignee.name) : "?";
-  const avatarBg = assignee?.name ? getAvatarColor(assignee.name) : "#6b7280";
+  const initials  = assignee?.name ? getInitials(assignee.name) : "?";
+  const avatarBg  = assignee?.name ? getAvatarColor(assignee.name) : "#6b7280";
 
   async function handleConfirmImpediment() {
     const reason = impedimentReason.trim();
-    if (!reason) {
-      toast.error("Informe o motivo do impedimento.");
-      return;
-    }
+    if (!reason) { toast.error("Informe o motivo do impedimento."); return; }
     try {
       if (typeof addImpediment === "function") {
-        await addImpediment(hu.id, { reason });
+        await addImpediment(hu.id, {
+          reason,
+          startedAt: impedimentStartedAt || undefined,
+        });
       }
       toast.success("Impedimento registrado.");
       setImpedimentOpen(false);
       setImpedimentReason("");
+      setImpedimentStartedAt(todayISO());
     } catch (err: any) {
       toast.error(err?.message ?? "Erro ao registrar impedimento.");
     }
@@ -124,67 +100,43 @@ export function KanbanCard({ hu, colHex }: Props) {
     <>
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <Card
-          ref={setNodeRef}
-          style={style}
-          className="p-3 hover:shadow-md transition-shadow bg-card border group relative"
-        >
-          {/* Drag handle area: header + title */}
+        <Card ref={setNodeRef} style={style} className="p-3 hover:shadow-md transition-shadow bg-card border group relative">
           <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
             <div className="flex items-start justify-between gap-2 mb-1.5">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="text-[10px] font-mono text-muted-foreground">{hu.code}</span>
                 {hasOpenBug && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Bug className="h-3 w-3 text-red-500 fill-red-500/30" />
-                      </TooltipTrigger>
-                      <TooltipContent>Bug em aberto</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                    <Bug className="h-3 w-3 text-red-500 fill-red-500/30" />
+                  </TooltipTrigger><TooltipContent>Bug em aberto</TooltipContent></Tooltip></TooltipProvider>
                 )}
               </div>
               {hu.priority && (
-                <Badge
-                  variant="outline"
-                  className={`text-[9px] px-1.5 py-0 h-4 ${PRIORITY_COLORS[hu.priority] ?? ""}`}
-                >
+                <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 ${PRIORITY_COLORS[hu.priority] ?? ""}`}>
                   {hu.priority}
                 </Badge>
               )}
             </div>
             {epic && (
               <div className="mb-1 flex items-center gap-1">
-                <span
-                  className="inline-block h-2 w-2 rounded-full shrink-0"
-                  style={{ background: epic.color }}
-                />
+                <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ background: epic.color }} />
                 <span className="text-[10px] text-muted-foreground truncate">{epic.name}</span>
               </div>
             )}
-            <p className="text-xs font-medium text-foreground line-clamp-3 leading-snug">
-              {hu.title}
-            </p>
+            <p className="text-xs font-medium text-foreground line-clamp-3 leading-snug">{hu.title}</p>
           </div>
 
-          {/* Lista de atividades expandida */}
           {expanded && huActivities.length > 0 && (
             <div className="mt-2 flex flex-col gap-1 border-t pt-2">
               {huActivities.map((a: any) => {
                 const dev = developers.find((d: any) => d.id === a.assigneeId);
                 const devInitials = dev?.name ? getInitials(dev.name) : null;
                 return (
-                  <div
-                    key={a.id}
-                    className="flex items-center gap-1.5 text-[10px] text-muted-foreground"
-                  >
+                  <div key={a.id} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                     <span className="truncate flex-1">{a.title}</span>
                     <div className="flex items-center gap-1 shrink-0">
                       {a.hours != null && <span>{a.hours}h</span>}
-                      {devInitials && (
-                        <span className="font-semibold text-foreground/70">{devInitials}</span>
-                      )}
+                      {devInitials && <span className="font-semibold text-foreground/70">{devInitials}</span>}
                     </div>
                   </div>
                 );
@@ -192,101 +144,52 @@ export function KanbanCard({ hu, colHex }: Props) {
             </div>
           )}
 
-          {/* Footer: hours + avatar + add button */}
           <div className="flex items-center justify-between mt-2 gap-2">
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
               {hu.estimatedHours != null && <span>{hu.estimatedHours}h</span>}
             </div>
             <div className="flex items-center gap-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 opacity-60 hover:opacity-100"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setQuickOpen(true);
-                }}
-                title="Adicionar atividade ou bug"
-              >
+              <Button type="button" variant="ghost" size="icon" className="h-5 w-5 opacity-60 hover:opacity-100"
+                onClick={(e) => { e.stopPropagation(); setQuickOpen(true); }} title="Adicionar atividade ou bug">
                 <Plus className="h-3 w-3" />
               </Button>
               {assignee ? (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Avatar className="h-5 w-5">
-                        {assignee.avatarUrl || assignee.avatar ? (
-                          <AvatarImage src={assignee.avatarUrl ?? assignee.avatar} alt={assigneeShort ?? assignee.name} />
-                        ) : null}
-                        <AvatarFallback
-                          className="text-[8px] font-semibold text-white"
-                          style={{ backgroundColor: avatarBg }}
-                        >
-                          {initials}
-                        </AvatarFallback>
-                      </Avatar>
-                    </TooltipTrigger>
-                    <TooltipContent>{assigneeShort ?? assignee.name}</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                  <Avatar className="h-5 w-5">
+                    {assignee.avatarUrl || assignee.avatar ? (
+                      <AvatarImage src={assignee.avatarUrl ?? assignee.avatar} alt={assigneeShort ?? assignee.name} />
+                    ) : null}
+                    <AvatarFallback className="text-[8px] font-semibold text-white" style={{ backgroundColor: avatarBg }}>
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                </TooltipTrigger><TooltipContent>{assigneeShort ?? assignee.name}</TooltipContent></Tooltip></TooltipProvider>
               ) : (
-                <Avatar className="h-5 w-5 opacity-50">
-                  <AvatarFallback className="text-[8px]">?</AvatarFallback>
-                </Avatar>
+                <Avatar className="h-5 w-5 opacity-50"><AvatarFallback className="text-[8px]">?</AvatarFallback></Avatar>
               )}
             </div>
           </div>
         </Card>
       </ContextMenuTrigger>
 
-      {/* Context menu */}
       <ContextMenuContent className="w-52">
-        {/* Toggle de expansao de atividades */}
         {huActivities.length > 0 && (
-          <>
-            <ContextMenuItem onClick={() => setExpanded((v) => !v)}>
-              {expanded ? "Recolher tarefas" : "Ver tarefas"}
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-          </>
+          <><ContextMenuItem onClick={() => setExpanded((v) => !v)}>
+            {expanded ? "Recolher tarefas" : "Ver tarefas"}
+          </ContextMenuItem><ContextMenuSeparator /></>
         )}
-
-        {/* Adicionar tarefa */}
-        <ContextMenuItem onClick={() => setQuickOpen(true)}>
-          Adicionar tarefa
-        </ContextMenuItem>
-
-        {/* Reportar impedimento — abre dialog para preencher motivo */}
-        <ContextMenuItem
-          onClick={() => {
-            setImpedimentReason("");
-            setImpedimentOpen(true);
-          }}
-        >
+        <ContextMenuItem onClick={() => setQuickOpen(true)}>Adicionar tarefa</ContextMenuItem>
+        <ContextMenuItem onClick={() => { setImpedimentReason(""); setImpedimentStartedAt(todayISO()); setImpedimentOpen(true); }}>
           <AlertTriangle className="h-3.5 w-3.5 mr-2 text-amber-500" />
           Reportar impedimento
         </ContextMenuItem>
-
         <ContextMenuSeparator />
-
-        {/* Mover para - submenu lateral */}
         <ContextMenuSub>
-          <ContextMenuSubTrigger>
-            <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />
-            Mover para
-          </ContextMenuSubTrigger>
+          <ContextMenuSubTrigger><ArrowRightLeft className="h-3.5 w-3.5 mr-2" />Mover para</ContextMenuSubTrigger>
           <ContextMenuSubContent className="w-44">
             {(workflowColumns ?? []).map((c: any) => (
-              <ContextMenuItem
-                key={c.key}
-                disabled={c.key === hu.status}
-                onClick={() => updateUserStoryStatus(hu.id, c.key)}
-              >
-                <span
-                  className="inline-block h-2 w-2 rounded-full mr-2 shrink-0"
-                  style={{ background: c.hex ?? "#6b7280" }}
-                />
+              <ContextMenuItem key={c.key} disabled={c.key === hu.status} onClick={() => updateUserStoryStatus(hu.id, c.key)}>
+                <span className="inline-block h-2 w-2 rounded-full mr-2 shrink-0" style={{ background: c.hex ?? "#6b7280" }} />
                 {c.label}
               </ContextMenuItem>
             ))}
@@ -296,37 +199,42 @@ export function KanbanCard({ hu, colHex }: Props) {
     </ContextMenu>
 
     {/* Dialog de impedimento */}
-    <AlertDialog
-      open={impedimentOpen}
-      onOpenChange={(o) => {
-        if (!o) {
-          setImpedimentOpen(false);
-          setImpedimentReason("");
-        }
-      }}
-    >
+    <AlertDialog open={impedimentOpen} onOpenChange={(o) => { if (!o) { setImpedimentOpen(false); setImpedimentReason(""); setImpedimentStartedAt(todayISO()); } }}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Reportar impedimento</AlertDialogTitle>
           <AlertDialogDescription>
-            Descreva o impedimento para o card{" "}
-            <strong>{hu.code}</strong> — {hu.title}
+            Descreva o impedimento para o card <strong>{hu.code}</strong> — {hu.title}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        <div className="py-2">
-          <Label htmlFor="impediment-reason" className="text-sm mb-1.5 block">
-            Motivo <span className="text-destructive">*</span>
-          </Label>
-          <Textarea
-            id="impediment-reason"
-            placeholder="Descreva o impedimento..."
-            value={impedimentReason}
-            onChange={(e) => setImpedimentReason(e.target.value)}
-            rows={3}
-            className="resize-none text-sm"
-            autoFocus
-          />
+        <div className="py-2 space-y-3">
+          <div>
+            <Label htmlFor="impediment-reason" className="text-sm mb-1.5 block">
+              Motivo <span className="text-destructive">*</span>
+            </Label>
+            <Textarea
+              id="impediment-reason"
+              placeholder="Descreva o impedimento..."
+              value={impedimentReason}
+              onChange={(e) => setImpedimentReason(e.target.value)}
+              rows={3}
+              className="resize-none text-sm"
+              autoFocus
+            />
+          </div>
+          <div>
+            <Label htmlFor="impediment-started" className="text-sm mb-1.5 block">
+              Data de início do impedimento
+            </Label>
+            <Input
+              id="impediment-started"
+              type="date"
+              value={impedimentStartedAt}
+              onChange={(e) => setImpedimentStartedAt(e.target.value)}
+              className="text-sm"
+            />
+          </div>
         </div>
 
         <AlertDialogFooter>
@@ -342,13 +250,7 @@ export function KanbanCard({ hu, colHex }: Props) {
       </AlertDialogContent>
     </AlertDialog>
 
-    {quickOpen && (
-      <QuickActivityDialog
-        open={quickOpen}
-        onClose={() => setQuickOpen(false)}
-        huId={hu.id}
-      />
-    )}
+    {quickOpen && <QuickActivityDialog open={quickOpen} onClose={() => setQuickOpen(false)} huId={hu.id} />}
     </>
   );
 }
