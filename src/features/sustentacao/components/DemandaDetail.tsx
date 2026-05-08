@@ -37,6 +37,7 @@ import { EncerramentoDialog } from "./EncerramentoDialog";
 import { SuspensaoDialog } from "./SuspensaoDialog";
 import { NovaAtividadeDialog } from "./NovaAtividadeDialog";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
+import { HorasInput } from "@/shared/components/common/HorasInput";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Demanda, DemandaHour } from "../types/demanda";
@@ -239,6 +240,14 @@ type DemandaExt = Demanda & {
   contador_rejeicoes?: number;
 };
 
+/** Converte minutos decimais para string "HH:MM" para exibição na tabela */
+function minutesToDisplay(horas: number): string {
+  const totalMinutes = Math.round(horas * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 export function DemandaDetail({
   demanda: rawDemanda,
   onBack,
@@ -289,12 +298,16 @@ export function DemandaDetail({
   const [showEncerramentoModal, setShowEncerramentoModal] = useState(false);
 
   const todayISO = () => new Date().toISOString().slice(0, 10);
+
+  // ─── Estado do formulário inline de lançamento de horas ───
+  // horas armazenado como número decimal (fração de hora) — HorasInput lida com a máscara
   const [hourForm, setHourForm] = useState({
-    horas: "",
+    horas: 0,        // decimal: 1.5 = 1h30min
     fase: "execucao",
     descricao: "",
     data: todayISO(),
   });
+
   const [showFasesManager, setShowFasesManager] = useState(false);
   const [newFaseLabel, setNewFaseLabel] = useState("");
   const [deleteHourId, setDeleteHourId] = useState<string | null>(null);
@@ -563,13 +576,15 @@ export function DemandaDetail({
   };
 
   const handleAddHour = async () => {
-    const h = parseFloat(hourForm.horas);
-    if (!h || h <= 0) return;
+    if (!hourForm.horas || hourForm.horas <= 0) {
+      toast.error("Informe um tempo válido.");
+      return;
+    }
     const created_at = hourForm.data
       ? new Date(hourForm.data + "T12:00:00").toISOString()
       : undefined;
-    await addHour({ horas: h, fase: hourForm.fase, descricao: hourForm.descricao, created_at });
-    setHourForm({ horas: "", fase: "execucao", descricao: "", data: todayISO() });
+    await addHour({ horas: hourForm.horas, fase: hourForm.fase, descricao: hourForm.descricao, created_at });
+    setHourForm({ horas: 0, fase: "execucao", descricao: "", data: todayISO() });
   };
 
   const handleSearch = async (q: string) => {
@@ -1005,11 +1020,11 @@ export function DemandaDetail({
                 )}
               </TabsContent>
 
-              {/* ─── ABA HORAS ─── */}
+              {/* ─── ABA ATIVIDADES (HORAS) ─── */}
               <TabsContent value="horas" className="mt-5 space-y-5">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-foreground">
-                    Total Acumulado: <span className="text-info">{total}h</span>
+                    Total Acumulado: <span className="text-info">{minutesToDisplay(total)}</span>
                   </p>
                 </div>
                 <Card>
@@ -1025,14 +1040,30 @@ export function DemandaDetail({
                   </CardHeader>
                   <CardContent className="px-4 pb-4">
                     <div className="flex flex-wrap gap-3 items-end">
+                      {/* Data */}
                       <div>
                         <Label className="text-xs">Data</Label>
-                        <Input type="date" value={hourForm.data} max={todayISO()} onChange={(e) => setHourForm((p) => ({ ...p, data: e.target.value }))} className="w-40 mt-1" />
+                        <Input
+                          type="date"
+                          value={hourForm.data}
+                          max={todayISO()}
+                          onChange={(e) => setHourForm((p) => ({ ...p, data: e.target.value }))}
+                          className="w-40 mt-1"
+                        />
                       </div>
+
+                      {/* ── Tempo HH:MM — substituiu o antigo <Input type="number"> ── */}
                       <div>
-                        <Label className="text-xs">Horas</Label>
-                        <Input type="number" min="0.5" step="0.5" value={hourForm.horas} onChange={(e) => setHourForm((p) => ({ ...p, horas: e.target.value }))} className="w-24 mt-1" />
+                        <Label className="text-xs">Tempo (HH:MM)</Label>
+                        <HorasInput
+                          value={hourForm.horas}
+                          onChange={(v) => setHourForm((p) => ({ ...p, horas: v }))}
+                          placeholder="00:00"
+                          className="w-28 mt-1"
+                        />
                       </div>
+
+                      {/* Fase */}
                       <div>
                         <Label className="text-xs">Fase</Label>
                         <Select value={hourForm.fase} onValueChange={(v) => setHourForm((p) => ({ ...p, fase: v }))}>
@@ -1040,17 +1071,28 @@ export function DemandaDetail({
                           <SelectContent>{fases.map((f) => <SelectItem key={f.key} value={f.key}>{f.label}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
+
+                      {/* Descrição */}
                       <div className="flex-1 min-w-[200px]">
                         <Label className="text-xs">Descrição</Label>
-                        <Input value={hourForm.descricao} onChange={(e) => setHourForm((p) => ({ ...p, descricao: e.target.value }))} className="mt-1" />
+                        <Input
+                          value={hourForm.descricao}
+                          onChange={(e) => setHourForm((p) => ({ ...p, descricao: e.target.value }))}
+                          className="mt-1"
+                          placeholder="Descreva a atividade..."
+                        />
                       </div>
+
                       <Button size="sm" onClick={handleAddHour} className="gap-1.5">
                         <Plus className="h-4 w-4" />Lançar
                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">Lançado por: {profile?.display_name || user?.email || "Usuário"}</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Lançado por: {profile?.display_name || user?.email || "Usuário"}
+                    </p>
                   </CardContent>
                 </Card>
+
                 {hours.length > 0 && (
                   <div className="rounded-lg border overflow-x-auto">
                     <table className="w-full text-sm">
@@ -1060,7 +1102,7 @@ export function DemandaDetail({
                           <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Fase</th>
                           <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Descrição</th>
                           <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Lançado por</th>
-                          <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Horas</th>
+                          <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Tempo</th>
                           {isAdmin && <th className="px-3 py-2" />}
                         </tr>
                       </thead>
@@ -1071,7 +1113,10 @@ export function DemandaDetail({
                             <td className="px-3 py-2 text-xs">{fasesMap[h.fase] || h.fase}</td>
                             <td className="px-3 py-2 text-xs max-w-[200px] truncate">{h.descricao || "-"}</td>
                             <td className="px-3 py-2 text-xs">{profilesMap.get(h.user_id) || "..."}</td>
-                            <td className="px-3 py-2 text-xs text-right font-mono font-medium">{h.horas}h</td>
+                            {/* Exibe HH:MM em vez de decimal */}
+                            <td className="px-3 py-2 text-xs text-right font-mono font-medium">
+                              {minutesToDisplay(Number(h.horas))}
+                            </td>
                             {isAdmin && (
                               <td className="px-3 py-2">
                                 <div className="flex items-center justify-end gap-1">
@@ -1271,8 +1316,6 @@ export function DemandaDetail({
         isCorretiva={isCorretiva}
       />
 
-      {/* Dialog de edição de atividade — somente admin */}
-      {/* onSuccess repassa reloadHours do DemandaDetail para garantir atualização imediata da tabela */}
       <NovaAtividadeDialog
         demanda={demanda as Demanda}
         open={showEditHourDialog}
