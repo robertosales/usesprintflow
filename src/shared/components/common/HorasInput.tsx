@@ -2,11 +2,6 @@
  * HorasInput — campo de horas no formato HH:MM com máscara automática.
  * Converte valor interno (decimal) para HH:MM na UI e vice-versa.
  *
- * Exemplos de autoformatação enquanto digita:
- *   "15"  → 00:15
- *   "130" → 01:30
- *   "245" → 02:45
- *
  * Props:
  *   value: número decimal (ex: 2.5 = 02:30)
  *   onChange: chamado com o número decimal após validação
@@ -31,27 +26,24 @@ export function hhmmToDecimal(hhmm: string): number {
   return h + m / 60;
 }
 
+function isValidHHMM(value: string): boolean {
+  if (!/^\d{2}:\d{2}$/.test(value)) return false;
+  const [, mStr] = value.split(":");
+  return parseInt(mStr, 10) <= 59;
+}
+
 /**
- * Aplica máscara enquanto o usuário digita digitos.
- * Entrada: somente dígitos (sem :)
- * Formata como HH:MM usando as regras:
- *   1 ou 2 dígitos  → 00:XX
- *   3 dígitos        → 0H:MM
- *   4+ dígitos       → HH:MM (trunca em 4)
+ * Aplica máscara somente quando a entrada é só dígitos (sem dois pontos).
+ * Quando já contém ":" retorna como está para permitir edição livre.
  */
-function applyMask(raw: string): string {
+function applyMaskIfNeeded(raw: string): string {
+  // Se já tem ":" o usuário está editando diretamente o HH:MM — não aplica máscara
+  if (raw.includes(":")) return raw;
   const digits = raw.replace(/\D/g, "").slice(0, 4);
   if (digits.length === 0) return "";
   if (digits.length <= 2) return `00:${digits.padStart(2, "0")}`;
   if (digits.length === 3) return `0${digits[0]}:${digits.slice(1)}`;
   return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
-}
-
-function isValidHHMM(value: string): boolean {
-  if (!/^\d{2}:\d{2}$/.test(value)) return false;
-  const [, mStr] = value.split(":");
-  const m = parseInt(mStr, 10);
-  return m >= 0 && m <= 59;
 }
 
 interface HorasInputProps {
@@ -71,51 +63,43 @@ export function HorasInput({
   placeholder = "00:00",
   id,
 }: HorasInputProps) {
-  // Guarda o último value externo que originou uma sincronização
-  // para não sobrescrever o que o usuário está digitando
-  const lastExternalValue = useRef<number>(value);
   const isFocused = useRef(false);
-
+  // Inicializa display com o valor já formatado (inclusive quando value=1 vindo do estado inicial)
   const [display, setDisplay] = useState(() => (value > 0 ? decimalToHHMM(value) : ""));
   const [error, setError] = useState("");
 
-  /**
-   * Sincroniza apenas quando o value externo muda E o campo não está em foco.
-   * Isso resolve o problema de re-sync durante a edição.
-   */
+  // Sincroniza value externo → display SOMENTE quando o campo não está focado
+  // Isso garante que abrir o modal de edição popula corretamente o campo
   useEffect(() => {
-    // Só atualiza se o value externo realmente mudou (ex: abrir modal com outro registro)
-    if (value === lastExternalValue.current) return;
-    lastExternalValue.current = value;
-    // Só aplica se o campo não estiver com foco (usuário não está digitando)
-    if (!isFocused.current) {
-      setDisplay(value > 0 ? decimalToHHMM(value) : "");
-      setError("");
-    }
+    if (isFocused.current) return; // usuário está digitando — não sobrescreve
+    setDisplay(value > 0 ? decimalToHHMM(value) : "");
+    setError("");
   }, [value]);
 
-  const handleFocus = () => {
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     isFocused.current = true;
+    // Seleciona tudo ao focar para facilitar sobrescrever
+    e.target.select();
   };
 
   const handleChange = (raw: string) => {
-    // Permite apagar
     if (raw === "") {
       setDisplay("");
       setError("");
       onChange(0);
       return;
     }
-    // Se usuário digitou só números, aplica máscara
-    const masked = applyMask(raw);
+
+    const masked = applyMaskIfNeeded(raw);
     setDisplay(masked);
 
-    if (masked && isValidHHMM(masked)) {
+    if (isValidHHMM(masked)) {
       setError("");
-      lastExternalValue.current = hhmmToDecimal(masked); // evita re-sync desnecessário
       onChange(hhmmToDecimal(masked));
-    } else if (masked.length === 5) {
+    } else if (masked.length === 5 && masked.includes(":")) {
       setError("Minutos inválidos (00–59)");
+    } else {
+      setError("");
     }
   };
 
@@ -123,7 +107,15 @@ export function HorasInput({
     isFocused.current = false;
     if (!display) { setError(""); return; }
     if (!isValidHHMM(display)) {
-      setError("Formato inválido. Use HH:MM (ex: 01:30)");
+      // Tenta autocompletar: se for só dígitos, aplica máscara final
+      const fallback = applyMaskIfNeeded(display);
+      if (isValidHHMM(fallback)) {
+        setDisplay(fallback);
+        setError("");
+        onChange(hhmmToDecimal(fallback));
+      } else {
+        setError("Formato inválido. Use HH:MM (ex: 01:30)");
+      }
     } else {
       setError("");
     }
@@ -140,7 +132,6 @@ export function HorasInput({
         placeholder={placeholder}
         disabled={disabled}
         className={cn("font-mono", error ? "border-destructive focus-visible:ring-destructive" : "", className)}
-        inputMode="numeric"
         maxLength={5}
       />
       {error && <p className="text-[11px] text-destructive">{error}</p>}
