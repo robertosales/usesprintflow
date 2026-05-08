@@ -70,8 +70,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     new Set((workflowColumns ?? []).map((c: WorkflowColumn) => c.key)),
   );
   const [localPositions, setLocalPositions] = useState<Record<string, number>>({});
-
-  // ── Estado de filtros unificado ──
   const [filtros, setFiltros] = useState<KanbanFiltros>(KANBAN_FILTROS_DEFAULT);
 
   useEffect(() => {
@@ -97,11 +95,24 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
   const sprintStories = useMemo(() => {
     let items = sprintBase;
 
-    if (filtros.membro !== "all")
+    // Busca textual
+    if (filtros.search.trim()) {
+      const q = filtros.search.trim().toLowerCase();
       items = items.filter((h: any) =>
-        h.assigneeId === filtros.membro ||
-        (Array.isArray(h.assignees) && h.assignees.includes(filtros.membro)),
+        String(h.title ?? "").toLowerCase().includes(q) ||
+        String(h.code  ?? "").toLowerCase().includes(q),
       );
+    }
+
+    // Filtro de membros (múltipla seleção, mesmo padrão da Sustentação)
+    if (filtros.membros.length > 0) {
+      items = items.filter((h: any) =>
+        filtros.membros.some((id) =>
+          h.assigneeId === id ||
+          (Array.isArray(h.assignees) && h.assignees.includes(id)),
+        ),
+      );
+    }
 
     if (filtros.tipo !== "all")
       items = items.filter((h: any) => h.type === filtros.tipo);

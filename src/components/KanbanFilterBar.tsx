@@ -1,5 +1,11 @@
+/**
+ * KanbanFilterBar — Filtro visual do Kanban Ágil.
+ * Usa KanbanResponsavelFilter (mesmo componente da Sustentação) para o filtro de membros
+ * com avatares: Todos AB FF FS DS EF TA ES RF GT LN RS PP
+ * Inclui visões salvas, filter chips com contagem e contador de demandas.
+ */
 import { useState, useMemo } from "react";
-import { X, BookmarkPlus, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { X, BookmarkPlus, ChevronDown, SlidersHorizontal, Search } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -11,21 +17,27 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { KanbanResponsavelFilter } from "@/shared/components/common/KanbanResponsavelFilter";
+import type { ResponsavelFilterItem } from "@/shared/components/common/KanbanResponsavelFilter";
+import { Input } from "@/components/ui/input";
+import { getInitials, formatDisplayName } from "@/lib/nameUtils";
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
+// ─── Tipos ──────────────────────────────────────────────────────────────────
 
 export interface KanbanFiltros {
-  membro: string;     // "all" | developer.id
-  tipo: string;       // "all" | story type
-  prioridade: string; // "all" | priority
-  status: string;     // "all" | column key
+  membros: string[];   // user IDs; vazio = todos
+  tipo: string;        // "all" | story type
+  prioridade: string;  // "all" | priority
+  status: string;      // "all" | column key
+  search: string;      // texto livre
 }
 
 export const KANBAN_FILTROS_DEFAULT: KanbanFiltros = {
-  membro: "all",
+  membros: [],
   tipo: "all",
   prioridade: "all",
   status: "all",
+  search: "",
 };
 
 export interface KanbanViewSalva {
@@ -36,37 +48,34 @@ export interface KanbanViewSalva {
 }
 
 const VIEWS_BUILTIN: KanbanViewSalva[] = [
-  { id: "meus",       label: "Meus cards",   icon: "👤", filtros: { ...KANBAN_FILTROS_DEFAULT } },
-  { id: "bugs",       label: "Bugs",         icon: "🐛", filtros: { ...KANBAN_FILTROS_DEFAULT, tipo: "bug" } },
-  { id: "alta_prio",  label: "Alta Prior.",  icon: "🔥", filtros: { ...KANBAN_FILTROS_DEFAULT, prioridade: "alta" } },
-  { id: "em_exec",    label: "Em Execução",  icon: "⚡",   filtros: { ...KANBAN_FILTROS_DEFAULT, status: "in_progress" } },
+  { id: "meus",      label: "Meus cards",  icon: "👤", filtros: { ...KANBAN_FILTROS_DEFAULT } },
+  { id: "bugs",      label: "Bugs",        icon: "🐛", filtros: { ...KANBAN_FILTROS_DEFAULT, tipo: "bug" } },
+  { id: "alta_prio", label: "Alta Prior.", icon: "🔥", filtros: { ...KANBAN_FILTROS_DEFAULT, prioridade: "alta" } },
+  { id: "em_exec",   label: "Em Execução", icon: "⚡", filtros: { ...KANBAN_FILTROS_DEFAULT, status: "in_progress" } },
 ];
 
-const LS_KEY = "kanban_views_salvas";
-
+const LS_KEY = "kanban_agil_views_salvas";
 function loadViews(): KanbanViewSalva[] {
   try { return JSON.parse(localStorage.getItem(LS_KEY) ?? "[]") as KanbanViewSalva[]; }
   catch { return []; }
 }
 function saveViews(v: KanbanViewSalva[]) { localStorage.setItem(LS_KEY, JSON.stringify(v)); }
 
-// ─── Helpers visuais ─────────────────────────────────────────────────────────
+// ─── Helpers visuais ────────────────────────────────────────────────────────
 
-const CHIP_COLORS: Record<keyof KanbanFiltros, string> = {
-  membro:     "text-emerald-400 border-emerald-400/40 bg-emerald-400/10",
+const CHIP_COLORS: Record<string, string> = {
   tipo:       "text-violet-400 border-violet-400/40 bg-violet-400/10",
   prioridade: "text-amber-400 border-amber-400/40 bg-amber-400/10",
   status:     "text-cyan-400 border-cyan-400/40 bg-cyan-400/10",
 };
 
-const CHIP_LABELS: Record<keyof KanbanFiltros, string> = {
-  membro:     "Membro",
+const CHIP_LABELS: Record<string, string> = {
   tipo:       "Tipo",
   prioridade: "Prioridade",
   status:     "Status",
 };
 
-// ─── Componente principal ─────────────────────────────────────────────────────
+// ─── Componente principal ────────────────────────────────────────────────────
 
 export function KanbanFilterBar({
   filtros,
@@ -91,35 +100,39 @@ export function KanbanFilterBar({
   const [saveLabel, setSaveLabel] = useState("");
   const [showSaveInput, setShowSaveInput] = useState(false);
 
-  // contagens dinâmicas
+  // ── Monta lista de responsáveis para o KanbanResponsavelFilter ──
+  const responsaveisFilter = useMemo<ResponsavelFilterItem[]>(() => {
+    // Usa developers do SprintContext que têm HUs no sprint
+    const idsComStory = new Set<string>();
+    stories.forEach((h: any) => {
+      if (h.assigneeId) idsComStory.add(h.assigneeId);
+      if (Array.isArray(h.assignees)) h.assignees.forEach((id: string) => idsComStory.add(id));
+    });
+    return (developers ?? [])
+      .filter((d: any) => idsComStory.has(d.id))
+      .map((d: any) => ({
+        userId: d.id,
+        name: d.name ?? "",
+        avatarUrl: d.avatarUrl ?? d.avatar_url ?? null,
+      }));
+  }, [stories, developers]);
+
+  // ── Contagens dinâmicas ──
   const counts = useMemo(() => {
-    const membroCounts: Record<string, number> = {};
-    const tipoCounts: Record<string, number> = {};
-    const prioCounts: Record<string, number> = {};
+    const tipoCounts: Record<string, number>   = {};
+    const prioCounts: Record<string, number>   = {};
     const statusCounts: Record<string, number> = {};
     stories.forEach((h: any) => {
-      // membro
-      const assignees: string[] = [];
-      if (h.assigneeId) assignees.push(h.assigneeId);
-      if (Array.isArray(h.assignees)) h.assignees.forEach((id: string) => assignees.push(id));
-      assignees.forEach((id) => { membroCounts[id] = (membroCounts[id] || 0) + 1; });
-      // tipo
-      if (h.type) tipoCounts[h.type] = (tipoCounts[h.type] || 0) + 1;
-      // prioridade
+      if (h.type)     tipoCounts[h.type]     = (tipoCounts[h.type]     || 0) + 1;
       if (h.priority) prioCounts[h.priority] = (prioCounts[h.priority] || 0) + 1;
-      // status
-      if (h.status) statusCounts[h.status] = (statusCounts[h.status] || 0) + 1;
+      if (h.status)   statusCounts[h.status] = (statusCounts[h.status] || 0) + 1;
     });
-    return { membroCounts, tipoCounts, prioCounts, statusCounts };
+    return { tipoCounts, prioCounts, statusCounts };
   }, [stories]);
 
-  // Chips ativos
+  // ── Chips ativos (tipo, prioridade, status) ──
   const activeChips = useMemo(() => {
-    const chips: { key: keyof KanbanFiltros; display: string }[] = [];
-    if (filtros.membro !== "all") {
-      const dev = developers.find((d: any) => d.id === filtros.membro);
-      chips.push({ key: "membro", display: dev?.name?.split(" ")[0] ?? filtros.membro });
-    }
+    const chips: { key: string; display: string }[] = [];
     if (filtros.tipo !== "all")       chips.push({ key: "tipo",       display: filtros.tipo });
     if (filtros.prioridade !== "all") chips.push({ key: "prioridade", display: filtros.prioridade });
     if (filtros.status !== "all") {
@@ -127,9 +140,16 @@ export function KanbanFilterBar({
       chips.push({ key: "status", display: col?.label ?? filtros.status });
     }
     return chips;
-  }, [filtros, developers, workflowColumns]);
+  }, [filtros, workflowColumns]);
 
-  function clearChip(key: keyof KanbanFiltros) {
+  const hasAnyFilter =
+    filtros.membros.length > 0 ||
+    filtros.tipo !== "all" ||
+    filtros.prioridade !== "all" ||
+    filtros.status !== "all" ||
+    filtros.search !== "";
+
+  function clearChip(key: string) {
     setActiveViewId(null);
     onChange({ ...filtros, [key]: "all" });
   }
@@ -138,10 +158,9 @@ export function KanbanFilterBar({
     onChange(KANBAN_FILTROS_DEFAULT);
   }
   function applyView(view: KanbanViewSalva) {
-    // "Meus cards" usa currentUserId
     if (view.id === "meus" && currentUserId) {
       setActiveViewId(view.id);
-      onChange({ ...KANBAN_FILTROS_DEFAULT, membro: currentUserId });
+      onChange({ ...KANBAN_FILTROS_DEFAULT, membros: [currentUserId] });
       return;
     }
     setActiveViewId(view.id);
@@ -149,7 +168,12 @@ export function KanbanFilterBar({
   }
   function saveCurrentView() {
     if (!saveLabel.trim()) return;
-    const newView: KanbanViewSalva = { id: Date.now().toString(), label: saveLabel.trim(), icon: "📌", filtros: { ...filtros } };
+    const newView: KanbanViewSalva = {
+      id: Date.now().toString(),
+      label: saveLabel.trim(),
+      icon: "📌",
+      filtros: { ...filtros },
+    };
     const updated = [...viewsCustom, newView];
     setViewsCustom(updated);
     saveViews(updated);
@@ -166,36 +190,30 @@ export function KanbanFilterBar({
 
   const allViews = [...VIEWS_BUILTIN, ...viewsCustom];
 
-  // opções de membros, tipos, prioridades e status para o popover
-  const membroItems = useMemo(() => [
-    { value: "all", label: "Todos", count: stories.length },
-    ...developers
-      .filter((d: any) => counts.membroCounts[d.id])
-      .map((d: any) => ({ value: d.id, label: d.name?.split(" ")[0] + (d.name?.split(" ")[1] ? " " + d.name.split(" ")[1][0] + "." : ""), count: counts.membroCounts[d.id] ?? 0 }))
-  ], [developers, counts, stories]);
-
+  // Opções para o popover de Tipo, Prioridade, Status
   const tipoItems = useMemo(() => [
     { value: "all", label: "Todos", count: stories.length },
-    ...Object.entries(counts.tipoCounts).map(([v, c]) => ({ value: v, label: v, count: c }))
+    ...Object.entries(counts.tipoCounts).map(([v, c]) => ({ value: v, label: v, count: c })),
   ], [counts, stories]);
 
   const prioItems = useMemo(() => [
     { value: "all", label: "Todas", count: stories.length },
-    ...Object.entries(counts.prioCounts).map(([v, c]) => ({ value: v, label: v, count: c }))
+    ...Object.entries(counts.prioCounts).map(([v, c]) => ({ value: v, label: v, count: c })),
   ], [counts, stories]);
 
   const statusItems = useMemo(() => [
     { value: "all", label: "Todos", count: stories.length },
     ...workflowColumns
       .filter((c: any) => counts.statusCounts[c.key])
-      .map((c: any) => ({ value: c.key, label: c.label, count: counts.statusCounts[c.key] ?? 0 }))
+      .map((c: any) => ({ value: c.key, label: c.label, count: counts.statusCounts[c.key] ?? 0 })),
   ], [workflowColumns, counts, stories]);
 
   return (
-    <div className="flex flex-col gap-2 mb-4">
+    <div className="flex flex-col gap-2.5">
+
       {/* ── Linha 1: Visões salvas ── */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground pr-1">Visões</span>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground pr-1 shrink-0">Visões</span>
         {allViews.map((v) => (
           <ViewChip
             key={v.id}
@@ -235,10 +253,39 @@ export function KanbanFilterBar({
         )}
       </div>
 
-      {/* ── Linha 2: Chips ativos + add filtro ── */}
+      {/* ── Linha 2: Busca + avatares de membros ── */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground pr-1">Filtros</span>
+        {/* Busca textual */}
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Buscar card..."
+            value={filtros.search}
+            onChange={(e) => { setActiveViewId(null); onChange({ ...filtros, search: e.target.value }); }}
+            className="pl-8 h-8 text-xs w-44"
+          />
+          {filtros.search && (
+            <button
+              onClick={() => onChange({ ...filtros, search: "" })}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
 
+        {/* Avatares de membros — exatamente como na Sustentação */}
+        {responsaveisFilter.length > 0 && (
+          <KanbanResponsavelFilter
+            responsaveis={responsaveisFilter}
+            selected={filtros.membros}
+            onChange={(membros) => { setActiveViewId(null); onChange({ ...filtros, membros }); }}
+          />
+        )}
+      </div>
+
+      {/* ── Linha 3: Chips ativos (tipo/prioridade/status) + botão Filtrar + contador ── */}
+      <div className="flex items-center gap-2 flex-wrap">
         {activeChips.map((chip) => (
           <span
             key={chip.key}
@@ -255,33 +302,32 @@ export function KanbanFilterBar({
         <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
           <PopoverTrigger asChild>
             <button className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary text-[11px] transition-colors">
-              <SlidersHorizontal className="h-3 w-3" /> Filtrar
+              <SlidersHorizontal className="h-3 w-3" /> Tipo / Prior / Status
               <ChevronDown className="h-2.5 w-2.5" />
             </button>
           </PopoverTrigger>
           <PopoverContent side="bottom" align="start" className="w-72 p-3 space-y-4">
-            <FilterGroup label="Membro"     colorClass="text-emerald-400" items={membroItems}  selected={filtros.membro}     onSelect={(v) => { onChange({ ...filtros, membro: v });     setActiveViewId(null); }} />
-            <FilterGroup label="Tipo"       colorClass="text-violet-400" items={tipoItems}    selected={filtros.tipo}       onSelect={(v) => { onChange({ ...filtros, tipo: v });       setActiveViewId(null); }} />
-            <FilterGroup label="Prioridade" colorClass="text-amber-400"  items={prioItems}    selected={filtros.prioridade} onSelect={(v) => { onChange({ ...filtros, prioridade: v }); setActiveViewId(null); }} />
-            <FilterGroup label="Status"     colorClass="text-cyan-400"   items={statusItems}  selected={filtros.status}     onSelect={(v) => { onChange({ ...filtros, status: v });     setActiveViewId(null); }} />
+            <FilterGroup label="Tipo"       colorClass="text-violet-400" items={tipoItems}   selected={filtros.tipo}       onSelect={(v) => { onChange({ ...filtros, tipo: v });       setActiveViewId(null); }} />
+            <FilterGroup label="Prioridade" colorClass="text-amber-400"  items={prioItems}   selected={filtros.prioridade} onSelect={(v) => { onChange({ ...filtros, prioridade: v }); setActiveViewId(null); }} />
+            <FilterGroup label="Status"     colorClass="text-cyan-400"   items={statusItems} selected={filtros.status}     onSelect={(v) => { onChange({ ...filtros, status: v });     setActiveViewId(null); }} />
           </PopoverContent>
         </Popover>
 
-        {activeChips.length > 0 && (
+        {hasAnyFilter && (
           <button onClick={clearAll} className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors">
-            <X className="h-3 w-3" /> Limpar
+            <X className="h-3 w-3" /> Limpar tudo
           </button>
         )}
 
         <span className="ml-auto text-[11px] font-mono text-muted-foreground">
-          <span className="text-foreground font-semibold">{totalFiltrado}</span> card{totalFiltrado !== 1 ? "s" : ""}
+          <span className="text-foreground font-semibold">{totalFiltrado}</span> demanda{totalFiltrado !== 1 ? "s" : ""}
         </span>
       </div>
     </div>
   );
 }
 
-// ─── ViewChip ─────────────────────────────────────────────────────────────────
+// ─── ViewChip ────────────────────────────────────────────────────────────────
 
 function ViewChip({ view, active, onApply, onDelete }: {
   view: KanbanViewSalva; active: boolean; onApply: () => void; onDelete?: () => void;
@@ -306,7 +352,7 @@ function ViewChip({ view, active, onApply, onDelete }: {
   );
 }
 
-// ─── FilterGroup ──────────────────────────────────────────────────────────────
+// ─── FilterGroup ─────────────────────────────────────────────────────────────
 
 function FilterGroup({ label, colorClass, items, selected, onSelect }: {
   label: string; colorClass: string;
