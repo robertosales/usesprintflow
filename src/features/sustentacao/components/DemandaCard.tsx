@@ -32,12 +32,7 @@ interface Props {
   onMove?: (d: Demanda, targetKey: string) => void;
 }
 
-function getInitials(name: string): string {
-  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0][0].toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
+import { getInitials, formatPersonName } from "@/lib/personName";
 
 export function DemandaCard({
   demanda,
@@ -127,7 +122,7 @@ export function DemandaCard({
             >
               {getInitials(responsavel)}
             </div>
-            <span className="text-[10px] text-muted-foreground truncate max-w-[110px]">{responsavel}</span>
+            <span className="text-[10px] text-muted-foreground truncate max-w-[110px]">{formatPersonName(responsavel)}</span>
           </div>
         ) : (
           <div className="flex items-center gap-1 text-muted-foreground/40">

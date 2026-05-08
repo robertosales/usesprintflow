@@ -69,12 +69,7 @@ function slaDaysRemaining(demanda: Demanda): number | null {
   return Math.round((dead.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0][0].toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
+import { getInitials, formatPersonName } from "@/lib/personName";
 
 function getResponsaveis(demanda: Demanda): { papel: string; nome: string }[] {
   const mapa: Record<string, string | null | undefined> = {
@@ -113,7 +108,7 @@ function ResponsavelAvatar({
           </div>
         </TooltipTrigger>
         <TooltipContent side="top" className="text-xs max-w-[180px]">
-          {nome}
+          {formatPersonName(nome)}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -162,7 +157,7 @@ function ResponsaveisGroup({
               <TooltipContent side="top" className="text-xs">
                 <div className="space-y-0.5">
                   {demais.map((r) => (
-                    <div key={r.papel}>{r.nome}</div>
+                    <div key={r.papel}>{formatPersonName(r.nome)}</div>
                   ))}
                 </div>
               </TooltipContent>
