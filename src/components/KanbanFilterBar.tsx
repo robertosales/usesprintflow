@@ -20,9 +20,8 @@ import {
 import { KanbanResponsavelFilter } from "@/shared/components/common/KanbanResponsavelFilter";
 import type { ResponsavelFilterItem } from "@/shared/components/common/KanbanResponsavelFilter";
 import { Input } from "@/components/ui/input";
-import { getInitials, formatDisplayName } from "@/lib/nameUtils";
 
-// ─── Tipos ──────────────────────────────────────────────────────────────────
+// ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export interface KanbanFiltros {
   membros: string[];   // user IDs; vazio = todos
@@ -61,7 +60,7 @@ function loadViews(): KanbanViewSalva[] {
 }
 function saveViews(v: KanbanViewSalva[]) { localStorage.setItem(LS_KEY, JSON.stringify(v)); }
 
-// ─── Helpers visuais ────────────────────────────────────────────────────────
+// ─── Helpers visuais ─────────────────────────────────────────────────────────
 
 const CHIP_COLORS: Record<string, string> = {
   tipo:       "text-violet-400 border-violet-400/40 bg-violet-400/10",
@@ -75,7 +74,7 @@ const CHIP_LABELS: Record<string, string> = {
   status:     "Status",
 };
 
-// ─── Componente principal ────────────────────────────────────────────────────
+// ─── Componente principal ─────────────────────────────────────────────────────
 
 export function KanbanFilterBar({
   filtros,
@@ -102,7 +101,6 @@ export function KanbanFilterBar({
 
   // ── Monta lista de responsáveis para o KanbanResponsavelFilter ──
   const responsaveisFilter = useMemo<ResponsavelFilterItem[]>(() => {
-    // Usa developers do SprintContext que têm HUs no sprint
     const idsComStory = new Set<string>();
     stories.forEach((h: any) => {
       if (h.assigneeId) idsComStory.add(h.assigneeId);
@@ -114,7 +112,7 @@ export function KanbanFilterBar({
         userId: d.id,
         name: d.name ?? "",
         avatarUrl: d.avatarUrl ?? d.avatar_url ?? null,
-      }));
+      } satisfies ResponsavelFilterItem));
   }, [stories, developers]);
 
   // ── Contagens dinâmicas ──
@@ -130,7 +128,7 @@ export function KanbanFilterBar({
     return { tipoCounts, prioCounts, statusCounts };
   }, [stories]);
 
-  // ── Chips ativos (tipo, prioridade, status) ──
+  // ── Chips ativos ──
   const activeChips = useMemo(() => {
     const chips: { key: string; display: string }[] = [];
     if (filtros.tipo !== "all")       chips.push({ key: "tipo",       display: filtros.tipo });
@@ -190,7 +188,6 @@ export function KanbanFilterBar({
 
   const allViews = [...VIEWS_BUILTIN, ...viewsCustom];
 
-  // Opções para o popover de Tipo, Prioridade, Status
   const tipoItems = useMemo(() => [
     { value: "all", label: "Todos", count: stories.length },
     ...Object.entries(counts.tipoCounts).map(([v, c]) => ({ value: v, label: v, count: c })),
@@ -255,7 +252,6 @@ export function KanbanFilterBar({
 
       {/* ── Linha 2: Busca + avatares de membros ── */}
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Busca textual */}
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <Input
@@ -274,7 +270,6 @@ export function KanbanFilterBar({
           )}
         </div>
 
-        {/* Avatares de membros — exatamente como na Sustentação */}
         {responsaveisFilter.length > 0 && (
           <KanbanResponsavelFilter
             responsaveis={responsaveisFilter}
@@ -284,7 +279,7 @@ export function KanbanFilterBar({
         )}
       </div>
 
-      {/* ── Linha 3: Chips ativos (tipo/prioridade/status) + botão Filtrar + contador ── */}
+      {/* ── Linha 3: Chips ativos + Filtrar + contador ── */}
       <div className="flex items-center gap-2 flex-wrap">
         {activeChips.map((chip) => (
           <span
@@ -327,7 +322,7 @@ export function KanbanFilterBar({
   );
 }
 
-// ─── ViewChip ────────────────────────────────────────────────────────────────
+// ─── ViewChip ─────────────────────────────────────────────────────────────────
 
 function ViewChip({ view, active, onApply, onDelete }: {
   view: KanbanViewSalva; active: boolean; onApply: () => void; onDelete?: () => void;
@@ -352,7 +347,7 @@ function ViewChip({ view, active, onApply, onDelete }: {
   );
 }
 
-// ─── FilterGroup ─────────────────────────────────────────────────────────────
+// ─── FilterGroup ──────────────────────────────────────────────────────────────
 
 function FilterGroup({ label, colorClass, items, selected, onSelect }: {
   label: string; colorClass: string;
