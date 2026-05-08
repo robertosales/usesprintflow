@@ -1,6 +1,22 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Demanda, DemandaTransition, DemandaHour } from "../types/demanda";
 
+/**
+ * Guard: converte qualquer formato de horas para number decimal antes de enviar ao banco.
+ * Aceita: 1 | 1.5 | "1" | "1.5" | "1:00" | "1:30" | "0:45"
+ * Nunca deixa uma string chegar na coluna numeric do Supabase (evita erro 22P02).
+ */
+function toDecimalHours(value: unknown): number {
+  if (typeof value === "number" && !isNaN(value)) return value;
+  const str = String(value ?? "").trim();
+  if (str.includes(":")) {
+    const [h = "0", m = "0"] = str.split(":");
+    return (parseInt(h, 10) || 0) + (parseInt(m, 10) || 0) / 60;
+  }
+  const parsed = parseFloat(str);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
 export async function fetchDemandas(teamId: string): Promise<Demanda[]> {
   const { data, error } = await supabase
     .from("demandas" as any)
@@ -57,7 +73,9 @@ export async function fetchTransitions(demandaId: string): Promise<DemandaTransi
 }
 
 export async function addHours(h: Omit<DemandaHour, "id" | "created_at"> & { created_at?: string }) {
-  const { error } = await supabase.from("demanda_hours" as any).insert(h as any);
+  // Garante que horas é sempre number decimal — nunca string como "1:00"
+  const payload = { ...h, horas: toDecimalHours(h.horas) };
+  const { error } = await supabase.from("demanda_hours" as any).insert(payload as any);
   if (error) throw error;
 }
 
@@ -76,11 +94,13 @@ export async function fetchHours(demandaId: string): Promise<DemandaHour[]> {
  */
 export async function updateHour(
   id: string,
-  data: { horas: number; fase: string; descricao: string; user_id?: string },
+  data: { horas: number | string; fase: string; descricao: string; user_id?: string },
 ) {
+  // Garante que horas é sempre number decimal — nunca string como "1:00"
+  const payload = { ...data, horas: toDecimalHours(data.horas) };
   const { error } = await supabase
     .from("demanda_hours" as any)
-    .update(data as any)
+    .update(payload as any)
     .eq("id", id);
   if (error) throw error;
 }
