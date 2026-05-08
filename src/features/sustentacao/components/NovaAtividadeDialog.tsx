@@ -23,7 +23,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useHours } from "../hooks/useDemandas";
 import { FASES, FASE_LABELS } from "../types/demanda";
 import type { Demanda, DemandaHour } from "../types/demanda";
-import { HorasInput } from "@/shared/components/common/HorasInput";
+import {
+  HorasInput,
+  hhmmToDecimal,
+  decimalToHHMM,
+  isValidHHMM,
+} from "@/shared/components/common/HorasInput";
 import { formatDisplayName } from "@/lib/nameUtils";
 
 interface Membro {
@@ -36,13 +41,10 @@ interface NovaAtividadeDialogProps {
   demanda: Demanda | null;
   open: boolean;
   onClose: () => void;
-  /** Quando informado, o dialog entra em modo edição (somente admin) */
   editHour?: DemandaHour | null;
-  /** Chamado após salvar com sucesso — use para recarregar a tabela no pai */
   onSuccess?: () => void;
 }
 
-/** Busca responsáveis da demanda com display_name via join. */
 async function fetchMembros(demandaId: string): Promise<Membro[]> {
   const { data, error } = await supabase
     .from("demanda_responsaveis" as any)
@@ -57,11 +59,7 @@ async function fetchMembros(demandaId: string): Promise<Membro[]> {
 }
 
 function initials(name: string) {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
+  return name.split(" ").slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
 }
 
 const PAPEL_COLORS: Record<string, string> = {
@@ -82,12 +80,13 @@ export function NovaAtividadeDialog({
   const { add, update, loading } = useHours(demanda?.id ?? null);
   const isEditing = !!editHour;
 
+  // horas é string H:MM — exatamente como o "duration" do ActivityManager
   const [fase, setFase] = useState<string>("execucao");
-  // horas agora armazenado como decimal internamente
-  const [horas, setHoras] = useState<number>(1);
+  const [horas, setHoras] = useState<string>("");
   const [descricao, setDescricao] = useState("");
   const [membros, setMembros] = useState<Membro[]>([]);
   const [targetUserId, setTargetUserId] = useState<string>("");
+  const [horasError, setHorasError] = useState("");
 
   useEffect(() => {
     if (open && isEditing && demanda?.id) {
@@ -100,44 +99,52 @@ export function NovaAtividadeDialog({
   useEffect(() => {
     if (editHour) {
       setFase(editHour.fase);
-      setHoras(Number(editHour.horas));
+      setHoras(decimalToHHMM(Number(editHour.horas))); // 1.5 → "1:30"
       setDescricao(editHour.descricao ?? "");
       setTargetUserId(editHour.user_id);
     } else {
       setFase("execucao");
-      setHoras(1);
+      setHoras("");
       setDescricao("");
       setTargetUserId("");
     }
+    setHorasError("");
   }, [editHour, open]);
 
   const reset = () => {
     setFase("execucao");
-    setHoras(1);
+    setHoras("");
     setDescricao("");
     setTargetUserId("");
     setMembros([]);
+    setHorasError("");
   };
 
-  const handleClose = () => {
-    reset();
-    onClose();
-  };
+  const handleClose = () => { reset(); onClose(); };
 
   const handleSalvar = async () => {
     if (!fase) { toast.error("Selecione a fase."); return; }
-    if (!horas || horas <= 0) { toast.error("Informe um tempo válido."); return; }
+
+    if (!isValidHHMM(horas)) {
+      setHorasError("Formato inválido. Use H:MM (ex: 0:30, 1:15)");
+      return;
+    }
+    const horasDecimal = hhmmToDecimal(horas);
+    if (horasDecimal <= 0) {
+      setHorasError("Duração deve ser maior que zero.");
+      return;
+    }
     if (!descricao.trim()) { toast.error("Informe uma descrição para a atividade."); return; }
 
     if (isEditing && editHour) {
       await update(editHour.id, {
         fase,
-        horas,
+        horas: horasDecimal,
         descricao: descricao.trim(),
         ...(targetUserId && targetUserId !== editHour.user_id ? { user_id: targetUserId } : {}),
       });
     } else {
-      await add({ fase, horas, descricao: descricao.trim() });
+      await add({ fase, horas: horasDecimal, descricao: descricao.trim() });
     }
 
     onSuccess?.();
@@ -155,11 +162,9 @@ export function NovaAtividadeDialog({
           <DialogTitle className="text-base flex items-center gap-2">
             <svg className="h-4 w-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="3" width="18" height="18" rx="2" />
-              {isEditing ? (
-                <path d="M16.5 3.5l4 4L7 21H3v-4L16.5 3.5z" />
-              ) : (
-                <path d="M12 8v8M8 12h8" />
-              )}
+              {isEditing
+                ? <path d="M16.5 3.5l4 4L7 21H3v-4L16.5 3.5z" />
+                : <path d="M12 8v8M8 12h8" />}
             </svg>
             {isEditing ? "Editar atividade" : "Nova atividade"}
           </DialogTitle>
@@ -187,17 +192,22 @@ export function NovaAtividadeDialog({
             </Select>
           </div>
 
-          {/* Horas — agora HH:MM */}
+          {/* Tempo H:MM — mesmo padrão que Duração estimada do ActivityManager */}
           <div className="space-y-1.5">
-            <Label htmlFor="horas" className="text-xs font-medium">Tempo (HH:MM)</Label>
+            <Label htmlFor="horas" className="text-xs font-medium">
+              Tempo (H:MM) <span className="text-destructive">*</span>
+            </Label>
             <HorasInput
               id="horas"
               value={horas}
-              onChange={setHoras}
-              placeholder="00:00"
+              onChange={(v) => { setHoras(v); setHorasError(""); }}
+              placeholder="H:MM"
               className="h-9 text-sm"
             />
-            <p className="text-[10px] text-muted-foreground">Ex: 01:30 = 1 hora e 30 minutos</p>
+            <p className="text-[10px] text-muted-foreground">
+              Ex: <b>0:30</b> (30min) · <b>1:15</b> (1h15) · <b>2:00</b> (2h)
+            </p>
+            {horasError && <p className="text-xs text-destructive">{horasError}</p>}
           </div>
 
           {/* Descrição */}
@@ -213,7 +223,7 @@ export function NovaAtividadeDialog({
             />
           </div>
 
-          {/* Lançado por — somente no modo edição (admin) */}
+          {/* Lançado por — somente modo edição (admin) */}
           {isEditing && (
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
@@ -223,11 +233,8 @@ export function NovaAtividadeDialog({
                   Somente admin
                 </Badge>
               </div>
-
               {membros.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">
-                  Nenhum responsável vinculado à demanda.
-                </p>
+                <p className="text-xs text-muted-foreground italic">Nenhum responsável vinculado à demanda.</p>
               ) : (
                 <Select value={targetUserId} onValueChange={setTargetUserId}>
                   <SelectTrigger className="h-10 text-sm">
@@ -263,9 +270,7 @@ export function NovaAtividadeDialog({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="ghost" size="sm" onClick={handleClose} disabled={loading}>
-            Cancelar
-          </Button>
+          <Button variant="ghost" size="sm" onClick={handleClose} disabled={loading}>Cancelar</Button>
           <Button size="sm" onClick={handleSalvar} disabled={loading}>
             {loading ? "Salvando..." : isEditing ? "Salvar alterações" : "Salvar atividade"}
           </Button>
