@@ -1,4 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
+import { getInitials, formatPersonName } from "@/lib/personName";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprint } from "@/contexts/SprintContext";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";

@@ -1,5 +1,6 @@
 // src/components/DashboardHome.tsx
 import { useSprint } from "@/contexts/SprintContext";
+import { getInitials, formatPersonName } from "@/lib/personName";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
