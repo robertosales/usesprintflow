@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SprintProvider } from "@/contexts/SprintContext";
+import { SessionTimeoutAlert } from "@/shared/components/common/SessionTimeoutAlert";
 
 // Pages
 import Index from "./pages/Index.tsx";
@@ -33,7 +34,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (profile?.must_change_password) {
     return <ForcePasswordChange onDone={refreshProfile} />;
   }
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {/* Alerta de sessão por inatividade — P6 */}
+      <SessionTimeoutAlert />
+    </>
+  );
 }
 
 function AuthRoute({ children }: { children: React.ReactNode }) {

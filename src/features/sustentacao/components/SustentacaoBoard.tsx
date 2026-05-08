@@ -23,6 +23,8 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { KanbanResponsavelFilter } from "@/shared/components/common/KanbanResponsavelFilter";
+import type { ResponsavelFilterItem } from "@/shared/components/common/KanbanResponsavelFilter";
 
 import type { Demanda } from "../types/demanda";
 import { SITUACAO_LABELS } from "../types/demanda";
@@ -69,7 +71,7 @@ function slaDaysRemaining(demanda: Demanda): number | null {
   return Math.round((dead.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-import { getInitials, formatPersonName } from "@/lib/personName";
+import { getInitials, formatDisplayName } from "@/lib/nameUtils";
 
 function getResponsaveis(demanda: Demanda): { papel: string; nome: string }[] {
   const mapa: Record<string, string | null | undefined> = {
@@ -108,7 +110,7 @@ function ResponsavelAvatar({
           </div>
         </TooltipTrigger>
         <TooltipContent side="top" className="text-xs max-w-[180px]">
-          {formatPersonName(nome)}
+          {formatDisplayName(nome)}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -157,7 +159,7 @@ function ResponsaveisGroup({
               <TooltipContent side="top" className="text-xs">
                 <div className="space-y-0.5">
                   {demais.map((r) => (
-                    <div key={r.papel}>{formatPersonName(r.nome)}</div>
+                    <div key={r.papel}>{formatDisplayName(r.nome)}</div>
                   ))}
                 </div>
               </TooltipContent>
@@ -434,6 +436,8 @@ export function SustentacaoBoard({
   const demandas = demandasProp ?? [];
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
+  // P3 — filtro por responsável
+  const [selectedResp, setSelectedResp] = useState<string[]>([]);
 
   const toggle = (key: string) =>
     setCollapsed((prev) => {
@@ -442,31 +446,67 @@ export function SustentacaoBoard({
       return n;
     });
 
+  // Extrai lista única de responsáveis de todas as demandas
+  const responsaveisFilter = useMemo<ResponsavelFilterItem[]>(() => {
+    const map = new Map<string, ResponsavelFilterItem>();
+    demandas.forEach((d) => {
+      const campos: Array<[string, string | null | undefined]> = [
+        [d.responsavel_dev ?? "", d.responsavel_dev],
+        [d.responsavel_requisitos ?? "", d.responsavel_requisitos],
+        [d.responsavel_arquiteto ?? "", d.responsavel_arquiteto],
+        [d.responsavel_teste ?? "", d.responsavel_teste],
+      ];
+      campos.forEach(([nome]) => {
+        if (nome && !map.has(nome)) {
+          map.set(nome, { userId: nome, name: nome });
+        }
+      });
+    });
+    return Array.from(map.values());
+  }, [demandas]);
+
   const filtered = useMemo(() => {
-    if (!search) return demandas;
-    const q = search.toLowerCase();
-    return demandas.filter(
-      (d) =>
-        String(d.descricao ?? "").toLowerCase().includes(q) ||
-        String(d.projeto ?? "").toLowerCase().includes(q) ||
-        String(d.rhm ?? "").toLowerCase().includes(q),
-    );
-  }, [demandas, search]);
+    let items = demandas;
+    // Filtro textual
+    if (search) {
+      const q = search.toLowerCase();
+      items = items.filter(
+        (d) =>
+          String(d.descricao ?? "").toLowerCase().includes(q) ||
+          String(d.projeto ?? "").toLowerCase().includes(q) ||
+          String(d.rhm ?? "").toLowerCase().includes(q),
+      );
+    }
+    // Filtro por responsável
+    if (selectedResp.length > 0) {
+      items = items.filter((d) => {
+        const nomes = [
+          d.responsavel_dev,
+          d.responsavel_requisitos,
+          d.responsavel_arquiteto,
+          d.responsavel_teste,
+        ].filter(Boolean) as string[];
+        return nomes.some((n) => selectedResp.includes(n));
+      });
+    }
+    return items;
+  }, [demandas, search, selectedResp]);
 
   const byStatus = useMemo(() => {
     const map: Record<string, Demanda[]> = {};
     VISIBLE_COLS.forEach((k) => { map[k] = []; });
-    demandas.filter(Boolean).forEach((d) => {
+    filtered.filter(Boolean).forEach((d) => {
       const key = (d.situacao as string) ?? "fila_atendimento";
       if (!map[key]) map[key] = [];
       map[key].push(d);
     });
     return map;
-  }, [demandas]);
+  }, [filtered]);
 
   return (
     <div className="flex flex-col h-full gap-3">
-      <div className="flex items-center gap-3 px-1">
+      {/* Barra de busca + filtro por responsável */}
+      <div className="flex items-center gap-3 px-1 flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <input
@@ -484,6 +524,16 @@ export function SustentacaoBoard({
             </button>
           )}
         </div>
+
+        {/* P3 — Filtro visual por responsável */}
+        {responsaveisFilter.length > 0 && (
+          <KanbanResponsavelFilter
+            responsaveis={responsaveisFilter}
+            selected={selectedResp}
+            onChange={setSelectedResp}
+          />
+        )}
+
         <Badge variant="outline" className="text-xs font-mono h-9 px-3">
           {filtered.length} demanda{filtered.length !== 1 ? "s" : ""}
         </Badge>

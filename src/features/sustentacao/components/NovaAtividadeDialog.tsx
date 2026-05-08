@@ -9,7 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -24,6 +23,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useHours } from "../hooks/useDemandas";
 import { FASES, FASE_LABELS } from "../types/demanda";
 import type { Demanda, DemandaHour } from "../types/demanda";
+import { HorasInput } from "@/shared/components/common/HorasInput";
+import { formatDisplayName } from "@/lib/nameUtils";
 
 interface Membro {
   user_id: string;
@@ -55,8 +56,13 @@ async function fetchMembros(demandaId: string): Promise<Membro[]> {
   }));
 }
 
-import { getInitials as initials, formatPersonName } from "@/lib/personName";
-import { parseHmToMinutes, minutesToHm, isValidHm, minutesToHoursDecimal } from "@/lib/duration";
+function initials(name: string) {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
 
 const PAPEL_COLORS: Record<string, string> = {
   desenvolvedor: "bg-blue-500",
@@ -77,7 +83,8 @@ export function NovaAtividadeDialog({
   const isEditing = !!editHour;
 
   const [fase, setFase] = useState<string>("execucao");
-  const [horas, setHoras] = useState<string>("1:00");
+  // horas agora armazenado como decimal internamente
+  const [horas, setHoras] = useState<number>(1);
   const [descricao, setDescricao] = useState("");
   const [membros, setMembros] = useState<Membro[]>([]);
   const [targetUserId, setTargetUserId] = useState<string>("");
@@ -93,12 +100,12 @@ export function NovaAtividadeDialog({
   useEffect(() => {
     if (editHour) {
       setFase(editHour.fase);
-      setHoras(minutesToHm(Math.round(Number(editHour.horas ?? 0) * 60)));
+      setHoras(Number(editHour.horas));
       setDescricao(editHour.descricao ?? "");
       setTargetUserId(editHour.user_id);
     } else {
       setFase("execucao");
-      setHoras("1:00");
+      setHoras(1);
       setDescricao("");
       setTargetUserId("");
     }
@@ -106,7 +113,7 @@ export function NovaAtividadeDialog({
 
   const reset = () => {
     setFase("execucao");
-    setHoras("1:00");
+    setHoras(1);
     setDescricao("");
     setTargetUserId("");
     setMembros([]);
@@ -118,27 +125,21 @@ export function NovaAtividadeDialog({
   };
 
   const handleSalvar = async () => {
-    const minutos = parseHmToMinutes(horas);
     if (!fase) { toast.error("Selecione a fase."); return; }
-    if (minutos === null || minutos <= 0) {
-      toast.error("Informe um tempo válido no formato HH:MM (ex.: 1:30).");
-      return;
-    }
-    const h = minutesToHoursDecimal(minutos);
+    if (!horas || horas <= 0) { toast.error("Informe um tempo válido."); return; }
     if (!descricao.trim()) { toast.error("Informe uma descrição para a atividade."); return; }
 
     if (isEditing && editHour) {
       await update(editHour.id, {
         fase,
-        horas: h,
+        horas,
         descricao: descricao.trim(),
         ...(targetUserId && targetUserId !== editHour.user_id ? { user_id: targetUserId } : {}),
       });
     } else {
-      await add({ fase, horas: h, descricao: descricao.trim() });
+      await add({ fase, horas, descricao: descricao.trim() });
     }
 
-    // Notifica o componente pai para recarregar a tabela
     onSuccess?.();
     handleClose();
   };
@@ -186,24 +187,17 @@ export function NovaAtividadeDialog({
             </Select>
           </div>
 
-          {/* Horas */}
+          {/* Horas — agora HH:MM */}
           <div className="space-y-1.5">
             <Label htmlFor="horas" className="text-xs font-medium">Tempo (HH:MM)</Label>
-            <Input
+            <HorasInput
               id="horas"
-              inputMode="numeric"
               value={horas}
-              onChange={(e) => setHoras(e.target.value)}
-              onBlur={(e) => {
-                const m = parseHmToMinutes(e.target.value);
-                if (m !== null) setHoras(minutesToHm(m));
-              }}
-              className={`h-9 text-sm ${horas && !isValidHm(horas) ? "border-destructive" : ""}`}
-              placeholder="ex: 1:30"
+              onChange={setHoras}
+              placeholder="00:00"
+              className="h-9 text-sm"
             />
-            {horas && !isValidHm(horas) && (
-              <p className="text-[11px] text-destructive">Use o formato HH:MM (ex.: 0:45, 1:30, 2:00).</p>
-            )}
+            <p className="text-[10px] text-muted-foreground">Ex: 01:30 = 1 hora e 30 minutos</p>
           </div>
 
           {/* Descrição */}
@@ -219,7 +213,7 @@ export function NovaAtividadeDialog({
             />
           </div>
 
-          {/* ── Lançado por — somente no modo edição (admin) ── */}
+          {/* Lançado por — somente no modo edição (admin) */}
           {isEditing && (
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
@@ -241,9 +235,9 @@ export function NovaAtividadeDialog({
                       {membroSelecionado && (
                         <span className="flex items-center gap-2">
                           <span className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold text-white ${PAPEL_COLORS[membroSelecionado.papel] ?? "bg-slate-500"}`}>
-                            {initials(membroSelecionado.display_name)}
+                            {initials(formatDisplayName(membroSelecionado.display_name))}
                           </span>
-                          <span>{membroSelecionado.display_name}</span>
+                          <span>{formatDisplayName(membroSelecionado.display_name)}</span>
                           <span className="text-muted-foreground capitalize text-xs">· {membroSelecionado.papel}</span>
                         </span>
                       )}
@@ -254,9 +248,9 @@ export function NovaAtividadeDialog({
                       <SelectItem key={m.user_id} value={m.user_id} className="text-sm">
                         <span className="flex items-center gap-2">
                           <span className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold text-white shrink-0 ${PAPEL_COLORS[m.papel] ?? "bg-slate-500"}`}>
-                            {initials(m.display_name)}
+                            {initials(formatDisplayName(m.display_name))}
                           </span>
-                          <span className="flex-1">{m.display_name}</span>
+                          <span className="flex-1">{formatDisplayName(m.display_name)}</span>
                           <span className="text-muted-foreground capitalize text-xs">{m.papel}</span>
                         </span>
                       </SelectItem>
