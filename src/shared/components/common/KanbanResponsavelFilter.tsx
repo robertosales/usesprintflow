@@ -33,7 +33,6 @@ export function KanbanResponsavelFilter({
 
   const toggle = (userId: string) => {
     if (selected.includes(userId)) {
-      // Deseleciona — se ficar vazio, volta para "Todos"
       const next = selected.filter((id) => id !== userId);
       onChange(next);
     } else {
@@ -73,6 +72,7 @@ export function KanbanResponsavelFilter({
           return (
             <Tooltip key={r.userId}>
               <TooltipTrigger asChild>
+                {/* CORRIGIDO: removido title={display} que causava tooltip nativo duplicado com o Radix TooltipContent */}
                 <button
                   onClick={() => toggle(r.userId)}
                   className={cn(
@@ -82,7 +82,7 @@ export function KanbanResponsavelFilter({
                       : "border-border hover:border-primary/50 opacity-70 hover:opacity-100",
                   )}
                   aria-pressed={active}
-                  title={display}
+                  aria-label={display}
                 >
                   {r.avatarUrl ? (
                     <img
