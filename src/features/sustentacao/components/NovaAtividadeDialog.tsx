@@ -77,7 +77,7 @@ export function NovaAtividadeDialog({
   const isEditing = !!editHour;
 
   const [fase, setFase] = useState<string>("execucao");
-  const [horas, setHoras] = useState<string>("1");
+  const [horas, setHoras] = useState<string>("1:00");
   const [descricao, setDescricao] = useState("");
   const [membros, setMembros] = useState<Membro[]>([]);
   const [targetUserId, setTargetUserId] = useState<string>("");
@@ -93,12 +93,12 @@ export function NovaAtividadeDialog({
   useEffect(() => {
     if (editHour) {
       setFase(editHour.fase);
-      setHoras(String(editHour.horas));
+      setHoras(minutesToHm(Math.round(Number(editHour.horas ?? 0) * 60)));
       setDescricao(editHour.descricao ?? "");
       setTargetUserId(editHour.user_id);
     } else {
       setFase("execucao");
-      setHoras("1");
+      setHoras("1:00");
       setDescricao("");
       setTargetUserId("");
     }
@@ -106,7 +106,7 @@ export function NovaAtividadeDialog({
 
   const reset = () => {
     setFase("execucao");
-    setHoras("1");
+    setHoras("1:00");
     setDescricao("");
     setTargetUserId("");
     setMembros([]);
@@ -118,9 +118,13 @@ export function NovaAtividadeDialog({
   };
 
   const handleSalvar = async () => {
-    const h = parseFloat(horas);
+    const minutos = parseHmToMinutes(horas);
     if (!fase) { toast.error("Selecione a fase."); return; }
-    if (isNaN(h) || h <= 0) { toast.error("Informe um número de horas válido."); return; }
+    if (minutos === null || minutos <= 0) {
+      toast.error("Informe um tempo válido no formato HH:MM (ex.: 1:30).");
+      return;
+    }
+    const h = minutesToHoursDecimal(minutos);
     if (!descricao.trim()) { toast.error("Informe uma descrição para a atividade."); return; }
 
     if (isEditing && editHour) {
@@ -184,17 +188,22 @@ export function NovaAtividadeDialog({
 
           {/* Horas */}
           <div className="space-y-1.5">
-            <Label htmlFor="horas" className="text-xs font-medium">Horas</Label>
+            <Label htmlFor="horas" className="text-xs font-medium">Tempo (HH:MM)</Label>
             <Input
               id="horas"
-              type="number"
-              min="0.25"
-              step="0.25"
+              inputMode="numeric"
               value={horas}
               onChange={(e) => setHoras(e.target.value)}
-              className="h-9 text-sm"
-              placeholder="ex: 2"
+              onBlur={(e) => {
+                const m = parseHmToMinutes(e.target.value);
+                if (m !== null) setHoras(minutesToHm(m));
+              }}
+              className={`h-9 text-sm ${horas && !isValidHm(horas) ? "border-destructive" : ""}`}
+              placeholder="ex: 1:30"
             />
+            {horas && !isValidHm(horas) && (
+              <p className="text-[11px] text-destructive">Use o formato HH:MM (ex.: 0:45, 1:30, 2:00).</p>
+            )}
           </div>
 
           {/* Descrição */}

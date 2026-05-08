@@ -93,29 +93,26 @@ function SprintProgressBar({
     <Card className="col-span-full">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <Target className="h-4 w-4 text-primary" />
-            <CardTitle className="text-sm font-semibold">{sprint.name}</CardTitle>
-            <Badge variant={isOver ? "destructive" : "secondary"} className="text-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <Target className="h-4 w-4 text-primary shrink-0" />
+            <CardTitle className="text-sm font-semibold truncate">{sprint.name}</CardTitle>
+            <Badge variant={isOver ? "destructive" : "secondary"} className="text-xs shrink-0">
               {isOver ? "Encerrado" : `${daysLeft}d restantes`}
             </Badge>
           </div>
-          <span className="text-xs text-muted-foreground">
-            {format(start, "dd MMM", { locale: ptBR })} → {format(end, "dd MMM yyyy", { locale: ptBR })}
-          </span>
+          <div className="flex items-center gap-3 shrink-0 ml-auto">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {format(start, "dd MMM", { locale: ptBR })} → {format(end, "dd MMM yyyy", { locale: ptBR })}
+            </span>
+            <span className="text-xs font-semibold text-primary tabular-nums whitespace-nowrap">
+              {pct}%
+            </span>
+          </div>
         </div>
       </CardHeader>
-      <CardContent className="pb-4">
+      <CardContent className="pb-4 pt-1">
         {sprint.goal && <p className="text-xs text-muted-foreground mb-3 italic">"{sprint.goal}"</p>}
-        <div className="relative">
-          <Progress value={pct} className="h-2" />
-          <span
-            className="absolute -top-5 text-[10px] font-semibold text-primary"
-            style={{ left: `${Math.min(pct, 94)}%` }}
-          >
-            {pct}%
-          </span>
-        </div>
+        <Progress value={pct} className="h-2" />
         <p className="mt-2 text-xs text-muted-foreground">
           Dia {elapsed} de {total} — sprint {pct >= 100 ? "concluído" : "em andamento"}
         </p>
