@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { getInitials, formatPersonName } from "@/lib/personName";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -955,9 +956,9 @@ export function DemandaDetail({
                           <CardContent className="px-4 pb-4 space-y-2">
                             {responsaveis.map((r) => (
                               <div key={r.id} className="flex items-center gap-2">
-                                <div className="h-7 w-7 rounded-full bg-info/20 flex items-center justify-center text-xs font-semibold text-info">{(r.profile?.display_name || "?")[0].toUpperCase()}</div>
+                                <div className="h-7 w-7 rounded-full bg-info/20 flex items-center justify-center text-xs font-semibold text-info">{getInitials(r.profile?.display_name)}</div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">{r.profile?.display_name}</p>
+                                  <p className="text-sm font-medium truncate">{formatPersonName(r.profile?.display_name)}</p>
                                   <p className="text-xs text-muted-foreground capitalize">{r.papel}</p>
                                 </div>
                               </div>
@@ -1139,9 +1140,9 @@ export function DemandaDetail({
                   <div className="space-y-2">
                     {responsaveis.map((r) => (
                       <div key={r.id} className="flex items-center gap-3 rounded-lg border px-4 py-3 bg-card">
-                        <div className="h-8 w-8 rounded-full bg-info/20 flex items-center justify-center text-sm font-semibold text-info shrink-0">{(r.profile?.display_name || "?")[0].toUpperCase()}</div>
+                        <div className="h-8 w-8 rounded-full bg-info/20 flex items-center justify-center text-sm font-semibold text-info shrink-0">{getInitials(r.profile?.display_name)}</div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium">{r.profile?.display_name || r.user_id}</p>
+                          <p className="text-sm font-medium">{formatPersonName(r.profile?.display_name) || r.user_id}</p>
                           <p className="text-xs text-muted-foreground capitalize">{r.papel}</p>
                         </div>
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => setDeleteRespId(r.id)}>

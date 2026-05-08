@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ShieldCheck, Save, Search, Trash2, AlertTriangle, ArrowRightLeft, Mail, KeyRound, Copy, CheckCircle2 } from "lucide-react";
 import { fetchAllRoles, getRoleLabel, type AppRole } from "@/hooks/usePermissions";
+import { getInitials, formatPersonName } from "@/lib/personName";
 import { PaginationControls } from "@/shared/components/common/Pagination";
 import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";
@@ -410,15 +411,10 @@ export function UserRolesManager() {
                   <div className="flex items-center gap-3">
                     {/* ✅ Avatar com iniciais do primeiro e último nome */}
                     <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 font-bold text-sm">
-                      {(() => {
-                        const parts = (user.display_name || "").trim().split(/\s+/).filter(Boolean);
-                        if (parts.length === 0) return "U";
-                        if (parts.length === 1) return parts[0][0].toUpperCase();
-                        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-                      })()}
+                      {getInitials(user.display_name)}
                     </div>
                     <div>
-                      <CardTitle className="text-sm font-semibold">{user.display_name}</CardTitle>
+                      <CardTitle className="text-sm font-semibold">{formatPersonName(user.display_name)}</CardTitle>
                       <p className="text-xs text-muted-foreground">{user.email}</p>
                     </div>
                   </div>
