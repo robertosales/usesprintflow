@@ -71,16 +71,32 @@ export function HorasInput({
   placeholder = "00:00",
   id,
 }: HorasInputProps) {
+  // Guarda o último value externo que originou uma sincronização
+  // para não sobrescrever o que o usuário está digitando
+  const lastExternalValue = useRef<number>(value);
+  const isFocused = useRef(false);
+
   const [display, setDisplay] = useState(() => (value > 0 ? decimalToHHMM(value) : ""));
   const [error, setError] = useState("");
-  const skipSync = useRef(false);
 
-  // Sincroniza value externo → display (ex: ao abrir edição)
+  /**
+   * Sincroniza apenas quando o value externo muda E o campo não está em foco.
+   * Isso resolve o problema de re-sync durante a edição.
+   */
   useEffect(() => {
-    if (skipSync.current) { skipSync.current = false; return; }
-    setDisplay(value > 0 ? decimalToHHMM(value) : "");
-    setError("");
+    // Só atualiza se o value externo realmente mudou (ex: abrir modal com outro registro)
+    if (value === lastExternalValue.current) return;
+    lastExternalValue.current = value;
+    // Só aplica se o campo não estiver com foco (usuário não está digitando)
+    if (!isFocused.current) {
+      setDisplay(value > 0 ? decimalToHHMM(value) : "");
+      setError("");
+    }
   }, [value]);
+
+  const handleFocus = () => {
+    isFocused.current = true;
+  };
 
   const handleChange = (raw: string) => {
     // Permite apagar
@@ -96,7 +112,7 @@ export function HorasInput({
 
     if (masked && isValidHHMM(masked)) {
       setError("");
-      skipSync.current = true;
+      lastExternalValue.current = hhmmToDecimal(masked); // evita re-sync desnecessário
       onChange(hhmmToDecimal(masked));
     } else if (masked.length === 5) {
       setError("Minutos inválidos (00–59)");
@@ -104,6 +120,7 @@ export function HorasInput({
   };
 
   const handleBlur = () => {
+    isFocused.current = false;
     if (!display) { setError(""); return; }
     if (!isValidHHMM(display)) {
       setError("Formato inválido. Use HH:MM (ex: 01:30)");
@@ -118,6 +135,7 @@ export function HorasInput({
         id={id}
         value={display}
         onChange={(e) => handleChange(e.target.value)}
+        onFocus={handleFocus}
         onBlur={handleBlur}
         placeholder={placeholder}
         disabled={disabled}
