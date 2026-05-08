@@ -10,6 +10,7 @@ import {
   ArrowRightLeft,
   User,
   ActivitySquare,
+  ChevronUp,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -58,9 +59,26 @@ const COLUMN_COLORS: Record<string, { hex: string }> = {
   ag_aceite_final:           { hex: "#10b981" },
 };
 
+// Cor por papel do responsável
+const PAPEL_COLORS: Record<string, string> = {
+  desenvolvedor:  "#3b82f6",
+  analista:       "#10b981",
+  arquiteto:      "#8b5cf6",
+  testador:       "#f59e0b",
+  gestor:         "#ec4899",
+};
+
+const PAPEL_LABELS: Record<string, string> = {
+  desenvolvedor:  "Desenvolvedor",
+  analista:       "Analista",
+  arquiteto:      "Arquiteto",
+  testador:       "Testador",
+  gestor:         "Gestor",
+};
+
 function hexAlpha(hex: string, a: number) {
   const c = hex.replace("#", "");
-  return `rgba(${parseInt(c.slice(0, 2), 16)},${parseInt(c.slice(2, 4), 16)},${parseInt(c.slice(4, 6), 16)},${a})`;
+  return `rgba(${parseInt(c.slice(0,2),16)},${parseInt(c.slice(2,4),16)},${parseInt(c.slice(4,6),16)},${a})`;
 }
 
 function slaDaysRemaining(demanda: Demanda): number | null {
@@ -73,120 +91,168 @@ function slaDaysRemaining(demanda: Demanda): number | null {
 
 import { getInitials, formatDisplayName } from "@/lib/nameUtils";
 
+// Retorna todos os responsáveis preenchidos, com papel e nome
 function getResponsaveis(demanda: Demanda): { papel: string; nome: string }[] {
-  const mapa: Record<string, string | null | undefined> = {
-    desenvolvedor:  demanda.responsavel_dev,
-    analista:       demanda.responsavel_requisitos,
-    arquiteto:      demanda.responsavel_arquiteto,
-    testador:       demanda.responsavel_teste,
-  };
-  return Object.entries(mapa)
+  const mapa: [string, string | null | undefined][] = [
+    ["desenvolvedor",  demanda.responsavel_dev],
+    ["analista",       demanda.responsavel_requisitos],
+    ["arquiteto",      demanda.responsavel_arquiteto],
+    ["testador",       demanda.responsavel_teste],
+  ];
+  return mapa
     .filter(([, nome]) => !!nome)
     .map(([papel, nome]) => ({ papel, nome: nome! }));
 }
 
+// ── Avatar individual com tooltip nome + papel ────────────────────
 function ResponsavelAvatar({
   nome,
-  accentHex,
+  papel,
   size = "sm",
+  isLast = false,
 }: {
   nome: string;
-  accentHex: string;
+  papel: string;
   size?: "sm" | "md";
+  isLast?: boolean;
 }) {
+  const color = PAPEL_COLORS[papel] ?? "#64748b";
   const dim = size === "md" ? "h-6 w-6 text-[9px]" : "h-5 w-5 text-[8px]";
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            className={`${dim} rounded-full flex items-center justify-center font-bold shrink-0 border border-background`}
+            className={`${dim} rounded-full flex items-center justify-center font-bold shrink-0 border-2 transition-transform hover:scale-110`}
             style={{
-              backgroundColor: hexAlpha(accentHex, 0.18),
-              color: accentHex,
+              backgroundColor: hexAlpha(color, 0.2),
+              color: color,
+              borderColor: isLast ? color : hexAlpha(color, 0.4),
+              boxShadow: isLast ? `0 0 0 2px ${hexAlpha(color, 0.25)}` : undefined,
             }}
           >
             {getInitials(nome)}
           </div>
         </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs max-w-[180px]">
-          {formatDisplayName(nome)}
+        <TooltipContent side="top" className="text-xs py-1.5 px-2.5">
+          <div className="font-semibold">{formatDisplayName(nome)}</div>
+          <div className="text-muted-foreground mt-0.5">{PAPEL_LABELS[papel] ?? papel}</div>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
 }
 
+// ── Grupo de responsáveis: recolhido/expandido ────────────────────
 function ResponsaveisGroup({
   responsaveis,
-  accentHex,
 }: {
   responsaveis: { papel: string; nome: string }[];
-  accentHex: string;
 }) {
   const [expanded, setExpanded] = useState(false);
 
   if (responsaveis.length === 0) {
     return (
-      <div className="h-5 w-5 rounded-full flex items-center justify-center opacity-30">
-        <User className="h-3 w-3 text-muted-foreground" />
+      <div className="flex items-center gap-1 text-muted-foreground/40">
+        <User className="h-3 w-3" />
       </div>
     );
   }
 
+  // Último adicionado = último do array
   const ultimo = responsaveis[responsaveis.length - 1];
   const demais = responsaveis.slice(0, -1);
+  const ultimoColor = PAPEL_COLORS[ultimo.papel] ?? "#64748b";
 
+  // ESTADO RECOLHIDO
   if (!expanded) {
     return (
-      <div className="flex items-center gap-0.5">
+      <div className="flex items-center gap-1">
+        <ResponsavelAvatar
+          nome={ultimo.nome}
+          papel={ultimo.papel}
+          size="md"
+          isLast
+        />
         {demais.length > 0 && (
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
-                  className="h-5 min-w-[20px] px-1 rounded-full text-[8px] font-bold border transition-colors"
+                  className="h-5 min-w-[22px] px-1.5 rounded-full text-[8px] font-bold border transition-all hover:scale-105 active:scale-95"
                   style={{
-                    backgroundColor: hexAlpha(accentHex, 0.1),
-                    color: accentHex,
-                    borderColor: hexAlpha(accentHex, 0.3),
+                    backgroundColor: hexAlpha(ultimoColor, 0.1),
+                    color: ultimoColor,
+                    borderColor: hexAlpha(ultimoColor, 0.35),
                   }}
+                  aria-label="Expandir responsáveis"
                 >
-                  +{demais.length}
+                  +{demais.length} <ChevronDown className="inline h-2.5 w-2.5" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                <div className="space-y-0.5">
-                  {demais.map((r) => (
-                    <div key={r.papel}>{formatDisplayName(r.nome)}</div>
-                  ))}
-                </div>
+              <TooltipContent side="top" className="text-xs max-w-[180px] space-y-0.5">
+                <div className="font-semibold mb-1 text-muted-foreground">Outros responsáveis:</div>
+                {demais.map((r) => (
+                  <div key={r.papel} className="flex items-center gap-1.5">
+                    <span
+                      className="inline-block h-1.5 w-1.5 rounded-full shrink-0"
+                      style={{ background: PAPEL_COLORS[r.papel] ?? "#64748b" }}
+                    />
+                    <span>{formatDisplayName(r.nome)}</span>
+                    <span className="text-muted-foreground">· {PAPEL_LABELS[r.papel] ?? r.papel}</span>
+                  </div>
+                ))}
+                <div className="text-muted-foreground mt-1 text-[10px]">Clique para expandir</div>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         )}
-        <ResponsavelAvatar nome={ultimo.nome} accentHex={accentHex} size="md" />
       </div>
     );
   }
 
+  // ESTADO EXPANDIDO
   return (
     <div
-      className="flex items-center gap-0.5 flex-wrap max-w-[140px]"
+      className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-muted/40 p-1.5 w-full"
       onClick={(e) => e.stopPropagation()}
     >
-      {responsaveis.map((r) => (
-        <ResponsavelAvatar key={r.papel} nome={r.nome} accentHex={accentHex} size="sm" />
-      ))}
-      <button
-        onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
-        className="h-5 w-5 rounded-full flex items-center justify-center text-[8px] font-bold border transition-colors"
-        style={{ color: accentHex, borderColor: hexAlpha(accentHex, 0.3) }}
-        title="Recolher"
-      >
-        ‹
-      </button>
+      <div className="flex items-center justify-between mb-0.5">
+        <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-wide">Responsáveis</span>
+        <button
+          onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
+          className="h-4 w-4 rounded flex items-center justify-center hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+          aria-label="Recolher"
+        >
+          <ChevronUp className="h-3 w-3" />
+        </button>
+      </div>
+      {responsaveis.map((r, i) => {
+        const color = PAPEL_COLORS[r.papel] ?? "#64748b";
+        const isUltimo = i === responsaveis.length - 1;
+        return (
+          <div key={r.papel} className="flex items-center gap-1.5 py-0.5">
+            <ResponsavelAvatar nome={r.nome} papel={r.papel} size="sm" isLast={isUltimo} />
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="text-[10px] font-medium text-foreground truncate">
+                {formatDisplayName(r.nome)}
+              </span>
+              <span className="text-[9px]" style={{ color: hexAlpha(color, 0.85) }}>
+                {PAPEL_LABELS[r.papel] ?? r.papel}
+              </span>
+            </div>
+            {isUltimo && (
+              <span
+                className="text-[8px] px-1 py-0.5 rounded border shrink-0"
+                style={{ color, borderColor: hexAlpha(color, 0.3), background: hexAlpha(color, 0.08) }}
+              >
+                último
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -220,13 +286,15 @@ function DemandaCard({
           className="bg-card rounded-lg border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_3px_10px_rgba(0,0,0,0.15)] hover:border-border transition-all duration-150 overflow-hidden cursor-pointer select-none group"
         >
           <div className="h-0.5" style={{ backgroundColor: accentHex }} />
-          <div className="p-3">
-            <p className="text-[13px] font-semibold leading-snug text-foreground line-clamp-2 mb-2">
+          <div className="p-3 flex flex-col gap-2">
+            {/* Título */}
+            <p className="text-[13px] font-semibold leading-snug text-foreground line-clamp-2">
               {demanda.descricao ?? demanda.tipo ?? "Demanda"}
             </p>
 
+            {/* RHM + Projeto */}
             {(demanda.rhm || demanda.projeto) && (
-              <div className="flex flex-wrap gap-1 mb-2">
+              <div className="flex flex-wrap gap-1">
                 {demanda.rhm && (
                   <span
                     className="text-[10px] font-bold px-2 py-0.5 rounded-full"
@@ -243,8 +311,10 @@ function DemandaCard({
               </div>
             )}
 
-            <div className="flex items-center justify-between mt-1">
-              <div className="flex items-center gap-1.5">
+            {/* Footer: SLA + botão atividade + responsáveis */}
+            <div className="flex items-start justify-between gap-2 mt-0.5">
+              {/* SLA */}
+              <div className="flex items-center gap-1.5 pt-0.5">
                 {late && (
                   <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5 bg-destructive/10 text-destructive border border-destructive/25">
                     <AlertTriangle className="h-2.5 w-2.5" /> SLA
@@ -260,9 +330,6 @@ function DemandaCard({
                     <Clock className="h-2.5 w-2.5" /> {slaD}d
                   </span>
                 )}
-              </div>
-
-              <div className="flex items-center gap-1.5">
                 {onNovaAtividade && (
                   <TooltipProvider>
                     <Tooltip>
@@ -279,7 +346,11 @@ function DemandaCard({
                     </Tooltip>
                   </TooltipProvider>
                 )}
-                <ResponsaveisGroup responsaveis={responsaveis} accentHex={accentHex} />
+              </div>
+
+              {/* Responsáveis (recolhido/expandido) */}
+              <div className="flex-1 min-w-0 flex justify-end">
+                <ResponsaveisGroup responsaveis={responsaveis} />
               </div>
             </div>
           </div>
@@ -319,16 +390,8 @@ function DemandaCard({
 }
 
 function CollapsedCol({
-  label,
-  count,
-  accentHex,
-  onClick,
-}: {
-  label: string;
-  count: number;
-  accentHex: string;
-  onClick: () => void;
-}) {
+  label, count, accentHex, onClick,
+}: { label: string; count: number; accentHex: string; onClick: () => void; }) {
   return (
     <div
       onClick={onClick}
@@ -353,24 +416,11 @@ function CollapsedCol({
 }
 
 function ExpandedCol({
-  label,
-  colKey,
-  demandas,
-  accentHex,
-  onCollapse,
-  onCardClick,
-  onAdd,
-  onMove,
-  onNovaAtividade,
+  label, colKey, demandas, accentHex, onCollapse, onCardClick, onAdd, onMove, onNovaAtividade,
 }: {
-  label: string;
-  colKey: string;
-  demandas: Demanda[];
-  accentHex: string;
-  onCollapse: () => void;
-  onCardClick?: (d: Demanda) => void;
-  onAdd?: () => void;
-  onMove?: (demanda: Demanda, targetKey: string) => void;
+  label: string; colKey: string; demandas: Demanda[]; accentHex: string;
+  onCollapse: () => void; onCardClick?: (d: Demanda) => void;
+  onAdd?: () => void; onMove?: (demanda: Demanda, targetKey: string) => void;
   onNovaAtividade?: (demanda: Demanda) => void;
 }) {
   return (
@@ -397,7 +447,6 @@ function ExpandedCol({
           </button>
         )}
       </div>
-
       <div className="p-2 overflow-y-auto flex-1 space-y-2" style={{ maxHeight: "calc(100vh - 260px)" }}>
         {demandas.length === 0 ? (
           <div className="flex items-center justify-center h-14 rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground">
@@ -436,7 +485,6 @@ export function SustentacaoBoard({
   const demandas = demandasProp ?? [];
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  // P3 — filtro por responsável
   const [selectedResp, setSelectedResp] = useState<string[]>([]);
 
   const toggle = (key: string) =>
@@ -446,19 +494,24 @@ export function SustentacaoBoard({
       return n;
     });
 
-  // Extrai lista única de responsáveis de todas as demandas
+  // Lista única de responsáveis para o filtro de avatares
   const responsaveisFilter = useMemo<ResponsavelFilterItem[]>(() => {
     const map = new Map<string, ResponsavelFilterItem>();
     demandas.forEach((d) => {
-      const campos: Array<[string, string | null | undefined]> = [
-        [d.responsavel_dev ?? "", d.responsavel_dev],
-        [d.responsavel_requisitos ?? "", d.responsavel_requisitos],
-        [d.responsavel_arquiteto ?? "", d.responsavel_arquiteto],
-        [d.responsavel_teste ?? "", d.responsavel_teste],
+      const campos: [string, string | null | undefined][] = [
+        ["desenvolvedor",  d.responsavel_dev],
+        ["analista",       d.responsavel_requisitos],
+        ["arquiteto",      d.responsavel_arquiteto],
+        ["testador",       d.responsavel_teste],
       ];
-      campos.forEach(([nome]) => {
+      campos.forEach(([papel, nome]) => {
         if (nome && !map.has(nome)) {
-          map.set(nome, { userId: nome, name: nome });
+          map.set(nome, {
+            userId: nome,
+            name: nome,
+            // passa a cor do papel para o KanbanResponsavelFilter exibir o avatar colorido
+            color: PAPEL_COLORS[papel],
+          } as ResponsavelFilterItem & { color?: string });
         }
       });
     });
@@ -467,7 +520,6 @@ export function SustentacaoBoard({
 
   const filtered = useMemo(() => {
     let items = demandas;
-    // Filtro textual
     if (search) {
       const q = search.toLowerCase();
       items = items.filter(
@@ -477,7 +529,6 @@ export function SustentacaoBoard({
           String(d.rhm ?? "").toLowerCase().includes(q),
       );
     }
-    // Filtro por responsável
     if (selectedResp.length > 0) {
       items = items.filter((d) => {
         const nomes = [
@@ -525,13 +576,22 @@ export function SustentacaoBoard({
           )}
         </div>
 
-        {/* P3 — Filtro visual por responsável */}
+        {/* Filtro visual por avatar de responsável */}
         {responsaveisFilter.length > 0 && (
           <KanbanResponsavelFilter
             responsaveis={responsaveisFilter}
             selected={selectedResp}
             onChange={setSelectedResp}
           />
+        )}
+
+        {selectedResp.length > 0 && (
+          <button
+            onClick={() => setSelectedResp([])}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="h-3 w-3" /> Limpar filtro
+          </button>
         )}
 
         <Badge variant="outline" className="text-xs font-mono h-9 px-3">
