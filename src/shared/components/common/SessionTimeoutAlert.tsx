@@ -2,7 +2,9 @@
  * SessionTimeoutAlert — alerta flutuante de encerramento de sessão por inatividade.
  * Posicionado no canto inferior direito. Aparece após 4 min de inatividade.
  * Encerra a sessão após 5 min (60s de countdown visível).
+ * Após logout redireciona para /auth?reason=idle_timeout.
  */
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSessionTimeout } from "@/shared/hooks/useSessionTimeout";
 import { Button } from "@/components/ui/button";
@@ -11,13 +13,15 @@ import { LogOut, RefreshCw } from "lucide-react";
 
 export function SessionTimeoutAlert() {
   const { signOut, session } = useAuth();
+  const navigate = useNavigate();
 
   const { showWarning, secondsLeft, continueSession } = useSessionTimeout({
     warningMs: 4 * 60 * 1000,
-    logoutMs: 5 * 60 * 1000,
-    enabled: !!session,
-    onLogout: () => {
-      signOut();
+    logoutMs:  5 * 60 * 1000,
+    enabled:   !!session,
+    onLogout: async () => {
+      await signOut();
+      navigate("/auth?reason=idle_timeout", { replace: true });
     },
   });
 
@@ -47,14 +51,28 @@ export function SessionTimeoutAlert() {
 
       <Progress value={progress} className="h-1.5 [&>div]:bg-amber-500" />
 
-      <Button
-        size="sm"
-        className="w-full gap-2 bg-primary hover:bg-primary/90"
-        onClick={continueSession}
-      >
-        <RefreshCw className="h-4 w-4" />
-        Continuar sessão
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-1 gap-2"
+          onClick={async () => {
+            await signOut();
+            navigate("/auth?reason=idle_timeout", { replace: true });
+          }}
+        >
+          <LogOut className="h-4 w-4" />
+          Sair agora
+        </Button>
+        <Button
+          size="sm"
+          className="flex-1 gap-2 bg-primary hover:bg-primary/90"
+          onClick={continueSession}
+        >
+          <RefreshCw className="h-4 w-4" />
+          Continuar
+        </Button>
+      </div>
     </div>
   );
 }

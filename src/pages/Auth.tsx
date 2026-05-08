@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
@@ -7,12 +8,15 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Mail, Lock, User } from "lucide-react";
+import { Mail, Lock, User, Clock } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { AxionLogo } from "@/components/AxionLogo";
 
 const Auth = () => {
+  const [searchParams] = useSearchParams();
+  const idleTimeout = searchParams.get("reason") === "idle_timeout";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -89,6 +93,17 @@ const Auth = () => {
           <CardDescription>{APP_TAGLINE}</CardDescription>
         </CardHeader>
         <CardContent>
+
+          {/* Banner de sessão expirada por inatividade */}
+          {idleTimeout && (
+            <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+              <Clock className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                Sua sessão foi encerrada automaticamente por <strong>inatividade</strong>. Faça login para continuar.
+              </p>
+            </div>
+          )}
+
           <Button
             variant="outline"
             className="w-full mb-4"
