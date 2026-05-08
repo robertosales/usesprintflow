@@ -19,8 +19,15 @@ import { useSprint } from "@/contexts/SprintContext";
 import { KanbanCard } from "./KanbanCard";
 import { KanbanStatus } from "@/types/sprint";
 import { toast } from "sonner";
-import { Search, ChevronRight, LayoutList } from "lucide-react";
+import { Search, ChevronRight, LayoutList, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +39,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { WorkflowColumn } from "@/types/sprint";
+import { getInitials, formatPersonName } from "@/lib/personName";
 
 // Mapa de cores padrao por coluna
 const COLUMN_COLORS: Record<string, string> = {
@@ -55,6 +63,7 @@ export function KanbanBoard({ sprintId }: Props) {
   const {
     userStories,
     workflowColumns,
+    developers,
     updateUserStoryStatus,
     reorderUserStories,
   } = useSprint() as any;
@@ -64,6 +73,8 @@ export function KanbanBoard({ sprintId }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  // P3: filtro de membro — "all" = sem filtro
+  const [memberFilter, setMemberFilter] = useState<string>("all");
   const [confirmMove, setConfirmMove] = useState<{ huId: string; toKey: string } | null>(null);
   const [expandedCols, setExpandedCols] = useState<Set<string>>(
     new Set((workflowColumns ?? []).map((c: WorkflowColumn) => c.key)),
@@ -87,18 +98,32 @@ export function KanbanBoard({ sprintId }: Props) {
   );
 
   const sprintStories = useMemo(() => {
+    // 1. filtra pelo sprint
     const base = sprintId
       ? userStories.filter((h: any) => h.sprintId === sprintId)
       : userStories;
+
+    // 2. filtra pelo texto de busca
     const q = searchQuery.trim().toLowerCase();
-    const filtered = q
+    const afterSearch = q
       ? base.filter((h: any) => h.title.toLowerCase().includes(q) || h.code.toLowerCase().includes(q))
       : base;
-    return [...filtered].sort(
+
+    // 3. P3: filtra pelo membro selecionado
+    const afterMember =
+      memberFilter === "all"
+        ? afterSearch
+        : afterSearch.filter((h: any) =>
+            // suporta assigneeId (string) ou assignees (array de IDs)
+            h.assigneeId === memberFilter ||
+            (Array.isArray(h.assignees) && h.assignees.includes(memberFilter)),
+          );
+
+    return [...afterMember].sort(
       (a: any, b: any) =>
         (localPositions[a.id] ?? a.position ?? 0) - (localPositions[b.id] ?? b.position ?? 0),
     );
-  }, [userStories, sprintId, searchQuery, localPositions]);
+  }, [userStories, sprintId, searchQuery, memberFilter, localPositions]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(String(event.active.id));
@@ -175,17 +200,68 @@ export function KanbanBoard({ sprintId }: Props) {
     });
   }
 
+  // P3: membros disponiveis para o select — apenas os que tem HUs no sprint atual
+  const membersWithStories = useMemo(() => {
+    const base = sprintId
+      ? userStories.filter((h: any) => h.sprintId === sprintId)
+      : userStories;
+    const ids = new Set<string>();
+    base.forEach((h: any) => {
+      if (h.assigneeId) ids.add(h.assigneeId);
+      if (Array.isArray(h.assignees)) h.assignees.forEach((id: string) => ids.add(id));
+    });
+    return (developers ?? []).filter((d: any) => ids.has(d.id));
+  }, [userStories, developers, sprintId]);
+
   return (
     <>
-      {/* Busca */}
-      <div className="mb-4 relative max-w-xs">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-        <Input
-          placeholder="Buscar card..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-8 h-8 text-xs"
-        />
+      {/* Barra de filtros */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {/* Busca por texto */}
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Buscar card..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-8 h-8 text-xs w-48"
+          />
+        </div>
+
+        {/* P3: Filtro de membro */}
+        {membersWithStories.length > 0 && (
+          <Select value={memberFilter} onValueChange={setMemberFilter}>
+            <SelectTrigger className="h-8 text-xs w-48 gap-1.5">
+              <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <SelectValue placeholder="Todos os membros" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">
+                Todos os membros
+              </SelectItem>
+              {membersWithStories.map((dev: any) => (
+                <SelectItem key={dev.id} value={dev.id} className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-primary text-[10px] font-bold shrink-0">
+                      {getInitials(dev.name)}
+                    </span>
+                    {formatPersonName(dev.name)}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* Badge indicando filtro ativo */}
+        {memberFilter !== "all" && (
+          <button
+            onClick={() => setMemberFilter("all")}
+            className="flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+          >
+            Limpar filtro ×
+          </button>
+        )}
       </div>
 
       <DndContext
