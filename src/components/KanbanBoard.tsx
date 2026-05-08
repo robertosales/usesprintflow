@@ -19,15 +19,7 @@ import { useSprint } from "@/contexts/SprintContext";
 import { KanbanCard } from "./KanbanCard";
 import { KanbanStatus } from "@/types/sprint";
 import { toast } from "sonner";
-import { Search, ChevronRight, LayoutList, Users } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ChevronRight, LayoutList } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,9 +31,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { WorkflowColumn } from "@/types/sprint";
-import { getInitials, formatPersonName } from "@/lib/personName";
+import { KanbanFilterBar, KANBAN_FILTROS_DEFAULT } from "./KanbanFilterBar";
+import type { KanbanFiltros } from "./KanbanFilterBar";
 
-// Mapa de cores padrao por coluna
 const COLUMN_COLORS: Record<string, string> = {
   backlog:     "#6b7280",
   todo:        "#3b82f6",
@@ -57,9 +49,10 @@ function getColumnHex(col: WorkflowColumn): string {
 
 interface Props {
   sprintId?: string;
+  currentUserId?: string;
 }
 
-export function KanbanBoard({ sprintId }: Props) {
+export function KanbanBoard({ sprintId, currentUserId }: Props) {
   const {
     userStories,
     workflowColumns,
@@ -70,18 +63,16 @@ export function KanbanBoard({ sprintId }: Props) {
 
   const canMove = true;
 
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  // P3: filtro de membro — "all" = sem filtro
-  const [memberFilter, setMemberFilter] = useState<string>("all");
-  const [confirmMove, setConfirmMove] = useState<{ huId: string; toKey: string } | null>(null);
+  const [activeId, setActiveId]         = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol]   = useState<string | null>(null);
+  const [confirmMove, setConfirmMove]   = useState<{ huId: string; toKey: string } | null>(null);
   const [expandedCols, setExpandedCols] = useState<Set<string>>(
     new Set((workflowColumns ?? []).map((c: WorkflowColumn) => c.key)),
   );
-
-  // Estado local de posicoes
   const [localPositions, setLocalPositions] = useState<Record<string, number>>({});
+
+  // ── Estado de filtros unificado ──
+  const [filtros, setFiltros] = useState<KanbanFiltros>(KANBAN_FILTROS_DEFAULT);
 
   useEffect(() => {
     setLocalPositions((prev) => {
@@ -97,33 +88,35 @@ export function KanbanBoard({ sprintId }: Props) {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
+  // Base: filtra pelo sprint
+  const sprintBase = useMemo(() =>
+    sprintId ? userStories.filter((h: any) => h.sprintId === sprintId) : userStories,
+  [userStories, sprintId]);
+
+  // Aplica todos os filtros
   const sprintStories = useMemo(() => {
-    // 1. filtra pelo sprint
-    const base = sprintId
-      ? userStories.filter((h: any) => h.sprintId === sprintId)
-      : userStories;
+    let items = sprintBase;
 
-    // 2. filtra pelo texto de busca
-    const q = searchQuery.trim().toLowerCase();
-    const afterSearch = q
-      ? base.filter((h: any) => h.title.toLowerCase().includes(q) || h.code.toLowerCase().includes(q))
-      : base;
+    if (filtros.membro !== "all")
+      items = items.filter((h: any) =>
+        h.assigneeId === filtros.membro ||
+        (Array.isArray(h.assignees) && h.assignees.includes(filtros.membro)),
+      );
 
-    // 3. P3: filtra pelo membro selecionado
-    const afterMember =
-      memberFilter === "all"
-        ? afterSearch
-        : afterSearch.filter((h: any) =>
-            // suporta assigneeId (string) ou assignees (array de IDs)
-            h.assigneeId === memberFilter ||
-            (Array.isArray(h.assignees) && h.assignees.includes(memberFilter)),
-          );
+    if (filtros.tipo !== "all")
+      items = items.filter((h: any) => h.type === filtros.tipo);
 
-    return [...afterMember].sort(
+    if (filtros.prioridade !== "all")
+      items = items.filter((h: any) => h.priority === filtros.prioridade);
+
+    if (filtros.status !== "all")
+      items = items.filter((h: any) => h.status === filtros.status);
+
+    return [...items].sort(
       (a: any, b: any) =>
         (localPositions[a.id] ?? a.position ?? 0) - (localPositions[b.id] ?? b.position ?? 0),
     );
-  }, [userStories, sprintId, searchQuery, memberFilter, localPositions]);
+  }, [sprintBase, filtros, localPositions]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(String(event.active.id));
@@ -149,7 +142,7 @@ export function KanbanBoard({ sprintId }: Props) {
       const { active, over } = event;
       if (!over || !canMove) return;
       const activeIdStr = String(active.id);
-      const overIdStr = String(over.id);
+      const overIdStr   = String(over.id);
       if (activeIdStr === overIdStr) return;
       const draggedHu = sprintStories.find((h: any) => h.id === activeIdStr);
       if (!draggedHu) return;
@@ -163,7 +156,7 @@ export function KanbanBoard({ sprintId }: Props) {
         const newIdx = colItems.findIndex((h: any) => h.id === overIdStr);
         if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
         const reordered = arrayMove(colItems, oldIdx, newIdx);
-        const updates = reordered.map((h: any, idx: number) => ({ id: h.id, position: idx }));
+        const updates   = reordered.map((h: any, idx: number) => ({ id: h.id, position: idx }));
         setLocalPositions((prev) => {
           const next = { ...prev };
           updates.forEach(({ id, position }: any) => { next[id] = position; });
@@ -200,68 +193,19 @@ export function KanbanBoard({ sprintId }: Props) {
     });
   }
 
-  // P3: membros disponiveis para o select — apenas os que tem HUs no sprint atual
-  const membersWithStories = useMemo(() => {
-    const base = sprintId
-      ? userStories.filter((h: any) => h.sprintId === sprintId)
-      : userStories;
-    const ids = new Set<string>();
-    base.forEach((h: any) => {
-      if (h.assigneeId) ids.add(h.assigneeId);
-      if (Array.isArray(h.assignees)) h.assignees.forEach((id: string) => ids.add(id));
-    });
-    return (developers ?? []).filter((d: any) => ids.has(d.id));
-  }, [userStories, developers, sprintId]);
-
   return (
     <>
-      {/* Barra de filtros */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        {/* Busca por texto */}
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Buscar card..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8 h-8 text-xs w-48"
-          />
-        </div>
-
-        {/* P3: Filtro de membro */}
-        {membersWithStories.length > 0 && (
-          <Select value={memberFilter} onValueChange={setMemberFilter}>
-            <SelectTrigger className="h-8 text-xs w-48 gap-1.5">
-              <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <SelectValue placeholder="Todos os membros" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">
-                Todos os membros
-              </SelectItem>
-              {membersWithStories.map((dev: any) => (
-                <SelectItem key={dev.id} value={dev.id} className="text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-primary text-[10px] font-bold shrink-0">
-                      {getInitials(dev.name)}
-                    </span>
-                    {formatPersonName(dev.name)}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        {/* Badge indicando filtro ativo */}
-        {memberFilter !== "all" && (
-          <button
-            onClick={() => setMemberFilter("all")}
-            className="flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-          >
-            Limpar filtro ×
-          </button>
-        )}
+      {/* ── Filter Bar ── */}
+      <div className="rounded-xl border border-border/60 bg-card px-4 py-3 mb-4">
+        <KanbanFilterBar
+          filtros={filtros}
+          onChange={setFiltros}
+          stories={sprintBase}
+          developers={developers ?? []}
+          workflowColumns={workflowColumns ?? []}
+          totalFiltrado={sprintStories.length}
+          currentUserId={currentUserId}
+        />
       </div>
 
       <DndContext
@@ -273,73 +217,47 @@ export function KanbanBoard({ sprintId }: Props) {
       >
         <div className="flex gap-3 overflow-x-auto pb-4 items-start">
           {(workflowColumns ?? []).map((col: WorkflowColumn) => {
-            const colHex = getColumnHex(col);
+            const colHex   = getColumnHex(col);
             const colItems = sprintStories.filter((h: any) => h.status === col.key);
             const isExpanded = expandedCols.has(col.key);
-            const isOver = dragOverCol === col.key;
+            const isOver     = dragOverCol === col.key;
 
-            /* ── COLUNA COLAPSADA: barra vertical compacta ── */
             if (!isExpanded) {
               return (
                 <div
                   key={col.key}
                   onClick={() => toggleCol(col.key)}
                   title={`Expandir ${col.label}`}
-                  className="flex flex-col items-center rounded-xl border cursor-pointer select-none
-                    transition-all duration-200 hover:opacity-80 shrink-0"
+                  className="flex flex-col items-center rounded-xl border cursor-pointer select-none transition-all duration-200 hover:opacity-80 shrink-0"
                   style={{
-                    width: 44,
-                    minHeight: 180,
+                    width: 44, minHeight: 180,
                     background: `color-mix(in srgb, ${colHex} 5%, var(--background))`,
                     borderColor: `color-mix(in srgb, ${colHex} 30%, transparent)`,
                   }}
                 >
-                  {/* Topo colorido + chevron */}
-                  <div
-                    className="w-full flex items-center justify-center rounded-t-xl py-2"
-                    style={{ background: colHex }}
-                  >
+                  <div className="w-full flex items-center justify-center rounded-t-xl py-2" style={{ background: colHex }}>
                     <ChevronRight className="h-4 w-4 text-white" />
                   </div>
-
-                  {/* Nome rotacionado */}
                   <div className="flex-1 flex items-center justify-center py-3">
                     <span
                       className="text-[11px] font-semibold uppercase tracking-widest whitespace-nowrap"
-                      style={{
-                        writingMode: "vertical-rl" as React.CSSProperties["writingMode"],
-                        transform: "rotate(180deg)",
-                        color: colHex,
-                        maxHeight: 200,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
+                      style={{ writingMode: "vertical-rl" as React.CSSProperties["writingMode"], transform: "rotate(180deg)", color: colHex, maxHeight: 200, overflow: "hidden", textOverflow: "ellipsis" }}
                     >
                       {col.label}
                     </span>
                   </div>
-
-                  {/* Contador na base */}
                   <div className="pb-3 flex flex-col items-center gap-1">
                     <LayoutList className="h-3 w-3" style={{ color: colHex, opacity: 0.6 }} />
-                    <span
-                      className="text-[11px] font-bold tabular-nums"
-                      style={{ color: colHex }}
-                    >
-                      {colItems.length}
-                    </span>
+                    <span className="text-[11px] font-bold tabular-nums" style={{ color: colHex }}>{colItems.length}</span>
                   </div>
                 </div>
               );
             }
 
-            /* ── COLUNA EXPANDIDA: layout normal ── */
             return (
               <div
                 key={col.key}
-                className={`flex flex-col rounded-xl border transition-all duration-200 shrink-0 ${
-                  isOver ? "ring-2 ring-offset-1" : "ring-0"
-                }`}
+                className={`flex flex-col rounded-xl border transition-all duration-200 shrink-0 ${ isOver ? "ring-2 ring-offset-1" : "ring-0" }`}
                 style={{
                   width: 260,
                   background: `color-mix(in srgb, ${colHex} 5%, var(--background))`,
@@ -347,65 +265,37 @@ export function KanbanBoard({ sprintId }: Props) {
                   ...(isOver ? { "--tw-ring-color": colHex } as React.CSSProperties : {}),
                 }}
               >
-                {/* Cabecalho */}
                 <div
                   className="flex items-center justify-between px-3 py-2.5 rounded-t-xl cursor-pointer select-none"
                   style={{ borderBottom: `2px solid ${colHex}` }}
                   onClick={() => toggleCol(col.key)}
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <ChevronRight
-                      className="h-3 w-3 shrink-0 rotate-90"
-                      style={{ color: colHex }}
-                    />
-                    <span
-                      className="text-xs font-semibold truncate uppercase tracking-wider"
-                      style={{ color: colHex }}
-                    >
-                      {col.label}
-                    </span>
+                    <ChevronRight className="h-3 w-3 shrink-0 rotate-90" style={{ color: colHex }} />
+                    <span className="text-xs font-semibold truncate uppercase tracking-wider" style={{ color: colHex }}>{col.label}</span>
                   </div>
                   <span
                     className="text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded-full ml-2 shrink-0"
-                    style={{
-                      background: `color-mix(in srgb, ${colHex} 18%, transparent)`,
-                      color: colHex,
-                    }}
+                    style={{ background: `color-mix(in srgb, ${colHex} 18%, transparent)`, color: colHex }}
                   >
                     {colItems.length}
                   </span>
                 </div>
 
-                {/* Lista de cards */}
-                <SortableContext
-                  items={colItems.map((h: any) => h.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div
-                    id={col.key}
-                    className="flex flex-col gap-2 p-2 min-h-[80px] max-h-[calc(100vh-260px)] overflow-y-auto"
-                  >
+                <SortableContext items={colItems.map((h: any) => h.id)} strategy={verticalListSortingStrategy}>
+                  <div id={col.key} className="flex flex-col gap-2 p-2 min-h-[80px] max-h-[calc(100vh-300px)] overflow-y-auto">
                     {colItems.map((hu: any) => {
                       const isDragging = hu.id === activeId;
                       return (
-                        <div
-                          key={hu.id}
-                          style={{ opacity: isDragging ? 0.3 : 1, transition: "opacity 0.15s" }}
-                        >
+                        <div key={hu.id} style={{ opacity: isDragging ? 0.3 : 1, transition: "opacity 0.15s" }}>
                           <KanbanCard hu={hu} colHex={colHex} />
                         </div>
                       );
                     })}
-
                     {colItems.length === 0 && (
                       <div
                         className="flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-[11px] text-muted-foreground/50 transition-colors"
-                        style={{
-                          borderColor: isOver
-                            ? `color-mix(in srgb, ${colHex} 50%, transparent)`
-                            : undefined,
-                          color: isOver ? colHex : undefined,
-                        }}
+                        style={{ borderColor: isOver ? `color-mix(in srgb, ${colHex} 50%, transparent)` : undefined, color: isOver ? colHex : undefined }}
                       >
                         {isOver ? "Soltar aqui" : "Sem cards"}
                       </div>
@@ -419,10 +309,7 @@ export function KanbanBoard({ sprintId }: Props) {
 
         <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
           {activeHu && (
-            <div
-              className="rotate-1 scale-105 shadow-2xl rounded-xl opacity-95 pointer-events-none"
-              style={{ width: 252 }}
-            >
+            <div className="rotate-1 scale-105 shadow-2xl rounded-xl opacity-95 pointer-events-none" style={{ width: 252 }}>
               <KanbanCard hu={activeHu} />
             </div>
           )}
@@ -435,10 +322,7 @@ export function KanbanBoard({ sprintId }: Props) {
             <AlertDialogTitle>Mover card?</AlertDialogTitle>
             <AlertDialogDescription>
               Deseja mover este card para a coluna{" "}
-              <strong>
-                {(workflowColumns ?? []).find((c: WorkflowColumn) => c.key === confirmMove?.toKey)?.label ?? confirmMove?.toKey}
-              </strong>
-              ?
+              <strong>{(workflowColumns ?? []).find((c: WorkflowColumn) => c.key === confirmMove?.toKey)?.label ?? confirmMove?.toKey}</strong>?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
