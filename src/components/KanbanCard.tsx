@@ -33,6 +33,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { formatPersonName, getInitials } from "@/lib/personName";
 
 interface Props {
   hu: UserStory;
@@ -71,14 +72,6 @@ function getAvatarColor(name: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-/** Retorna iniciais: primeira letra do primeiro nome + primeira letra do último nome */
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0][0].toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
 export function KanbanCard({ hu, colHex }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: hu.id });
@@ -105,6 +98,7 @@ export function KanbanCard({ hu, colHex }: Props) {
   const huActivities = (activities ?? []).filter((a: any) => a.huId === hu.id);
   const hasOpenBug = huActivities.some((a: any) => a.activityType === "bug" && !a.isClosed);
 
+  const assigneeShort = assignee?.name ? formatPersonName(assignee.name) : null;
   const initials = assignee?.name ? getInitials(assignee.name) : "?";
   const avatarBg = assignee?.name ? getAvatarColor(assignee.name) : "#6b7280";
 
@@ -223,7 +217,7 @@ export function KanbanCard({ hu, colHex }: Props) {
                     <TooltipTrigger asChild>
                       <Avatar className="h-5 w-5">
                         {assignee.avatarUrl || assignee.avatar ? (
-                          <AvatarImage src={assignee.avatarUrl ?? assignee.avatar} alt={assignee.name} />
+                          <AvatarImage src={assignee.avatarUrl ?? assignee.avatar} alt={assigneeShort ?? assignee.name} />
                         ) : null}
                         <AvatarFallback
                           className="text-[8px] font-semibold text-white"
@@ -233,7 +227,7 @@ export function KanbanCard({ hu, colHex }: Props) {
                         </AvatarFallback>
                       </Avatar>
                     </TooltipTrigger>
-                    <TooltipContent>{assignee.name}</TooltipContent>
+                    <TooltipContent>{assigneeShort ?? assignee.name}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               ) : (
