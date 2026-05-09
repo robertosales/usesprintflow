@@ -1,8 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDemandas } from "../../hooks/useDemandas";
 import { useAuth } from "@/contexts/AuthContext";
 import { calcIAP, calcIQS, calcICT, calcISS, calcGlosasSummary } from "../../utils/imrCalculations";
@@ -10,47 +8,52 @@ import type { DemandaIMR, DemandaEvento } from "../../utils/imrCalculations";
 import { INDICADORES_GRUPO2, getIndicadorFaixa, EVENTOS_CONFIG } from "../../types/imr";
 import * as eventosSvc from "../../services/eventos.service";
 import { REPORT_CONFIGS } from "../../utils/reportConfig";
-import { ReportHeader } from "./ReportHeader";
-import { ReportFilters } from "./ReportFilters";
+import {
+  ReportLayout,
+  ReportPageHeader,
+  ReportFilterBar,
+  ReportKPISummary,
+  ReportDataTable,
+  ReportLegendBlock,
+} from "@/shared/components/reports";
+import type { KPIItem, TableColumn } from "@/shared/components/reports";
 import { Download, BarChart3 } from "lucide-react";
 
-function today() { return new Date().toISOString().split("T")[0]; }
+function today()        { return new Date().toISOString().split("T")[0]; }
 function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split("T")[0]; }
 function fmtDateBR(d: string) { return d ? new Date(d).toLocaleDateString("pt-BR") : "—"; }
 
-export function RelatorioIMR() {
-  const { demandas } = useDemandas();
-  const { currentTeamId, profile } = useAuth();
-  const [eventos, setEventos] = useState<DemandaEvento[]>([]);
-  const [filterPeriodo, setFilterPeriodo] = useState('30');
-  const [dataInicio, setDataInicio] = useState(daysAgo(30));
-  const [dataFim, setDataFim] = useState(today());
+const FAIXA_STATUS = { green: "success", yellow: "warning", orange: "warning", red: "danger" } as const;
+const STATUS_LABEL  = { green: "Meta atingida", yellow: "Abaixo da meta", orange: "Faixa intermediária", red: "Glosa máxima" };
 
-  const loadEventos = useCallback(async () => {
+interface Props { onBack?: () => void; }
+
+export function RelatorioIMR({ onBack }: Props) {
+  const { demandas }           = useDemandas();
+  const { currentTeamId, profile } = useAuth();
+  const [eventos, setEventos]  = useState<DemandaEvento[]>([]);
+  const [periodo, setPeriodo]  = useState("30");
+  const [dataInicio, setDataInicio] = useState(daysAgo(30));
+  const [dataFim,    setDataFim]    = useState(today());
+
+  const load = useCallback(async () => {
     if (!currentTeamId) return;
     try { setEventos(await eventosSvc.fetchEventosByTeam(currentTeamId)); } catch { /* */ }
   }, [currentTeamId]);
-
-  useEffect(() => { loadEventos(); }, [loadEventos]);
+  useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => {
     let items = demandas as unknown as DemandaIMR[];
-    if (dataInicio) {
-      const ini = new Date(dataInicio + 'T00:00:00');
-      items = items.filter(d => new Date(d.created_at) >= ini);
-    }
-    if (dataFim) {
-      const fim = new Date(dataFim + 'T23:59:59');
-      items = items.filter(d => new Date(d.created_at) <= fim);
-    }
+    if (dataInicio) items = items.filter(d => new Date(d.created_at) >= new Date(dataInicio + "T00:00:00"));
+    if (dataFim)    items = items.filter(d => new Date(d.created_at) <= new Date(dataFim    + "T23:59:59"));
     return items;
   }, [demandas, dataInicio, dataFim]);
 
-  const iap = useMemo(() => calcIAP(filtered), [filtered]);
-  const iqs = useMemo(() => calcIQS(filtered), [filtered]);
-  const ict = useMemo(() => calcICT(filtered), [filtered]);
-  const iss = useMemo(() => calcISS(filtered), [filtered]);
-  const glosas = useMemo(() => calcGlosasSummary(eventos), [eventos]);
+  const iap    = useMemo(() => calcIAP(filtered),           [filtered]);
+  const iqs    = useMemo(() => calcIQS(filtered),           [filtered]);
+  const ict    = useMemo(() => calcICT(filtered),           [filtered]);
+  const iss    = useMemo(() => calcISS(filtered),           [filtered]);
+  const glosas = useMemo(() => calcGlosasSummary(eventos),  [eventos]);
 
   const indicators = [
     { ...INDICADORES_GRUPO2[0], valor: iap.valor, detail: `${iap.qdap}/${iap.qdtot}` },
@@ -59,135 +62,122 @@ export function RelatorioIMR() {
     { ...INDICADORES_GRUPO2[3], valor: iss.valor, detail: `${iss.total} avaliadas` },
   ];
 
+  const periodoLabel = `${fmtDateBR(dataInicio)} a ${fmtDateBR(dataFim)}`;
+
+  // KPI cards com semáforo por faixa IMR
+  const kpiItems: KPIItem[] = indicators.map(ind => {
+    const faixa = getIndicadorFaixa(ind, ind.valor);
+    return {
+      label:  `${ind.sigla} — ${ind.nome}`,
+      value:  ind.sigla === "ISS" ? ind.valor.toFixed(1) : `${ind.valor.toFixed(1)}%`,
+      meta:   `Meta: ≥ ${ind.meta}${ind.unidade}`,
+      status: FAIXA_STATUS[faixa.cor],
+      badge:  faixa.glosa > 0 ? `Glosa ${faixa.glosa}%` : undefined,
+      badgeVariant: faixa.glosa > 0 ? "destructive" : undefined,
+      sub:    STATUS_LABEL[faixa.cor],
+      icon:   BarChart3,
+    };
+  });
+
+  // Tabela de eventos de glosa
+  const eventosData = Object.entries(glosas.byEvento).map(([ev, data]) => {
+    const c = EVENTOS_CONFIG.find(e => e.codigo === ev);
+    return { ev, descricao: c?.descricao || ev, count: data.count, redutor: c?.redutor ?? 0, total: data.total, incidencia: c?.incidencia || "" };
+  });
+
+  const colsEventos: TableColumn[] = [
+    { key: "ev",         label: "Código",     render: (v) => <span className="font-mono font-bold">{v}</span> },
+    { key: "descricao",  label: "Descrição" },
+    { key: "count",      label: "Ocorrências", align: "right", sortable: true },
+    { key: "redutor",    label: "Redutor Unit.",align: "right", render: (v) => `${v}%` },
+    { key: "total",      label: "Total",       align: "right", sortable: true, render: (v) => <span className="text-destructive font-medium">{v.toFixed(2)}%</span> },
+    { key: "incidencia", label: "Incidência",  render: (v) => <Badge variant="secondary" className="text-[10px] capitalize">{v}</Badge> },
+  ];
+
   const exportCSV = () => {
-    const cfg = REPORT_CONFIGS.sustentacao_imr;
-    const lines = [cfg.titulo, `Gerado em: ${new Date().toLocaleString('pt-BR')}`, `Responsável: ${profile?.display_name || ''}`, ''];
-    lines.push('Indicador,Valor,Meta,Status,% Glosa');
+    const cfg   = REPORT_CONFIGS.sustentacao_imr;
+    const lines = [cfg.titulo, `Gerado em: ${new Date().toLocaleString("pt-BR")}`, `Responsável: ${profile?.display_name || ""}`, ""];
+    lines.push("Indicador,Valor,Meta,Status,% Glosa");
     indicators.forEach(ind => {
-      const faixa = getIndicadorFaixa(ind, ind.valor);
-      const status = faixa.cor === 'green' ? '✅' : faixa.cor === 'yellow' ? '⚠️' : '❌';
-      lines.push(`${ind.sigla} - ${ind.nome},${ind.sigla === 'ISS' ? ind.valor.toFixed(1) : ind.valor.toFixed(1) + '%'},≥${ind.meta}${ind.unidade},${status},${faixa.glosa}%`);
+      const faixa  = getIndicadorFaixa(ind, ind.valor);
+      const status = faixa.cor === "green" ? "✅" : faixa.cor === "yellow" ? "⚠️" : "❌";
+      lines.push(`${ind.sigla} - ${ind.nome},${ind.sigla === "ISS" ? ind.valor.toFixed(1) : ind.valor.toFixed(1) + "%"},≥${ind.meta}${ind.unidade},${status},${faixa.glosa}%`);
     });
-    lines.push('', 'Eventos de Glosa', 'Código,Descrição,Ocorrências,Redutor Total,Incidência');
+    lines.push("", "Eventos de Glosa", "Código,Descrição,Ocorrências,Redutor Total,Incidência");
     Object.entries(glosas.byEvento).forEach(([ev, data]) => {
       const c = EVENTOS_CONFIG.find(e => e.codigo === ev);
-      lines.push(`${ev},"${c?.descricao || ''}",${data.count},${data.total.toFixed(2)}%,${c?.incidencia || ''}`);
+      lines.push(`${ev},"${c?.descricao || ""}",${data.count},${data.total.toFixed(2)}%,${c?.incidencia || ""}`);
     });
-    lines.push('', `Glosa Integral Total: ${glosas.totalIntegral.toFixed(2)}%`);
-    lines.push(`Glosa Limitada Total: ${glosas.totalLimitada.toFixed(2)}%`);
-
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `${cfg.tituloExportacao.replace(/\s+/g, '_')}.csv`; a.click();
+    lines.push("", `Glosa Integral Total: ${glosas.totalIntegral.toFixed(2)}%`, `Glosa Limitada Total: ${glosas.totalLimitada.toFixed(2)}%`);
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = "IMR_Grupo2.csv"; a.click();
     URL.revokeObjectURL(url);
   };
 
-  const EMOJI = { green: '🟢', yellow: '🟡', orange: '🟠', red: '🔴' };
-  const STATUS_LABEL = { green: '✅ Meta atingida', yellow: '⚠️ Abaixo da meta', orange: '⚠️ Faixa intermediária', red: '❌ Glosa máxima' };
-
   return (
-    <div className="space-y-6">
-      <ReportHeader tipoRelatorio={REPORT_CONFIGS.sustentacao_imr.titulo} periodo={`${fmtDateBR(dataInicio)} a ${fmtDateBR(dataFim)}`} />
-
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            {REPORT_CONFIGS.sustentacao_imr.titulo.replace('Relatório — ', '')}
-          </h2>
-          <p className="text-sm text-muted-foreground">{REPORT_CONFIGS.sustentacao_imr.subtitulo}</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
-          <Download className="h-4 w-4" />Exportar CSV
-        </Button>
-      </div>
-
-      <ReportFilters
-        periodo={filterPeriodo} setPeriodo={setFilterPeriodo}
-        showAnalista={false}
-        dataInicio={dataInicio} setDataInicio={setDataInicio}
-        dataFim={dataFim} setDataFim={setDataFim}
-      />
-
-      {/* Resumo Executivo */}
-      <Card>
-        <CardHeader><CardTitle className="text-sm">Resumo Executivo</CardTitle></CardHeader>
-        <CardContent>
-          <table className="w-full text-sm">
-            <thead><tr className="border-b bg-muted/50">
-              <th className="text-left p-2 font-medium text-muted-foreground">Indicador</th>
-              <th className="text-center p-2 font-medium text-muted-foreground">Valor</th>
-              <th className="text-center p-2 font-medium text-muted-foreground">Meta</th>
-              <th className="text-center p-2 font-medium text-muted-foreground">Status</th>
-              <th className="text-center p-2 font-medium text-muted-foreground">% Glosa</th>
-              <th className="text-left p-2 font-medium text-muted-foreground">Detalhe</th>
-            </tr></thead>
-            <tbody>
-              {indicators.map(ind => {
-                const faixa = getIndicadorFaixa(ind, ind.valor);
-                return (
-                  <tr key={ind.sigla} className="border-b last:border-0">
-                    <td className="p-2 font-medium">{ind.sigla} — {ind.nome}</td>
-                    <td className="p-2 text-center font-bold">{ind.sigla === 'ISS' ? ind.valor.toFixed(1) : `${ind.valor.toFixed(1)}%`}</td>
-                    <td className="p-2 text-center">≥ {ind.meta}{ind.unidade}</td>
-                    <td className="p-2 text-center">{EMOJI[faixa.cor]} {STATUS_LABEL[faixa.cor]}</td>
-                    <td className="p-2 text-center">{faixa.glosa > 0 ? <Badge variant="destructive" className="text-[10px]">{faixa.glosa}%</Badge> : '—'}</td>
-                    <td className="p-2 text-muted-foreground">{ind.detail}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
-
-      {/* Eventos e Glosas */}
-      <Card>
-        <CardHeader><CardTitle className="text-sm">Relatório de Eventos e Glosas</CardTitle></CardHeader>
-        <CardContent>
-          {Object.keys(glosas.byEvento).length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum evento de glosa registrado no período.</p>
+    <ReportLayout
+      header={
+        <ReportPageHeader
+          titulo={REPORT_CONFIGS.sustentacao_imr.titulo.replace("Relatório — ", "")}
+          subtitulo={REPORT_CONFIGS.sustentacao_imr.subtitulo}
+          modulo="sustentacao"
+          periodoLabel={periodoLabel}
+          icon={BarChart3}
+          onBack={onBack}
+          onExportCSV={exportCSV}
+        />
+      }
+      filters={
+        <ReportFilterBar
+          periodo={periodo}    setPeriodo={setPeriodo}
+          dataInicio={dataInicio} setDataInicio={setDataInicio}
+          dataFim={dataFim}    setDataFim={setDataFim}
+          showAnalista={false}
+          modulo="sustentacao"
+          totalFiltrado={filtered.length}
+          onClear={() => { setPeriodo("30"); setDataInicio(daysAgo(30)); setDataFim(today()); }}
+        />
+      }
+      kpis={<ReportKPISummary items={kpiItems} />}
+      table={
+        <div className="space-y-4">
+          {/* Tabela de glosas */}
+          {eventosData.length > 0 ? (
+            <ReportDataTable
+              titulo="Eventos de Glosa"
+              columns={colsEventos}
+              data={eventosData}
+              rowKey={(r) => r.ev}
+            />
           ) : (
-            <>
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-muted/50">
-                  <th className="text-left p-2 font-medium text-muted-foreground">Código</th>
-                  <th className="text-left p-2 font-medium text-muted-foreground">Descrição</th>
-                  <th className="text-center p-2 font-medium text-muted-foreground">Ocorrências</th>
-                  <th className="text-center p-2 font-medium text-muted-foreground">Redutor Unit.</th>
-                  <th className="text-center p-2 font-medium text-muted-foreground">Total</th>
-                  <th className="text-center p-2 font-medium text-muted-foreground">Incidência</th>
-                </tr></thead>
-                <tbody>
-                  {Object.entries(glosas.byEvento).map(([ev, data]) => {
-                    const c = EVENTOS_CONFIG.find(e => e.codigo === ev);
-                    return (
-                      <tr key={ev} className="border-b last:border-0">
-                        <td className="p-2 font-mono font-bold">{ev}</td>
-                        <td className="p-2">{c?.descricao || ev}</td>
-                        <td className="p-2 text-center">{data.count}</td>
-                        <td className="p-2 text-center">{c?.redutor}%</td>
-                        <td className="p-2 text-center font-medium text-destructive">{data.total.toFixed(2)}%</td>
-                        <td className="p-2 text-center"><Badge variant="secondary" className="text-[10px] capitalize">{c?.incidencia}</Badge></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <div className="flex gap-4 mt-4 text-sm">
-                <div className="p-3 rounded-lg border flex-1">
-                  <p className="text-[10px] text-muted-foreground uppercase font-semibold">Glosa Integral</p>
-                  <p className={`text-lg font-bold ${glosas.totalIntegral > 0 ? 'text-destructive' : ''}`}>{glosas.totalIntegral.toFixed(2)}%</p>
-                </div>
-                <div className="p-3 rounded-lg border flex-1">
-                  <p className="text-[10px] text-muted-foreground uppercase font-semibold">Glosa Limitada</p>
-                  <p className={`text-lg font-bold ${glosas.totalLimitada > 0 ? 'text-destructive' : ''}`}>{glosas.totalLimitada.toFixed(2)}%</p>
-                </div>
-              </div>
-            </>
+            <p className="text-sm text-muted-foreground text-center py-4">Nenhum evento de glosa registrado no período.</p>
           )}
-        </CardContent>
-      </Card>
-    </div>
+
+          {/* Resumo glosa total */}
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              { label: "Glosa Integral Total", value: glosas.totalIntegral },
+              { label: "Glosa Limitada Total", value: glosas.totalLimitada },
+            ].map(({ label, value }) => (
+              <div key={label} className="rounded-xl border border-border bg-card p-4">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+                <p className={`text-2xl font-bold mt-1 ${value > 0 ? "text-destructive" : "text-emerald-600"}`}>{value.toFixed(2)}%</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      }
+      footer={
+        <ReportLegendBlock items={[
+          { sigla: "IAP",  descricao: "Índice de Atendimento no Prazo" },
+          { sigla: "IQS",  descricao: "Índice de Qualidade de Soluções" },
+          { sigla: "ICT",  descricao: "Índice de Conformidade Técnica" },
+          { sigla: "ISS",  descricao: "Índice de Satisfação do Solicitante" },
+          { sigla: "Glosa",descricao: "Redutor contratual aplicado quando o indicador fica abaixo da meta" },
+        ]} />
+      }
+    />
   );
 }
