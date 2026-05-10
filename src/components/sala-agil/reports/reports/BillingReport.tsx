@@ -15,17 +15,37 @@ interface Props {
   emittedBy: string;
 }
 
+// Agrupa atividades por HU para exibição na tela
+function groupByHU(acts: ReportData['activities']) {
+  const map = new Map<string, { huCode: string; huTitle: string; acts: typeof acts; subtotal: number }>();
+  for (const a of acts) {
+    const key = a.huCode || 'SEM-HU';
+    if (!map.has(key)) map.set(key, { huCode: a.huCode || '—', huTitle: a.huTitle || '', acts: [], subtotal: 0 });
+    const g = map.get(key)!;
+    g.acts.push(a);
+    g.subtotal += Number(a.hours) || 0;
+  }
+  return [...map.values()];
+}
+
 export function BillingReport({ data, sprints, emittedBy }: Props) {
   const [configOpen, setConfigOpen] = useState(false);
   const [selectedSprint, setSelectedSprint] = useState(sprints[0]?.id ?? '');
 
   const sprintName = sprints.find(s => s.id === selectedSprint)?.name ?? '';
-  const totalH    = data.activities.reduce((s, a) => s + a.hours, 0);
+  const totalH    = data.activities.reduce((s, a) => s + (Number(a.hours) || 0), 0);
   const totalActs = data.activities.length;
 
   async function handleGenerate(config: any, preview: boolean) {
     try {
-      await generateReport({ ...config, sprintId: selectedSprint }, data, emittedBy, preview);
+      await generateReport(
+        { ...config, sprintId: selectedSprint },
+        data,
+        emittedBy,
+        preview,
+        'Relatório de Produtividade Individual — Faturamento',
+        'Uso restrito — Setor de Faturamento',
+      );
       toast.success('Relatório gerado com sucesso!');
     } catch {
       toast.error('Erro ao gerar relatório');
@@ -66,11 +86,15 @@ export function BillingReport({ data, sprints, emittedBy }: Props) {
         </div>
       </div>
 
+      {/* Cards por membro — agrupados por HU, sem coluna Tipo */}
       {data.developers.map(dev => {
         const acts = data.activities.filter(a => a.developerName === dev.name);
-        const devH = acts.reduce((s, a) => s + a.hours, 0);
+        const devH = acts.reduce((s, a) => s + (Number(a.hours) || 0), 0);
+        const groups = groupByHU(acts);
+
         return (
           <div key={dev.id} className="border rounded-xl overflow-hidden bg-card">
+            {/* Sub-header do membro */}
             <div className="flex items-center justify-between px-5 py-3 bg-muted/30 border-b">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-xs font-bold text-primary-foreground">
@@ -86,40 +110,67 @@ export function BillingReport({ data, sprints, emittedBy }: Props) {
                 <Badge variant="outline">{acts.length} atividades</Badge>
               </div>
             </div>
+
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b bg-muted/20">
-                  {['Código','Título','Tipo','Status','Início','Fim','Horas','HU'].map(h => (
+                  {['Código', 'Título da Atividade', 'Status', 'Início', 'Fim', 'Horas', 'HU'].map(h => (
                     <th key={h} className="px-3 py-2 text-left font-semibold text-muted-foreground">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {acts.map((a, i) => (
-                  <tr key={a.id} className={i % 2 === 0 ? '' : 'bg-muted/10'}>
-                    <td className="px-3 py-2 font-mono text-[11px] text-muted-foreground">{a.code}</td>
-                    <td className="px-3 py-2 font-medium text-foreground max-w-[280px] truncate">{a.title}</td>
-                    <td className="px-3 py-2">
-                      <Badge variant="outline" className="text-[10px]">{a.type}</Badge>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                        a.status === 'Concluída'    ? 'bg-[#22c55e]/15 text-[#22c55e]' :
-                        a.status === 'Em Progresso' ? 'bg-[#3b82f6]/15 text-[#3b82f6]' :
-                        'bg-muted text-muted-foreground'
-                      }`}>{a.status}</span>
-                    </td>
-                    <td className="px-3 py-2 text-muted-foreground">{a.startDate}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{a.endDate}</td>
-                    <td className="px-3 py-2 font-bold text-[#3b82f6]">{a.hours}h</td>
-                    <td className="px-3 py-2">
-                      <Badge variant="secondary" className="text-[10px]">{a.huCode}</Badge>
-                    </td>
-                  </tr>
+                {groups.map(g => (
+                  <>
+                    {/* Linha de HU agrupadora */}
+                    <tr key={`hu-${g.huCode}`} className="bg-violet-50 dark:bg-violet-950/20">
+                      <td colSpan={7} className="px-3 py-1.5">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="bg-primary text-primary-foreground text-[9px] font-bold px-1.5 py-0.5 rounded">
+                            {g.huCode}
+                          </span>
+                          {g.huTitle && <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-300">{g.huTitle}</span>}
+                        </span>
+                      </td>
+                    </tr>
+                    {/* Atividades do grupo */}
+                    {g.acts.map((a, i) => (
+                      <tr key={a.id} className={i % 2 === 0 ? '' : 'bg-muted/10'}>
+                        <td className="px-3 py-2 font-mono text-[11px] text-muted-foreground">{a.code}</td>
+                        <td className="px-3 py-2 font-medium text-foreground max-w-[280px] truncate">{a.title}</td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                            a.status === 'Concluída'    ? 'bg-emerald-500/15 text-emerald-600' :
+                            a.status === 'Em Progresso' ? 'bg-blue-500/15 text-blue-600' :
+                            'bg-muted text-muted-foreground'
+                          }`}>{a.status}</span>
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{a.startDate}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{a.endDate}</td>
+                        <td className="px-3 py-2 font-bold text-primary">{a.hours}h</td>
+                        <td className="px-3 py-2">
+                          <Badge variant="secondary" className="text-[10px]">{a.huCode}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                    {/* Subtotal por HU */}
+                    {groups.length > 1 && (
+                      <tr key={`sub-${g.huCode}`} className="bg-slate-50 dark:bg-slate-900/40 border-t">
+                        <td colSpan={5} className="px-3 py-1.5 text-[11px] font-semibold text-muted-foreground">
+                          SUBTOTAL {g.huCode}
+                        </td>
+                        <td className="px-3 py-1.5 font-bold text-primary">{g.subtotal}h</td>
+                        <td />
+                      </tr>
+                    )}
+                  </>
                 ))}
+                {/* Total do membro */}
                 <tr className="border-t bg-primary/5">
-                  <td colSpan={6} className="px-3 py-2 text-xs font-semibold text-muted-foreground">Subtotal</td>
-                  <td className="px-3 py-2 font-bold text-[#3b82f6]">{devH}h</td>
+                  <td colSpan={5} className="px-3 py-2 text-xs font-semibold text-muted-foreground">
+                    Total: {acts.length} atividades
+                  </td>
+                  <td className="px-3 py-2 font-bold text-primary">{devH}h</td>
                   <td />
                 </tr>
               </tbody>
