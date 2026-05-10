@@ -15,7 +15,7 @@ interface ReportPageHeaderProps {
 }
 
 /**
- * Cabeçalho padrão de relatório com botão Voltar, badge de módulo e ações de exportação.
+ * Cabeçalho padrão de relatório com logo Axion, botão Voltar, badge de módulo e ações de exportação.
  */
 export function ReportPageHeader({
   title,
@@ -42,6 +42,14 @@ export function ReportPageHeader({
             Voltar
           </Button>
         )}
+
+        {/* Logo Axion */}
+        <img
+          src="/axion-logo.png"
+          alt="Axion"
+          className="h-9 w-auto object-contain shrink-0 mt-0.5"
+        />
+
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 flex-wrap">
             {icon && <span className="text-primary">{icon}</span>}
