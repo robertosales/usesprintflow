@@ -11,3 +11,5 @@ export { ReportDataTable } from "./ReportDataTable";
 export type { TableColumn } from "./ReportDataTable";
 export { ReportLegendBlock } from "./ReportLegendBlock";
 export { exportToCSV } from "./exportToCSV";
+export { exportToPDF } from "./exportToPDF";
+export type { ExportPDFOptions, PDFMemberSection, PDFActivity } from "./exportToPDF";

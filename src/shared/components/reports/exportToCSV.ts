@@ -1,15 +1,19 @@
+/**
+ * exportToCSV — aceita array de objetos planos.
+ * As chaves do primeiro objeto viram cabeçalho.
+ */
 export function exportToCSV(
-  rows: Record<string, any>[],
-  columns: { key: string; label: string }[],
+  data: Record<string, any>[],
   filename: string,
 ) {
-  const visibleCols = columns.filter((c) => !c.key.startsWith("_"));
-  const header = visibleCols.map((c) => `"${c.label}"`).join(",");
-  const body = rows
+  if (!data || data.length === 0) return;
+  const headers = Object.keys(data[0]);
+  const header = headers.map((h) => `"${h}"`).join(",");
+  const body = data
     .map((row) =>
-      visibleCols
-        .map((c) => {
-          const val = row[c.key] ?? "";
+      headers
+        .map((h) => {
+          const val = row[h] ?? "";
           return `"${String(val).replace(/"/g, '""')}"`;
         })
         .join(","),

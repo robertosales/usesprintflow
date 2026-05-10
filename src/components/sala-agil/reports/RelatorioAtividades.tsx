@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { User, CheckCircle, Clock, Zap, Bug } from "lucide-react";
+import { User, CheckCircle, Clock, Zap, Bug, FileDown, FileText } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LabelList, LineChart, Line, Legend,
@@ -13,13 +13,16 @@ import {
   ReportFilterBar,
   ReportDataTable,
   exportToCSV,
+  exportToPDF,
 } from "@/shared/components/reports";
+import type { PDFMemberSection } from "@/shared/components/reports";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getInitials } from "@/lib/personName";
 
 interface Props {
-  sprints: { id: string; name: string; isActive?: boolean }[];
+  sprints: { id: string; name: string; isActive?: boolean; start_date?: string; end_date?: string }[];
   developers: { id: string; name: string; role: string }[];
   rawData: {
     sprints: any[];
@@ -38,11 +41,6 @@ const MEMBER_COLORS = [
   "#ef4444", "#06b6d4", "#ec4899", "#f97316",
 ];
 
-const ACT_TYPE_LABEL: Record<string, string> = {
-  task: "Tarefa", bug: "Bug", improvement: "Melhoria",
-  feature: "Feature", test: "Teste", other: "Outro",
-};
-
 function avatarColor(name: string) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
@@ -53,7 +51,12 @@ function effStatus(e: number): "good" | "warning" | "danger" {
   return e >= 80 ? "good" : e >= 60 ? "warning" : "danger";
 }
 
-export function RelatorioAtividades({ sprints, developers, rawData, teamName, onBack }: Props) {
+function fmtDate(d: string) {
+  if (!d) return "";
+  return new Date(d + "T00:00:00").toLocaleDateString("pt-BR");
+}
+
+export function RelatorioAtividades({ sprints, developers, rawData, teamName, currentUserName, onBack }: Props) {
   const [filters, setFilters] = useState<Record<string, string>>({
     sprintId: "all", memberId: "all", type: "all", status: "all",
   });
@@ -76,6 +79,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, on
     { value: "done", label: "Concluída" }, { value: "open", label: "Em aberto" },
   ];
 
+  // ─── Filtragem ─────────────────────────────────────────────
   const filteredActivities = useMemo(() => {
     let acts = rawData.activities;
     if (filters.sprintId !== "all") {
@@ -91,6 +95,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, on
     return acts;
   }, [rawData, filters]);
 
+  // ─── Métricas por membro ─────────────────────────────────
   const memberMetrics = useMemo(() => {
     return developers.map((dev) => {
       const acts = filteredActivities.filter((a: any) => a.assignee_id === dev.id);
@@ -114,10 +119,12 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, on
         total: acts.length, closed: closed.length, open: acts.length - closed.length,
         hoursP, hoursC, hoursPending: hoursP - hoursC, eff,
         bugs: bugs.length, bugsClosed: bugsClosed.length, cycleTime,
+        acts,
       };
     }).filter((m) => m.total > 0);
   }, [filteredActivities, developers]);
 
+  // ─── KPIs ──────────────────────────────────────────────────
   const totalActs = filteredActivities.length;
   const totalClosed = filteredActivities.filter((a: any) => a.is_closed).length;
   const totalHoursP = filteredActivities.reduce((s: number, a: any) => s + Number(a.hours), 0);
@@ -131,6 +138,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, on
     { label: "Membros Ativos", value: memberMetrics.length, sub: `de ${developers.length} no time`, icon: <User className="h-4 w-4" />, status: "neutral" as any },
   ];
 
+  // ─── Dados para gráficos ───────────────────────────────────
   const hoursBarData = memberMetrics.map((m) => ({
     name: m.name.split(" ")[0],
     "Concluídas": m.hoursC,
@@ -139,7 +147,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, on
 
   const throughputData = useMemo(() => {
     return [...rawData.sprints]
-      .sort((a: any, b: any) => a.start_date.localeCompare(b.start_date))
+      .sort((a: any, b: any) => (a.start_date ?? "").localeCompare(b.start_date ?? ""))
       .slice(-6)
       .map((sprint: any) => {
         const huIds = new Set(rawData.hus.filter((h: any) => h.sprint_id === sprint.id).map((h: any) => h.id));
@@ -160,33 +168,122 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, on
     "Bugs Resolvidos": m.bugs > 0 ? Math.round((m.bugsClosed / m.bugs) * 100) : 100,
   }));
 
+  // ─── Tabela de atividades ─────────────────────────────────
   const tableData = useMemo(() => {
     return filteredActivities.map((a: any) => {
       const dev = developers.find((d) => d.id === a.assignee_id);
       const hu = rawData.hus.find((h: any) => h.id === a.hu_id);
       const sprint = hu ? rawData.sprints.find((s: any) => s.id === hu.sprint_id) : null;
       return {
-        membro: dev?.name || "—", titulo: a.title,
-        tipo: a.activity_type || "task", sprint: sprint?.name || "—",
-        hu: hu?.code || "—", horas: Number(a.hours) || 0,
-        inicio: a.start_date || "", fim: a.end_date || "", status: a.is_closed,
+        membro: dev?.name || "—",
+        titulo: a.title,
+        sprint: sprint?.name || "—",
+        hu: hu?.code || "—",
+        horas: Number(a.hours) || 0,
+        inicio: a.start_date || "",
+        fim: a.end_date || "",
+        status: a.is_closed,
+        // campos extras para PDF
+        _code: a.code || "",
+        _huTitle: hu?.title || "",
+        _role: dev?.role || "",
+        _assigneeId: a.assignee_id,
+        _sprintStart: sprint?.start_date || "",
+        _sprintEnd: sprint?.end_date || "",
+        _sprintName: sprint?.name || "",
       };
     });
   }, [filteredActivities, developers, rawData]);
 
-  function handleExport() {
+  // ─── Exportar CSV (simples, sem coluna Tipo) ──────────────
+  function handleExportCSV() {
     exportToCSV(
       tableData.map((r) => ({
-        Membro: r.membro, Título: r.titulo,
-        Tipo: ACT_TYPE_LABEL[r.tipo] ?? r.tipo,
-        Sprint: r.sprint, HU: r.hu, Horas: r.horas,
-        Início: r.inicio ? new Date(r.inicio).toLocaleDateString("pt-BR") : "",
-        Fim: r.fim ? new Date(r.fim).toLocaleDateString("pt-BR") : "",
+        Membro: r.membro,
+        Código: r._code,
+        "Título da Atividade": r.titulo,
+        Sprint: r.sprint,
+        HU: r.hu,
+        "Horas": r.horas,
+        "Início": r.inicio ? fmtDate(r.inicio) : "",
+        "Fim": r.fim ? fmtDate(r.fim) : "",
         Status: r.status ? "Concluída" : "Em aberto",
       })),
       `atividades_${teamName}`,
     );
   }
+
+  // ─── Exportar PDF (agrupado por membro → por HU) ─────────
+  function handleExportPDF() {
+    // Determina sprint selecionada para metadados
+    const selectedSprint = filters.sprintId !== "all"
+      ? rawData.sprints.find((s: any) => s.id === filters.sprintId)
+      : null;
+
+    // Agrupa atividades por membro
+    const memberMap = new Map<string, { dev: typeof developers[0]; acts: typeof tableData }>();
+    for (const row of tableData) {
+      if (!memberMap.has(row._assigneeId)) {
+        const dev = developers.find((d) => d.id === row._assigneeId);
+        if (dev) memberMap.set(row._assigneeId, { dev, acts: [] });
+      }
+      memberMap.get(row._assigneeId)?.acts.push(row);
+    }
+
+    // Define se exporta membro específico ou todos
+    const targetMembers = filters.memberId !== "all"
+      ? [...memberMap.values()].filter((m) => m.dev.id === filters.memberId)
+      : [...memberMap.values()];
+
+    const sections: PDFMemberSection[] = targetMembers.map(({ dev, acts }) => {
+      // Sprint info por atividade
+      const sprintName = selectedSprint?.name || acts[0]?._sprintName || "";
+      const sprintStart = selectedSprint?.start_date || acts[0]?._sprintStart || "";
+      const sprintEnd = selectedSprint?.end_date || acts[0]?._sprintEnd || "";
+
+      return {
+        name: dev.name,
+        role: dev.role,
+        sprintName,
+        sprintStart,
+        sprintEnd,
+        teamName,
+        activities: acts.map((r) => ({
+          code: r._code,
+          title: r.titulo,
+          status: r.status ? "Concluída" : "Em Progresso",
+          startDate: r.inicio,
+          endDate: r.fim,
+          hours: r.horas,
+          huCode: r.hu,
+          huTitle: r._huTitle,
+        })),
+      };
+    });
+
+    const sprintLabel = selectedSprint?.name || "Todas as Sprints";
+
+    exportToPDF({
+      reportTitle: "Relatório de Produtividade Individual",
+      reportSubtitle: sprintLabel,
+      emittedBy: currentUserName,
+      restrictLabel: `Time: ${teamName}`,
+      sections,
+      filename: `atividades_${teamName}_${sprintLabel}`.replace(/\s+/g, "-"),
+    });
+  }
+
+  // ─── Actions do header ────────────────────────────────────
+  const exportActions = (
+    <div className="flex items-center gap-2">
+      <Button size="sm" variant="outline" onClick={handleExportCSV} className="gap-1.5 h-8">
+        <FileDown className="h-3.5 w-3.5" /> CSV
+      </Button>
+      <Button size="sm" variant="outline" onClick={handleExportPDF} className="gap-1.5 h-8">
+        <FileText className="h-3.5 w-3.5" /> PDF
+      </Button>
+    </div>
+  );
 
   return (
     <ReportLayout>
@@ -196,7 +293,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, on
         icon={<User className="h-5 w-5" />}
         badge="Ágil"
         onBack={onBack}
-        onExportCSV={handleExport}
+        actions={exportActions}
       />
 
       <ReportFilterBar
@@ -248,7 +345,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, on
       </div>
 
       {radarData.length > 1 && (
-        <ReportChart title="Comparação de Produtividade" subtitle="Eficiência, conclusões e resolução de bugs (%)" height="h-72">
+        <ReportChart title="Comparação de Produtividade" subtitle="Eficiência, conclusões e bugs (%)" height="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <RadarChart data={radarData} margin={{ top: 8, right: 24, left: 24, bottom: 8 }}>
               <PolarGrid stroke="hsl(var(--border))" />
@@ -264,6 +361,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, on
         </ReportChart>
       )}
 
+      {/* Tabela de produtividade por membro */}
       <ReportDataTable
         title="Produtividade por Membro"
         badge={memberMetrics.length}
@@ -304,24 +402,24 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, on
         ]}
       />
 
+      {/* Tabela detalhada de atividades — sem coluna Tipo */}
       <ReportDataTable
         title="Detalhamento de Atividades"
         badge={tableData.length}
         data={tableData}
         rowKey={(_, i) => i}
         columns={[
+          { key: "_code", header: "Código", render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || "—"}</span> },
           { key: "membro", header: "Membro", sortable: true },
-          { key: "titulo", header: "Título", sortable: true },
-          { key: "tipo", header: "Tipo", align: "center",
-            render: (v) => <span className="text-xs capitalize">{ACT_TYPE_LABEL[v] ?? v}</span> },
+          { key: "titulo", header: "Título da Atividade", sortable: true },
           { key: "sprint", header: "Sprint", sortable: true },
           { key: "hu", header: "HU", align: "center",
             render: (v) => v !== "—" ? <span className="font-mono text-xs">{v}</span> : "—" },
           { key: "horas", header: "Horas", align: "center", sortable: true, render: (v) => `${v}h` },
           { key: "inicio", header: "Início", align: "center",
-            render: (v) => v ? new Date(v).toLocaleDateString("pt-BR") : "—" },
+            render: (v) => v ? fmtDate(v) : "—" },
           { key: "fim", header: "Fim", align: "center",
-            render: (v) => v ? new Date(v).toLocaleDateString("pt-BR") : "—" },
+            render: (v) => v ? fmtDate(v) : "—" },
           { key: "status", header: "Status", align: "center",
             render: (v) => v
               ? <Badge className="text-[10px] bg-emerald-500/15 text-emerald-600">Concluída</Badge>
