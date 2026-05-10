@@ -40,25 +40,9 @@ function groupByHU(acts: ActivityRow[]) {
   return [...map.values()];
 }
 
-// ─── Helper: carrega logo Axion como base64 para embed no PDF
-async function loadLogoBase64(): Promise<string | null> {
-  try {
-    const res = await fetch('/axion-logo.png');
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-}
-
 // ─── Gerador de CSV (sem coluna Tipo, agrupado por HU)
 function buildCSV(data: ReportData, scope: string): string {
-  const headers = ['Membro', 'Cargo', 'Código', 'Título da Atividade', 'Status', 'Início', 'Fim', 'Horas', 'HU'];
+  const headers = ['Membro','Cargo','Código','Título da Atividade','Status','Início','Fim','Horas','HU'];
   const devs = scope === 'all'
     ? data.developers
     : data.developers.filter(d => d.id === scope);
@@ -79,7 +63,7 @@ function buildCSV(data: ReportData, scope: string): string {
     rows.push([dev.name, '', 'TOTAL', '', '', '', '', String(devTotal), '']);
   }
 
-  const escape = (s: string) => s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
+  const escape = (s: string) => s.includes(',') || s.includes('"') ? `"${s.replace(/"/g,'""')}"` : s;
   return [headers.join(','), ...rows.map(r => r.map(escape).join(','))].join('\n');
 }
 
@@ -94,7 +78,7 @@ async function buildXLSX(data: ReportData, scope: string, sprintName: string) {
   for (const dev of devs) {
     const acts = data.activities.filter(a => a.developerName === dev.name);
     const groups = groupByHU(acts);
-    const headers = ['Código', 'Título da Atividade', 'Status', 'Início', 'Fim', 'Horas', 'HU'];
+    const headers = ['Código','Título da Atividade','Status','Início','Fim','Horas','HU'];
     const rows: (string | number)[][] = [];
     let devTotal = 0;
     for (const g of groups) {
@@ -107,21 +91,14 @@ async function buildXLSX(data: ReportData, scope: string, sprintName: string) {
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     ws['!cols'] = headers.map((h, i) => ({ wch: i === 1 ? 50 : Math.max(h.length, 14) }));
-    const sheetName = dev.name.split(' ').slice(0, 2).join(' ').substring(0, 31);
+    const sheetName = dev.name.split(' ').slice(0,2).join(' ').substring(0,31);
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
   }
   XLSX.writeFile(wb, `Produtividade_Faturamento_${sprintName}.xlsx`);
 }
 
-// ─── Gerador de PDF com logo Axion, sem Tipo, agrupado por HU
-async function buildPDF(
-  data: ReportData,
-  scope: string,
-  sprintName: string,
-  emittedBy: string,
-  reportTitle = 'Relatório de Produtividade Individual — Faturamento',
-  restrictLabel = 'Uso restrito — Setor de Faturamento',
-) {
+// ─── Gerador de PDF (cabeçalho Axion, sem Tipo, agrupado por HU com subtotal por grupo)
+async function buildPDF(data: ReportData, scope: string, sprintName: string, emittedBy: string, reportTitle = 'Relatório de Produtividade Individual — Faturamento', restrictLabel = 'Uso restrito — Setor de Faturamento') {
   const { default: jsPDF } = await import('jspdf');
   const autoTable = (await import('jspdf-autotable')).default;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -136,60 +113,47 @@ async function buildPDF(
   const periodStart = data.sprintStart || data.periodStart;
   const periodEnd   = data.sprintEnd   || data.periodEnd;
 
-  // Carrega logo
-  const logoBase64 = await loadLogoBase64();
-
   devs.forEach((dev, idx) => {
     if (idx > 0) doc.addPage();
 
-    // ── Faixa de cabeçalho institucional
+    // ── Cabeçalho institucional (fundo gradiente simulado em roxo/índigo)
     doc.setFillColor(79, 70, 229);
-    doc.rect(0, 0, 297, 26, 'F');
-
-    // Logo Axion no cabeçalho (fundo transparente sobre o roxo)
-    if (logoBase64) {
-      try {
-        // Altura fixa de 18mm, largura proporcional (~18mm)
-        doc.addImage(logoBase64, 'PNG', 8, 4, 18, 18);
-      } catch { /* ignora erro de imagem */ }
-    }
-
-    // Textos do cabeçalho
-    const textX = logoBase64 ? 30 : 10;
+    doc.rect(0, 0, 297, 24, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-    doc.text('Axion — Operações & Fluxo Ágil', textX, 10);
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    doc.text(reportTitle, textX, 17);
-    doc.setFontSize(8);
-    doc.text(`Emitido em: ${dateStr} às ${timeStr}  ·  Por: ${emittedBy}`, 160, 10, { align: 'left' });
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('Axion — Operações & Fluxo Ágil', 10, 9);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text(reportTitle, 10, 17);
+    doc.setFontSize(9);
+    doc.text(`Emitido em: ${dateStr} às ${timeStr}  ·  Por: ${emittedBy}`, 160, 9, { align: 'left' });
     doc.text(restrictLabel, 160, 17, { align: 'left' });
 
     // ── Sub-header do membro
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-    doc.text(dev.name, 10, 36);
+    doc.text(dev.name, 10, 33);
     doc.setFontSize(9); doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
     const metaLine = [dev.role, sprintName, periodStart && periodEnd ? `${periodStart} → ${periodEnd}` : '', data.teamName ? `Time: ${data.teamName}` : '']
       .filter(Boolean).join('  ·  ');
-    doc.text(metaLine, 10, 42);
+    doc.text(metaLine, 10, 39);
     doc.setDrawColor(226, 232, 240);
-    doc.line(10, 45, 287, 45);
+    doc.line(10, 42, 287, 42);
 
-    // ── Tabela agrupada por HU
+    // ── Tabela agrupada por HU (sem coluna Tipo)
     const acts = data.activities.filter(a => a.developerName === dev.name);
     const groups = groupByHU(acts);
     const totalH = acts.reduce((s, a) => s + (Number(a.hours) || 0), 0);
 
-    const body: any[][] = [];
+    const body: (string | { content: string; styles?: object; colSpan?: number })[][] = [];
+
     for (const g of groups) {
       if (g.huCode !== '—') {
         body.push([{
           content: `${g.huCode}${g.huTitle ? '  —  ' + g.huTitle : ''}`,
           colSpan: 6,
-          styles: { fillColor: [237, 233, 254], textColor: [55, 48, 163], fontStyle: 'bold', fontSize: 8 },
-        }]);
+          styles: { fillColor: [237, 233, 254], textColor: [55, 48, 163], fontStyle: 'bold', fontSize: 8 }
+        }] as any);
       }
       for (const a of g.acts) {
         body.push([a.code, a.title, a.status, a.startDate, a.endDate, `${a.hours}h`]);
@@ -198,18 +162,18 @@ async function buildPDF(
         body.push([{
           content: `SUBTOTAL ${g.huCode}`,
           colSpan: 5,
-          styles: { fillColor: [241, 245, 249], textColor: [100, 116, 139], fontStyle: 'bold', fontSize: 8 },
+          styles: { fillColor: [241, 245, 249], textColor: [100, 116, 139], fontStyle: 'bold', fontSize: 8 }
         }, {
           content: `${g.subtotal}h`,
-          styles: { fillColor: [241, 245, 249], textColor: [79, 70, 229], fontStyle: 'bold', fontSize: 8 },
-        }]);
+          styles: { fillColor: [241, 245, 249], textColor: [79, 70, 229], fontStyle: 'bold', fontSize: 8 }
+        }] as any);
       }
     }
 
     autoTable(doc, {
       head: [['Código', 'Título da Atividade', 'Status', 'Início', 'Fim', 'Horas']],
       body,
-      startY: 49,
+      startY: 46,
       styles: { fontSize: 8, cellPadding: 2.5, lineColor: [226, 232, 240], lineWidth: 0.1 },
       headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold', fontSize: 8 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
@@ -223,7 +187,6 @@ async function buildPDF(
       },
     });
 
-    // Rodapé
     const pageH = doc.internal.pageSize.height;
     doc.setFontSize(8); doc.setTextColor(148, 163, 184);
     doc.text(`Total: ${totalH}h lançadas  ·  ${acts.length} atividades`, 10, pageH - 8);
