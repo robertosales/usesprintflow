@@ -183,7 +183,6 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         inicio: a.start_date || "",
         fim: a.end_date || "",
         status: a.is_closed,
-        // campos extras para PDF
         _code: a.code || "",
         _huTitle: hu?.title || "",
         _role: dev?.role || "",
@@ -195,7 +194,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     });
   }, [filteredActivities, developers, rawData]);
 
-  // ─── Exportar CSV (simples, sem coluna Tipo) ──────────────
+  // ─── Exportar CSV ─────────────────────────────────────────
   function handleExportCSV() {
     exportToCSV(
       tableData.map((r) => ({
@@ -213,14 +212,12 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     );
   }
 
-  // ─── Exportar PDF (agrupado por membro → por HU) ─────────
+  // ─── Exportar PDF ─────────────────────────────────────────
   function handleExportPDF() {
-    // Determina sprint selecionada para metadados
     const selectedSprint = filters.sprintId !== "all"
       ? rawData.sprints.find((s: any) => s.id === filters.sprintId)
       : null;
 
-    // Agrupa atividades por membro
     const memberMap = new Map<string, { dev: typeof developers[0]; acts: typeof tableData }>();
     for (const row of tableData) {
       if (!memberMap.has(row._assigneeId)) {
@@ -230,17 +227,14 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
       memberMap.get(row._assigneeId)?.acts.push(row);
     }
 
-    // Define se exporta membro específico ou todos
     const targetMembers = filters.memberId !== "all"
       ? [...memberMap.values()].filter((m) => m.dev.id === filters.memberId)
       : [...memberMap.values()];
 
     const sections: PDFMemberSection[] = targetMembers.map(({ dev, acts }) => {
-      // Sprint info por atividade
       const sprintName = selectedSprint?.name || acts[0]?._sprintName || "";
       const sprintStart = selectedSprint?.start_date || acts[0]?._sprintStart || "";
       const sprintEnd = selectedSprint?.end_date || acts[0]?._sprintEnd || "";
-
       return {
         name: dev.name,
         role: dev.role,
@@ -262,7 +256,6 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     });
 
     const sprintLabel = selectedSprint?.name || "Todas as Sprints";
-
     exportToPDF({
       reportTitle: "Relatório de Produtividade Individual",
       reportSubtitle: sprintLabel,
@@ -273,7 +266,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     });
   }
 
-  // ─── Actions do header ────────────────────────────────────
+  // ─── Botões de exportação (prop correta: extraActions) ────
   const exportActions = (
     <div className="flex items-center gap-2">
       <Button size="sm" variant="outline" onClick={handleExportCSV} className="gap-1.5 h-8">
@@ -293,7 +286,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         icon={<User className="h-5 w-5" />}
         badge="Ágil"
         onBack={onBack}
-        actions={exportActions}
+        extraActions={exportActions}
       />
 
       <ReportFilterBar
@@ -361,7 +354,6 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         </ReportChart>
       )}
 
-      {/* Tabela de produtividade por membro */}
       <ReportDataTable
         title="Produtividade por Membro"
         badge={memberMetrics.length}
@@ -402,7 +394,6 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         ]}
       />
 
-      {/* Tabela detalhada de atividades — sem coluna Tipo */}
       <ReportDataTable
         title="Detalhamento de Atividades"
         badge={tableData.length}
