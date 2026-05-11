@@ -69,13 +69,14 @@ export function RelatorioSLA({ onBack }: Props) {
   const periodoLabel = `${fmtDateBR(dataInicio)} a ${fmtDateBR(dataFim)}`;
   const reportCfg    = getReportConfig("sla_compliance");
 
-  const complianceStatus = sla.compliance >= META_SLA ? "success" : sla.compliance >= 80 ? "warning" : "danger";
+  const complianceStatus: "good" | "warning" | "danger" =
+    sla.compliance >= META_SLA ? "good" : sla.compliance >= 80 ? "warning" : "danger";
 
   const kpiItems: KPIItem[] = [
-    { label: "Compliance",     value: `${sla.compliance.toFixed(1)}%`, meta: `Meta: ≥ ${META_SLA}%`, status: complianceStatus, icon: Shield },
-    { label: "Violados",       value: sla.violados, status: sla.violados > 0 ? "danger" : "success", icon: AlertTriangle },
-    { label: "Em Risco",       value: sla.emRisco,  status: sla.emRisco  > 0 ? "warning" : "success", icon: AlertTriangle },
-    { label: "Maior Violação", value: maiorViolacao, status: "neutral", icon: CheckCircle2 },
+    { label: "Compliance",     value: `${sla.compliance.toFixed(1)}%`, meta: `Meta: ≥ ${META_SLA}%`, status: complianceStatus,                                          icon: Shield       },
+    { label: "Violados",       value: sla.violados,                    status: sla.violados > 0 ? "danger"  : "good",                                                   icon: AlertTriangle },
+    { label: "Em Risco",       value: sla.emRisco,                     status: sla.emRisco  > 0 ? "warning" : "good",                                                   icon: AlertTriangle },
+    { label: "Maior Violação", value: maiorViolacao,                   status: "neutral",                                                                               icon: CheckCircle2  },
   ];
 
   const statusBadge = (s: string) => {
@@ -85,14 +86,14 @@ export function RelatorioSLA({ onBack }: Props) {
   };
 
   const columns: TableColumn[] = [
-    { key: "rhm",       label: "RHM",       sortable: true },
-    { key: "projeto",   label: "Projeto",   sortable: true },
-    { key: "prioridade",label: "Prioridade",sortable: true },
-    { key: "abertura",  label: "Abertura",  sortable: true, render: (v) => new Date(v).toLocaleDateString("pt-BR") },
-    { key: "prazoSLA",  label: "Prazo SLA", sortable: true, render: (v) => `${new Date(v).toLocaleDateString("pt-BR")} ${new Date(v).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` },
-    { key: "resolucao", label: "Resolução",                 render: (v) => v ? new Date(v).toLocaleDateString("pt-BR") : <span className="text-muted-foreground">Em aberto</span> },
-    { key: "statusSLA", label: "Status",    sortable: true, render: (v) => statusBadge(v) },
-    { key: "atraso",    label: "Atraso",    align: "right", sortable: true, render: (v) => v > 0 ? <span className="text-destructive font-medium">{formatHours(v)}</span> : "—" },
+    { key: "rhm",       label: "RHM",        sortable: true },
+    { key: "projeto",   label: "Projeto",    sortable: true },
+    { key: "prioridade",label: "Prioridade", sortable: true },
+    { key: "abertura",  label: "Abertura",   sortable: true, render: (v) => new Date(v).toLocaleDateString("pt-BR") },
+    { key: "prazoSLA",  label: "Prazo SLA",  sortable: true, render: (v) => `${new Date(v).toLocaleDateString("pt-BR")} ${new Date(v).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` },
+    { key: "resolucao", label: "Resolução",                  render: (v) => v ? new Date(v).toLocaleDateString("pt-BR") : <span className="text-muted-foreground">Em aberto</span> },
+    { key: "statusSLA", label: "Status",     sortable: true, render: (v) => statusBadge(v) },
+    { key: "atraso",    label: "Atraso",     align: "right", sortable: true, render: (v) => v > 0 ? <span className="text-destructive font-medium">{formatHours(v)}</span> : "—" },
   ];
 
   const tableData = sla.results.map(r => ({ ...r, abertura: r.abertura, prazoSLA: r.prazoSLA }));
@@ -141,8 +142,8 @@ export function RelatorioSLA({ onBack }: Props) {
         >
           <div className="h-8 rounded-full overflow-hidden flex bg-muted mt-2">
             {barData.dentro  > 0 && <div className="bg-emerald-500 h-full transition-all" style={{ width: `${(barData.dentro  / barData.total) * 100}%` }} />}
-            {barData.emRisco > 0 && <div className="bg-orange-400  h-full transition-all" style={{ width: `${(barData.emRisco / barData.total) * 100}%` }} />}
-            {barData.violado > 0 && <div className="bg-destructive  h-full transition-all" style={{ width: `${(barData.violado / barData.total) * 100}%` }} />}
+            {barData.emRisco > 0 && <div className="bg-orange-400 h-full transition-all" style={{ width: `${(barData.emRisco / barData.total) * 100}%` }} />}
+            {barData.violado > 0 && <div className="bg-destructive h-full transition-all" style={{ width: `${(barData.violado / barData.total) * 100}%` }} />}
           </div>
         </ReportChart>
       }
@@ -152,26 +153,20 @@ export function RelatorioSLA({ onBack }: Props) {
             <ExportButton getData={getExportData} />
           </div>
           <ReportDataTable
-            titulo="Detalhamento por Chamado"
+            titulo="Detalhamento por Demanda"
             columns={columns}
             data={tableData}
-            rowKey={(r) => r.demandaId}
-            pageSize={20}
-            totals={{
-              label: `Total: ${sla.results.length} chamados`,
-              values: {
-                statusSLA: <span className="text-xs"><span className="text-emerald-600">{barData.dentro} dentro</span> · <span className="text-orange-500">{barData.emRisco} risco</span> · <span className="text-destructive">{barData.violado} violados</span></span>,
-              },
-            }}
+            rowKey={(r) => r.rhm}
           />
         </>
       }
       footer={
         <ReportLegendBlock items={[
-          { sigla: "SLA",     descricao: "Acordo de Nível de Serviço — prazo máximo para resolução" },
-          { sigla: "Dentro",  descricao: "Chamado resolvido ou em andamento dentro do prazo" },
-          { sigla: "Em risco",descricao: "Menos de 2 horas restantes para o vencimento" },
-          { sigla: "Violado", descricao: "Prazo de SLA excedido" },
+          { sigla: "SLA",      descricao: "Service Level Agreement — prazo contratual de atendimento" },
+          { sigla: "Dentro",   descricao: "Resolvido antes do prazo SLA" },
+          { sigla: "Em Risco", descricao: "Dentro do prazo mas com menos de 20% de margem" },
+          { sigla: "Violado",  descricao: "Prazo SLA ultrapassado" },
+          { sigla: "Atraso",   descricao: "Horas excedidas após o prazo SLA" },
         ]} />
       }
     />

@@ -16,7 +16,6 @@ import {
 } from "@/shared/components/reports";
 import type { KPIItem, TableColumn } from "@/shared/components/reports";
 import { Clock, Timer, TrendingUp, Target, Activity } from "lucide-react";
-import type { Demanda, DemandaTransition } from "../../types/demanda";
 
 const META_MTTR = 4;
 const META_TMR  = 1;
@@ -25,10 +24,12 @@ function today()        { return new Date().toISOString().split("T")[0]; }
 function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split("T")[0]; }
 function fmtDateBR(d: string) { return d ? new Date(d).toLocaleDateString("pt-BR") : "—"; }
 
-function kpiStatus(val: number, meta: number) {
-  if (val <= meta)        return "success"  as const;
-  if (val <= meta * 1.5)  return "warning"  as const;
-  return                         "danger"   as const;
+type KPIStatus = "good" | "warning" | "danger";
+
+function kpiStatus(val: number, meta: number): KPIStatus {
+  if (val <= meta)       return "good";
+  if (val <= meta * 1.5) return "warning";
+  return "danger";
 }
 
 interface Props { onBack?: () => void; }
@@ -90,23 +91,22 @@ export function RelatorioTempoMedio({ onBack }: Props) {
   }, [analistaStats]);
 
   const reportCfg = getReportConfig("tempo_medio");
-
   const periodoLabel = `${fmtDateBR(dataInicio)} a ${fmtDateBR(dataFim)}`;
 
   const kpiItems: KPIItem[] = [
-    { label: "TMR",  value: formatHours(tempos.tmr),  meta: `Meta: < ${META_TMR}h`,  status: kpiStatus(tempos.tmr,  META_TMR),  icon: Timer   },
-    { label: "MTTR", value: formatHours(tempos.mttr), meta: `Meta: < ${META_MTTR}h`, status: kpiStatus(tempos.mttr, META_MTTR), icon: Clock   },
+    { label: "TMR",  value: formatHours(tempos.tmr),  meta: `Meta: < ${META_TMR}h`,  status: kpiStatus(tempos.tmr,  META_TMR),  icon: Timer      },
+    { label: "MTTR", value: formatHours(tempos.mttr), meta: `Meta: < ${META_MTTR}h`, status: kpiStatus(tempos.mttr, META_MTTR), icon: Clock      },
     { label: "TMA",  value: formatHours(tempos.tma),  meta: `Meta: < ${META_MTTR}h`, status: kpiStatus(tempos.tma,  META_MTTR), icon: TrendingUp },
-    { label: "MTTA", value: formatHours(tempos.mtta), meta: `Meta: < ${META_TMR}h`,  status: kpiStatus(tempos.mtta, META_TMR),  icon: Target  },
+    { label: "MTTA", value: formatHours(tempos.mtta), meta: `Meta: < ${META_TMR}h`,  status: kpiStatus(tempos.mtta, META_TMR),  icon: Target     },
   ];
 
   const columns: TableColumn[] = [
     { key: "nome",      label: "Analista",    sortable: true },
     { key: "total",     label: "Total",       align: "right", sortable: true },
-    { key: "tmr",       label: "TMR",         align: "right", sortable: true, render: (v) => <span className={`font-medium ${kpiStatus(v, META_TMR) === "success" ? "text-emerald-600" : kpiStatus(v, META_TMR) === "warning" ? "text-orange-500" : "text-destructive"}`}>{formatHours(v)}</span> },
-    { key: "mttr",      label: "MTTR",        align: "right", sortable: true, render: (v) => <span className={`font-medium ${kpiStatus(v, META_MTTR) === "success" ? "text-emerald-600" : kpiStatus(v, META_MTTR) === "warning" ? "text-orange-500" : "text-destructive"}`}>{formatHours(v)}</span> },
-    { key: "tma",       label: "TMA",         align: "right", sortable: true, render: (v) => <span className={`font-medium ${kpiStatus(v, META_MTTR) === "success" ? "text-emerald-600" : kpiStatus(v, META_MTTR) === "warning" ? "text-orange-500" : "text-destructive"}`}>{formatHours(v)}</span> },
-    { key: "mtta",      label: "MTTA",        align: "right", sortable: true, render: (v) => <span className={`font-medium ${kpiStatus(v, META_TMR) === "success" ? "text-emerald-600" : kpiStatus(v, META_TMR) === "warning" ? "text-orange-500" : "text-destructive"}`}>{formatHours(v)}</span> },
+    { key: "tmr",       label: "TMR",         align: "right", sortable: true, render: (v) => <span className={`font-medium ${kpiStatus(v, META_TMR) === "good" ? "text-emerald-600" : kpiStatus(v, META_TMR) === "warning" ? "text-orange-500" : "text-destructive"}`}>{formatHours(v)}</span> },
+    { key: "mttr",      label: "MTTR",        align: "right", sortable: true, render: (v) => <span className={`font-medium ${kpiStatus(v, META_MTTR) === "good" ? "text-emerald-600" : kpiStatus(v, META_MTTR) === "warning" ? "text-orange-500" : "text-destructive"}`}>{formatHours(v)}</span> },
+    { key: "tma",       label: "TMA",         align: "right", sortable: true, render: (v) => <span className={`font-medium ${kpiStatus(v, META_MTTR) === "good" ? "text-emerald-600" : kpiStatus(v, META_MTTR) === "warning" ? "text-orange-500" : "text-destructive"}`}>{formatHours(v)}</span> },
+    { key: "mtta",      label: "MTTA",        align: "right", sortable: true, render: (v) => <span className={`font-medium ${kpiStatus(v, META_TMR) === "good" ? "text-emerald-600" : kpiStatus(v, META_TMR) === "warning" ? "text-orange-500" : "text-destructive"}`}>{formatHours(v)}</span> },
     { key: "acimaMeta", label: "Acima Meta",  align: "right", sortable: true, render: (v, row) => v > 0 ? <Badge variant="destructive" className="text-[10px]">{v} ({row.pctAcima}%)</Badge> : <span className="text-muted-foreground">0</span> },
   ];
 
@@ -156,10 +156,10 @@ export function RelatorioTempoMedio({ onBack }: Props) {
               label: "Total / Média",
               values: {
                 total: totals.total,
-                tmr:   <span className={kpiStatus(tempos.tmr,  META_TMR)  === "success" ? "text-emerald-600" : kpiStatus(tempos.tmr,  META_TMR)  === "warning" ? "text-orange-500" : "text-destructive"}>{formatHours(tempos.tmr)}</span>,
-                mttr:  <span className={kpiStatus(tempos.mttr, META_MTTR) === "success" ? "text-emerald-600" : kpiStatus(tempos.mttr, META_MTTR) === "warning" ? "text-orange-500" : "text-destructive"}>{formatHours(tempos.mttr)}</span>,
-                tma:   <span className={kpiStatus(tempos.tma,  META_MTTR) === "success" ? "text-emerald-600" : kpiStatus(tempos.tma,  META_MTTR) === "warning" ? "text-orange-500" : "text-destructive"}>{formatHours(tempos.tma)}</span>,
-                mtta:  <span className={kpiStatus(tempos.mtta, META_TMR)  === "success" ? "text-emerald-600" : kpiStatus(tempos.mtta, META_TMR)  === "warning" ? "text-orange-500" : "text-destructive"}>{formatHours(tempos.mtta)}</span>,
+                tmr:   <span className={kpiStatus(tempos.tmr,  META_TMR)  === "good" ? "text-emerald-600" : kpiStatus(tempos.tmr,  META_TMR)  === "warning" ? "text-orange-500" : "text-destructive"}>{formatHours(tempos.tmr)}</span>,
+                mttr:  <span className={kpiStatus(tempos.mttr, META_MTTR) === "good" ? "text-emerald-600" : kpiStatus(tempos.mttr, META_MTTR) === "warning" ? "text-orange-500" : "text-destructive"}>{formatHours(tempos.mttr)}</span>,
+                tma:   <span className={kpiStatus(tempos.tma,  META_MTTR) === "good" ? "text-emerald-600" : kpiStatus(tempos.tma,  META_MTTR) === "warning" ? "text-orange-500" : "text-destructive"}>{formatHours(tempos.tma)}</span>,
+                mtta:  <span className={kpiStatus(tempos.mtta, META_TMR)  === "good" ? "text-emerald-600" : kpiStatus(tempos.mtta, META_TMR)  === "warning" ? "text-orange-500" : "text-destructive"}>{formatHours(tempos.mtta)}</span>,
                 acimaMeta: totals.acima > 0 ? <Badge variant="destructive" className="text-[10px]">{totals.acima} ({totals.pct}%)</Badge> : <span className="text-muted-foreground">0</span>,
               },
             } : undefined}
