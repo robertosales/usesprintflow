@@ -1,15 +1,17 @@
-import { ReactNode, ElementType } from "react";
+import { ReactNode, ComponentType, SVGProps } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type LucideIcon = ComponentType<SVGProps<SVGSVGElement> & { className?: string }>;
 
 export interface KPIItem {
   label: string;
   value: string | number;
   sub?: string;
   meta?: string;
-  /** Aceita ReactNode (JSX) ou referência a componente Lucide (ElementType) */
-  icon?: ReactNode | ElementType;
+  /** Aceita JSX (ReactNode) ou componente Lucide diretamente */
+  icon?: ReactNode | LucideIcon;
   /** 'success' é alias de 'good' para retrocompatibilidade */
   status?: "good" | "success" | "warning" | "danger" | "neutral";
   trend?: { direction: "up" | "down" | "same"; isGood: boolean };
@@ -41,10 +43,14 @@ const STATUS_ICON_BG: Record<string, string> = {
   neutral: "bg-primary/10 text-primary",
 };
 
-function resolveIcon(icon: ReactNode | ElementType | undefined): ReactNode {
+function resolveIcon(icon: ReactNode | LucideIcon | undefined): ReactNode {
   if (!icon) return null;
-  if (typeof icon === "function" || (typeof icon === "object" && icon !== null && "$$typeof" in (icon as object))) {
-    const Ic = icon as ElementType;
+  if (typeof icon === "function") {
+    const Ic = icon as LucideIcon;
+    return <Ic className="h-5 w-5" />;
+  }
+  if (typeof icon === "object" && icon !== null && "$$typeof" in (icon as Record<string, unknown>)) {
+    const Ic = icon as unknown as LucideIcon;
     return <Ic className="h-5 w-5" />;
   }
   return icon as ReactNode;
@@ -62,9 +68,8 @@ export function ReportKPISummary({ items, cols = 4 }: ReportKPISummaryProps) {
   return (
     <div className={cn("grid gap-3", gridClass)}>
       {items.map((item, i) => {
-        // normaliza 'success' → 'good' para retrocompatibilidade
-        const rawSt = item.status ?? "neutral";
-        const st = rawSt === "success" ? "good" : rawSt;
+        const rawSt  = item.status ?? "neutral";
+        const st     = rawSt === "success" ? "good" : rawSt;
         const iconNode = resolveIcon(item.icon);
         const TrendIcon =
           item.trend?.direction === "up"
