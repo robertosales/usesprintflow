@@ -25,8 +25,11 @@ import { AnalyticsSidebar } from "@/components/sala-agil/metrics/AnalyticsSideba
 import { TimelineCard } from "@/components/sala-agil/metrics/TimelineCard";
 import { ProductivityChart } from "@/components/sala-agil/metrics/ProductivityChart";
 import { PerformanceHeader } from "@/components/sala-agil/metrics/PerformanceHeader";
+import { formatMinutes } from "@/lib/duration";
 
-// ─── Interfaces (inalteradas) ────────────────────────────────────────────────────────
+// ─── Interfaces ──────────────────────────────────────────────────────────────
+// hoursPlanned / hoursCompleted / hoursPending agora representam MINUTOS (inteiros)
+// para evitar erros de ponto flutuante e garantir exibição correta.
 interface MemberMetrics {
   id: string;
   name: string;
@@ -35,14 +38,14 @@ interface MemberMetrics {
   tasksStarted: number;
   tasksCompleted: number;
   tasksNotStarted: number;
-  hoursPlanned: number;
-  hoursCompleted: number;
-  hoursPending: number;
+  hoursPlanned: number;    // minutos
+  hoursCompleted: number;  // minutos
+  hoursPending: number;    // minutos
   efficiency: number;
   bugsAssigned: number;
   bugsResolved: number;
   storyPointsCompleted: number;
-  avgTimePerActivity: number;
+  avgTimePerActivity: number; // minutos
   wip: number;
   cycleTime: number;
   tasksByStatus: { name: string; value: number; color: string }[];
@@ -58,7 +61,7 @@ interface Props {
   loading?: boolean;
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 const MEMBER_COLORS = [
   "#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4",
   "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16", "#e11d48",
@@ -91,7 +94,7 @@ function groupActivitiesByDate(activities: any[]): Record<string, any[]> {
   return groups;
 }
 
-// ─── MemberRow ───────────────────────────────────────────────────────────────────────
+// ─── MemberRow ───────────────────────────────────────────────────────────────
 function MemberRow({
   member,
   index,
@@ -136,8 +139,8 @@ function MemberRow({
       {/* Horas */}
       <td className="px-4 py-3 text-center">
         <span className="text-sm tabular-nums">
-          <span className="font-semibold">{member.hoursCompleted}h</span>
-          <span className="text-muted-foreground">/{member.hoursPlanned}h</span>
+          <span className="font-semibold">{formatMinutes(member.hoursCompleted)}</span>
+          <span className="text-muted-foreground">/{formatMinutes(member.hoursPlanned)}</span>
         </span>
       </td>
       {/* Eficiência */}
@@ -180,7 +183,7 @@ function MemberRow({
   );
 }
 
-// ─── MemberModal (fullscreen) ─────────────────────────────────────────────────────────
+// ─── MemberModal ─────────────────────────────────────────────────────────────
 function MemberModal({
   member,
   sprintName,
@@ -195,11 +198,6 @@ function MemberModal({
   const avatarColor = getAvatarColor(member.name);
   const initials = getInitials(member.name);
   const grouped = useMemo(() => groupActivitiesByDate(member.activities ?? []), [member.activities]);
-
-  const hoursBarData = [
-    { name: "Concluído", value: member.hoursCompleted },
-    { name: "Pendente", value: member.hoursPending },
-  ];
 
   return (
     <DialogContent className="max-w-[95vw] w-full h-[95vh] flex flex-col p-0 gap-0 overflow-hidden">
@@ -246,8 +244,8 @@ function MemberModal({
             />
             <MetricCard
               icon={Clock} label="Horas" accent="blue"
-              value={`${member.hoursCompleted}h`}
-              sublabel={`de ${member.hoursPlanned}h planejadas`}
+              value={formatMinutes(member.hoursCompleted)}
+              sublabel={`de ${formatMinutes(member.hoursPlanned)} planejadas`}
             />
             <MetricCard
               icon={Zap} label="Eficiência"
@@ -349,7 +347,7 @@ function MemberModal({
   );
 }
 
-// ─── IndividualPerformance (main export) ─────────────────────────────────────────────────
+// ─── IndividualPerformance (main export) ─────────────────────────────────────
 export function IndividualPerformance({
   members,
   sprintName,
@@ -398,7 +396,6 @@ export function IndividualPerformance({
     rows: (m.activities || []).map((a: any) => [m.name, a.title, a.description || "", a.start_date, a.end_date, a.hours]),
   });
 
-  // Totais
   const totals = {
     tasksAssigned: members.reduce((s, m) => s + m.tasksAssigned, 0),
     tasksCompleted: members.reduce((s, m) => s + m.tasksCompleted, 0),
@@ -408,13 +405,12 @@ export function IndividualPerformance({
     notStarted: members.reduce((s, m) => s + m.tasksNotStarted, 0),
   };
 
-  const criticalMembers = members.filter((m) => m.hoursPlanned > 20 && m.efficiency === 0);
+  const criticalMembers = members.filter((m) => m.hoursPlanned > 20 * 60 && m.efficiency === 0);
   const effColor = totals.efficiency >= 80 ? "green" : totals.efficiency >= 60 ? "amber" : "red";
 
   return (
     <TooltipProvider>
       <div className="space-y-5">
-        {/* Header da seção */}
         <PerformanceHeader
           title="Desempenho Individual"
           sprintName={sprintName}
@@ -446,7 +442,6 @@ export function IndividualPerformance({
           />
         </div>
 
-        {/* Alerta crítico */}
         {criticalMembers.length > 0 && (
           <div className="flex items-center gap-2 rounded-lg bg-destructive/10 border-l-4 border-destructive px-4 py-2.5 text-sm text-destructive">
             <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -484,7 +479,7 @@ export function IndividualPerformance({
                   {totals.tasksCompleted}/{totals.tasksAssigned}
                 </td>
                 <td className="px-4 py-3 text-center text-sm font-semibold tabular-nums">
-                  {totals.hoursCompleted}h/{totals.hoursPlanned}h
+                  {formatMinutes(totals.hoursCompleted)}/{formatMinutes(totals.hoursPlanned)}
                 </td>
                 <td className="px-4 py-3">
                   <span className="text-sm font-bold tabular-nums"
@@ -551,7 +546,6 @@ export function IndividualPerformance({
           />
         )}
 
-        {/* Modal fullscreen do membro */}
         <Dialog open={!!selectedMember} onOpenChange={(open) => !open && setSelectedMember(null)}>
           {selectedMember && (
             <MemberModal

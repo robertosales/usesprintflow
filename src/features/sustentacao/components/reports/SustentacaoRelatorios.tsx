@@ -1,38 +1,37 @@
 import { useState } from "react";
 import { ReportCatalog } from "@/shared/components/reports";
-import type { ReportCatalogItem } from "@/shared/components/reports";
+import type { CatalogItem } from "@/shared/components/reports";
 import { RelatorioTempoMedio } from "./RelatorioTempoMedio";
 import { RelatorioSLA } from "./RelatorioSLA";
 import { RelatorioProdutividade } from "./RelatorioProdutividade";
 import { RelatorioIMR } from "./RelatorioIMR";
 import { Clock, Shield, Users, BarChart3 } from "lucide-react";
 
-const CATALOG_ITEMS: ReportCatalogItem[] = [
+const CATALOG_ITEMS: CatalogItem[] = [
   {
-    key: "tempo",
-    titulo: "Tempo Médio",
-    descricao: "TMR · MTTR · TMA · MTTA por analista e período",
-    icon: Clock,
+    id: "tempo",
+    title: "Tempo Médio",
+    description: "TMR · MTTR · TMA · MTTA por analista e período",
+    icon: <Clock className="h-5 w-5" />,
   },
   {
-    key: "sla",
-    titulo: "SLA Compliance",
-    descricao: "Cumprimento do acordo de nível de serviço por chamado",
-    icon: Shield,
+    id: "sla",
+    title: "SLA Compliance",
+    description: "Cumprimento do acordo de nível de serviço por chamado",
+    icon: <Shield className="h-5 w-5" />,
   },
   {
-    key: "produtividade",
-    titulo: "Produtividade",
-    descricao: "Atividades, horas lançadas e taxa de resolução por analista",
-    icon: Users,
+    id: "produtividade",
+    title: "Produtividade",
+    description: "Atividades, horas lançadas e taxa de resolução por analista",
+    icon: <Users className="h-5 w-5" />,
   },
   {
-    key: "imr",
-    titulo: "IMR Grupo 2",
-    descricao: "IAP · IQS · ICT · ISS — indicadores e glosas contratuais",
-    icon: BarChart3,
+    id: "imr",
+    title: "IMR Grupo 2",
+    description: "IAP · IQS · ICT · ISS — indicadores e glosas contratuais",
+    icon: <BarChart3 className="h-5 w-5" />,
     badge: "Contratual",
-    badgeVariant: "outline",
   },
 ];
 
@@ -41,10 +40,10 @@ export function SustentacaoRelatorios() {
 
   const handleBack = () => setSelected(null);
 
-  if (selected === "tempo")        return <RelatorioTempoMedio   onBack={handleBack} />;
-  if (selected === "sla")          return <RelatorioSLA           onBack={handleBack} />;
-  if (selected === "produtividade") return <RelatorioProdutividade onBack={handleBack} />;
-  if (selected === "imr")          return <RelatorioIMR           onBack={handleBack} />;
+  if (selected === "tempo")          return <RelatorioTempoMedio    onBack={handleBack} />;
+  if (selected === "sla")            return <RelatorioSLA            onBack={handleBack} />;
+  if (selected === "produtividade")  return <RelatorioProdutividade  onBack={handleBack} />;
+  if (selected === "imr")            return <RelatorioIMR            onBack={handleBack} />;
 
   return (
     <div className="space-y-6">
@@ -57,9 +56,7 @@ export function SustentacaoRelatorios() {
 
       <ReportCatalog
         items={CATALOG_ITEMS}
-        selected={selected ?? undefined}
         onSelect={setSelected}
-        modulo="sustentacao"
       />
     </div>
   );

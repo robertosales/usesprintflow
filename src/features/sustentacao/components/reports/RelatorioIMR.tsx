@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { useDemandas } from "../../hooks/useDemandas";
 import { useAuth } from "@/contexts/AuthContext";
 import { calcIAP, calcIQS, calcICT, calcISS, calcGlosasSummary } from "../../utils/imrCalculations";
@@ -17,22 +16,27 @@ import {
   ReportLegendBlock,
 } from "@/shared/components/reports";
 import type { KPIItem, TableColumn } from "@/shared/components/reports";
-import { Download, BarChart3 } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 
 function today()        { return new Date().toISOString().split("T")[0]; }
 function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split("T")[0]; }
 function fmtDateBR(d: string) { return d ? new Date(d).toLocaleDateString("pt-BR") : "—"; }
 
-const FAIXA_STATUS = { green: "success", yellow: "warning", orange: "warning", red: "danger" } as const;
-const STATUS_LABEL  = { green: "Meta atingida", yellow: "Abaixo da meta", orange: "Faixa intermediária", red: "Glosa máxima" };
+const FAIXA_STATUS: Record<string, KPIItem["status"]> = {
+  green:  "good",
+  yellow: "warning",
+  orange: "warning",
+  red:    "danger",
+};
+const STATUS_LABEL = { green: "Meta atingida", yellow: "Abaixo da meta", orange: "Faixa intermediária", red: "Glosa máxima" };
 
 interface Props { onBack?: () => void; }
 
 export function RelatorioIMR({ onBack }: Props) {
-  const { demandas }           = useDemandas();
+  const { demandas }               = useDemandas();
   const { currentTeamId, profile } = useAuth();
-  const [eventos, setEventos]  = useState<DemandaEvento[]>([]);
-  const [periodo, setPeriodo]  = useState("30");
+  const [eventos, setEventos]      = useState<DemandaEvento[]>([]);
+  const [periodo, setPeriodo]      = useState("30");
   const [dataInicio, setDataInicio] = useState(daysAgo(30));
   const [dataFim,    setDataFim]    = useState(today());
 
@@ -49,11 +53,11 @@ export function RelatorioIMR({ onBack }: Props) {
     return items;
   }, [demandas, dataInicio, dataFim]);
 
-  const iap    = useMemo(() => calcIAP(filtered),           [filtered]);
-  const iqs    = useMemo(() => calcIQS(filtered),           [filtered]);
-  const ict    = useMemo(() => calcICT(filtered),           [filtered]);
-  const iss    = useMemo(() => calcISS(filtered),           [filtered]);
-  const glosas = useMemo(() => calcGlosasSummary(eventos),  [eventos]);
+  const iap    = useMemo(() => calcIAP(filtered),          [filtered]);
+  const iqs    = useMemo(() => calcIQS(filtered),          [filtered]);
+  const ict    = useMemo(() => calcICT(filtered),          [filtered]);
+  const iss    = useMemo(() => calcISS(filtered),          [filtered]);
+  const glosas = useMemo(() => calcGlosasSummary(eventos), [eventos]);
 
   const indicators = [
     { ...INDICADORES_GRUPO2[0], valor: iap.valor, detail: `${iap.qdap}/${iap.qdtot}` },
@@ -64,34 +68,30 @@ export function RelatorioIMR({ onBack }: Props) {
 
   const periodoLabel = `${fmtDateBR(dataInicio)} a ${fmtDateBR(dataFim)}`;
 
-  // KPI cards com semáforo por faixa IMR
   const kpiItems: KPIItem[] = indicators.map(ind => {
     const faixa = getIndicadorFaixa(ind, ind.valor);
     return {
       label:  `${ind.sigla} — ${ind.nome}`,
       value:  ind.sigla === "ISS" ? ind.valor.toFixed(1) : `${ind.valor.toFixed(1)}%`,
       meta:   `Meta: ≥ ${ind.meta}${ind.unidade}`,
-      status: FAIXA_STATUS[faixa.cor],
-      badge:  faixa.glosa > 0 ? `Glosa ${faixa.glosa}%` : undefined,
-      badgeVariant: faixa.glosa > 0 ? "destructive" : undefined,
-      sub:    STATUS_LABEL[faixa.cor],
-      icon:   BarChart3,
+      status: FAIXA_STATUS[faixa.cor] ?? "neutral",
+      sub:    STATUS_LABEL[faixa.cor as keyof typeof STATUS_LABEL],
+      icon:   <BarChart3 className="h-5 w-5" />,
     };
   });
 
-  // Tabela de eventos de glosa
   const eventosData = Object.entries(glosas.byEvento).map(([ev, data]) => {
     const c = EVENTOS_CONFIG.find(e => e.codigo === ev);
     return { ev, descricao: c?.descricao || ev, count: data.count, redutor: c?.redutor ?? 0, total: data.total, incidencia: c?.incidencia || "" };
   });
 
   const colsEventos: TableColumn[] = [
-    { key: "ev",         label: "Código",     render: (v) => <span className="font-mono font-bold">{v}</span> },
+    { key: "ev",         label: "Código",      render: (v) => <span className="font-mono font-bold">{v}</span> },
     { key: "descricao",  label: "Descrição" },
-    { key: "count",      label: "Ocorrências", align: "right", sortable: true },
-    { key: "redutor",    label: "Redutor Unit.",align: "right", render: (v) => `${v}%` },
-    { key: "total",      label: "Total",       align: "right", sortable: true, render: (v) => <span className="text-destructive font-medium">{v.toFixed(2)}%</span> },
-    { key: "incidencia", label: "Incidência",  render: (v) => <Badge variant="secondary" className="text-[10px] capitalize">{v}</Badge> },
+    { key: "count",      label: "Ocorrências",  align: "right", sortable: true },
+    { key: "redutor",    label: "Redutor Unit.", align: "right", render: (v) => `${v}%` },
+    { key: "total",      label: "Total",        align: "right", sortable: true, render: (v) => <span className="text-destructive font-medium">{v.toFixed(2)}%</span> },
+    { key: "incidencia", label: "Incidência",   render: (v) => <Badge variant="secondary" className="text-[10px] capitalize">{v}</Badge> },
   ];
 
   const exportCSV = () => {
@@ -110,21 +110,18 @@ export function RelatorioIMR({ onBack }: Props) {
     });
     lines.push("", `Glosa Integral Total: ${glosas.totalIntegral.toFixed(2)}%`, `Glosa Limitada Total: ${glosas.totalLimitada.toFixed(2)}%`);
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href = url; a.download = "IMR_Grupo2.csv"; a.click();
-    URL.revokeObjectURL(url);
+    const url  = URL.createObjectURL(blob); const a = document.createElement("a");
+    a.href = url; a.download = "IMR_Grupo2.csv"; a.click(); URL.revokeObjectURL(url);
   };
 
   return (
     <ReportLayout
       header={
         <ReportPageHeader
-          titulo={REPORT_CONFIGS.sustentacao_imr.titulo.replace("Relatório — ", "")}
-          subtitulo={REPORT_CONFIGS.sustentacao_imr.subtitulo}
-          modulo="sustentacao"
-          periodoLabel={periodoLabel}
-          icon={BarChart3}
+          title={REPORT_CONFIGS.sustentacao_imr.titulo.replace("Relatório — ", "")}
+          description={REPORT_CONFIGS.sustentacao_imr.subtitulo}
+          icon={<BarChart3 className="h-5 w-5" />}
+          badge={periodoLabel}
           onBack={onBack}
           onExportCSV={exportCSV}
         />
@@ -143,19 +140,11 @@ export function RelatorioIMR({ onBack }: Props) {
       kpis={<ReportKPISummary items={kpiItems} />}
       table={
         <div className="space-y-4">
-          {/* Tabela de glosas */}
           {eventosData.length > 0 ? (
-            <ReportDataTable
-              titulo="Eventos de Glosa"
-              columns={colsEventos}
-              data={eventosData}
-              rowKey={(r) => r.ev}
-            />
+            <ReportDataTable titulo="Eventos de Glosa" columns={colsEventos} data={eventosData} rowKey={(r) => r.ev} />
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">Nenhum evento de glosa registrado no período.</p>
           )}
-
-          {/* Resumo glosa total */}
           <div className="grid grid-cols-2 gap-4">
             {[
               { label: "Glosa Integral Total", value: glosas.totalIntegral },
@@ -171,11 +160,11 @@ export function RelatorioIMR({ onBack }: Props) {
       }
       footer={
         <ReportLegendBlock items={[
-          { sigla: "IAP",  descricao: "Índice de Atendimento no Prazo" },
-          { sigla: "IQS",  descricao: "Índice de Qualidade de Soluções" },
-          { sigla: "ICT",  descricao: "Índice de Conformidade Técnica" },
-          { sigla: "ISS",  descricao: "Índice de Satisfação do Solicitante" },
-          { sigla: "Glosa",descricao: "Redutor contratual aplicado quando o indicador fica abaixo da meta" },
+          { sigla: "IAP",   descricao: "Índice de Atendimento no Prazo" },
+          { sigla: "IQS",   descricao: "Índice de Qualidade de Soluções" },
+          { sigla: "ICT",   descricao: "Índice de Conformidade Técnica" },
+          { sigla: "ISS",   descricao: "Índice de Satisfação do Solicitante" },
+          { sigla: "Glosa", descricao: "Redutor contratual aplicado quando o indicador fica abaixo da meta" },
         ]} />
       }
     />
