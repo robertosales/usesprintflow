@@ -106,7 +106,8 @@ const Index = () => {
         {!loading && !needsTeam && (
           <>
             {/* ── Sem restrição ────────────────────────────── */}
-            {active === "dashboard" && <DashboardHome key={`dash-${currentTeamId}`} />}
+            {/* Fix 3: key inclui activeSprint?.id para forçar re-render ao trocar sprint ativo */}
+            {active === "dashboard" && <DashboardHome key={`dash-${currentTeamId}-${activeSprint?.id ?? "none"}`} />}
             {active === "planning" && <PlanningPoker />}
             {active === "equipe" && <DeveloperManager />}
             {active === "calendario" && <CalendarView />}

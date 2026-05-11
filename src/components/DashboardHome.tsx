@@ -16,7 +16,6 @@ import {
   TrendingUp,
   Clock,
   CheckCircle2,
-  ArrowRight,
   Users,
   Calendar,
   Target,
@@ -26,7 +25,7 @@ import {
 import { differenceInDays, format, isAfter, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-// ── KPI Card — melhoria 1 e 2: borda semântica + número maior + progress visível ──
+// ── KPI Card ──────────────────────────────────────────────────────────────────
 interface KpiCardProps {
   label: string;
   value: string | number;
@@ -81,10 +80,7 @@ function KpiCard({
         </div>
         {progress !== undefined && (
           <div className="mt-3">
-            <Progress
-              value={progress}
-              className={cn("h-2", progressClass)}
-            />
+            <Progress value={progress} className={cn("h-2", progressClass)} />
           </div>
         )}
       </CardContent>
@@ -152,6 +148,14 @@ const PRIORITY_COLOR: Record<string, string> = {
   low: "bg-green-400",
 };
 
+// ── Detecta a coluna "concluído" de forma robusta ─────────────────────────────
+const DONE_KEYS = ["done", "concluido", "concluída", "finalizado", "finalizada", "entregue"];
+
+function resolveDoneKey(columns: { key: string }[]): string | undefined {
+  const byName = columns.find((c) => DONE_KEYS.includes(c.key.toLowerCase()));
+  return byName?.key ?? columns[columns.length - 1]?.key;
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 export function DashboardHome() {
   const { userStories, activities, developers, activeSprint, sprints, workflowColumns } = useSprint();
@@ -161,9 +165,21 @@ export function DashboardHome() {
     ? userStories.filter((h) => h.sprintId === activeSprint.id)
     : userStories;
 
-  const lastCol = workflowColumns[workflowColumns.length - 1]?.key;
-  const doneHUs = sprintHUs.filter((h) => h.status === lastCol);
-  const openHUs = sprintHUs.filter((h) => h.status !== lastCol);
+  // Fix 1: detecção robusta da coluna "done"
+  const doneColKey = resolveDoneKey(workflowColumns);
+
+  const doneHUs = sprintHUs.filter((h) => h.status === doneColKey);
+
+  // Fix 2: openHUs ordenado por posição no workflow (reflete movimentação no Kanban)
+  const openHUs = [...sprintHUs.filter((h) => h.status !== doneColKey)].sort((a, b) => {
+    const posA = workflowColumns.findIndex((c) => c.key === a.status);
+    const posB = workflowColumns.findIndex((c) => c.key === b.status);
+    // Colunas mais avançadas no topo; -1 (não encontrado) vai para o fim
+    const pa = posA === -1 ? -Infinity : posA;
+    const pb = posB === -1 ? -Infinity : posB;
+    return pb - pa;
+  });
+
   const bugHUs = sprintHUs.filter((h) => h.status === "bug");
   const blockedHUs = sprintHUs.filter(
     (h) => h.impediments && h.impediments.some((i: any) => !i.resolvedAt)
@@ -176,9 +192,8 @@ export function DashboardHome() {
   const openActs = activities.filter((a) => !a.isClosed);
   const totalHours = activities.reduce((s, a) => s + (a.hours || 0), 0);
 
-  const recentHUs = [...openHUs]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 5);
+  // Exibe as 5 primeiras HUs abertas já ordenadas por posição no workflow
+  const recentHUs = openHUs.slice(0, 5);
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -187,7 +202,6 @@ export function DashboardHome() {
     return "Boa noite";
   };
 
-  // Melhoria 5: usa display_name ou full_name em vez do username técnico
   const displayName =
     profile?.display_name ||
     profile?.full_name ||
@@ -198,7 +212,7 @@ export function DashboardHome() {
   return (
     <div className="flex flex-col gap-6 p-6 max-w-[1400px] mx-auto">
 
-      {/* ── Melhoria 7: Header com separador visual ───────────────────────── */}
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-border">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
@@ -217,14 +231,14 @@ export function DashboardHome() {
         </div>
       </div>
 
-      {/* ── Sprint Progress ───────────────────────────────────────────────── */}
+      {/* Sprint Progress */}
       {activeSprint && (
         <div className="grid grid-cols-1">
           <SprintProgressBar sprint={activeSprint} />
         </div>
       )}
 
-      {/* ── Melhoria 1 + 2: KPI Grid com borda semântica + números maiores + progress visível ── */}
+      {/* KPI Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard
           label="HUs Concluídas"
@@ -275,10 +289,8 @@ export function DashboardHome() {
         />
       </div>
 
-      {/* ── Linha 2: HUs Recentes + Equipe ───────────────────────────────── */}
+      {/* HUs em Aberto + Equipe */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-        {/* Melhoria 3: HUs em Aberto com estado vazio compacto */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -336,7 +348,6 @@ export function DashboardHome() {
           </CardContent>
         </Card>
 
-        {/* Melhoria 4: Equipe com CTA quando vazia */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -354,7 +365,6 @@ export function DashboardHome() {
                   size="sm"
                   className="w-full text-xs"
                   onClick={() => {
-                    // navega para a aba de membros
                     document.querySelector<HTMLElement>('[data-tab="members"]')?.click();
                   }}
                 >
@@ -391,7 +401,7 @@ export function DashboardHome() {
         </Card>
       </div>
 
-      {/* ── Melhoria 6: KPIs inferiores padronizados em text-3xl ─────────── */}
+      {/* KPIs inferiores */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard
           label="Total de Sprints"
