@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import React, { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Download } from "lucide-react";
@@ -22,21 +22,17 @@ interface ReportPageHeaderProps {
 
 function renderIcon(icon: unknown): ReactNode {
   if (!icon) return null;
-  // Componente Lucide passado como referencia (function ou forwardRef)
   if (
     typeof icon === "function" ||
     (typeof icon === "object" &&
       icon !== null &&
       "$$typeof" in (icon as Record<string, unknown>))
   ) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const Ic = icon as React.FC<{ className?: string }>;
     return <Ic className="h-5 w-5" />;
   }
   return icon as ReactNode;
 }
-
-import React from "react";
 
 export function ReportPageHeader({
   title,
