@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Users, UserPlus, Shield } from "lucide-react";
+import { Plus, Trash2, Users, UserPlus, Shield, Search } from "lucide-react";
 import { getRoleLabel, ALL_ROLES, type AppRole } from "@/hooks/usePermissions";
 
 const PREDEFINED_ROLES = [
@@ -41,6 +41,7 @@ export function TeamMembersManager() {
   const [showCustom, setShowCustom] = useState(false);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
 
   const fetchMembers = async () => {
     if (!currentTeamId) return;
@@ -127,6 +128,17 @@ export function TeamMembersManager() {
 
   const availableProfiles = allProfiles.filter((p) => !members.find((m) => m.user_id === p.user_id));
 
+  // Filtro de busca aplicado ao grid
+  const filteredMembers = members.filter((m) => {
+    const term = search.toLowerCase();
+    if (!term) return true;
+    return (
+      m.profile?.display_name?.toLowerCase().includes(term) ||
+      m.profile?.email?.toLowerCase().includes(term) ||
+      m.role?.toLowerCase().includes(term)
+    );
+  });
+
   if (!currentTeamId) {
     return (
       <Card className="border-dashed">
@@ -140,6 +152,7 @@ export function TeamMembersManager() {
 
   return (
     <div className="space-y-6">
+      {/* ── Cabeçalho: título + botão adicionar ── */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
@@ -206,7 +219,7 @@ export function TeamMembersManager() {
                     <div className="flex gap-2 mt-1">
                       <Input
                         value={customRole}
-                        onChange={(e) => setCustomRole(e.target.value)}
+<br/>                        onChange={(e) => setCustomRole(e.target.value)}
                         placeholder="Digite a função personalizada"
                       />
                       <Button
@@ -231,8 +244,38 @@ export function TeamMembersManager() {
         )}
       </div>
 
+      {/* ── Busca ── */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input
+          className="pl-9"
+          placeholder="Buscar por nome, e-mail ou função…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      {/* ── Contador de membros ── */}
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Users className="h-4 w-4" />
+        <span>
+          {search ? (
+            <>
+              <span className="font-semibold text-foreground">{filteredMembers.length}</span> de{" "}
+              <span className="font-semibold text-foreground">{members.length}</span> membros encontrados
+            </>
+          ) : (
+            <>
+              <span className="font-semibold text-foreground">{members.length}</span>{" "}
+              {members.length === 1 ? "membro" : "membros"} no time
+            </>
+          )}
+        </span>
+      </div>
+
+      {/* ── Grid de membros ── */}
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {members.map((member) => (
+        {filteredMembers.map((member) => (
           <Card key={member.id}>
             <CardHeader className="pb-2 flex flex-row items-start justify-between">
               <div className="space-y-1">
@@ -265,9 +308,12 @@ export function TeamMembersManager() {
         ))}
       </div>
 
-      {members.length === 0 && !loading && (
+      {/* ── Estado vazio ── */}
+      {filteredMembers.length === 0 && !loading && (
         <Card className="border-dashed p-8 text-center">
-          <p className="text-muted-foreground">Nenhum membro neste time ainda.</p>
+          <p className="text-muted-foreground">
+            {search ? `Nenhum membro encontrado para "${search}".` : "Nenhum membro neste time ainda."}
+          </p>
         </Card>
       )}
     </div>
