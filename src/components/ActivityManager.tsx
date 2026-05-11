@@ -51,6 +51,13 @@ function isValidDuration(value: string): boolean {
   return /^\d+:[0-5]\d$/.test(value);
 }
 
+/** Formata "YYYY-MM-DD" como "DD/MM/YYYY" sem conversão de timezone */
+function formatDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const [year, month, day] = dateStr.split("-");
+  return `${day}/${month}/${year}`;
+}
+
 // -----------------------------------------------------------------
 
 export function ActivityManager() {
@@ -549,8 +556,7 @@ export function ActivityManager() {
                       <span>{dev?.name || "N/A"}</span>
                       <span>{decimalToDuration(act.hours)}</span>
                       <span>
-                        {new Date(act.startDate).toLocaleDateString("pt-BR")} →{" "}
-                        {new Date(act.endDate).toLocaleDateString("pt-BR")}
+                        {formatDate(act.startDate)} → {formatDate(act.endDate)}
                       </span>
                     </div>
                   </div>
