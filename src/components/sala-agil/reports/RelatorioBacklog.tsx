@@ -45,7 +45,6 @@ const STATUS_COLORS: Record<string, string> = {
   pronto_para_publicacao: "#22c55e",
 };
 
-// Normaliza status: qualquer valor backlog_* vira 'backlog'
 function normalizeStatus(s: string): string {
   if (!s) return "backlog";
   if (s.startsWith("backlog")) return "backlog";
@@ -58,6 +57,30 @@ function getStatusLabel(s: string): string {
 
 function getStatusColor(s: string): string {
   return STATUS_COLORS[normalizeStatus(s)] ?? "#94a3b8";
+}
+
+/**
+ * Resolve o responsável de uma HU:
+ * 1. Usa o campo assignee_id diretamente na HU (campo direto)
+ * 2. Se não existir, cai para a primeira atividade associada
+ */
+function resolveHuDev(
+  hu: any,
+  activities: any[],
+  developers: { id: string; name: string; role: string }[]
+): { id: string; name: string; role: string } | null {
+  // 1️⃣ campo direto na HU
+  if (hu.assignee_id) {
+    const found = developers.find((d) => d.id === hu.assignee_id);
+    if (found) return found;
+  }
+  // 2️⃣ fallback: primeira atividade
+  const acts = activities.filter((a: any) => a.hu_id === hu.id);
+  if (acts.length > 0) {
+    const found = developers.find((d) => d.id === acts[0].assignee_id);
+    if (found) return found;
+  }
+  return null;
 }
 
 // ─── Gráfico pizza SVG puro
@@ -225,7 +248,6 @@ export function RelatorioBacklog({ sprints, developers, rawData, teamName, curre
     return data;
   }, [rawData.hus, filters.sprintId]);
 
-  // Usa status normalizado para agrupamento
   const statusData = useMemo(() => {
     const counts: Record<string, number> = {};
     hus.forEach((h: any) => {
@@ -239,8 +261,11 @@ export function RelatorioBacklog({ sprints, developers, rawData, teamName, curre
 
   const memberData = useMemo(() => {
     return developers.map((dev) => {
-      const devHuIds = new Set(rawData.activities.filter((a: any) => a.assignee_id === dev.id).map((a: any) => a.hu_id));
-      const devHUs = hus.filter((h: any) => devHuIds.has(h.id));
+      // Usa assignee_id da HU diretamente; fallback para atividades
+      const devHUs = hus.filter((h: any) => {
+        if (h.assignee_id) return h.assignee_id === dev.id;
+        return rawData.activities.some((a: any) => a.hu_id === h.id && a.assignee_id === dev.id);
+      });
       const done = devHUs.filter((h: any) => normalizeStatus(h.status) === "pronto_para_publicacao").length;
       const inProg = devHUs.filter((h: any) => ["em_desenvolvimento", "em_code_review", "em_teste"].includes(normalizeStatus(h.status))).length;
       const pending = devHUs.length - done - inProg;
@@ -260,16 +285,31 @@ export function RelatorioBacklog({ sprints, developers, rawData, teamName, curre
     { label: "Pendentes", value: pending, status: pending > 0 ? "danger" : "good" as any },
   ];
 
-  const tableData = hus.map((h: any) => {
-    const acts = rawData.activities.filter((a: any) => a.hu_id === h.id);
-    const sprint = rawData.sprints.find((s: any) => s.id === h.sprint_id);
-    const dev = acts.length > 0 ? developers.find((d) => d.id === acts[0].assignee_id) : null;
-    return {
-      code: h.code || "—", title: h.title, status: h.status, priority: h.priority || "—",
-      sprint: sprint?.name || "—", member: dev?.name || "—",
-      points: h.story_points || 0, endDate: h.end_date || "",
-    };
-  });
+  // Fix: resolve responsável via assignee_id da HU (campo direto) antes de cair nas atividades
+  const tableData = useMemo(() => {
+    let data = hus.map((h: any) => {
+      const dev = resolveHuDev(h, rawData.activities, developers);
+      const sprint = rawData.sprints.find((s: any) => s.id === h.sprint_id);
+      return {
+        code: h.code || "—",
+        title: h.title,
+        status: h.status,
+        priority: h.priority || "—",
+        sprint: sprint?.name || "—",
+        member: dev?.name || "—",
+        memberId: dev?.id || "",
+        points: h.story_points || 0,
+        endDate: h.end_date || "",
+      };
+    });
+
+    // Fix: aplica filtro de membro na tabela
+    if (filters.memberId !== "all") {
+      data = data.filter((r) => r.memberId === filters.memberId);
+    }
+
+    return data;
+  }, [hus, rawData.activities, rawData.sprints, developers, filters.memberId]);
 
   function handleExportCSV() {
     exportToCSV(
