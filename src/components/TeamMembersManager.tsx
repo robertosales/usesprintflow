@@ -9,8 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Users, UserPlus, Shield, Search } from "lucide-react";
-import { getRoleLabel, ALL_ROLES, type AppRole } from "@/hooks/usePermissions";
+import { Trash2, Users, UserPlus, Shield, Search } from "lucide-react";
+import { getRoleLabel, type AppRole } from "@/hooks/usePermissions";
 
 const PREDEFINED_ROLES = [
   "Analista de Requisitos",
@@ -34,9 +34,11 @@ export function TeamMembersManager() {
   const { currentTeamId, hasPermission, isAdmin } = useAuth();
   const canManage = hasPermission("manage_teams");
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [allProfiles, setAllProfiles] = useState<{ user_id: string; display_name: string; email: string }[]>([]);
+  const [allProfiles, setAllProfiles] = useState<
+    { user_id: string; display_name: string; email: string }[]
+  >([]);
   const [selectedUserId, setSelectedUserId] = useState("");
-  const [memberRole, setMemberRole] = useState("Desenvolvedor");
+  const [memberRole, setMemberRole] = useState("Desenvolvedor Fullstack");
   const [customRole, setCustomRole] = useState("");
   const [showCustom, setShowCustom] = useState(false);
   const [open, setOpen] = useState(false);
@@ -46,7 +48,10 @@ export function TeamMembersManager() {
   const fetchMembers = async () => {
     if (!currentTeamId) return;
     setLoading(true);
-    const { data: tmData } = await supabase.from("team_members").select("*").eq("team_id", currentTeamId);
+    const { data: tmData } = await supabase
+      .from("team_members")
+      .select("*")
+      .eq("team_id", currentTeamId);
 
     const memberList = tmData || [];
     const userIds = memberList.map((m: any) => m.user_id);
@@ -62,7 +67,10 @@ export function TeamMembersManager() {
 
     let userRoles: any[] = [];
     if (userIds.length > 0 && isAdmin) {
-      const { data: rData } = await supabase.from("user_roles").select("user_id, role").in("user_id", userIds);
+      const { data: rData } = await supabase
+        .from("user_roles")
+        .select("user_id, role")
+        .in("user_id", userIds);
       userRoles = rData || [];
     }
 
@@ -70,15 +78,19 @@ export function TeamMembersManager() {
       memberList.map((m: any) => ({
         ...m,
         profile: profiles.find((p: any) => p.user_id === m.user_id),
-        user_roles: userRoles.filter((r: any) => r.user_id === m.user_id).map((r: any) => r.role as AppRole),
-      })),
+        user_roles: userRoles
+          .filter((r: any) => r.user_id === m.user_id)
+          .map((r: any) => r.role as AppRole),
+      }))
     );
     setLoading(false);
   };
 
   const fetchAllProfiles = async () => {
     if (!isAdmin) return;
-    const { data } = await supabase.from("profiles").select("user_id, display_name, email");
+    const { data } = await supabase
+      .from("profiles")
+      .select("user_id, display_name, email");
     setAllProfiles(data || []);
   };
 
@@ -89,17 +101,17 @@ export function TeamMembersManager() {
 
   const handleAddMember = async () => {
     if (!currentTeamId || !selectedUserId) {
-      toast.error("Selecione um usuário");
+      toast.error("Selecione um usu\u00e1rio");
       return;
     }
     const exists = members.find((m) => m.user_id === selectedUserId);
     if (exists) {
-      toast.error("Usuário já é membro deste time");
+      toast.error("Usu\u00e1rio j\u00e1 \u00e9 membro deste time");
       return;
     }
     const finalRole = showCustom ? customRole.trim() : memberRole;
     if (!finalRole) {
-      toast.error("Informe a função do membro");
+      toast.error("Informe a fun\u00e7\u00e3o do membro");
       return;
     }
     const { error } = await supabase.from("team_members").insert({
@@ -126,9 +138,11 @@ export function TeamMembersManager() {
     await fetchMembers();
   };
 
-  const availableProfiles = allProfiles.filter((p) => !members.find((m) => m.user_id === p.user_id));
+  const availableProfiles = allProfiles.filter(
+    (p) => !members.find((m) => m.user_id === p.user_id)
+  );
 
-  // Filtro de busca aplicado ao grid
+  // Filtro de busca em tempo real
   const filteredMembers = members.filter((m) => {
     const term = search.toLowerCase();
     if (!term) return true;
@@ -152,14 +166,17 @@ export function TeamMembersManager() {
 
   return (
     <div className="space-y-6">
-      {/* ── Cabeçalho: título + botão adicionar ── */}
+      {/* Cabe\u00e7alho */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Users className="h-6 w-6 text-primary" /> Membros do Time
           </h2>
-          <p className="text-sm text-muted-foreground">Gerencie os membros associados a este time</p>
+          <p className="text-sm text-muted-foreground">
+            Gerencie os membros associados a este time
+          </p>
         </div>
+
         {canManage && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -173,10 +190,10 @@ export function TeamMembersManager() {
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label>Usuário *</Label>
+                  <Label>Usu\u00e1rio *</Label>
                   <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione um usuário" />
+                      <SelectValue placeholder="Selecione um usu\u00e1rio" />
                     </SelectTrigger>
                     <SelectContent>
                       {availableProfiles.map((p) => (
@@ -187,8 +204,9 @@ export function TeamMembersManager() {
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div>
-                  <Label>Função no Time *</Label>
+                  <Label>Fun\u00e7\u00e3o no Time *</Label>
                   {!showCustom ? (
                     <Select
                       value={memberRole}
@@ -211,7 +229,9 @@ export function TeamMembersManager() {
                           </SelectItem>
                         ))}
                         <SelectItem value="__custom__">
-                          <span className="text-primary font-medium">+ Outra função...</span>
+                          <span className="text-primary font-medium">
+                            + Outra fun\u00e7\u00e3o...
+                          </span>
                         </SelectItem>
                       </SelectContent>
                     </Select>
@@ -219,15 +239,15 @@ export function TeamMembersManager() {
                     <div className="flex gap-2 mt-1">
                       <Input
                         value={customRole}
-<br/>                        onChange={(e) => setCustomRole(e.target.value)}
-                        placeholder="Digite a função personalizada"
+                        onChange={(e) => setCustomRole(e.target.value)}
+                        placeholder="Digite a fun\u00e7\u00e3o personalizada"
                       />
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => {
                           setShowCustom(false);
-                          setMemberRole("Desenvolvedor");
+                          setMemberRole("Desenvolvedor Fullstack");
                         }}
                       >
                         Cancelar
@@ -235,6 +255,7 @@ export function TeamMembersManager() {
                     </div>
                   )}
                 </div>
+
                 <Button onClick={handleAddMember} className="w-full">
                   Adicionar
                 </Button>
@@ -244,46 +265,62 @@ export function TeamMembersManager() {
         )}
       </div>
 
-      {/* ── Busca ── */}
+      {/* Barra de busca */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
           className="pl-9"
-          placeholder="Buscar por nome, e-mail ou função…"
+          placeholder="Buscar por nome, e-mail ou fun\u00e7\u00e3o\u2026"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
-      {/* ── Contador de membros ── */}
+      {/* Contador de membros */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Users className="h-4 w-4" />
         <span>
           {search ? (
             <>
-              <span className="font-semibold text-foreground">{filteredMembers.length}</span> de{" "}
-              <span className="font-semibold text-foreground">{members.length}</span> membros encontrados
+              <span className="font-semibold text-foreground">
+                {filteredMembers.length}
+              </span>{" "}
+              de{" "}
+              <span className="font-semibold text-foreground">
+                {members.length}
+              </span>{" "}
+              membros encontrados
             </>
           ) : (
             <>
-              <span className="font-semibold text-foreground">{members.length}</span>{" "}
+              <span className="font-semibold text-foreground">
+                {members.length}
+              </span>{" "}
               {members.length === 1 ? "membro" : "membros"} no time
             </>
           )}
         </span>
       </div>
 
-      {/* ── Grid de membros ── */}
+      {/* Grid de cards */}
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {filteredMembers.map((member) => (
           <Card key={member.id}>
             <CardHeader className="pb-2 flex flex-row items-start justify-between">
               <div className="space-y-1">
-                <CardTitle className="text-sm font-semibold">{member.profile?.display_name || "Usuário"}</CardTitle>
-                <p className="text-xs text-muted-foreground">{member.profile?.email}</p>
+                <CardTitle className="text-sm font-semibold">
+                  {member.profile?.display_name || "Usu\u00e1rio"}
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  {member.profile?.email}
+                </p>
               </div>
               {canManage && (
-                <Button variant="ghost" size="icon" onClick={() => handleRemoveMember(member.id)}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleRemoveMember(member.id)}
+                >
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               )}
@@ -301,18 +338,21 @@ export function TeamMembersManager() {
                 ))}
               </div>
               <p className="text-[10px] text-muted-foreground mt-2">
-                Desde {new Date(member.joined_at).toLocaleDateString("pt-BR")}
+                Desde{" "}
+                {new Date(member.joined_at).toLocaleDateString("pt-BR")}
               </p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* ── Estado vazio ── */}
+      {/* Estado vazio */}
       {filteredMembers.length === 0 && !loading && (
         <Card className="border-dashed p-8 text-center">
           <p className="text-muted-foreground">
-            {search ? `Nenhum membro encontrado para "${search}".` : "Nenhum membro neste time ainda."}
+            {search
+              ? `Nenhum membro encontrado para "${search}".`
+              : "Nenhum membro neste time ainda."}
           </p>
         </Card>
       )}
