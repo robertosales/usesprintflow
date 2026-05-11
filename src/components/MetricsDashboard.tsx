@@ -27,6 +27,7 @@ import { TeamPerformance } from "@/components/dashboard/TeamPerformance";
 import { QualityPanel } from "@/components/dashboard/QualityPanel";
 import { ReleasesPanel } from "@/components/dashboard/ReleasesPanel";
 import { SalaAgilRelatorios } from "@/components/sala-agil/reports/SalaAgilRelatorios";
+import { formatMinutes } from "@/lib/duration";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -97,7 +98,6 @@ export function MetricsDashboard() {
   }>({ sprints: [], hus: [], activities: [], impediments: [], developers: [], workflowCols: [] });
 
   const lastTeamIdRef = useRef<string>("");
-  // Ref para evitar múltiplos reloads simultâneos vindos do Realtime
   const reloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -163,18 +163,15 @@ export function MetricsDashboard() {
     [filters.teamId, agileTeams, isAdmin, currentTeamId],
   ); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Carga inicial ao montar / trocar time
   useEffect(() => {
     if (agileTeams.length > 0) loadData();
   }, [filters.teamId, agileTeams]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Supabase Realtime: escuta INSERT / UPDATE / DELETE nas tabelas relevantes
   useEffect(() => {
     if (agileTeams.length === 0) return;
 
     const scheduleReload = () => {
       if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current);
-      // Debounce de 800 ms para agrupar múltiplos eventos simultâneos
       reloadDebounceRef.current = setTimeout(() => {
         loadData();
       }, 800);
@@ -182,31 +179,11 @@ export function MetricsDashboard() {
 
     const channel = supabase
       .channel("metrics-realtime")
-      .on(
-        "postgres_changes" as any,
-        { event: "*", schema: "public", table: "user_stories" },
-        scheduleReload,
-      )
-      .on(
-        "postgres_changes" as any,
-        { event: "*", schema: "public", table: "activities" },
-        scheduleReload,
-      )
-      .on(
-        "postgres_changes" as any,
-        { event: "*", schema: "public", table: "sprints" },
-        scheduleReload,
-      )
-      .on(
-        "postgres_changes" as any,
-        { event: "*", schema: "public", table: "impediments" },
-        scheduleReload,
-      )
-      .on(
-        "postgres_changes" as any,
-        { event: "*", schema: "public", table: "developers" },
-        scheduleReload,
-      )
+      .on("postgres_changes" as any, { event: "*", schema: "public", table: "user_stories" }, scheduleReload)
+      .on("postgres_changes" as any, { event: "*", schema: "public", table: "activities" }, scheduleReload)
+      .on("postgres_changes" as any, { event: "*", schema: "public", table: "sprints" }, scheduleReload)
+      .on("postgres_changes" as any, { event: "*", schema: "public", table: "impediments" }, scheduleReload)
+      .on("postgres_changes" as any, { event: "*", schema: "public", table: "developers" }, scheduleReload)
       .subscribe();
 
     return () => {
@@ -215,7 +192,6 @@ export function MetricsDashboard() {
     };
   }, [agileTeams, loadData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Recarrega ao voltar para a aba do navegador (fallback)
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === "visible") loadData();
@@ -296,13 +272,14 @@ export function MetricsDashboard() {
       const closedActs = devActs.filter((a: any) => a.is_closed);
       const startedActs = devActs.filter((a: any) => !a.is_closed && a.start_date <= today);
       const notStartedCount = devActs.length - startedActs.length - closedActs.length;
-      const hoursPlanned = devActs.reduce((s: number, a: any) => s + Number(a.hours), 0);
-      const hoursCompleted = closedActs.reduce((s: number, a: any) => s + Number(a.hours), 0);
+      // Acumula em minutos para evitar erros de ponto flutuante
+      const hoursPlannedMin = devActs.reduce((s: number, a: any) => s + Math.round(Number(a.hours) * 60), 0);
+      const hoursCompletedMin = closedActs.reduce((s: number, a: any) => s + Math.round(Number(a.hours) * 60), 0);
       const bugActs = devActs.filter((a: any) => a.activity_type === "bug");
       const bugsClosed = bugActs.filter((a: any) => a.is_closed);
       const completedHUs = devHUs.filter((h: any) => h.status === lastCol);
       const spCompleted = completedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
-      const avgTime = closedActs.length > 0 ? Math.round((hoursCompleted / closedActs.length) * 10) / 10 : 0;
+      const avgTimeMin = closedActs.length > 0 ? Math.round(hoursCompletedMin / closedActs.length) : 0;
       const wip = startedActs.length;
       let cycleTime = 0;
       if (closedActs.length > 0) {
@@ -322,11 +299,13 @@ export function MetricsDashboard() {
       return {
         id: dev.id, name: dev.name, role: dev.role || "developer",
         tasksAssigned: devActs.length, tasksStarted: startedActs.length, tasksCompleted: closedActs.length,
-        tasksNotStarted: Math.max(0, notStartedCount), hoursPlanned, hoursCompleted,
-        hoursPending: hoursPlanned - hoursCompleted,
-        efficiency: hoursPlanned > 0 ? Math.round((hoursCompleted / hoursPlanned) * 100) : 0,
+        tasksNotStarted: Math.max(0, notStartedCount),
+        hoursPlanned: hoursPlannedMin,
+        hoursCompleted: hoursCompletedMin,
+        hoursPending: hoursPlannedMin - hoursCompletedMin,
+        efficiency: hoursPlannedMin > 0 ? Math.round((hoursCompletedMin / hoursPlannedMin) * 100) : 0,
         bugsAssigned: bugActs.length, bugsResolved: bugsClosed.length, storyPointsCompleted: spCompleted,
-        avgTimePerActivity: avgTime, wip, cycleTime, tasksByStatus, activities: devActs,
+        avgTimePerActivity: avgTimeMin, wip, cycleTime, tasksByStatus, activities: devActs,
       };
     });
   }, [filtered]);
@@ -349,7 +328,7 @@ export function MetricsDashboard() {
         const entry: any = { sprint: sprint.name };
         filtered.developers.forEach((dev: any) => {
           const devActs = sprintActs.filter((a: any) => a.assignee_id === dev.id);
-          entry[dev.name.split(" ")[0]] = devActs.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + Number(a.hours), 0);
+          entry[dev.name.split(" ")[0]] = devActs.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + Math.round(Number(a.hours) * 60), 0);
         });
         return entry;
       });
@@ -361,8 +340,9 @@ export function MetricsDashboard() {
     const completedHUs = hus.filter((h: any) => h.status === lastCol);
     const totalPoints = hus.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
     const completedPoints = completedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
-    const totalHours = activities.reduce((s: number, a: any) => s + Number(a.hours), 0);
-    const completedHours = activities.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + Number(a.hours), 0);
+    // Acumula em minutos
+    const totalHoursMin = activities.reduce((s: number, a: any) => s + Math.round(Number(a.hours) * 60), 0);
+    const completedHoursMin = activities.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + Math.round(Number(a.hours) * 60), 0);
     const today = new Date().toISOString().split("T")[0];
     const overdueCount = hus.filter((h: any) => h.status !== lastCol && h.end_date && h.end_date < today).length;
     const blockedCount = hus.filter((h: any) => impediments.some((imp: any) => imp.hu_id === h.id && !imp.resolved_at)).length;
@@ -381,7 +361,8 @@ export function MetricsDashboard() {
     })();
     return {
       totalPoints, completedPoints, totalHUs: hus.length, completedHUs: completedHUs.length,
-      totalHours, completedHours, totalActivities: activities.length,
+      totalHoursMin, completedHoursMin,
+      totalActivities: activities.length,
       completedActivities: activities.filter((a: any) => a.is_closed).length,
       overdueCount, blockedCount, devCount: filtered.developers.length, statusData,
       sprintName: filtered.sprints[0]?.name || "Sem sprint",
@@ -415,8 +396,8 @@ export function MetricsDashboard() {
     const prevCycleTime = prevWithDates.length > 0
       ? Math.round((prevWithDates.reduce((s: number, h: any) => s + Math.max(0, (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / 86400000), 0) / prevWithDates.length) * 10) / 10
       : 0;
-    const prevDoneHrs = prevActs.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + Number(a.hours), 0);
-    return { velocity: prevVelocity, commitment: prevCommitment, cycleTime: prevCycleTime, hours: prevDoneHrs };
+    const prevDoneMin = prevActs.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + Math.round(Number(a.hours) * 60), 0);
+    return { velocity: prevVelocity, commitment: prevCommitment, cycleTime: prevCycleTime, hoursMin: prevDoneMin };
   }, [rawData, filtered]);
 
   if (loading)
@@ -458,7 +439,13 @@ export function MetricsDashboard() {
         <OverviewKPI icon={Target} label="HUs Concluídas" value={`${teamOverview.completedHUs}`} sub={`/${teamOverview.totalHUs}`} trend={trends ? getTrend(teamOverview.completedHUs, teamOverview.totalHUs > 0 ? trends.velocity : 0) : undefined} />
         <OverviewKPI icon={CheckCircle} label="Commitment" value={`${teamOverview.commitmentAccuracy}%`} sub="HUs entregues/plan." accent={teamOverview.commitmentAccuracy >= 80 ? undefined : teamOverview.commitmentAccuracy >= 60 ? "warning" : "destructive"} trend={trends ? getTrend(teamOverview.commitmentAccuracy, trends.commitment) : undefined} />
         <OverviewKPI icon={Clock} label="Cycle Time" value={`${teamOverview.cycleTimeDays}d`} sub="média por HU" trend={trends ? getTrend(trends.cycleTime, teamOverview.cycleTimeDays, true) : undefined} />
-        <OverviewKPI icon={Gauge} label="Horas" value={`${teamOverview.completedHours}h`} sub={`/${teamOverview.totalHours}h plan.`} trend={trends ? getTrend(teamOverview.completedHours, trends.hours) : undefined} />
+        <OverviewKPI
+          icon={Gauge}
+          label="Horas"
+          value={formatMinutes(teamOverview.completedHoursMin)}
+          sub={`/${formatMinutes(teamOverview.totalHoursMin)} plan.`}
+          trend={trends ? getTrend(teamOverview.completedHoursMin, trends.hoursMin) : undefined}
+        />
         <OverviewKPI icon={Users} label="Time" value={`${teamOverview.devCount}`} sub="membros" />
         <OverviewKPI icon={AlertTriangle} label="Atrasadas" value={`${teamOverview.overdueCount}`} sub="HUs" accent={teamOverview.overdueCount > 0 ? "destructive" : undefined} />
         <OverviewKPI icon={ShieldAlert} label="Impedidas" value={`${teamOverview.blockedCount}`} sub="HUs" accent={teamOverview.blockedCount > 0 ? "warning" : undefined} />
@@ -489,8 +476,6 @@ export function MetricsDashboard() {
         <TabsContent value="releases">
           <ReleasesPanel teamId={effectiveTeamId} sprints={rawData.sprints.map((s: any) => ({ id: s.id, name: s.name }))} />
         </TabsContent>
-
-        {/* ── Relatórios Ágeis ─────────────────────────────── */}
         <TabsContent value="reports" className="mt-0 p-0">
           <SalaAgilRelatorios
             sprints={rawData.sprints.map((s: any) => ({ id: s.id, name: s.name, isActive: s.is_active }))}

@@ -3,15 +3,17 @@ import { X, ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { CHART_TOOLTIP_STYLE, STATUS_COLORS } from "./tokens";
+import { formatMinutes } from "@/lib/duration";
 
+// hoursPlanned / hoursCompleted recebidos em MINUTOS (inteiros)
 interface MemberMetrics {
   id: string;
   name: string;
   role: string;
   tasksAssigned: number;
   tasksCompleted: number;
-  hoursPlanned: number;
-  hoursCompleted: number;
+  hoursPlanned: number;   // minutos
+  hoursCompleted: number; // minutos
   efficiency: number;
   bugsAssigned: number;
   bugsResolved: number;
@@ -88,7 +90,9 @@ export function AnalyticsSidebar({ member, onClose, className }: AnalyticsSideba
           sub={`${Math.round((member.tasksCompleted / Math.max(member.tasksAssigned, 1)) * 100)}% concluídas`}
           color="#22c55e"
         />
-        <KpiRow label="Horas" value={`${member.hoursCompleted}h / ${member.hoursPlanned}h`}
+        <KpiRow
+          label="Horas"
+          value={`${formatMinutes(member.hoursCompleted)} / ${formatMinutes(member.hoursPlanned)}`}
           sub="planejado vs realizado"
         />
         <KpiRow label="Eficiência" value={`${member.efficiency}%`} color={effColor}
