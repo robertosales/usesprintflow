@@ -1,23 +1,18 @@
-import { ReactNode, ComponentType, SVGProps } from "react";
+import { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type LucideIcon = ComponentType<SVGProps<SVGSVGElement> & { className?: string }>;
-
 interface ReportPageHeaderProps {
   title?: string;
-  /** @deprecated use title */
   titulo?: string;
   description?: string;
-  /** @deprecated use description */
   subtitulo?: string;
-  /** Aceita JSX (ReactNode) ou componente Lucide diretamente */
-  icon?: ReactNode | LucideIcon;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  icon?: any;
   badge?: string;
   badgeVariant?: "default" | "secondary" | "outline" | "destructive";
-  /** @deprecated ignorado */
   modulo?: string;
   periodoLabel?: string;
   onBack?: () => void;
@@ -25,19 +20,23 @@ interface ReportPageHeaderProps {
   extraActions?: ReactNode;
 }
 
-function renderIcon(icon: ReactNode | LucideIcon | undefined): ReactNode {
+function renderIcon(icon: unknown): ReactNode {
   if (!icon) return null;
-  // Componente Lucide (função ou objeto forwardRef) — renderiza como JSX
-  if (typeof icon === "function") {
-    const Ic = icon as LucideIcon;
-    return <Ic className="h-5 w-5" />;
-  }
-  if (typeof icon === "object" && icon !== null && "$$typeof" in (icon as Record<string, unknown>)) {
-    const Ic = icon as unknown as LucideIcon;
+  // Componente Lucide passado como referencia (function ou forwardRef)
+  if (
+    typeof icon === "function" ||
+    (typeof icon === "object" &&
+      icon !== null &&
+      "$$typeof" in (icon as Record<string, unknown>))
+  ) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Ic = icon as React.FC<{ className?: string }>;
     return <Ic className="h-5 w-5" />;
   }
   return icon as ReactNode;
 }
+
+import React from "react";
 
 export function ReportPageHeader({
   title,
