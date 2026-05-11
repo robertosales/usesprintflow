@@ -108,7 +108,11 @@ export function ActivityManager() {
     if (typeFilter !== "all") acts = acts.filter((a) => a.activityType === typeFilter);
     if (statusFilter === "open") acts = acts.filter((a) => !a.isClosed);
     if (statusFilter === "closed") acts = acts.filter((a) => a.isClosed);
-    return acts;
+    // Abertas primeiro; dentro de cada grupo, data decrescente
+    return [...acts].sort((a, b) => {
+      if (a.isClosed !== b.isClosed) return a.isClosed ? 1 : -1;
+      return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+    });
   }, [activities, activeSprint, sprintStories, debouncedSearch, typeFilter, statusFilter]);
 
   const {
