@@ -97,6 +97,9 @@ async function buildXLSX(data: ReportData, scope: string, sprintName: string) {
   XLSX.writeFile(wb, `Produtividade_Faturamento_${sprintName}.xlsx`);
 }
 
+// ─── Cor primária Sala Ágil (verde #16a34a)
+const AGIL_PRIMARY: [number, number, number] = [22, 163, 74];
+
 // ─── Gerador de PDF (cabeçalho Axion, sem Tipo, agrupado por HU com subtotal por grupo)
 async function buildPDF(data: ReportData, scope: string, sprintName: string, emittedBy: string, reportTitle = 'Relatório de Produtividade Individual — Faturamento', restrictLabel = 'Uso restrito — Setor de Faturamento') {
   const { default: jsPDF } = await import('jspdf');
@@ -116,8 +119,8 @@ async function buildPDF(data: ReportData, scope: string, sprintName: string, emi
   devs.forEach((dev, idx) => {
     if (idx > 0) doc.addPage();
 
-    // ── Cabeçalho institucional (fundo gradiente simulado em roxo/índigo)
-    doc.setFillColor(79, 70, 229);
+    // ── Cabeçalho institucional (Sala Ágil — verde)
+    doc.setFillColor(...AGIL_PRIMARY);
     doc.rect(0, 0, 297, 24, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(14); doc.setFont('helvetica', 'bold');
@@ -152,7 +155,7 @@ async function buildPDF(data: ReportData, scope: string, sprintName: string, emi
         body.push([{
           content: `${g.huCode}${g.huTitle ? '  —  ' + g.huTitle : ''}`,
           colSpan: 6,
-          styles: { fillColor: [237, 233, 254], textColor: [55, 48, 163], fontStyle: 'bold', fontSize: 8 }
+          styles: { fillColor: [220, 252, 231], textColor: [4, 120, 87], fontStyle: 'bold', fontSize: 8 }
         }] as any);
       }
       for (const a of g.acts) {
@@ -165,7 +168,7 @@ async function buildPDF(data: ReportData, scope: string, sprintName: string, emi
           styles: { fillColor: [241, 245, 249], textColor: [100, 116, 139], fontStyle: 'bold', fontSize: 8 }
         }, {
           content: `${g.subtotal}h`,
-          styles: { fillColor: [241, 245, 249], textColor: [79, 70, 229], fontStyle: 'bold', fontSize: 8 }
+          styles: { fillColor: [241, 245, 249], textColor: AGIL_PRIMARY, fontStyle: 'bold', fontSize: 8 }
         }] as any);
       }
     }
@@ -175,7 +178,7 @@ async function buildPDF(data: ReportData, scope: string, sprintName: string, emi
       body,
       startY: 46,
       styles: { fontSize: 8, cellPadding: 2.5, lineColor: [226, 232, 240], lineWidth: 0.1 },
-      headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+      headStyles: { fillColor: AGIL_PRIMARY, textColor: 255, fontStyle: 'bold', fontSize: 8 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
         0: { cellWidth: 22 },
@@ -183,7 +186,7 @@ async function buildPDF(data: ReportData, scope: string, sprintName: string, emi
         2: { cellWidth: 28 },
         3: { cellWidth: 22 },
         4: { cellWidth: 22 },
-        5: { cellWidth: 18, fontStyle: 'bold', textColor: [79, 70, 229], halign: 'center' },
+        5: { cellWidth: 18, fontStyle: 'bold', textColor: AGIL_PRIMARY, halign: 'center' },
       },
     });
 

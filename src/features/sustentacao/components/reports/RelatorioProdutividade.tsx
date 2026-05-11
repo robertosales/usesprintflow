@@ -145,13 +145,16 @@ function AtividadeExpandivel({ atividade }: { atividade: AtividadeRow }) {
   );
 }
 
+// ─── Cor primária Sustentação (azul #2563eb)
+const SUST_PRIMARY: [number, number, number] = [37, 99, 235];
+
 async function gerarPDFIndividual(grupo: AnalistaGroup, dataInicio: string, dataFim: string) {
   try {
     const { default: jsPDF } = await import("jspdf");
     const autoTable = (await import("jspdf-autotable")).default;
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const now = new Date(); const W = doc.internal.pageSize.getWidth(); const ML = 12; const MR = 12; const CW = W - ML - MR;
-    const PRIMARY=[15,118,110] as [number,number,number],DARK=[30,41,59] as [number,number,number],MUTED=[100,116,139] as [number,number,number],LIGHT_BG=[248,250,252] as [number,number,number],BORDER_CLR=[226,232,240] as [number,number,number],HEAD_ROW=[51,65,85] as [number,number,number],ALT_ROW=[248,250,252] as [number,number,number],TOTAL_BG=[241,245,249] as [number,number,number];
+    const PRIMARY=SUST_PRIMARY,DARK=[30,41,59] as [number,number,number],MUTED=[100,116,139] as [number,number,number],LIGHT_BG=[248,250,252] as [number,number,number],BORDER_CLR=[226,232,240] as [number,number,number],HEAD_ROW=[51,65,85] as [number,number,number],ALT_ROW=[248,250,252] as [number,number,number],TOTAL_BG=[241,245,249] as [number,number,number];
     doc.setFillColor(...PRIMARY); doc.rect(0,0,W,26,"F");
     doc.setTextColor(255,255,255); doc.setFontSize(13); doc.setFont("helvetica","bold"); doc.text("RELATÓRIO DE PRODUTIVIDADE — INDIVIDUAL",ML,10);
     doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.text("Módulo: Sustentação",ML,16); doc.text(`Gerado em: ${now.toLocaleDateString("pt-BR")} às ${now.toLocaleTimeString("pt-BR")}`,ML,21);
@@ -162,7 +165,7 @@ async function gerarPDFIndividual(grupo: AnalistaGroup, dataInicio: string, data
     doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(...MUTED); doc.text(`Período: ${fmtDate(dataInicio)} a ${fmtDate(dataFim)}`,ML+17,y+13);
     y+=21; doc.setTextColor(...DARK); doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.text("RESUMO DO PERÍODO",ML,y);
     y+=3; const kpiW=CW/5;
-    const kpis=[{label:"Atividades",value:String(grupo.atividades.length),bg:[219,234,254] as [number,number,number],txt:[30,64,175] as [number,number,number]},{label:"Resolvidas",value:String(grupo.resolvidos),bg:[220,252,231] as [number,number,number],txt:[4,120,87] as [number,number,number]},{label:"Em Aberto",value:String(grupo.emAberto),bg:[255,237,213] as [number,number,number],txt:[154,52,18] as [number,number,number]},{label:"Taxa Resolução",value:`${grupo.taxaResolucao.toFixed(0)}%`,bg:[243,232,255] as [number,number,number],txt:[109,40,217] as [number,number,number]},{label:"Total Horas",value:`${grupo.totalHoras.toFixed(1)}h`,bg:[204,251,241] as [number,number,number],txt:[15,118,110] as [number,number,number]}];
+    const kpis=[{label:"Atividades",value:String(grupo.atividades.length),bg:[219,234,254] as [number,number,number],txt:[30,64,175] as [number,number,number]},{label:"Resolvidas",value:String(grupo.resolvidos),bg:[220,252,231] as [number,number,number],txt:[4,120,87] as [number,number,number]},{label:"Em Aberto",value:String(grupo.emAberto),bg:[255,237,213] as [number,number,number],txt:[154,52,18] as [number,number,number]},{label:"Taxa Resolução",value:`${grupo.taxaResolucao.toFixed(0)}%`,bg:[243,232,255] as [number,number,number],txt:[109,40,217] as [number,number,number]},{label:"Total Horas",value:`${grupo.totalHoras.toFixed(1)}h`,bg:[219,234,254] as [number,number,number],txt:SUST_PRIMARY}];
     kpis.forEach(({label,value,bg,txt},i)=>{ const x=ML+i*kpiW; doc.setFillColor(...bg); doc.roundedRect(x,y,kpiW-1.5,15,1.5,1.5,"F"); doc.setTextColor(...MUTED); doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.text(label.toUpperCase(),x+(kpiW-1.5)/2,y+5,{align:"center"}); doc.setTextColor(...txt); doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.text(value,x+(kpiW-1.5)/2,y+13,{align:"center"}); });
     y+=20;
     for (const ativ of grupo.atividades) {
@@ -170,7 +173,7 @@ async function gerarPDFIndividual(grupo: AnalistaGroup, dataInicio: string, data
       const sitLabel=situacaoLabel(ativ.situacao);
       doc.setFillColor(...PRIMARY); doc.roundedRect(ML,y,CW,10,2,2,"F");
       doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont("helvetica","bold"); const rhmLabel=`RHM ${ativ.rhm}`; doc.text(rhmLabel,ML+3,y+7); const rhmW=doc.getTextWidth(rhmLabel); doc.setFont("helvetica","normal"); doc.text(`  ·  ${trunc(ativ.projeto,40)}`,ML+3+rhmW,y+7);
-      doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(204,255,249); doc.text(trunc(sitLabel,22),ML+CW-3,y+7,{align:"right"});
+      doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(204,229,255); doc.text(trunc(sitLabel,22),ML+CW-3,y+7,{align:"right"});
       y+=10;
       doc.setFillColor(...TOTAL_BG); doc.rect(ML,y,CW,8,"F"); doc.setDrawColor(...BORDER_CLR); doc.rect(ML,y,CW,8,"S");
       const c1X=ML+3,c2X=ML+CW*0.36,c3X=ML+CW*0.68;
