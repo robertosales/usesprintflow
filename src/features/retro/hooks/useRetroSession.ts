@@ -2,10 +2,19 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { retroService } from "../services/retro.service";
-import type { RetroCard, RetroParticipant, RetroPhase, RetroSession, RetroVote, RetroModelKey } from "../types/retro";
+import type {
+  RetroCard,
+  RetroParticipant,
+  RetroPhase,
+  RetroSession,
+  RetroVote,
+  RetroModelKey,
+  RetroActionItem,
+  ActionItemStatus,
+} from "../types/retro";
 
 const HEARTBEAT_MS = 20_000;
-const OFFLINE_THRESHOLD_MS = 60_000; // 60s → considera offline
+const OFFLINE_THRESHOLD_MS = 60_000;
 
 interface Options {
   teamId: string | null;
@@ -18,25 +27,25 @@ export function useRetroSession({ teamId, sprintId, userId }: Options) {
   const [cards, setCards] = useState<RetroCard[]>([]);
   const [votes, setVotes] = useState<RetroVote[]>([]);
   const [participants, setParticipants] = useState<RetroParticipant[]>([]);
+  const [actionItems, setActionItems] = useState<RetroActionItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  // ─── Loaders ────────────────────────────────────────────────────────────────
-  const loadAll = useCallback(
-    async (sId: string) => {
-      const [c, v, p] = await Promise.all([
-        retroService.listCards(sId),
-        retroService.listVotes(sId),
-        retroService.listParticipants(sId),
-      ]);
-      setCards(c);
-      setVotes(v);
-      setParticipants(p);
-    },
-    [],
-  );
+  // ─── Loaders ─────────────────────────────────────────────────────────────────
+  const loadAll = useCallback(async (sId: string) => {
+    const [c, v, p, a] = await Promise.all([
+      retroService.listCards(sId),
+      retroService.listVotes(sId),
+      retroService.listParticipants(sId),
+      retroService.listActionItems(sId),
+    ]);
+    setCards(c);
+    setVotes(v);
+    setParticipants(p);
+    setActionItems(a);
+  }, []);
 
   const loadSession = useCallback(async () => {
     if (!teamId || !sprintId) {
@@ -44,6 +53,7 @@ export function useRetroSession({ teamId, sprintId, userId }: Options) {
       setCards([]);
       setVotes([]);
       setParticipants([]);
+      setActionItems([]);
       return;
     }
     setLoading(true);
@@ -56,6 +66,7 @@ export function useRetroSession({ teamId, sprintId, userId }: Options) {
         setCards([]);
         setVotes([]);
         setParticipants([]);
+        setActionItems([]);
       }
     } finally {
       setLoading(false);
@@ -66,7 +77,7 @@ export function useRetroSession({ teamId, sprintId, userId }: Options) {
     loadSession();
   }, [loadSession]);
 
-  // ─── Profiles cache ─────────────────────────────────────────────────────────
+  // ─── Profiles cache ───────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from("profiles").select("user_id, display_name").limit(500);
@@ -76,7 +87,7 @@ export function useRetroSession({ teamId, sprintId, userId }: Options) {
     })();
   }, []);
 
-  // ─── Realtime subscription ──────────────────────────────────────────────────
+  // ─── Realtime subscription ────────────────────────────────────────────────────
   useEffect(() => {
     if (!session?.id) return;
     const sId = session.id;
@@ -98,6 +109,10 @@ export function useRetroSession({ teamId, sprintId, userId }: Options) {
         const p = await retroService.listParticipants(sId);
         setParticipants(p);
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "retro_action_items", filter: `session_id=eq.${sId}` }, async () => {
+        const a = await retroService.listActionItems(sId);
+        setActionItems(a);
+      })
       .subscribe();
 
     channelRef.current = channel;
@@ -107,7 +122,7 @@ export function useRetroSession({ teamId, sprintId, userId }: Options) {
     };
   }, [session?.id, loadSession]);
 
-  // ─── Join + heartbeat ───────────────────────────────────────────────────────
+  // ─── Join + heartbeat ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!session?.id || !userId) return;
     const sId = session.id;
@@ -122,18 +137,16 @@ export function useRetroSession({ teamId, sprintId, userId }: Options) {
     };
   }, [session?.id, userId]);
 
-  // ─── Derived ────────────────────────────────────────────────────────────────
+  // ─── Derived ──────────────────────────────────────────────────────────────────
   const me = participants.find((p) => p.userId === userId) || null;
   const isFacilitator = me?.isFacilitator ?? false;
-
-  // facilitador desconectado >60s → outros podem assumir
   const facilitator = participants.find((p) => p.isFacilitator) || null;
   const facilitatorOffline =
     facilitator !== null &&
     !facilitator.isOnline &&
     Date.now() - new Date(facilitator.lastSeenAt).getTime() > OFFLINE_THRESHOLD_MS;
 
-  // ─── Actions ────────────────────────────────────────────────────────────────
+  // ─── Actions ──────────────────────────────────────────────────────────────────
   const createSession = useCallback(
     async (model: RetroModelKey) => {
       if (!teamId || !sprintId || !userId) return;
@@ -203,11 +216,31 @@ export function useRetroSession({ teamId, sprintId, userId }: Options) {
     [session, userId],
   );
 
+  const createActionItem = useCallback(
+    async (payload: { title: string; description?: string; ownerId?: string; dueDate?: string; cardId?: string }) => {
+      if (!session) return;
+      await retroService.createActionItem(session.id, payload);
+    },
+    [session],
+  );
+
+  const updateActionItem = useCallback(
+    async (actionId: string, updates: Partial<{ title: string; description: string; ownerId: string; dueDate: string; status: ActionItemStatus }>) => {
+      await retroService.updateActionItem(actionId, updates);
+    },
+    [],
+  );
+
+  const deleteActionItem = useCallback(async (actionId: string) => {
+    await retroService.deleteActionItem(actionId);
+  }, []);
+
   return {
     session,
     cards,
     votes,
     participants,
+    actionItems,
     profiles,
     loading,
     me,
@@ -225,6 +258,9 @@ export function useRetroSession({ teamId, sprintId, userId }: Options) {
     toggleVote,
     assumeFacilitator,
     transferFacilitatorTo,
+    createActionItem,
+    updateActionItem,
+    deleteActionItem,
     refresh: loadSession,
   };
 }
