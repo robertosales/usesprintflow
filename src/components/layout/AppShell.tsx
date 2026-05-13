@@ -107,13 +107,11 @@ const NAV_SALA_AGIL: NavItem[] = [
   { key: "board",          label: "Board Kanban",            icon: Kanban,           path: "/sala-agil/board",             group: "main" },
   { key: "backlog",        label: "Backlog",                 icon: ListTodo,         path: "/sala-agil/backlog",           group: "main" },
   { key: "epicos",         label: "Épicos",                  icon: Layers,           path: "/sala-agil/epicos",            group: "main" },
-  // ✅ fix: key e path alinhados com VALID_SECTIONS do Index.tsx
   { key: "planning-poker", label: "Planning Poker",          icon: PlayingCardIcon,  path: "/sala-agil/planning-poker",   group: "main" },
   { key: "calendario",     label: "Calendário",              icon: Calendar,         path: "/sala-agil/calendario",        group: "main" },
   { key: "equipe",         label: "Equipe",                  icon: Users,            path: "/sala-agil/equipe",            group: "main" },
   { key: "atividades",     label: "Atividades",              icon: Activity,         path: "/sala-agil/atividades",        group: "main" },
   { key: "impedimentos",   label: "Impedimentos",            icon: AlertTriangle,    path: "/sala-agil/impedimentos",      group: "main" },
-  // ✅ fix: key e path alinhados com VALID_SECTIONS do Index.tsx
   { key: "retrospectiva",  label: "Retrospectiva",           icon: Repeat,           path: "/sala-agil/retrospectiva",     group: "main" },
   {
     key: "gerador-apf",
@@ -325,7 +323,7 @@ function SidebarNav({
     return location.pathname.startsWith(item.path);
   };
   return (
-    <nav className="flex-1 overflow-y-auto px-2 py-1 space-y-3 scrollbar-none">
+    <nav className="flex-1 overflow-y-auto px-2 py-1 space-y-3 scrollbar-none min-h-0">
       {groups.map(({ group, items: groupItems }) => (
         <div key={group}>
           {!collapsed && (
@@ -482,21 +480,21 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
   const pageLabel = activeItem?.label ?? "Dashboard";
   const Icon = activeItem?.icon;
   return (
-    <header className="h-12 shrink-0 flex items-center justify-between px-4 bg-sidebar border-b border-border">
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] text-muted-foreground font-medium hidden sm:block">
+    <header className="h-12 shrink-0 flex items-center justify-between px-4 bg-sidebar border-b border-border overflow-hidden">
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <span className="text-[11px] text-muted-foreground font-medium hidden sm:block shrink-0">
           {module === "sala_agil" ? "Sala Ágil" : "Sustentação"}
         </span>
-        <ChevronRight className="h-3 w-3 text-muted-foreground/50 hidden sm:block" />
-        <div className="flex items-center gap-2">
+        <ChevronRight className="h-3 w-3 text-muted-foreground/50 hidden sm:block shrink-0" />
+        <div className="flex items-center gap-2 min-w-0">
           {Icon && <Icon className={cn("h-4 w-4 shrink-0", accent.textCls)} />}
-          <span className="text-[13px] font-semibold text-foreground">{pageLabel}</span>
+          <span className="text-[13px] font-semibold text-foreground truncate">{pageLabel}</span>
         </div>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 shrink-0">
         {module === "sala_agil" && activeSprint && (
           <div
-            className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border"
+            className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border shrink-0"
             style={{
               backgroundColor: accent.hexAlpha(0.12),
               color: accent.hex,
@@ -504,7 +502,7 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
             }}
           >
             <GitBranch className="h-2.5 w-2.5" />
-            {activeSprint.name}
+            <span className="truncate max-w-[120px]">{activeSprint.name}</span>
           </div>
         )}
         <DarkModeToggle />
@@ -546,7 +544,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             {collapsed ? (
               <AxionLogo size={22} />
             ) : (
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <AxionLogo size={22} />
                 <div className="min-w-0">
                   <p className="text-[14px] font-bold text-foreground tracking-tight leading-none">Axion</p>
@@ -560,7 +558,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
               <button
                 onClick={() => setCollapsed(true)}
                 aria-label="Recolher sidebar"
-                className="flex h-6 w-6 items-center justify-center rounded-md
+                className="flex h-6 w-6 items-center justify-center rounded-md shrink-0
                   text-muted-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
               >
                 <PanelLeftClose className="h-3.5 w-3.5" />
@@ -577,7 +575,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             />
           )}
 
-          <div className="px-2 pt-2">
+          <div className="px-2 pt-2 shrink-0">
             {canSwitch ? (
               <ModuleSwitcher module={module} collapsed={collapsed} />
             ) : (
@@ -599,11 +597,11 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             )}
           </div>
 
-          <div className="px-2 mb-1">
+          <div className="px-2 mb-1 shrink-0">
             <TeamSwitcher module={module} collapsed={collapsed} />
           </div>
 
-          <div className="h-px bg-border mx-2 mb-1" />
+          <div className="h-px bg-border mx-2 mb-1 shrink-0" />
 
           <SidebarNav module={module} activeKey={activeKey} collapsed={collapsed} onNavigate={onNavigate} />
 
@@ -655,10 +653,11 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
           </div>
         </aside>
 
-        {/* Conteúdo */}
+        {/* Conteúdo principal — flex-1 + min-w-0 garante que não ultrapasse a viewport */}
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <Topbar module={module} activeKey={activeKey} />
-          <main className="flex-1 overflow-y-auto bg-background">{children}</main>
+          {/* overflow-y-auto aqui garante scroll interno sem estourar o layout */}
+          <main className="flex-1 overflow-y-auto overflow-x-hidden bg-background">{children}</main>
         </div>
       </div>
     </TooltipProvider>
