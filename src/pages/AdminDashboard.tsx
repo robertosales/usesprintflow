@@ -11,12 +11,13 @@ import { TeamDetailPanel }     from "@/features/admin/components/TeamDetailPanel
 import { AdminTimesPage }      from "@/features/admin/pages/AdminTimesPage";
 import { AdminUsuariosPage }   from "@/features/admin/pages/AdminUsuariosPage";
 import { AdminHistoricoPage }  from "@/features/admin/pages/AdminHistoricoPage";
+import { AdminCapacidadePage } from "@/features/admin/pages/AdminCapacidadePage";
 import { NotificationBell }    from "@/features/admin/components/NotificationBell";
 import { Button }   from "@/components/ui/button";
 import { Badge }    from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LayoutDashboard, LogOut, Users, UsersRound, BarChart3, History } from "lucide-react";
+import { LayoutDashboard, LogOut, Users, UsersRound, BarChart3, History, Gauge } from "lucide-react";
 
 export default function AdminDashboard() {
   const { profile, signOut, teams } = useAuth();
@@ -47,7 +48,6 @@ export default function AdminDashboard() {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted-foreground hidden md:block">{data} · {hora}</span>
-            {/* 🔔 Sino de notificações */}
             {!loading && (
               <NotificationBell
                 notifications={notifications}
@@ -68,20 +68,21 @@ export default function AdminDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6">
-        {/* Saudação */}
         <div className="mb-6">
           <h1 className="text-xl font-bold">Olá, {profile?.display_name?.split(" ")[0] ?? "Admin"} 👋</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Visão consolidada de todos os módulos do Sistema AXION.</p>
         </div>
 
-        {/* Tabs */}
         <Tabs defaultValue="visao-geral">
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 flex-wrap h-auto gap-1">
             <TabsTrigger value="visao-geral" className="gap-1.5 text-xs">
               <BarChart3 className="h-3.5 w-3.5" /> Visão Geral
             </TabsTrigger>
             <TabsTrigger value="historico" className="gap-1.5 text-xs">
               <History className="h-3.5 w-3.5" /> Histórico
+            </TabsTrigger>
+            <TabsTrigger value="capacidade" className="gap-1.5 text-xs">
+              <Gauge className="h-3.5 w-3.5" /> Capacidade
             </TabsTrigger>
             <TabsTrigger value="times" className="gap-1.5 text-xs">
               <UsersRound className="h-3.5 w-3.5" /> Times
@@ -99,17 +100,10 @@ export default function AdminDashboard() {
             {loading ? <Skeleton className="h-56 w-full rounded-xl" /> : <ComparativeChart byTeam={byTeam} selectedTeam={selectedTeam} />}
           </TabsContent>
 
-          <TabsContent value="historico">
-            <AdminHistoricoPage />
-          </TabsContent>
-
-          <TabsContent value="times">
-            <AdminTimesPage />
-          </TabsContent>
-
-          <TabsContent value="usuarios">
-            <AdminUsuariosPage />
-          </TabsContent>
+          <TabsContent value="historico"><AdminHistoricoPage /></TabsContent>
+          <TabsContent value="capacidade"><AdminCapacidadePage /></TabsContent>
+          <TabsContent value="times"><AdminTimesPage /></TabsContent>
+          <TabsContent value="usuarios"><AdminUsuariosPage /></TabsContent>
         </Tabs>
       </main>
     </div>
