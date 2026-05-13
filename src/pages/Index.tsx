@@ -29,7 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 
-// ─── Seções válidas ─────────────────────────────────────────────────────────────────────
+// ─── Seções válidas ──────────────────────────────────────────────────────────
 const VALID_SECTIONS = [
   "dashboard", "backlog", "board", "planning-poker", "retrospectiva",
   "releases", "relatorios", "notificacoes", "gerador-apf", "metricas",
@@ -39,7 +39,12 @@ const VALID_SECTIONS = [
 
 export type SectionKey = typeof VALID_SECTIONS[number];
 
-// ─── AccessDenied ─────────────────────────────────────────────────────────────────────────
+// Seções que NUNCA exigem time selecionado (acesso universal)
+const TEAM_FREE_SECTIONS: SectionKey[] = [
+  "planning-poker", "retrospectiva", "times", "membros", "perfis",
+  "fluxo", "campos", "automacoes",
+];
+
 function AccessDenied() {
   return (
     <div className="flex flex-col items-center justify-center py-24 space-y-3">
@@ -50,25 +55,20 @@ function AccessDenied() {
   );
 }
 
-// ─── SectionGuard ────────────────────────────────────────────────────────────────────────
 function SectionGuard({ permission, children }: { permission: string; children: React.ReactNode }) {
   const { hasPermission } = useAuth();
   return hasPermission(permission) ? <>{children}</> : <AccessDenied />;
 }
 
-// ─── Index ───────────────────────────────────────────────────────────────────────────────────
 const Index = () => {
   const { section } = useParams<{ section: string }>();
   const navigate = useNavigate();
 
-  // FIX: só redireciona após auth carregar E section não estar na lista
-  // Antes o useEffect disparava antes do section ser resolvido pelo router
   const active = (VALID_SECTIONS.includes(section as SectionKey) ? section : "dashboard") as SectionKey;
 
-  const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission, isAdmin } = useAuth();
+  const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission, isAdmin, roles } = useAuth();
   const { activeSprint } = useSprint();
   const [showTeamModal, setShowTeamModal] = React.useState(false);
-
   const { showWizard, completeOnboarding } = useOnboarding();
 
   const moduleTeams = teams.filter((t) => t.module === "sala_agil");
@@ -84,7 +84,7 @@ const Index = () => {
     }
   }, [loading, teams]);
 
-  // FIX: aguarda auth carregar antes de redirecionar seção inválida
+  // Só redireciona seção inválida após auth carregar
   useEffect(() => {
     if (loading) return;
     if (section && !VALID_SECTIONS.includes(section as SectionKey)) {
@@ -94,8 +94,12 @@ const Index = () => {
 
   const handleNavigate = (key: string) => navigate(`/sala-agil/${key}`);
 
-  // FIX: admin não é bloqueado por needsTeam — tem acesso livre a todas as seções
-  const needsTeam = !isAdmin && !currentTeamId && active !== "times";
+  // FIX v2: não bloqueia se:
+  // 1. usuário é admin (isAdmin)
+  // 2. a seção está na lista de TEAM_FREE_SECTIONS (planning-poker, retrospectiva, etc)
+  // 3. ainda está carregando (evita flash de "selecione um time")
+  const isTeamFreeSection = TEAM_FREE_SECTIONS.includes(active);
+  const needsTeam = !loading && !isAdmin && !currentTeamId && !isTeamFreeSection;
 
   return (
     <AppShell module="sala_agil" activeKey={active} onNavigate={handleNavigate}>
@@ -107,7 +111,6 @@ const Index = () => {
         onClose={() => setShowTeamModal(false)}
       />
 
-      {/* 8C — Onboarding Wizard */}
       <OnboardingWizard open={showWizard && !loading} onComplete={completeOnboarding} />
 
       <div className="max-w-7xl mx-auto p-4 md:p-6">
@@ -136,10 +139,8 @@ const Index = () => {
             {active === "equipe"         && <DeveloperManager />}
             {active === "calendario"     && <CalendarView />}
             {active === "retrospectiva"  && <RetroManager />}
-            {active === "gerador-apf"    && (
-              <SectionGuard permission="view_backlog"><ApfGeneratorPage /></SectionGuard>
-            )}
-            {active === "backlog" && (
+            {active === "gerador-apf"    && <SectionGuard permission="view_backlog"><ApfGeneratorPage /></SectionGuard>}
+            {active === "backlog"        && (
               <SectionGuard permission="view_backlog">
                 <div className="space-y-8"><SprintManager /><UserStoryManager /></div>
               </SectionGuard>
