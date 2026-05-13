@@ -15,6 +15,7 @@ import ResetPassword from "./pages/ResetPassword.tsx";
 import ForcePasswordChange from "./pages/ForcePasswordChange.tsx";
 import SustentacaoPage from "./features/sustentacao/SustentacaoPage";
 import { ModuleSelector } from "./features/sustentacao/components/ModuleSelector";
+import AdminDashboard from "./pages/AdminDashboard";
 
 const queryClient = new QueryClient();
 
@@ -37,7 +38,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
-      {/* Alerta de sessão por inatividade — P6 */}
       <SessionTimeoutAlert />
     </>
   );
@@ -47,7 +47,7 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   const { session, loading, profile, isAdmin } = useAuth();
   if (loading) return null;
   if (!session) return <>{children}</>;
-  if (isAdmin || profile?.module_access === "admin") return <Navigate to="/modulos" replace />;
+  if (isAdmin || profile?.module_access === "admin") return <Navigate to="/dashboard-admin" replace />;
   if (profile?.module_access === "sustentacao") return <Navigate to="/sustentacao" replace />;
   return <Navigate to="/sala-agil" replace />;
 }
@@ -55,7 +55,7 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
 function ModuleRedirect() {
   const { profile, loading, isAdmin } = useAuth();
   if (loading) return null;
-  if (isAdmin || profile?.module_access === "admin") return <Navigate to="/modulos" replace />;
+  if (isAdmin || profile?.module_access === "admin") return <Navigate to="/dashboard-admin" replace />;
   if (profile?.module_access === "sustentacao") return <Navigate to="/sustentacao" replace />;
   return <Navigate to="/sala-agil" replace />;
 }
@@ -74,6 +74,14 @@ function ModuleGuard({ module, children }: { module: "sala_agil" | "sustentacao"
       </div>
     </div>
   );
+}
+
+/** Bloqueia acesso à rota /dashboard-admin para não-admins */
+function AdminGuard({ children }: { children: React.ReactNode }) {
+  const { isAdmin, loading } = useAuth();
+  if (loading) return null;
+  if (!isAdmin) return <Navigate to="/modulos" replace />;
+  return <>{children}</>;
 }
 
 const App = () => (
@@ -111,7 +119,19 @@ const App = () => (
                 }
               />
 
-              {/* Sala Ágil — navegação interna gerenciada pelo Index/AppShell */}
+              {/* Dashboard Admin — exclusivo isAdmin */}
+              <Route
+                path="/dashboard-admin"
+                element={
+                  <ProtectedRoute>
+                    <AdminGuard>
+                      <AdminDashboard />
+                    </AdminGuard>
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Sala Ágil */}
               <Route
                 path="/sala-agil"
                 element={
