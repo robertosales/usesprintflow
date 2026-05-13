@@ -7,10 +7,13 @@ import { SustentacaoKpis }   from "@/features/admin/components/SustentacaoKpis";
 import { ModuleQuickAccess } from "@/features/admin/components/ModuleQuickAccess";
 import { ComparativeChart }  from "@/features/admin/components/ComparativeChart";
 import { TeamDetailPanel }   from "@/features/admin/components/TeamDetailPanel";
+import { AdminTimesPage }    from "@/features/admin/pages/AdminTimesPage";
+import { AdminUsuariosPage } from "@/features/admin/pages/AdminUsuariosPage";
 import { Button }   from "@/components/ui/button";
 import { Badge }    from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LayoutDashboard, LogOut, Users } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LayoutDashboard, LogOut, Users, UsersRound, BarChart3 } from "lucide-react";
 
 export default function AdminDashboard() {
   const { profile, signOut, teams } = useAuth();
@@ -28,6 +31,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Topbar */}
       <header className="sticky top-0 z-40 bg-background/90 backdrop-blur border-b border-border">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
@@ -51,29 +55,47 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 space-y-8">
+      <main className="max-w-7xl mx-auto px-4 py-6">
 
         {/* Saudação */}
-        <div>
+        <div className="mb-6">
           <h1 className="text-xl font-bold">Olá, {profile?.display_name?.split(" ")[0] ?? "Admin"} 👋</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Visão consolidada de todos os módulos do Sistema AXION.</p>
         </div>
 
-        {/* 1. Acesso Rápido — logo abaixo do Olá */}
-        {loading ? <Skeleton className="h-40 w-full rounded-xl" /> : <ModuleQuickAccess kpis={g} />}
+        {/* Tabs principais */}
+        <Tabs defaultValue="visao-geral">
+          <TabsList className="mb-6">
+            <TabsTrigger value="visao-geral" className="gap-1.5 text-xs">
+              <BarChart3 className="h-3.5 w-3.5" /> Visão Geral
+            </TabsTrigger>
+            <TabsTrigger value="times" className="gap-1.5 text-xs">
+              <UsersRound className="h-3.5 w-3.5" /> Times
+            </TabsTrigger>
+            <TabsTrigger value="usuarios" className="gap-1.5 text-xs">
+              <Users className="h-3.5 w-3.5" /> Usuários
+            </TabsTrigger>
+          </TabsList>
 
-        {/* 2. KPIs globais Sala Ágil */}
-        {loading ? <Skeleton className="h-32 w-full rounded-xl" /> : <SalaAgilKpis kpis={g} sprintAtivo={sprintLabel} />}
+          {/* ── Visão Geral ───────────────────────────────────────── */}
+          <TabsContent value="visao-geral" className="space-y-8">
+            {loading ? <Skeleton className="h-40 w-full rounded-xl" /> : <ModuleQuickAccess kpis={g} />}
+            {loading ? <Skeleton className="h-32 w-full rounded-xl" /> : <SalaAgilKpis kpis={g} sprintAtivo={sprintLabel} />}
+            {loading ? <Skeleton className="h-32 w-full rounded-xl" /> : <SustentacaoKpis kpis={g} />}
+            {loading ? <Skeleton className="h-48 w-full rounded-xl" /> : <TeamDetailPanel byTeam={byTeam} selectedTeam={selectedTeam} onSelect={setSelectedTeam} />}
+            {loading ? <Skeleton className="h-56 w-full rounded-xl" /> : <ComparativeChart byTeam={byTeam} selectedTeam={selectedTeam} />}
+          </TabsContent>
 
-        {/* 3. KPIs globais Sustentação */}
-        {loading ? <Skeleton className="h-32 w-full rounded-xl" /> : <SustentacaoKpis kpis={g} />}
+          {/* ── Times ─────────────────────────────────────────────── */}
+          <TabsContent value="times">
+            <AdminTimesPage />
+          </TabsContent>
 
-        {/* 4. Detalhe por time + seletor */}
-        {loading ? <Skeleton className="h-48 w-full rounded-xl" /> : <TeamDetailPanel byTeam={byTeam} selectedTeam={selectedTeam} onSelect={setSelectedTeam} />}
-
-        {/* 5. Gráfico filtrado pelo seletor */}
-        {loading ? <Skeleton className="h-56 w-full rounded-xl" /> : <ComparativeChart byTeam={byTeam} selectedTeam={selectedTeam} />}
-
+          {/* ── Usuários ──────────────────────────────────────────── */}
+          <TabsContent value="usuarios">
+            <AdminUsuariosPage />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
