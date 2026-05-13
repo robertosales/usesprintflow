@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import {
   Sparkles,
   ListTodo,
-  LayoutKanban,
+  Kanban,
   PlayCircle,
   CheckCircle2,
   ChevronRight,
@@ -52,7 +52,7 @@ const STEPS: Step[] = [
   },
   {
     id: 3,
-    icon: <LayoutKanban className="h-10 w-10 text-warning" />,
+    icon: <Kanban className="h-10 w-10 text-warning" />,
     title: "Adicione Histórias de Usuário",
     description:
       "Cada HU representa uma funcionalidade do ponto de vista do usuário. Use o formato \"Como [perfil], quero [ação], para [objetivo]\" e associe critérios de aceite claros.",
@@ -74,7 +74,7 @@ const STEPS: Step[] = [
     title: "Tudo pronto! 🚀",
     description:
       "Você já sabe o básico para começar. Explore também o Kanban para acompanhar o progresso das HUs, as Retrospectivas ao final de cada sprint e os Relatórios para métricas da equipe.",
-    tip: "🔄 Para refazer este tutorial, acesse Configurações \u2192 Geral \u2192 Refazer tutorial.",
+    tip: "🔄 Para refazer este tutorial, acesse Configurações → Geral → Refazer tutorial.",
   },
 ];
 
@@ -106,7 +106,6 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
     <Dialog open={open} onOpenChange={(o) => { if (!o) onComplete(); }}>
       <DialogContent className="max-w-lg" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          {/* Stepper */}
           <div className="flex items-center gap-1.5 mb-4">
             {STEPS.map((s, i) => (
               <div
@@ -131,7 +130,6 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
             </DialogDescription>
           </div>
 
-          {/* Tip */}
           <div className="mt-3 rounded-lg bg-muted/50 border px-4 py-2.5">
             <p className="text-xs text-muted-foreground">{current.tip}</p>
           </div>
@@ -139,7 +137,6 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
 
         <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            {/* Skip */}
             {!isLast && (
               <Button variant="ghost" size="sm" className="text-muted-foreground gap-1 text-xs" onClick={onComplete}>
                 <SkipForward className="h-3.5 w-3.5" /> Pular tutorial
@@ -148,14 +145,12 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
-            {/* Back */}
             {!isFirst && (
               <Button variant="outline" size="sm" onClick={handleBack} className="gap-1">
                 <ChevronLeft className="h-4 w-4" /> Anterior
               </Button>
             )}
 
-            {/* Action CTA (passos com navegação) */}
             {current.action && (
               <Button
                 variant="outline"
@@ -167,7 +162,6 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
               </Button>
             )}
 
-            {/* Next / Finish */}
             <Button size="sm" onClick={handleNext} className="gap-1">
               {isLast ? (
                 <><Rocket className="h-4 w-4" /> Começar!</>
