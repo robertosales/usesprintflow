@@ -5,7 +5,11 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
+  // loadEnv captura arquivos .env locais; process.env captura o ambiente do servidor de build/deploy
   const env = loadEnv(mode, process.cwd(), '');
+
+  const appSupabaseUrl = process.env.APP_SUPABASE_URL || env.APP_SUPABASE_URL || env.VITE_SUPABASE_URL || '';
+  const appSupabaseKey = process.env.APP_SUPABASE_KEY || env.APP_SUPABASE_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 
   return {
     server: {
@@ -16,9 +20,8 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      // Mapeia variáveis APP_* para ficarem acessíveis via import.meta.env
-      'import.meta.env.APP_SUPABASE_URL': JSON.stringify(env.APP_SUPABASE_URL || ''),
-      'import.meta.env.APP_SUPABASE_KEY': JSON.stringify(env.APP_SUPABASE_KEY || ''),
+      'import.meta.env.APP_SUPABASE_URL': JSON.stringify(appSupabaseUrl),
+      'import.meta.env.APP_SUPABASE_KEY': JSON.stringify(appSupabaseKey),
     },
     plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
     resolve: {
