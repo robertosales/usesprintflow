@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminKpis } from "@/features/admin/hooks/useAdminKpis";
+import { useNotifications } from "@/features/admin/hooks/useNotifications";
 import { SalaAgilKpis }        from "@/features/admin/components/SalaAgilKpis";
 import { SustentacaoKpis }     from "@/features/admin/components/SustentacaoKpis";
 import { ModuleQuickAccess }   from "@/features/admin/components/ModuleQuickAccess";
@@ -10,6 +11,7 @@ import { TeamDetailPanel }     from "@/features/admin/components/TeamDetailPanel
 import { AdminTimesPage }      from "@/features/admin/pages/AdminTimesPage";
 import { AdminUsuariosPage }   from "@/features/admin/pages/AdminUsuariosPage";
 import { AdminHistoricoPage }  from "@/features/admin/pages/AdminHistoricoPage";
+import { NotificationBell }    from "@/features/admin/components/NotificationBell";
 import { Button }   from "@/components/ui/button";
 import { Badge }    from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,6 +21,7 @@ import { LayoutDashboard, LogOut, Users, UsersRound, BarChart3, History } from "
 export default function AdminDashboard() {
   const { profile, signOut, teams } = useAuth();
   const { global: g, byTeam, loading } = useAdminKpis();
+  const { notifications, criticalCount, warningCount } = useNotifications(byTeam);
   const navigate = useNavigate();
   const [selectedTeam, setSelectedTeam] = useState("all");
 
@@ -44,6 +47,14 @@ export default function AdminDashboard() {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted-foreground hidden md:block">{data} · {hora}</span>
+            {/* 🔔 Sino de notificações */}
+            {!loading && (
+              <NotificationBell
+                notifications={notifications}
+                criticalCount={criticalCount}
+                warningCount={warningCount}
+              />
+            )}
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Users className="h-3.5 w-3.5" />
               <span>{profile?.display_name || profile?.email}</span>
