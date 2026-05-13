@@ -169,7 +169,6 @@ export function TeamMembersManager() {
     return sortBy === "recent" ? db - da : da - db;
   });
 
-  // Stats
   const totalMembers = members.length;
   const totalAdmins = members.filter((m) =>
     m.user_roles?.includes("admin" as AppRole),
@@ -198,7 +197,6 @@ export function TeamMembersManager() {
 
   return (
     <div className="space-y-6">
-      {/* ── HEADER ── */}
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <h2 className="text-3xl font-bold tracking-tight text-foreground">
@@ -210,94 +208,93 @@ export function TeamMembersManager() {
         </div>
 
         {canManage && (
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <UserPlus className="h-4 w-4 mr-2" /> Adicionar Membro
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Adicionar Membro ao Time</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label>Usuário *</Label>
-                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <UserPlus className="h-4 w-4 mr-2" /> Adicionar Membro
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Adicionar Membro ao Time</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Usuário *</Label>
+                  <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um usuário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableProfiles.map((p) => (
+                        <SelectItem key={p.user_id} value={p.user_id}>
+                          {p.display_name} ({p.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>Função no Time *</Label>
+                  {!showCustom ? (
+                    <Select
+                      value={memberRole}
+                      onValueChange={(v) => {
+                        if (v === "__custom__") {
+                          setShowCustom(true);
+                          setMemberRole("");
+                        } else {
+                          setMemberRole(v);
+                        }
+                      }}
+                    >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione um usuário" />
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableProfiles.map((p) => (
-                          <SelectItem key={p.user_id} value={p.user_id}>
-                            {p.display_name} ({p.email})
+                        {PREDEFINED_ROLES.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {role}
                           </SelectItem>
                         ))}
+                        <SelectItem value="__custom__">
+                          <span className="text-primary font-medium">
+                            + Outra função...
+                          </span>
+                        </SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-
-                  <div>
-                    <Label>Função no Time *</Label>
-                    {!showCustom ? (
-                      <Select
-                        value={memberRole}
-                        onValueChange={(v) => {
-                          if (v === "__custom__") {
-                            setShowCustom(true);
-                            setMemberRole("");
-                          } else {
-                            setMemberRole(v);
-                          }
+                  ) : (
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        value={customRole}
+                        onChange={(e) => setCustomRole(e.target.value)}
+                        placeholder="Digite a função personalizada"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setShowCustom(false);
+                          setMemberRole("Desenvolvedor Fullstack");
                         }}
                       >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PREDEFINED_ROLES.map((role) => (
-                            <SelectItem key={role} value={role}>
-                              {role}
-                            </SelectItem>
-                          ))}
-                          <SelectItem value="__custom__">
-                            <span className="text-primary font-medium">
-                              + Outra função...
-                            </span>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <div className="flex gap-2 mt-1">
-                        <Input
-                          value={customRole}
-                          onChange={(e) => setCustomRole(e.target.value)}
-                          placeholder="Digite a função personalizada"
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setShowCustom(false);
-                            setMemberRole("Desenvolvedor Fullstack");
-                          }}
-                        >
-                          Cancelar
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  <Button onClick={handleAddMember} className="w-full">
-                    Adicionar
-                  </Button>
+                        Cancelar
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              </DialogContent>
-            </Dialog>
-          )}
+
+                <Button onClick={handleAddMember} className="w-full">
+                  Adicionar
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
-      {/* ── STATS PILLS ── */}
       <div className="flex flex-wrap items-center gap-2">
         <StatPill dotClass="bg-blue-500" value={totalMembers} label={totalMembers === 1 ? "membro" : "membros"} />
         <StatPill dotClass="bg-emerald-500" value={totalAdmins} label="admins" />
@@ -305,7 +302,6 @@ export function TeamMembersManager() {
         <StatPill dotClass="bg-yellow-500" value={totalQA} label="QA" />
       </div>
 
-      {/* ── BUSCA + FILTROS ── */}
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -345,7 +341,6 @@ export function TeamMembersManager() {
         </Select>
       </div>
 
-      {/* ── LISTA DE MEMBROS ── */}
       <div className="space-y-3">
         {sortedMembers.map((member) => {
           const name = member.profile?.display_name || "Usuário";
@@ -356,12 +351,10 @@ export function TeamMembersManager() {
             >
               <CardContent className="p-5">
                 <div className="flex items-start gap-4">
-                  {/* Avatar */}
                   <div className="h-12 w-12 shrink-0 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border border-primary/20 flex items-center justify-center text-sm font-semibold text-primary">
                     {getInitials(name)}
                   </div>
 
-                  {/* Body */}
                   <div className="flex-1 min-w-0 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -384,7 +377,6 @@ export function TeamMembersManager() {
                       )}
                     </div>
 
-                    {/* Badges */}
                     <div className="flex flex-wrap gap-1.5">
                       <Badge variant="secondary" className="rounded-full font-normal">
                         {member.role}
@@ -407,7 +399,6 @@ export function TeamMembersManager() {
                       ))}
                     </div>
 
-                    {/* Footer */}
                     <div className="flex items-center justify-between pt-3 mt-1 border-t border-border/60">
                       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Calendar className="h-3.5 w-3.5" />
@@ -427,7 +418,6 @@ export function TeamMembersManager() {
         })}
       </div>
 
-      {/* ── ESTADO VAZIO ── */}
       {sortedMembers.length === 0 && !loading && (
         <Card className="border-dashed p-8 text-center">
           <p className="text-muted-foreground">
