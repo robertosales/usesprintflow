@@ -104,17 +104,17 @@ export function TeamMembersManager() {
 
   const handleAddMember = async () => {
     if (!currentTeamId || !selectedUserId) {
-      toast.error("Selecione um usu\u00e1rio");
+      toast.error("Selecione um usuário");
       return;
     }
     const exists = members.find((m) => m.user_id === selectedUserId);
     if (exists) {
-      toast.error("Usu\u00e1rio j\u00e1 \u00e9 membro deste time");
+      toast.error("Usuário já é membro deste time");
       return;
     }
     const finalRole = showCustom ? customRole.trim() : memberRole;
     if (!finalRole) {
-      toast.error("Informe a fun\u00e7\u00e3o do membro");
+      toast.error("Informe a função do membro");
       return;
     }
     const { error } = await supabase.from("team_members").insert({
@@ -222,10 +222,10 @@ export function TeamMembersManager() {
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <Label>Usu\u00e1rio *</Label>
+                    <Label>Usuário *</Label>
                     <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione um usu\u00e1rio" />
+                        <SelectValue placeholder="Selecione um usuário" />
                       </SelectTrigger>
                       <SelectContent>
                         {availableProfiles.map((p) => (
@@ -238,7 +238,7 @@ export function TeamMembersManager() {
                   </div>
 
                   <div>
-                    <Label>Fun\u00e7\u00e3o no Time *</Label>
+                    <Label>Função no Time *</Label>
                     {!showCustom ? (
                       <Select
                         value={memberRole}
@@ -262,7 +262,7 @@ export function TeamMembersManager() {
                           ))}
                           <SelectItem value="__custom__">
                             <span className="text-primary font-medium">
-                              + Outra fun\u00e7\u00e3o...
+                              + Outra função...
                             </span>
                           </SelectItem>
                         </SelectContent>
@@ -272,7 +272,7 @@ export function TeamMembersManager() {
                         <Input
                           value={customRole}
                           onChange={(e) => setCustomRole(e.target.value)}
-                          placeholder="Digite a fun\u00e7\u00e3o personalizada"
+                          placeholder="Digite a função personalizada"
                         />
                         <Button
                           variant="outline"
@@ -311,7 +311,7 @@ export function TeamMembersManager() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             className="pl-9 rounded-full bg-card"
-            placeholder="Buscar por nome, e-mail ou fun\u00e7\u00e3o\u2026"
+            placeholder="Buscar por nome, e-mail ou função…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -320,10 +320,10 @@ export function TeamMembersManager() {
         <Select value={roleFilter} onValueChange={setRoleFilter}>
           <SelectTrigger className="w-full sm:w-[200px] rounded-full bg-card">
             <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
-            <SelectValue placeholder="Filtrar por fun\u00e7\u00e3o" />
+            <SelectValue placeholder="Filtrar por função" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todas as fun\u00e7\u00f5es</SelectItem>
+            <SelectItem value="all">Todas as funções</SelectItem>
             {uniqueRoles.map((r) => (
               <SelectItem key={r} value={r}>
                 {r}
@@ -348,7 +348,7 @@ export function TeamMembersManager() {
       {/* ── LISTA DE MEMBROS ── */}
       <div className="space-y-3">
         {sortedMembers.map((member) => {
-          const name = member.profile?.display_name || "Usu\u00e1rio";
+          const name = member.profile?.display_name || "Usuário";
           return (
             <Card
               key={member.id}
