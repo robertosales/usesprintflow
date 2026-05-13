@@ -10,6 +10,7 @@ import { SessionTimeoutAlert } from "@/shared/components/common/SessionTimeoutAl
 // Pages
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
+import AuthCallback from "./pages/AuthCallback.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import ForcePasswordChange from "./pages/ForcePasswordChange.tsx";
@@ -94,7 +95,12 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
+              {/* Rota pública de auth */}
               <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
+
+              {/* ✅ Callback OAuth — processa code do Google/Supabase após autorização */}
+              <Route path="/auth/callback" element={<AuthCallback />} />
+
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
               <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
