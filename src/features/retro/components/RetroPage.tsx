@@ -16,7 +16,7 @@ import { RetroActionPhase } from "./RetroActionPhase";
 import { RetroResultsView } from "./RetroResultsView";
 import { RetroHistoryPanel } from "./RetroHistoryPanel";
 import { toast } from "sonner";
-import type { RetroPhase } from "../types/retro";
+import type { RetroPhase, RetroModelKey } from "../types/retro";
 
 const NEXT_PHASE: Record<RetroPhase, RetroPhase | null> = {
   writing: "reveal",
@@ -67,9 +67,9 @@ export function RetroPage() {
     deleteActionItem,
     refresh,
   } = useRetroSession({
-    teamId: currentTeamId,
+    teamId:   currentTeamId,
     sprintId: activeSprint?.id ?? null,
-    userId: user?.id ?? null,
+    userId:   user?.id ?? null,
   });
 
   const modelLabel = useMemo(() => (session ? getModel(session.model).label : ""), [session]);
@@ -96,7 +96,12 @@ export function RetroPage() {
     );
   }
 
-  // ─── Handlers ────────────────────────────────────────────────────────────────────────────────
+  // ─── Handlers ───────────────────────────────────────────────────────────────────────────────
+  // Wrapper: RetroStartScreen passa (model), createSession espera (sprintIdOverride?, model?)
+  const handleStart = async (model: RetroModelKey) => {
+    await createSession(undefined, model);
+  };
+
   const handleAdvance = async () => {
     if (!session) return;
     const next = NEXT_PHASE[session.currentPhase];
@@ -148,7 +153,7 @@ export function RetroPage() {
             <RetroStartScreen
               canStart={canStart}
               sprintName={activeSprint.name}
-              onStart={createSession}
+              onStart={handleStart}
             />
           )}
 
