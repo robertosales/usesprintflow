@@ -1,6 +1,7 @@
 // src/pages/AuthCallback.tsx
-// Página de callback OAuth — processa o code retornado pelo provider (Google etc.)
-// e troca por sessão válida via Supabase PKCE antes de redirecionar o usuário.
+// Processa o retorno do OAuth do Lovable SDK e/ou Supabase PKCE.
+// O Lovable SDK pode retornar tokens via hash (#access_token=...) ou
+// via query param (?code=...). Ambos os casos são tratados aqui.
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,33 +17,35 @@ export default function AuthCallback() {
 
     async function handleCallback() {
       try {
-        // Caso PKCE: URL contém ?code=...
+        // Caso 1: PKCE — URL contém ?code=...
         const params = new URLSearchParams(window.location.search);
         const code = params.get("code");
-
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
             console.error("[AuthCallback] exchangeCodeForSession error:", error);
-            navigate("/auth?error=oauth_failed", { replace: true });
-            return;
           }
         }
 
-        // Caso implicit flow: URL contém #access_token=...
-        // O SDK do Supabase detecta automaticamente via onAuthStateChange,
-        // mas forçamos getSession para garantir sincronização.
-        const { data: { session } } = await supabase.auth.getSession();
+        // Caso 2: Implicit / Lovable SDK — tokens no hash (#access_token=...)
+        // O SDK do Supabase detecta o hash automaticamente via onAuthStateChange.
+        // Aguardamos a sessão ser estabelecida com polling curto.
+        let session = null;
+        for (let i = 0; i < 10; i++) {
+          const { data } = await supabase.auth.getSession();
+          session = data.session;
+          if (session) break;
+          await new Promise((r) => setTimeout(r, 300));
+        }
 
         if (session) {
-          // Redireciona para a raiz — o ModuleRedirect cuida de onde enviar
           navigate("/", { replace: true });
         } else {
-          // Sem sessão após callback — algo deu errado
+          console.warn("[AuthCallback] nenhuma sessão encontrada após callback");
           navigate("/auth?error=no_session", { replace: true });
         }
       } catch (err) {
-        console.error("[AuthCallback] unexpected error:", err);
+        console.error("[AuthCallback] erro inesperado:", err);
         navigate("/auth?error=unexpected", { replace: true });
       }
     }
