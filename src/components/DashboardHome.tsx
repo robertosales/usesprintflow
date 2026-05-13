@@ -53,18 +53,19 @@ function KpiCard({
 }: KpiCardProps) {
   return (
     <Card className={cn("relative overflow-hidden border-l-4", borderClass || "border-l-border")}>
-      <CardContent className="pt-4 pb-4 px-5">
+      <CardContent className="pt-4 pb-4 px-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide truncate">
               {label}
             </p>
-            <p className="mt-1 text-4xl font-bold tabular-nums leading-none">{value}</p>
+            {/* text-2xl em vez de text-4xl — evita estouro em telas menores */}
+            <p className="mt-1 text-2xl font-bold tabular-nums leading-none truncate">{value}</p>
             {sub && <p className="mt-1.5 text-xs text-muted-foreground truncate">{sub}</p>}
             {trendLabel && (
               <p
                 className={cn(
-                  "mt-1 text-xs font-semibold",
+                  "mt-1 text-xs font-semibold truncate",
                   trend === "up" && "text-green-600 dark:text-green-400",
                   trend === "down" && "text-red-500 dark:text-red-400",
                   trend === "neutral" && "text-muted-foreground",
@@ -74,8 +75,8 @@ function KpiCard({
               </p>
             )}
           </div>
-          <div className={cn("shrink-0 rounded-lg p-2.5", iconClass || "bg-primary/10 text-primary")}>
-            <Icon className="h-5 w-5" />
+          <div className={cn("shrink-0 rounded-lg p-2", iconClass || "bg-primary/10 text-primary")}>
+            <Icon className="h-4 w-4" />
           </div>
         </div>
         {progress !== undefined && (
@@ -104,7 +105,7 @@ function SprintProgressBar({
   const isOver = isAfter(today, end);
 
   return (
-    <Card className="col-span-full border-l-4 border-l-primary">
+    <Card className="col-span-full border-l-4 border-l-primary overflow-hidden">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <Target className="h-4 w-4 text-primary shrink-0" />
@@ -129,7 +130,7 @@ function SprintProgressBar({
       </CardHeader>
       <CardContent className="pb-4 pt-1">
         {sprint.goal && (
-          <p className="text-xs text-muted-foreground mb-3 italic">"{sprint.goal}"</p>
+          <p className="text-xs text-muted-foreground mb-3 italic line-clamp-2">"{sprint.goal}"</p>
         )}
         <Progress value={pct} className="h-2.5" />
         <p className="mt-2 text-xs text-muted-foreground">
@@ -165,16 +166,12 @@ export function DashboardHome() {
     ? userStories.filter((h) => h.sprintId === activeSprint.id)
     : userStories;
 
-  // Fix 1: detecção robusta da coluna "done"
   const doneColKey = resolveDoneKey(workflowColumns);
-
   const doneHUs = sprintHUs.filter((h) => h.status === doneColKey);
 
-  // Fix 2: openHUs ordenado por posição no workflow (reflete movimentação no Kanban)
   const openHUs = [...sprintHUs.filter((h) => h.status !== doneColKey)].sort((a, b) => {
     const posA = workflowColumns.findIndex((c) => c.key === a.status);
     const posB = workflowColumns.findIndex((c) => c.key === b.status);
-    // Colunas mais avançadas no topo; -1 (não encontrado) vai para o fim
     const pa = posA === -1 ? -Infinity : posA;
     const pb = posB === -1 ? -Infinity : posB;
     return pb - pa;
@@ -191,8 +188,6 @@ export function DashboardHome() {
 
   const openActs = activities.filter((a) => !a.isClosed);
   const totalHours = activities.reduce((s, a) => s + (a.hours || 0), 0);
-
-  // Exibe as 5 primeiras HUs abertas já ordenadas por posição no workflow
   const recentHUs = openHUs.slice(0, 5);
 
   const greeting = () => {
@@ -210,22 +205,23 @@ export function DashboardHome() {
   const firstName = displayName.split(" ")[0];
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-[1400px] mx-auto">
+    /* w-full + overflow-x-hidden evitam que o conteúdo ultrapasse a área visível */
+    <div className="flex flex-col gap-5 px-4 sm:px-6 py-6 w-full overflow-x-hidden">
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-border">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <LayoutDashboard className="h-5 w-5 text-primary" />
-            {greeting()}, {firstName}
+        <div className="min-w-0">
+          <h1 className="text-lg font-bold flex items-center gap-2 truncate">
+            <LayoutDashboard className="h-5 w-5 text-primary shrink-0" />
+            <span className="truncate">{greeting()}, {firstName}</span>
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted-foreground mt-0.5 truncate">
             {activeSprint
               ? `Sprint ativo: ${activeSprint.name}`
               : "Nenhum sprint ativo — crie um na aba Sprints"}
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
           <Calendar className="h-3.5 w-3.5" />
           {format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
         </div>
@@ -238,8 +234,8 @@ export function DashboardHome() {
         </div>
       )}
 
-      {/* KPI Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* KPI Grid — 1 col mobile, 2 col sm, 4 col md+ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard
           label="HUs Concluídas"
           value={`${doneHUs.length}/${sprintHUs.length}`}
@@ -291,7 +287,7 @@ export function DashboardHome() {
 
       {/* HUs em Aberto + Equipe */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <BookOpen className="h-4 w-4 text-primary" />
@@ -314,7 +310,7 @@ export function DashboardHome() {
                   return (
                     <li
                       key={hu.id}
-                      className="flex items-center gap-3 px-5 py-3 hover:bg-muted/40 transition-colors"
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors"
                     >
                       <span
                         className={cn(
@@ -331,7 +327,7 @@ export function DashboardHome() {
                       {col && (
                         <Badge
                           variant="outline"
-                          className="text-xs shrink-0 hidden sm:inline-flex"
+                          className="text-xs shrink-0 hidden sm:inline-flex max-w-[100px] truncate"
                           style={{
                             borderColor: (col as any).hex || "#94a3b8",
                             color: (col as any).hex || "#94a3b8",
@@ -348,7 +344,7 @@ export function DashboardHome() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Users className="h-4 w-4 text-primary" />
@@ -379,7 +375,7 @@ export function DashboardHome() {
                     (a) => a.assigneeId === dev.id && !a.isClosed
                   ).length;
                   return (
-                    <li key={dev.id} className="flex items-center gap-3 px-5 py-2.5">
+                    <li key={dev.id} className="flex items-center gap-3 px-4 py-2.5">
                       <div className="shrink-0 h-7 w-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
                         {getInitials(dev.name)}
                       </div>
@@ -388,7 +384,7 @@ export function DashboardHome() {
                         <p className="text-xs text-muted-foreground truncate">{dev.role}</p>
                       </div>
                       {myActs > 0 && (
-                        <Badge variant="secondary" className="text-xs tabular-nums">
+                        <Badge variant="secondary" className="text-xs tabular-nums shrink-0">
                           {myActs}
                         </Badge>
                       )}
@@ -402,7 +398,7 @@ export function DashboardHome() {
       </div>
 
       {/* KPIs inferiores */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard
           label="Total de Sprints"
           value={sprints.length}
