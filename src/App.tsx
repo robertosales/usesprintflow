@@ -16,6 +16,8 @@ import ForcePasswordChange from "./pages/ForcePasswordChange.tsx";
 import SustentacaoPage from "./features/sustentacao/SustentacaoPage";
 import { ModuleSelector } from "./features/sustentacao/components/ModuleSelector";
 import AdminDashboard from "./pages/AdminDashboard";
+import PlanningPokerPage from "./pages/PlanningPokerPage";
+import RetroPage from "./pages/RetroPage";
 
 const queryClient = new QueryClient();
 
@@ -76,7 +78,6 @@ function ModuleGuard({ module, children }: { module: "sala_agil" | "sustentacao"
   );
 }
 
-/** Bloqueia acesso à rota /dashboard-admin para não-admins */
 function AdminGuard({ children }: { children: React.ReactNode }) {
   const { isAdmin, loading } = useAuth();
   if (loading) return null;
@@ -93,78 +94,43 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route
-                path="/auth"
-                element={
-                  <AuthRoute>
-                    <Auth />
-                  </AuthRoute>
-                }
-              />
+              <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
               <Route path="/reset-password" element={<ResetPassword />} />
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <ModuleRedirect />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/modulos"
-                element={
-                  <ProtectedRoute>
-                    <ModuleSelector />
-                  </ProtectedRoute>
-                }
-              />
+              <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
+              <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
 
-              {/* Dashboard Admin — exclusivo isAdmin */}
+              {/* Dashboard Admin */}
               <Route
                 path="/dashboard-admin"
-                element={
-                  <ProtectedRoute>
-                    <AdminGuard>
-                      <AdminDashboard />
-                    </AdminGuard>
-                  </ProtectedRoute>
-                }
+                element={<ProtectedRoute><AdminGuard><AdminDashboard /></AdminGuard></ProtectedRoute>}
               />
 
-              {/* Sala Ágil — rota base redireciona para /dashboard */}
+              {/* Sala Ágil — base */}
               <Route
                 path="/sala-agil"
-                element={
-                  <ProtectedRoute>
-                    <ModuleGuard module="sala_agil">
-                      <Navigate to="/sala-agil/dashboard" replace />
-                    </ModuleGuard>
-                  </ProtectedRoute>
-                }
+                element={<ProtectedRoute><ModuleGuard module="sala_agil"><Navigate to="/sala-agil/dashboard" replace /></ModuleGuard></ProtectedRoute>}
               />
 
-              {/* Sala Ágil — sub-rotas com deep-link */}
+              {/* Rotas dedicadas — bypass total do Index.tsx */}
+              <Route
+                path="/sala-agil/planning-poker"
+                element={<ProtectedRoute><ModuleGuard module="sala_agil"><PlanningPokerPage /></ModuleGuard></ProtectedRoute>}
+              />
+              <Route
+                path="/sala-agil/retrospectiva"
+                element={<ProtectedRoute><ModuleGuard module="sala_agil"><RetroPage /></ModuleGuard></ProtectedRoute>}
+              />
+
+              {/* Sala Ágil — demais sub-rotas */}
               <Route
                 path="/sala-agil/:section"
-                element={
-                  <ProtectedRoute>
-                    <ModuleGuard module="sala_agil">
-                      <Index />
-                    </ModuleGuard>
-                  </ProtectedRoute>
-                }
+                element={<ProtectedRoute><ModuleGuard module="sala_agil"><Index /></ModuleGuard></ProtectedRoute>}
               />
 
               {/* Sustentação */}
               <Route
                 path="/sustentacao/*"
-                element={
-                  <ProtectedRoute>
-                    <ModuleGuard module="sustentacao">
-                      <SustentacaoPage />
-                    </ModuleGuard>
-                  </ProtectedRoute>
-                }
+                element={<ProtectedRoute><ModuleGuard module="sustentacao"><SustentacaoPage /></ModuleGuard></ProtectedRoute>}
               />
 
               <Route path="*" element={<NotFound />} />
