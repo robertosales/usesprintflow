@@ -4,7 +4,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { KanbanCard, KanbanColumn } from "./useKanbanBoard";
 
-const DONE_COLUMN_KEYS = ["done", "concluido", "concluído", "finalizado", "deployed", "entregue"];
+const DONE_COLUMN_KEYS = [
+  "pronto_para_publicacao",
+  "pronto para publicação",
+  "done",
+  "concluido",
+  "concluído",
+  "finalizado",
+  "deployed",
+  "entregue",
+];
 
 export interface SprintSummary {
   sprintId:         string;
