@@ -59,7 +59,7 @@ export function useFinalizeSprint(
     try {
       const { error: sprintErr } = await supabase
         .from("sprints")
-        .update({ is_active: false, ended_at: new Date().toISOString() })
+        .update({ is_active: false, end_date: new Date().toISOString() })
         .eq("id", activeSprint.id);
       if (sprintErr) throw sprintErr;
 
