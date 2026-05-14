@@ -16,10 +16,12 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { useSprint } from "@/contexts/SprintContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { KanbanCard } from "./KanbanCard";
 import { KanbanStatus } from "@/types/sprint";
 import { toast } from "sonner";
-import { ChevronRight, LayoutList } from "lucide-react";
+import { ChevronRight, LayoutList, FlagTriangleRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +36,7 @@ import { WorkflowColumn } from "@/types/sprint";
 import { KanbanFilterBar, KANBAN_FILTROS_DEFAULT } from "./KanbanFilterBar";
 import type { KanbanFiltros } from "./KanbanFilterBar";
 import { SprintImpedimentsBanner } from "./SprintImpedimentsBanner";
+import { supabase } from "@/integrations/supabase/client";
 
 const COLUMN_COLORS: Record<string, string> = {
   backlog:     "#6b7280",
@@ -42,6 +45,8 @@ const COLUMN_COLORS: Record<string, string> = {
   review:      "#8b5cf6",
   done:        "#10b981",
 };
+
+const DONE_KEYS = ["done", "concluido", "concluído", "finalizado", "deployed", "entregue"];
 
 function getColumnHex(col: WorkflowColumn): string {
   if (col.hex) return col.hex;
@@ -63,9 +68,17 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     reorderUserStories,
   } = useSprint() as any;
 
+  const { isAdmin, roles } = useAuth();
+  const canFinalizeSprint = isAdmin || roles.includes("scrum_master" as any);
+
+  // Sprint ativa
+  const activeSprint = useMemo(
+    () => (sprints ?? []).find((s: any) => s.isActive || s.is_active) ?? null,
+    [sprints],
+  );
+
   const canMove = true;
 
-  // Sprint ativa correspondente ao sprintId recebido (para o banner)
   const currentSprint = useMemo(
     () => (sprints ?? []).find((s: any) => s.id === sprintId) ?? null,
     [sprints, sprintId],
@@ -79,6 +92,11 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
   );
   const [localPositions, setLocalPositions] = useState<Record<string, number>>({});
   const [filtros, setFiltros] = useState<KanbanFiltros>(KANBAN_FILTROS_DEFAULT);
+
+  // Modal finalizar sprint
+  const [finalizeOpen,    setFinalizeOpen]    = useState(false);
+  const [finalizing,      setFinalizing]      = useState(false);
+  const [finalizeConfirm, setFinalizeConfirm] = useState(false);
 
   useEffect(() => {
     setLocalPositions((prev) => {
@@ -94,16 +112,12 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
-  // Base: filtra pelo sprint
   const sprintBase = useMemo(() =>
     sprintId ? userStories.filter((h: any) => h.sprintId === sprintId) : userStories,
   [userStories, sprintId]);
 
-  // Aplica todos os filtros
   const sprintStories = useMemo(() => {
     let items = sprintBase;
-
-    // Busca textual
     if (filtros.search.trim()) {
       const q = filtros.search.trim().toLowerCase();
       items = items.filter((h: any) =>
@@ -111,8 +125,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         String(h.code  ?? "").toLowerCase().includes(q),
       );
     }
-
-    // Filtro de membros (múltipla seleção, mesmo padrão da Sustentação)
     if (filtros.membros.length > 0) {
       items = items.filter((h: any) =>
         filtros.membros.some((id) =>
@@ -121,21 +133,49 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         ),
       );
     }
-
     if (filtros.tipo !== "all")
       items = items.filter((h: any) => h.type === filtros.tipo);
-
     if (filtros.prioridade !== "all")
       items = items.filter((h: any) => h.priority === filtros.prioridade);
-
     if (filtros.status !== "all")
       items = items.filter((h: any) => h.status === filtros.status);
-
     return [...items].sort(
       (a: any, b: any) =>
         (localPositions[a.id] ?? a.position ?? 0) - (localPositions[b.id] ?? b.position ?? 0),
     );
   }, [sprintBase, filtros, localPositions]);
+
+  // Resumo da sprint ativa para o modal
+  const sprintSummary = useMemo(() => {
+    if (!activeSprint) return null;
+    const allCards   = userStories.filter((h: any) => h.sprintId === activeSprint.id || h.sprint_id === activeSprint.id);
+    const doneCards  = allCards.filter((h: any) => DONE_KEYS.includes((h.status ?? "").toLowerCase()));
+    return {
+      total:      allCards.length,
+      done:       doneCards.length,
+      incomplete: allCards.length - doneCards.length,
+      rate:       allCards.length > 0 ? Math.round((doneCards.length / allCards.length) * 100) : 0,
+    };
+  }, [activeSprint, userStories]);
+
+  const handleFinalizeSprint = useCallback(async () => {
+    if (!activeSprint) return;
+    setFinalizing(true);
+    try {
+      const { error } = await supabase
+        .from("sprints")
+        .update({ is_active: false, end_date: new Date().toISOString() })
+        .eq("id", activeSprint.id);
+      if (error) throw error;
+      toast.success(`Sprint "${activeSprint.name}" finalizada com sucesso! 🎉`);
+      setFinalizeOpen(false);
+      setFinalizeConfirm(false);
+    } catch (err: any) {
+      toast.error("Erro ao finalizar sprint: " + (err?.message ?? "tente novamente"));
+    } finally {
+      setFinalizing(false);
+    }
+  }, [activeSprint]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(String(event.active.id));
@@ -218,6 +258,21 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
       {currentSprint && (
         <div className="mb-3">
           <SprintImpedimentsBanner sprint={currentSprint} />
+        </div>
+      )}
+
+      {/* ── Barra superior com botão Finalizar Sprint ── */}
+      {canFinalizeSprint && activeSprint && (
+        <div className="flex justify-end mb-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/30"
+            onClick={() => setFinalizeOpen(true)}
+          >
+            <FlagTriangleRight className="h-3.5 w-3.5" />
+            Finalizar Sprint
+          </Button>
         </div>
       )}
 
@@ -342,6 +397,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         </DragOverlay>
       </DndContext>
 
+      {/* ── Modal mover card ── */}
       <AlertDialog open={!!confirmMove} onOpenChange={(o) => !o && setConfirmMove(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -354,6 +410,49 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmMove}>Confirmar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Modal Finalizar Sprint ── */}
+      <AlertDialog open={finalizeOpen} onOpenChange={(o) => { if (!o) { setFinalizeOpen(false); setFinalizeConfirm(false); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <FlagTriangleRight className="h-5 w-5 text-amber-500" />
+              Finalizar Sprint
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                {activeSprint && (
+                  <p>Você está prestes a finalizar a sprint <strong>"{activeSprint.name}"</strong>.</p>
+                )}
+                {sprintSummary && (
+                  <div className="rounded-lg border bg-muted/40 p-3 space-y-1">
+                    <div className="flex justify-between"><span>Total de cards:</span><strong>{sprintSummary.total}</strong></div>
+                    <div className="flex justify-between text-emerald-600"><span>Concluídos:</span><strong>{sprintSummary.done}</strong></div>
+                    <div className="flex justify-between text-amber-600"><span>Incompletos:</span><strong>{sprintSummary.incomplete}</strong></div>
+                    <div className="flex justify-between"><span>Taxa de conclusão:</span><strong>{sprintSummary.rate}%</strong></div>
+                  </div>
+                )}
+                {!finalizeConfirm && (
+                  <p className="text-muted-foreground">Esta ação irá marcar a sprint como finalizada. Deseja continuar?</p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={finalizing}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={finalizing}
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+              onClick={(e) => {
+                e.preventDefault();
+                handleFinalizeSprint();
+              }}
+            >
+              {finalizing ? "Finalizando..." : "Confirmar Encerramento"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
