@@ -89,16 +89,16 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <AuthProvider>
-        <SprintProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
+      <BrowserRouter>
+        <AuthProvider>
+          <SprintProvider>
+            <Toaster />
+            <Sonner />
             <Routes>
               {/* Rota pública de auth */}
               <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
 
-              {/* ✅ Callback OAuth — processa code do Google/Supabase após autorização */}
+              {/* ✅ Callback OAuth */}
               <Route path="/auth/callback" element={<AuthCallback />} />
 
               <Route path="/reset-password" element={<ResetPassword />} />
@@ -117,7 +117,7 @@ const App = () => (
                 element={<ProtectedRoute><ModuleGuard module="sala_agil"><Navigate to="/sala-agil/dashboard" replace /></ModuleGuard></ProtectedRoute>}
               />
 
-              {/* Rotas dedicadas — bypass total do Index.tsx */}
+              {/* Rotas dedicadas */}
               <Route
                 path="/sala-agil/planning-poker"
                 element={<ProtectedRoute><ModuleGuard module="sala_agil"><PlanningPokerPage /></ModuleGuard></ProtectedRoute>}
@@ -141,9 +141,9 @@ const App = () => (
 
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </BrowserRouter>
-        </SprintProvider>
-      </AuthProvider>
+          </SprintProvider>
+        </AuthProvider>
+      </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
