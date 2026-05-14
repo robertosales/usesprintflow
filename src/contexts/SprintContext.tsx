@@ -329,7 +329,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const addActivity = async (act: Omit<Activity, "id" | "endDate" | "createdAt">) => {
     if (!teamId) return;
     const safeHours = toDecimalHours(act.hours);
-    // end_date = startDate: atividade sempre ocorre no mesmo dia
     const { error } = await supabase.from("activities").insert({
       team_id: teamId, hu_id: act.huId, title: act.title, description: act.description,
       activity_type: act.activityType, assignee_id: act.assigneeId || null,
@@ -358,7 +357,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (act.hours !== undefined) updateData.hours = toDecimalHours(act.hours);
     if (act.startDate !== undefined) {
       updateData.start_date = act.startDate;
-      // Só atualiza end_date se a atividade ainda não foi encerrada
       if (!existing.isClosed) {
         updateData.end_date = act.startDate;
       }
@@ -371,7 +369,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const removeActivity = async (id: string) => { await supabase.from("activities").delete().eq("id", id); await refreshAll(); };
 
   const closeActivity = async (id: string) => {
-    // Grava is_closed, closed_at E end_date com a data real de encerramento
     const today = new Date().toISOString().slice(0, 10);
     await supabase.from("activities").update({
       is_closed: true,
@@ -398,7 +395,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   };
 
   const reopenActivity = async (id: string) => {
-    // Ao reabrir, limpa end_date para indicar que está em andamento novamente
     await supabase.from("activities").update({ is_closed: false, closed_at: null, end_date: null }).eq("id", id);
     await refreshAll();
   };
@@ -529,18 +525,25 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
   // ── WORKFLOW COLUMNS ──────────────────────────────────────────────────────
   const setWorkflowColumns = (columns: WorkflowColumn[]) => setWorkflowColumnsState(normalizeWorkflowColumns(columns));
+
   const addWorkflowColumn = async (col: WorkflowColumn) => {
     if (!teamId) return;
     const normalized = normalizeWorkflowColumns([col])[0];
-    const { error } = await supabase.from("workflow_columns").insert({ team_id: teamId, key: normalized.key, label: normalized.label, color_class: normalized.colorClass || "", dot_color: normalized.dotColor || "", hex: normalized.hex, sort_order: workflowColumns.length });
+    const { error } = await supabase.from("workflow_columns").insert({
+      team_id: teamId, key: normalized.key, label: normalized.label,
+      color_class: normalized.colorClass || "", dot_color: normalized.dotColor || "",
+      hex: normalized.hex, sort_order: workflowColumns.length,
+    });
     if (error) { toast.error("Erro ao adicionar coluna"); return; }
     await refreshAll();
   };
+
   const removeWorkflowColumn = async (key: string) => {
     if (!teamId) return;
     await supabase.from("workflow_columns").delete().eq("team_id", teamId).eq("key", key);
     await refreshAll();
   };
+
   const updateWorkflowColumn = async (key: string, col: Partial<WorkflowColumn>) => {
     if (!teamId) return;
     const updateData: any = {};
@@ -552,14 +555,96 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     await supabase.from("workflow_columns").update(updateData).eq("team_id", teamId).eq("key", key);
     await refreshAll();
   };
+
+  /**
+   * FIX: Usa upsert em vez de update puro.
+   * Colunas novas (criadas apenas no draft local) recebem INSERT.
+   * Colunas existentes recebem UPDATE via onConflict em (team_id, key).
+   * Colunas removidas do draft são deletadas do banco.
+   */
   const reorderWorkflowColumns = async (columns: WorkflowColumn[]) => {
     if (!teamId) return;
+
     const normalized = normalizeWorkflowColumns(columns);
-    for (let i = 0; i < columns.length; i++) {
-      const c = normalized[i];
-      await supabase.from("workflow_columns").update({ sort_order: i, label: c.label, color_class: c.colorClass || "", dot_color: c.dotColor || "", hex: c.hex || null }).eq("team_id", teamId).eq("key", c.key);
+
+    // 1. Busca as keys que já existem no banco para este time
+    const { data: existing, error: fetchErr } = await supabase
+      .from("workflow_columns")
+      .select("key")
+      .eq("team_id", teamId);
+
+    if (fetchErr) {
+      console.error("[reorderWorkflowColumns] fetch error:", fetchErr);
+      toast.error("Erro ao sincronizar fluxo: " + fetchErr.message);
+      return;
     }
+
+    const existingKeys = new Set((existing ?? []).map((r: any) => r.key));
+    const incomingKeys = new Set(normalized.map(c => c.key));
+
+    // 2. Separa em novas (INSERT) e existentes (UPDATE)
+    const toInsert = normalized.filter(c => !existingKeys.has(c.key));
+    const toUpdate = normalized.filter(c =>  existingKeys.has(c.key));
+
+    // 3. Deleta as colunas que foram removidas do draft (existem no banco mas não no novo fluxo)
+    const toDelete = [...existingKeys].filter(k => !incomingKeys.has(k));
+
+    const ops: Promise<any>[] = [];
+
+    // INSERT das novas
+    if (toInsert.length > 0) {
+      const rows = toInsert.map((c, i) => ({
+        team_id:     teamId,
+        key:         c.key,
+        label:       c.label,
+        color_class: c.colorClass || "",
+        dot_color:   c.dotColor || "",
+        hex:         c.hex || null,
+        wip_limit:   (c as any).wipLimit ?? null,
+        sort_order:  normalized.indexOf(c),
+      }));
+      ops.push(
+        supabase.from("workflow_columns").insert(rows).then(({ error }) => {
+          if (error) console.error("[reorderWorkflowColumns] insert error:", error);
+        })
+      );
+    }
+
+    // UPDATE dos existentes (sort_order + label + cores)
+    for (const c of toUpdate) {
+      ops.push(
+        supabase.from("workflow_columns").update({
+          sort_order:  normalized.indexOf(c),
+          label:       c.label,
+          color_class: c.colorClass || "",
+          dot_color:   c.dotColor || "",
+          hex:         c.hex || null,
+          wip_limit:   (c as any).wipLimit ?? null,
+        }).eq("team_id", teamId).eq("key", c.key)
+        .then(({ error }) => {
+          if (error) console.error("[reorderWorkflowColumns] update error:", error);
+        })
+      );
+    }
+
+    // DELETE das removidas
+    for (const key of toDelete) {
+      ops.push(
+        supabase.from("workflow_columns").delete()
+          .eq("team_id", teamId).eq("key", key)
+          .then(({ error }) => {
+            if (error) console.error("[reorderWorkflowColumns] delete error:", error);
+          })
+      );
+    }
+
+    await Promise.all(ops);
+
+    // Atualiza estado local com os dados normalizados
     setWorkflowColumnsState(normalized);
+
+    // Recarrega do banco para confirmar persistência real
+    await refreshAll();
   };
 
   return (
