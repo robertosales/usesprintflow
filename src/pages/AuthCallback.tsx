@@ -1,7 +1,6 @@
 // src/pages/AuthCallback.tsx
-// Processa o retorno do OAuth do Lovable SDK e/ou Supabase PKCE.
-// O Lovable SDK pode retornar tokens via hash (#access_token=...) ou
-// via query param (?code=...). Ambos os casos são tratados aqui.
+// Processa o retorno do OAuth do Lovable SDK.
+// O Lovable SDK redireciona com tokens no hash: #access_token=...&refresh_token=...
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,33 +16,50 @@ export default function AuthCallback() {
 
     async function handleCallback() {
       try {
-        // Caso 1: PKCE — URL contém ?code=...
+        // --- Caso 1: tokens no hash (Lovable SDK implicit flow) ---
+        const hash = window.location.hash;
+        if (hash && hash.includes("access_token")) {
+          const hashParams = new URLSearchParams(hash.replace(/^#/, ""));
+          const access_token = hashParams.get("access_token");
+          const refresh_token = hashParams.get("refresh_token");
+
+          if (access_token && refresh_token) {
+            const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+            if (error) {
+              console.error("[AuthCallback] setSession error:", error);
+              navigate("/auth?error=set_session_failed", { replace: true });
+              return;
+            }
+            navigate("/", { replace: true });
+            return;
+          }
+        }
+
+        // --- Caso 2: PKCE code no query string ---
         const params = new URLSearchParams(window.location.search);
         const code = params.get("code");
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
             console.error("[AuthCallback] exchangeCodeForSession error:", error);
+            navigate("/auth?error=pkce_failed", { replace: true });
+            return;
           }
-        }
-
-        // Caso 2: Implicit / Lovable SDK — tokens no hash (#access_token=...)
-        // O SDK do Supabase detecta o hash automaticamente via onAuthStateChange.
-        // Aguardamos a sessão ser estabelecida com polling curto.
-        let session = null;
-        for (let i = 0; i < 10; i++) {
-          const { data } = await supabase.auth.getSession();
-          session = data.session;
-          if (session) break;
-          await new Promise((r) => setTimeout(r, 300));
-        }
-
-        if (session) {
           navigate("/", { replace: true });
-        } else {
-          console.warn("[AuthCallback] nenhuma sessão encontrada após callback");
-          navigate("/auth?error=no_session", { replace: true });
+          return;
         }
+
+        // --- Caso 3: sessão já existe ---
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          navigate("/", { replace: true });
+          return;
+        }
+
+        console.warn("[AuthCallback] nenhum token encontrado na URL de callback");
+        console.warn("hash:", window.location.hash);
+        console.warn("search:", window.location.search);
+        navigate("/auth?error=no_token", { replace: true });
       } catch (err) {
         console.error("[AuthCallback] erro inesperado:", err);
         navigate("/auth?error=unexpected", { replace: true });

@@ -57,8 +57,6 @@ const Auth = () => {
 
   const handleGoogleLogin = async () => {
     setLoading(true);
-    // Usa lovable.auth (SDK proprietário do Lovable) com redirect_uri apontando
-    // para /auth/callback — que trata a sessão antes de redirecionar o usuário.
     const result = await lovable.auth.signInWithOAuth("google", {
       redirect_uri: `${window.location.origin}/auth/callback`,
     });
