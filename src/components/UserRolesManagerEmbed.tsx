@@ -78,7 +78,7 @@ function getModuleIcon(module_access: string, roles: AppRole[]) {
   if (label === "Sala Ágil")   return <Zap className="h-3 w-3" />;
   if (label === "Sustentação") return <Shield className="h-3 w-3" />;
   if (label === "Admin")       return <ShieldCheck className="h-3 w-3" />;
-  return null; // Ambos — sem ícone
+  return null;
 }
 
 export function UserRolesManagerEmbed() {
@@ -112,7 +112,6 @@ export function UserRolesManagerEmbed() {
 
       setAvailableRoles(rolesFromBank.map((r) => ({ name: r.name as AppRole, label: r.label })));
 
-      // Monta mapa user_id → times
       const teamsMap: Record<string, { id: string; name: string }[]> = {};
       memberList.forEach((m: any) => {
         if (!m.user_id || !m.teams) return;
@@ -145,9 +144,12 @@ export function UserRolesManagerEmbed() {
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
   const filteredUsers = useMemo(() => {
-    if (!debouncedSearch) return users;
+    const sorted = [...users].sort((a, b) =>
+      a.display_name.localeCompare(b.display_name, "pt-BR", { sensitivity: "base" })
+    );
+    if (!debouncedSearch) return sorted;
     const q = debouncedSearch.toLowerCase();
-    return users.filter((u) =>
+    return sorted.filter((u) =>
       u.display_name.toLowerCase().includes(q) ||
       u.email.toLowerCase().includes(q) ||
       u.teams.some(t => t.name.toLowerCase().includes(q))
@@ -320,7 +322,6 @@ export function UserRolesManagerEmbed() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">{user.email}</p>
-                      {/* Times */}
                       {user.teams.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {user.teams.map(t => (
