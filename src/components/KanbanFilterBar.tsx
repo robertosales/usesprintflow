@@ -115,10 +115,9 @@ export function KanbanFilterBar({
     [sprints],
   );
 
-  // ── Contagem de HUs por sprint (usando todas as HUs passadas, sem filtro) ──
+  // ── Contagem de HUs por sprint ──
   const huCountBySprint = useMemo(() => {
     const counts: Record<string, number> = {};
-    // stories aqui é sprintBase (todas HUs sem filtro de sprint)
     stories.forEach((h: any) => {
       const sid = h.sprintId || h.sprint_id;
       if (sid) counts[sid] = (counts[sid] ?? 0) + 1;
@@ -144,7 +143,20 @@ export function KanbanFilterBar({
     [sprints, filtros.sprintId],
   );
 
-  // ── Monta lista de responsáveis para o KanbanResponsavelFilter ──
+  // ── Label completo da opção selecionada (para dimensionar o trigger) ──
+  const selectedLabel = useMemo(() => {
+    if (filtros.sprintId === "all") return "📋 Todas as sprints";
+    const s = selectedSprint;
+    if (!s) return "";
+    const isActive = s.isActive || s.is_active;
+    const count    = huCountBySprint[s.id] ?? 0;
+    const emoji    = isActive ? "🟢" : "⚫";
+    const ativa    = isActive ? " • Ativa" : "";
+    const hus      = count > 0 ? ` • ${count} HU${count !== 1 ? "s" : ""}` : "";
+    return `${emoji} ${s.name}${ativa}${hus}`;
+  }, [filtros.sprintId, selectedSprint, huCountBySprint]);
+
+  // ── Monta lista de responsáveis ──
   const responsaveisFilter = useMemo<ResponsavelFilterItem[]>(() => {
     const idsComStory = new Set<string>();
     stories.forEach((h: any) => {
@@ -266,29 +278,41 @@ export function KanbanFilterBar({
             onChange({ ...filtros, sprintId: val });
           }}
         >
-          <SelectTrigger className="h-8 text-xs w-56 border-border/60">
-            <SelectValue placeholder="Selecione uma sprint..." />
+          {/*
+            w-auto + min-w-[12rem]: o trigger cresce com o texto,
+            respeitando um mínimo legível e sem cortar nomes longos.
+          */}
+          <SelectTrigger className="h-8 text-xs w-auto min-w-[12rem] border-border/60 pr-8">
+            <span className="whitespace-nowrap text-xs">{selectedLabel}</span>
           </SelectTrigger>
-          <SelectContent>
+
+          <SelectContent className="min-w-[var(--radix-select-trigger-width)]">
+            {/* Opção: todas as sprints */}
             <SelectItem value="all">
-              <span className="flex items-center gap-1.5 text-xs">
+              <span className="flex items-center gap-1.5 text-xs whitespace-nowrap">
                 <span>📋</span>
                 <span>Todas as sprints</span>
               </span>
             </SelectItem>
+
+            {/* Opções por sprint */}
             {sprintsSorted.map((s: any) => {
               const isActive = s.isActive || s.is_active;
               const count    = huCountBySprint[s.id] ?? 0;
               return (
                 <SelectItem key={s.id} value={s.id}>
-                  <span className="flex items-center gap-1.5 text-xs">
+                  <span className="flex items-center gap-1.5 text-xs whitespace-nowrap">
                     <span>{isActive ? "🟢" : "⚫"}</span>
-                    <span className="truncate max-w-[140px]">{s.name}</span>
+                    <span>{s.name}</span>
                     {isActive && (
-                      <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-400/20 text-amber-600 uppercase tracking-wide">Ativa</span>
+                      <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-400/20 text-amber-600 uppercase tracking-wide">
+                        Ativa
+                      </span>
                     )}
                     {count > 0 && (
-                      <span className="text-[9px] font-mono text-muted-foreground ml-auto pl-1">{count} HU{count !== 1 ? "s" : ""}</span>
+                      <span className="text-[9px] font-mono text-muted-foreground">
+                        {count} HU{count !== 1 ? "s" : ""}
+                      </span>
                     )}
                   </span>
                 </SelectItem>
@@ -297,14 +321,14 @@ export function KanbanFilterBar({
           </SelectContent>
         </Select>
 
-        {/* Badge visual da sprint ativa quando está selecionada */}
+        {/* Badge sprint em andamento */}
         {selectedSprint && (selectedSprint.isActive || selectedSprint.is_active) && (
           <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-600 text-[10px] font-semibold">
             🏃 Sprint em andamento
           </span>
         )}
 
-        {/* Badge para sprints encerradas */}
+        {/* Badge sprint encerrada */}
         {selectedSprint && !selectedSprint.isActive && !selectedSprint.is_active && (
           <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-slate-400/15 border border-slate-400/40 text-slate-500 text-[10px] font-medium">
             🏁 Encerrada
