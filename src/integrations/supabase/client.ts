@@ -2,24 +2,17 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-// O Lovable expõe secrets com prefixo VITE_ para o frontend (via Vite).
-// Use VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY nos Secrets do Lovable.
-// APP_SUPABASE_* são mantidos como fallback para compatibilidade.
-const SUPABASE_URL =
-  import.meta.env.VITE_SUPABASE_URL ||
-  import.meta.env.APP_SUPABASE_URL;
+// O Lovable injeta automaticamente as variáveis do Supabase no build.
+// Em desenvolvimento local, crie um .env com VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.
+const SUPABASE_URL: string =
+  (import.meta.env.VITE_SUPABASE_URL as string) ||
+  (import.meta.env.APP_SUPABASE_URL as string) ||
+  "";
 
-const SUPABASE_PUBLISHABLE_KEY =
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  import.meta.env.APP_SUPABASE_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  throw new Error(
-    '[Supabase] Variáveis de ambiente não encontradas.\n' +
-    'No Lovable: configure VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY nos Secrets.\n' +
-    'Localmente: crie .env com VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.'
-  );
-}
+const SUPABASE_PUBLISHABLE_KEY: string =
+  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string) ||
+  (import.meta.env.APP_SUPABASE_KEY as string) ||
+  "";
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
