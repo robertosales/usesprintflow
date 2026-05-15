@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import * as XLSX from "xlsx";
 
 export interface ApfTemplate {
   id: string;
@@ -31,63 +32,113 @@ export interface ApfGeneration {
   created_at: string;
 }
 
-// ─ Extensões legíveis como texto puro ─
-const TEXT_EXTENSIONS = [".md", ".txt", ".csv", ".json", ".xml", ".html", ".htm"];
+// ─── Limites ───
+const MAX_TEXT_CHARS = 80_000; // ~20 K tokens por arquivo
+
+// ─── Helpers de extração ───
+
+function isXlsx(file: File): boolean {
+  return (
+    file.name.toLowerCase().endsWith(".xlsx") ||
+    file.name.toLowerCase().endsWith(".xls") ||
+    file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    file.type === "application/vnd.ms-excel"
+  );
+}
 
 function isTextFile(file: File): boolean {
   const name = file.name.toLowerCase();
-  if (TEXT_EXTENSIONS.some((ext) => name.endsWith(ext))) return true;
-  if (file.type.startsWith("text/")) return true;
-  return false;
+  const textExts = [".md", ".txt", ".csv", ".json", ".xml", ".html", ".htm"];
+  return textExts.some((e) => name.endsWith(e)) || file.type.startsWith("text/");
 }
 
 /**
- * Prepara arquivos para a Edge Function.
- *
- * - Texto (md, txt, csv...): envia conteúdo bruto truncado em 80 KB.
- * - Binários (xlsx, docx, pdf): NÃO envia base64 — a Edge Function não consegue
- *   extrair texto de xlsx/docx nativamente no Deno sem libs pesadas.
- *   Em vez disso, envia uma descrição amigável para que a IA saiba que o arquivo
- *   foi anexado mas não pode ser lido — isso é melhor do que mandar base64 gigante
- *   que estoura o limite de tokens.
- *
- * Limite por arquivo: 80 KB de texto (~20 K tokens).
- * A Edge Function ainda aplica um segundo corte no total do contexto.
+ * Extrai texto de arquivo .xlsx/.xls usando SheetJS.
+ * Cada planilha vira uma seção de texto com os dados em formato CSV simples.
  */
-async function fileToPayload(file: File): Promise<{ name: string; content: string }> {
-  const MAX_TEXT_BYTES = 80_000; // ~20 K tokens
+async function extractXlsx(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const parts: string[] = [];
 
-  if (isTextFile(file)) {
-    try {
-      const text = await file.text();
-      const truncated =
-        text.length > MAX_TEXT_BYTES
-          ? text.slice(0, MAX_TEXT_BYTES) + `\n\n[... arquivo truncado — ${(file.size / 1024).toFixed(0)} KB total ...]`
-          : text;
-      return { name: file.name, content: truncated };
-    } catch {
-      return { name: file.name, content: `[Erro ao ler ${file.name}]` };
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+    const trimmed = csv.trim();
+    if (trimmed) {
+      parts.push(`=== Planilha: ${sheetName} ===\n${trimmed}`);
     }
   }
 
-  // Binário — descreve o arquivo sem enviar base64
-  const sizeKb = (file.size / 1024).toFixed(1);
-  return {
-    name: file.name,
-    content:
-      `[Arquivo binário anexado: ${file.name} (${file.type || "tipo desconhecido"}, ${sizeKb} KB).` +
-      ` Utilize as informações textuais dos demais arquivos e do prompt para gerar o documento.` +
-      ` Se este arquivo for a Baseline ou o Modelo de Contagem, baseie-se no nome do arquivo e nas instruções do template.]`,
-  };
+  const result = parts.join("\n\n");
+  return result || "[Arquivo xlsx sem conteúdo legível]"; 
 }
 
 /**
+ * Converte um arquivo para payload { name, content } para a Edge Function.
+ *
+ * Prioridade de extração:
+ * 1. .xlsx/.xls  → SheetJS (CSV por planilha)
+ * 2. texto puro  → file.text() truncado
+ * 3. demais      → aviso descritivo (sem base64)
+ */
+async function fileToPayload(file: File): Promise<{ name: string; content: string }> {
+  try {
+    if (isXlsx(file)) {
+      const raw = await extractXlsx(file);
+      const content =
+        raw.length > MAX_TEXT_CHARS
+          ? raw.slice(0, MAX_TEXT_CHARS) + `\n\n[... truncado — ${(file.size / 1024).toFixed(0)} KB total ...]`
+          : raw;
+      return { name: file.name, content };
+    }
+
+    if (isTextFile(file)) {
+      const raw = await file.text();
+      const content =
+        raw.length > MAX_TEXT_CHARS
+          ? raw.slice(0, MAX_TEXT_CHARS) + `\n\n[... truncado — ${(file.size / 1024).toFixed(0)} KB total ...]`
+          : raw;
+      return { name: file.name, content };
+    }
+
+    // .docx, .pdf e outros binários — não extraímos por ora
+    return {
+      name: file.name,
+      content:
+        `[Arquivo binário: ${file.name} (${file.type || "tipo desconhecido"}, ` +
+        `${(file.size / 1024).toFixed(1)} KB). ` +
+        `Conteúdo não pôde ser extraído automaticamente. ` +
+        `Utilize as informações dos demais arquivos e as instruções do template para gerar o documento.]`,
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { name: file.name, content: `[Erro ao processar ${file.name}: ${msg}]` };
+  }
+}
+
+/**
+ * Prepara todos os arquivos para envio à Edge Function.
  * Exportado para uso no hook useApfGenerate.
  */
 export async function prepareFilesForEdgeFunction(
   files: File[],
 ): Promise<Array<{ name: string; content: string }>> {
   return Promise.all(files.map(fileToPayload));
+}
+
+/**
+ * Verifica se pelo menos um arquivo tem conteúdo real extraível.
+ * Retorna o nome dos arquivos sem conteúdo para exibir no toast.
+ */
+export function validateFilePayloads(
+  payloads: Array<{ name: string; content: string }>,
+): { valid: boolean; emptyFiles: string[] } {
+  const PLACEHOLDER_RE = /^\[Arquivo binário:|^\[Erro ao processar|^\[Arquivo xlsx sem/;
+  const emptyFiles = payloads
+    .filter((p) => PLACEHOLDER_RE.test(p.content.trim()) || p.content.trim().length < 20)
+    .map((p) => p.name);
+  return { valid: emptyFiles.length < payloads.length, emptyFiles };
 }
 
 export async function fetchTemplates(teamId: string): Promise<ApfTemplate[]> {
@@ -158,7 +209,10 @@ export async function duplicateTemplate(template: ApfTemplate): Promise<ApfTempl
 }
 
 export async function toggleTemplateActive(id: string, isActive: boolean): Promise<void> {
-  const { error } = await supabase.from("apf_templates").update({ is_active: !isActive }).eq("id", id);
+  const { error } = await supabase
+    .from("apf_templates")
+    .update({ is_active: !isActive })
+    .eq("id", id);
   if (error) throw error;
 }
 
@@ -219,7 +273,7 @@ export async function invokeApfGeneration(body: {
   return {
     docxBase64:  data.docxBase64,
     markdown:    data.markdown ?? "",
-    pfTotal:     data.pfTotal   ?? null,
+    pfTotal:     data.pfTotal  ?? null,
     pfBreakdown: data.pfBreakdown ?? {},
   };
 }
