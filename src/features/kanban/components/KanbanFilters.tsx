@@ -3,7 +3,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label }  from "@/components/ui/label";
 import { Badge }  from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { SlidersHorizontal, RotateCcw } from "lucide-react";
+import { SlidersHorizontal, RotateCcw, FlagTriangleRight } from "lucide-react";
 import type { KanbanFilters } from "../hooks/useKanbanBoard";
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -11,15 +11,20 @@ const PRIORITY_LABELS: Record<string, string> = {
 };
 
 interface Props {
-  filters:   KanbanFilters;
-  onChange:  (f: KanbanFilters) => void;
-  devs:      { id: string; name: string }[];
-  epics:     { id: string; name: string; color: string }[];
-  sprints:   { id: string; name: string }[];
-  totalVisible: number;
+  filters:            KanbanFilters;
+  onChange:           (f: KanbanFilters) => void;
+  devs:               { id: string; name: string }[];
+  epics:              { id: string; name: string; color: string }[];
+  sprints:            { id: string; name: string }[];
+  totalVisible:       number;
+  showFinalize?:      boolean;
+  onFinalizeSprint?:  () => void;
 }
 
-export function KanbanFiltersBar({ filters, onChange, devs, epics, sprints, totalVisible }: Props) {
+export function KanbanFiltersBar({
+  filters, onChange, devs, epics, sprints, totalVisible,
+  showFinalize, onFinalizeSprint,
+}: Props) {
   const set = <K extends keyof KanbanFilters>(k: K, v: KanbanFilters[K]) =>
     onChange({ ...filters, [k]: v });
 
@@ -84,7 +89,22 @@ export function KanbanFiltersBar({ filters, onChange, devs, epics, sprints, tota
         </Button>
       )}
 
-      <Badge variant="outline" className="text-[10px] ml-auto">{totalVisible} HUs</Badge>
+      {/* Contador de HUs + Finalizar Sprint — lado direito */}
+      <div className="ml-auto flex items-center gap-2">
+        <Badge variant="outline" className="text-[10px]">{totalVisible} HUs</Badge>
+
+        {showFinalize && onFinalizeSprint && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-[11px] gap-1.5 border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/30"
+            onClick={onFinalizeSprint}
+          >
+            <FlagTriangleRight className="h-3.5 w-3.5" />
+            Finalizar Sprint
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

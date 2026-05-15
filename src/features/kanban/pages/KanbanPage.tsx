@@ -6,11 +6,10 @@ import { FinalizeSprintModal } from "../components/FinalizeSprintModal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge }   from "@/components/ui/badge";
 import { Button }  from "@/components/ui/button";
-import { RefreshCw, Layers, FlagTriangleRight } from "lucide-react";
+import { RefreshCw, Layers } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function KanbanPage() {
-  // Todos vêem o Kanban. Só admin e scrum_master podem encerrar sprint.
   const { isAdmin, profile } = useAuth();
   const canFinalizeSprint = isAdmin
     || (profile as any)?.role === "scrum_master"
@@ -73,6 +72,7 @@ export function KanbanPage() {
 
   return (
     <div className="space-y-4 p-4">
+      {/* Header — apenas título e refresh */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2">
           <Layers className="h-5 w-5 text-primary" />
@@ -86,24 +86,12 @@ export function KanbanPage() {
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          {canFinalizeSprint && activeSprint && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5 border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/30"
-              onClick={openModal}
-            >
-              <FlagTriangleRight className="h-3.5 w-3.5" />
-              Finalizar Sprint
-            </Button>
-          )}
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={reload}>
-            <RefreshCw className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        <Button variant="outline" size="icon" className="h-8 w-8" onClick={reload}>
+          <RefreshCw className="h-3.5 w-3.5" />
+        </Button>
       </div>
 
+      {/* Barra de filtros — Finalizar Sprint integrado no lado direito */}
       <KanbanFiltersBar
         filters={filters}
         onChange={setFilters}
@@ -111,6 +99,8 @@ export function KanbanPage() {
         epics={epics}
         sprints={sprints as any}
         totalVisible={filteredCards.length}
+        showFinalize={canFinalizeSprint && !!activeSprint}
+        onFinalizeSprint={openModal}
       />
 
       {filters.swimlane && swimlaneDevs.length > 0 ? (
