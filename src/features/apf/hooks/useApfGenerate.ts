@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprint } from "@/contexts/SprintContext";
@@ -16,12 +16,11 @@ import { supabase } from "@/integrations/supabase/client";
 export type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
 export type OutputFormat = "docx" | "markdown";
 
-/** Etapas visíveis de progresso (P5) */
 export type ProgressStep =
   | "idle"
-  | "reading_files"    // Etapa 1: lendo xlsx + docx
-  | "calling_ai"       // Etapa 2: chamando a IA
-  | "saving"           // Etapa 3: salvando resultado
+  | "reading_files"
+  | "calling_ai"
+  | "saving"
   | "done";
 
 export const PROGRESS_LABELS: Record<ProgressStep, string> = {
@@ -126,11 +125,37 @@ export function useApfGenerate() {
   const [answers, setAnswers]           = useState<Record<string, { value: string; detail?: string }>>({});
   const [showQuestions, setShowQuestions] = useState(false);
 
+  // ─── Refs para sempre ler o valor mais recente (evita stale closure) ───
+  const baselineFileRef      = useRef(baselineFile);
+  const huFilesRef           = useRef(huFiles);
+  const modelFileRef         = useRef(modelFile);
+  const selectedSprintIdRef  = useRef(selectedSprintId);
+  const selectedTemplateIdRef= useRef(selectedTemplateId);
+  const selectedTemplateRef  = useRef<ApfTemplate | undefined>(undefined);
+  const questionsRef         = useRef(questions);
+  const answersRef           = useRef(answers);
+  const providerRef          = useRef(provider);
+  const apiKeyRef            = useRef(apiKey);
+  const outputFormatRef      = useRef(outputFormat);
+
+  useEffect(() => { baselineFileRef.current      = baselineFile; },      [baselineFile]);
+  useEffect(() => { huFilesRef.current           = huFiles; },           [huFiles]);
+  useEffect(() => { modelFileRef.current         = modelFile; },         [modelFile]);
+  useEffect(() => { selectedSprintIdRef.current  = selectedSprintId; },  [selectedSprintId]);
+  useEffect(() => { selectedTemplateIdRef.current= selectedTemplateId; },[selectedTemplateId]);
+  useEffect(() => { questionsRef.current         = questions; },         [questions]);
+  useEffect(() => { answersRef.current           = answers; },           [answers]);
+  useEffect(() => { providerRef.current          = provider; },          [provider]);
+  useEffect(() => { apiKeyRef.current            = apiKey; },            [apiKey]);
+  useEffect(() => { outputFormatRef.current      = outputFormat; },      [outputFormat]);
+
+  // ─── Carregar templates ───
   useEffect(() => {
     if (!currentTeamId) return;
     fetchActiveTemplates(currentTeamId).then(setTemplates).catch(() => {});
   }, [currentTeamId]);
 
+  // ─── Histórico ───
   useEffect(() => {
     if (!currentTeamId || !selectedSprintId) { setGenerations([]); return; }
     setLoadingHistory(true);
@@ -146,14 +171,21 @@ export function useApfGenerate() {
   );
 
   useEffect(() => {
+    selectedTemplateRef.current = selectedTemplate;
+  }, [selectedTemplate]);
+
+  useEffect(() => {
     if (!selectedTemplate) { setQuestions([]); setAnswers({}); return; }
     setQuestions(detectInteractiveQuestions(selectedTemplate.prompt_content));
     setAnswers({});
   }, [selectedTemplate]);
 
-  const providerCfg   = PROVIDERS.find((p) => p.value === provider)!;
-  const apiKeyOk      = !providerCfg.needsKey || apiKey.trim().length > 0;
-  const canGenerate   = !!selectedSprintId && !!selectedTemplateId && !!baselineFile && huFiles.length > 0 && !!modelFile && apiKeyOk;
+  const providerCfg = PROVIDERS.find((p) => p.value === provider)!;
+  const apiKeyOk    = !providerCfg.needsKey || apiKey.trim().length > 0;
+
+  // canGenerate lê sempre do estado (usado só para desabilitar o botão na UI)
+  const canGenerate = !!selectedSprintId && !!selectedTemplateId && !!baselineFile && huFiles.length > 0 && !!modelFile && apiKeyOk;
+
   const allQuestionsAnswered = questions.every((q) => {
     const a = answers[q.id];
     if (!a || !a.value) return false;
@@ -161,62 +193,74 @@ export function useApfGenerate() {
     return true;
   });
 
+  // ─── runGeneration lê SEMPRE via refs — nunca fica stale ───
   const runGeneration = useCallback(async () => {
     if (!currentTeamId || !user) { toast.error("Sessão inválida. Faça login novamente."); return; }
 
+    // Lê valores atuais via refs
+    const _baseline   = baselineFileRef.current;
+    const _huFiles    = huFilesRef.current;
+    const _modelFile  = modelFileRef.current;
+    const _sprintId   = selectedSprintIdRef.current;
+    const _templateId = selectedTemplateIdRef.current;
+    const _template   = selectedTemplateRef.current;
+    const _questions  = questionsRef.current;
+    const _answers    = answersRef.current;
+    const _provider   = providerRef.current;
+    const _apiKey     = apiKeyRef.current;
+    const _format     = outputFormatRef.current;
+    const _providerCfg = PROVIDERS.find((p) => p.value === _provider)!;
+    const _apiKeyOk   = !_providerCfg.needsKey || _apiKey.trim().length > 0;
+
     const missing: string[] = [];
-    if (!selectedSprintId)    missing.push("Sprint");
-    if (!selectedTemplateId)  missing.push("Template");
-    if (!baselineFile)        missing.push("Baseline");
-    if (huFiles.length === 0) missing.push("HUs da Sprint");
-    if (!modelFile)           missing.push("Modelo de Contagem");
-    if (!apiKeyOk)            missing.push("API Key do provedor");
+    if (!_sprintId)         missing.push("Sprint");
+    if (!_templateId)       missing.push("Template");
+    if (!_baseline)         missing.push("Baseline");
+    if (_huFiles.length === 0) missing.push("HUs da Sprint");
+    if (!_modelFile)        missing.push("Modelo de Contagem");
+    if (!_apiKeyOk)         missing.push("API Key do provedor");
     if (missing.length > 0) { toast.error(`Preencha antes de gerar: ${missing.join(", ")}`); return; }
 
     setGenerating(true);
     let generationId: string | undefined;
 
     try {
-      const sprint       = sprints.find((s) => s.id === selectedSprintId);
+      const sprint       = sprints.find((s) => s.id === _sprintId);
       const baseFilename = `APF_${(sprint?.name ?? "Sprint").replace(/\s+/g, "_")}_${Date.now()}`;
-      const filename     = `${baseFilename}.${outputFormat === "docx" ? "docx" : "md"}`;
+      const filename     = `${baseFilename}.${_format === "docx" ? "docx" : "md"}`;
 
-      // Etapa 0: Criar registro pending ANTES de chamar a IA
       const gen = await createGeneration({
-        team_id:       currentTeamId,
-        template_id:   selectedTemplateId,
-        sprint_id:     selectedSprintId,
-        generated_by:  user.id,
-        baseline_file: baselineFile!.name,
-        hu_file:       huFiles.map((f) => f.name).join(", "),
-        model_file:    modelFile!.name,
+        team_id:         currentTeamId,
+        template_id:     _templateId,
+        sprint_id:       _sprintId,
+        generated_by:    user.id,
+        baseline_file:   _baseline!.name,
+        hu_file:         _huFiles.map((f) => f.name).join(", "),
+        model_file:      _modelFile!.name,
         output_filename: filename,
-        status: "pending",
+        status:          "pending",
       });
       generationId = gen.id;
 
-      // Etapa 1: Ler e converter arquivos (base64 para xlsx/docx)
       setProgressStep("reading_files");
-      const allFiles    = [baselineFile!, ...huFiles, modelFile!];
+      const allFiles    = [_baseline!, ..._huFiles, _modelFile!];
       const filePayload = await prepareFilesForEdgeFunction(allFiles);
 
       const finalPrompt = applyAnswersToPrompt(
-        selectedTemplate!.prompt_content,
-        questions,
-        answers,
+        _template!.prompt_content,
+        _questions,
+        _answers,
       );
 
-      // Etapa 2: Chamar a IA
       setProgressStep("calling_ai");
       const result = await invokeApfGeneration({
         prompt:       finalPrompt,
-        provider,
-        apiKey:       providerCfg.needsKey ? apiKey.trim() : undefined,
+        provider:     _provider,
+        apiKey:       _providerCfg.needsKey ? _apiKey.trim() : undefined,
         files:        filePayload,
         generationId,
       });
 
-      // Etapa 3: Finalizar
       setProgressStep("saving");
       setLastResult({
         base64:      result.docxBase64,
@@ -227,7 +271,7 @@ export function useApfGenerate() {
       });
       setShowPreview(true);
 
-      const updated = await fetchGenerations(currentTeamId, selectedSprintId);
+      const updated = await fetchGenerations(currentTeamId, _sprintId);
       setGenerations(updated);
 
       setProgressStep("done");
@@ -240,7 +284,7 @@ export function useApfGenerate() {
           .update({ status: "error", error_message: e?.message ?? "Erro desconhecido" })
           .eq("id", generationId)
           .catch(() => {});
-        const updated = await fetchGenerations(currentTeamId!, selectedSprintId);
+        const updated = await fetchGenerations(currentTeamId!, selectedSprintIdRef.current);
         setGenerations(updated);
       }
       toast.error(e?.message ?? "Erro ao gerar documento");
@@ -249,20 +293,36 @@ export function useApfGenerate() {
       setShowQuestions(false);
       setTimeout(() => setProgressStep("idle"), 2000);
     }
-  }, [
-    currentTeamId, user,
-    selectedSprintId, selectedTemplateId,
-    baselineFile, huFiles, modelFile,
-    apiKeyOk, sprints, outputFormat,
-    selectedTemplate, questions, answers,
-    provider, providerCfg.needsKey, apiKey,
-  ]);
+  // Deps mínimas — tudo mais é lido via ref
+  }, [currentTeamId, user, sprints]);
 
   const handleGenerateClick = useCallback(() => {
-    if (!canGenerate) return;
-    if (questions.length > 0 && !allQuestionsAnswered) { setShowQuestions(true); return; }
+    // Lê canGenerate na hora (não da closure)
+    const _baseline  = baselineFileRef.current;
+    const _huFiles   = huFilesRef.current;
+    const _modelFile = modelFileRef.current;
+    const _sprintId  = selectedSprintIdRef.current;
+    const _templateId= selectedTemplateIdRef.current;
+    const _provider  = providerRef.current;
+    const _apiKey    = apiKeyRef.current;
+    const _providerCfg = PROVIDERS.find((p) => p.value === _provider)!;
+    const _apiKeyOk  = !_providerCfg.needsKey || _apiKey.trim().length > 0;
+    const _canGenerate = !!_sprintId && !!_templateId && !!_baseline && _huFiles.length > 0 && !!_modelFile && _apiKeyOk;
+
+    if (!_canGenerate) return;
+
+    const _questions = questionsRef.current;
+    const _answers   = answersRef.current;
+    const _allAnswered = _questions.every((q) => {
+      const a = _answers[q.id];
+      if (!a || !a.value) return false;
+      if (q.kind === "yesno" && a.value === "sim" && !a.detail?.trim()) return false;
+      return true;
+    });
+
+    if (_questions.length > 0 && !_allAnswered) { setShowQuestions(true); return; }
     void runGeneration();
-  }, [canGenerate, questions.length, allQuestionsAnswered, runGeneration]);
+  }, [runGeneration]);
 
   return {
     sprints,
