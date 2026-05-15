@@ -24,21 +24,65 @@ type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
 
 interface FileInput {
   name: string;
-  content: string; // texto extraído ou conteúdo bruto
+  content: string;
 }
 
 interface RequestBody {
   prompt: string;
   provider: Provider;
-  apiKey?: string; // opcional - se não vier, usa LOVABLE_API_KEY (apenas para 'lovable')
+  apiKey?: string;
   model?: string;
   files?: FileInput[];
+  generationId?: string;
+}
+
+// ─── Limites de contexto ───
+// ~200 K tokens de contexto útil para a IA (bem abaixo do limite de 1 M)
+const MAX_CHARS_PER_FILE  = 60_000;   // ~15 K tokens por arquivo
+const MAX_CHARS_TOTAL_CTX = 600_000;  // ~150 K tokens total de contexto de arquivos
+
+/**
+ * Sanitiza e trunca os arquivos recebidos antes de montar o prompt.
+ * - Remove base64 (data URI) — não serve para a IA, só estoura tokens.
+ * - Trunca cada arquivo em MAX_CHARS_PER_FILE.
+ * - Trunca o total acumulado em MAX_CHARS_TOTAL_CTX.
+ */
+function sanitizeFiles(files: FileInput[]): FileInput[] {
+  const result: FileInput[] = [];
+  let totalChars = 0;
+
+  for (const f of files) {
+    let content = f.content ?? "";
+
+    // Se ainda chegou base64 (data URI), descarta o payload e avisa a IA
+    if (/^data:[^;]+;base64,/.test(content)) {
+      content = `[Arquivo binário: ${f.name} — conteúdo não extraível. Utilize os demais arquivos e as instruções do template.]`;
+    }
+
+    // Trunca por arquivo
+    if (content.length > MAX_CHARS_PER_FILE) {
+      content = content.slice(0, MAX_CHARS_PER_FILE) + `\n[... truncado — arquivo muito grande ...]`;
+    }
+
+    // Trunca o total
+    if (totalChars + content.length > MAX_CHARS_TOTAL_CTX) {
+      const remaining = MAX_CHARS_TOTAL_CTX - totalChars;
+      if (remaining <= 0) break; // contexto cheio, ignora o resto
+      content = content.slice(0, remaining) + `\n[... contexto total atingiu o limite ...]`;
+    }
+
+    totalChars += content.length;
+    result.push({ name: f.name, content });
+  }
+
+  return result;
 }
 
 function buildFullPrompt(prompt: string, files: FileInput[] = []) {
+  const sanitized = sanitizeFiles(files);
   const ctx =
-    files.length > 0
-      ? `\n\n=== ARQUIVOS DE CONTEXTO ===\n${files
+    sanitized.length > 0
+      ? `\n\n=== ARQUIVOS DE CONTEXTO ===\n${sanitized
           .map((f) => `--- ${f.name} ---\n${f.content}`)
           .join("\n\n")}\n=== FIM DOS ARQUIVOS ===\n`
       : "";
@@ -132,194 +176,97 @@ async function callPerplexity(fullPrompt: string, apiKey: string, model = "sonar
   return data.choices?.[0]?.message?.content ?? "";
 }
 
-// ── Estilo das tabelas (alinhado às imagens de referência) ──
-// Cabeçalho azul escuro com texto branco; primeira coluna (vertical key/value) cinza claro.
-const HEADER_FILL = "1F4E78"; // azul corporativo
-const KEY_FILL = "D9D9D9"; // cinza claro
+// ─── DOCX helpers ───
+const HEADER_FILL  = "1F4E78";
+const KEY_FILL     = "D9D9D9";
 const BORDER_COLOR = "9DB2BF";
+const cellBorder   = { style: BorderStyle.SINGLE, size: 6, color: BORDER_COLOR };
+const cellBorders  = { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder };
 
-const cellBorder = { style: BorderStyle.SINGLE, size: 6, color: BORDER_COLOR };
-const cellBorders = {
-  top: cellBorder,
-  bottom: cellBorder,
-  left: cellBorder,
-  right: cellBorder,
-};
-
-function makeCell(
-  text: string,
-  opts: { header?: boolean; keyCol?: boolean; width: number } = { width: 4680 },
-): TableCell {
+function makeCell(text: string, opts: { header?: boolean; keyCol?: boolean; width: number } = { width: 4680 }): TableCell {
   const isBold = !!opts.header || !!opts.keyCol;
-  const fill = opts.header ? HEADER_FILL : opts.keyCol ? KEY_FILL : undefined;
-  const color = opts.header ? "FFFFFF" : "000000";
+  const fill   = opts.header ? HEADER_FILL : opts.keyCol ? KEY_FILL : undefined;
+  const color  = opts.header ? "FFFFFF" : "000000";
   return new TableCell({
     borders: cellBorders,
     width: { size: opts.width, type: WidthType.DXA },
     shading: fill ? { fill, type: ShadingType.CLEAR, color: "auto" } : undefined,
     margins: { top: 80, bottom: 80, left: 120, right: 120 },
-    children: [
-      new Paragraph({
-        children: [
-          new TextRun({ text: text || "", bold: isBold, color, size: 20 }),
-        ],
-      }),
-    ],
+    children: [new Paragraph({ children: [new TextRun({ text: text || "", bold: isBold, color, size: 20 })] })],
   });
 }
 
 function parseMarkdownRow(line: string): string[] {
-  // Remove pipes externas e divide em colunas, preservando texto
-  const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
-  return trimmed.split("|").map((c) => c.trim());
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
 }
 
 function isSeparatorRow(line: string): boolean {
-  // Linha tipo: | --- | :---: | ---: |
   return /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(line);
 }
 
 function buildTable(headerCells: string[], rows: string[][]): Table {
-  const TOTAL_WIDTH = 9360; // US Letter content width with 1" margins
-  const colCount = Math.max(headerCells.length, ...rows.map((r) => r.length), 1);
-  const colWidth = Math.floor(TOTAL_WIDTH / colCount);
-  const columnWidths = Array(colCount).fill(colWidth);
-
-  // Detecta se é tabela "chave/valor" (2 colunas, cabeçalho vazio ou genérico)
-  const isKeyValue =
-    colCount === 2 &&
-    headerCells.every((h) => !h || /^(campo|chave|item|atributo)$/i.test(h));
-
+  const TOTAL_WIDTH = 9360;
+  const colCount    = Math.max(headerCells.length, ...rows.map((r) => r.length), 1);
+  const colWidth    = Math.floor(TOTAL_WIDTH / colCount);
+  const isKeyValue  = colCount === 2 && headerCells.every((h) => !h || /^(campo|chave|item|atributo)$/i.test(h));
   const trs: TableRow[] = [];
 
   if (!isKeyValue) {
-    trs.push(
-      new TableRow({
-        tableHeader: true,
-        children: headerCells
-          .concat(Array(colCount - headerCells.length).fill(""))
-          .map((h) => makeCell(h, { header: true, width: colWidth })),
-      }),
-    );
+    trs.push(new TableRow({
+      tableHeader: true,
+      children: headerCells.concat(Array(colCount - headerCells.length).fill(""))
+        .map((h) => makeCell(h, { header: true, width: colWidth })),
+    }));
   }
-
   for (const r of rows) {
     const padded = r.concat(Array(colCount - r.length).fill(""));
-    trs.push(
-      new TableRow({
-        children: padded.map((cellText, idx) =>
-          makeCell(cellText, { keyCol: isKeyValue && idx === 0, width: colWidth }),
-        ),
-      }),
-    );
+    trs.push(new TableRow({
+      children: padded.map((t, idx) => makeCell(t, { keyCol: isKeyValue && idx === 0, width: colWidth })),
+    }));
   }
-
-  return new Table({
-    width: { size: TOTAL_WIDTH, type: WidthType.DXA },
-    columnWidths,
-    rows: trs,
-  });
+  return new Table({ width: { size: TOTAL_WIDTH, type: WidthType.DXA }, columnWidths: Array(colCount).fill(colWidth), rows: trs });
 }
 
 function textToDocxBlocks(text: string): (Paragraph | Table)[] {
-  const lines = text.split(/\r?\n/);
+  const lines  = text.split(/\r?\n/);
   const blocks: (Paragraph | Table)[] = [];
   let i = 0;
-
-  const pushParagraph = (p: Paragraph) => blocks.push(p);
-
   while (i < lines.length) {
-    const raw = lines[i];
-    const line = raw.trimEnd();
-
-    // ── Detecta tabela markdown ──
+    const line = lines[i].trimEnd();
     if (line.trim().startsWith("|") && i + 1 < lines.length && isSeparatorRow(lines[i + 1])) {
       const header = parseMarkdownRow(line);
-      i += 2; // pula header + separator
+      i += 2;
       const rows: string[][] = [];
-      while (i < lines.length && lines[i].trim().startsWith("|")) {
-        rows.push(parseMarkdownRow(lines[i]));
-        i++;
-      }
+      while (i < lines.length && lines[i].trim().startsWith("|")) { rows.push(parseMarkdownRow(lines[i])); i++; }
       blocks.push(buildTable(header, rows));
-      // Espaço após a tabela
       blocks.push(new Paragraph({ children: [new TextRun("")] }));
       continue;
     }
-
-    if (!line.trim()) {
-      pushParagraph(new Paragraph({ children: [new TextRun("")] }));
-    } else if (line.startsWith("# ")) {
-      pushParagraph(
-        new Paragraph({
-          heading: HeadingLevel.HEADING_1,
-          children: [new TextRun({ text: line.slice(2), bold: true, size: 32 })],
-          spacing: { before: 240, after: 160 },
-        }),
-      );
-    } else if (line.startsWith("## ")) {
-      pushParagraph(
-        new Paragraph({
-          heading: HeadingLevel.HEADING_2,
-          children: [new TextRun({ text: line.slice(3), bold: true, size: 28 })],
-          spacing: { before: 200, after: 120 },
-        }),
-      );
-    } else if (line.startsWith("### ")) {
-      pushParagraph(
-        new Paragraph({
-          heading: HeadingLevel.HEADING_3,
-          children: [new TextRun({ text: line.slice(4), bold: true, size: 24 })],
-          spacing: { before: 160, after: 100 },
-        }),
-      );
-    } else if (line.startsWith("- ") || line.startsWith("* ")) {
-      pushParagraph(
-        new Paragraph({
-          children: [new TextRun(line.slice(2))],
-          bullet: { level: 0 },
-        }),
-      );
-    } else {
-      pushParagraph(
-        new Paragraph({
-          alignment: AlignmentType.JUSTIFIED,
-          children: [new TextRun(line)],
-          spacing: { after: 120 },
-        }),
-      );
-    }
+    if (!line.trim())                        blocks.push(new Paragraph({ children: [new TextRun("")] }));
+    else if (line.startsWith("# "))          blocks.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: line.slice(2),  bold: true, size: 32 })], spacing: { before: 240, after: 160 } }));
+    else if (line.startsWith("## "))         blocks.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: line.slice(3),  bold: true, size: 28 })], spacing: { before: 200, after: 120 } }));
+    else if (line.startsWith("### "))        blocks.push(new Paragraph({ heading: HeadingLevel.HEADING_3, children: [new TextRun({ text: line.slice(4),  bold: true, size: 24 })], spacing: { before: 160, after: 100 } }));
+    else if (line.startsWith("- ") || line.startsWith("* ")) blocks.push(new Paragraph({ children: [new TextRun(line.slice(2))], bullet: { level: 0 } }));
+    else                                     blocks.push(new Paragraph({ alignment: AlignmentType.JUSTIFIED, children: [new TextRun(line)], spacing: { after: 120 } }));
     i++;
   }
-
   return blocks;
 }
 
 async function generateDocxBase64(text: string): Promise<string> {
   const doc = new Document({
-    sections: [
-      {
-        properties: {
-          page: {
-            margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
-          },
-        },
-        children: textToDocxBlocks(text),
-      },
-    ],
+    sections: [{ properties: { page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } }, children: textToDocxBlocks(text) }],
   });
-
   const buffer = await Packer.toBuffer(doc);
-  // Convert Uint8Array to base64
   let binary = "";
   const bytes = new Uint8Array(buffer);
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)) as any);
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 0x8000)) as any);
   }
   return btoa(binary);
 }
 
+// ─── Handler ───
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -327,10 +274,9 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as RequestBody;
     const { prompt, provider, apiKey, model, files } = body;
 
-    if (!prompt || !prompt.trim()) {
+    if (!prompt?.trim()) {
       return new Response(JSON.stringify({ error: "Prompt é obrigatório" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -344,28 +290,11 @@ Deno.serve(async (req) => {
         aiText = await callLovable(fullPrompt, key, model);
         break;
       }
-      case "openai": {
-        if (!apiKey) throw new Error("API key da OpenAI é obrigatória");
-        aiText = await callOpenAI(fullPrompt, apiKey, model);
-        break;
-      }
-      case "gemini": {
-        if (!apiKey) throw new Error("API key do Gemini é obrigatória");
-        aiText = await callGemini(fullPrompt, apiKey, model);
-        break;
-      }
-      case "anthropic": {
-        if (!apiKey) throw new Error("API key do Claude é obrigatória");
-        aiText = await callAnthropic(fullPrompt, apiKey, model);
-        break;
-      }
-      case "perplexity": {
-        if (!apiKey) throw new Error("API key do Perplexity é obrigatória");
-        aiText = await callPerplexity(fullPrompt, apiKey, model);
-        break;
-      }
-      default:
-        throw new Error(`Provider inválido: ${provider}`);
+      case "openai":     { if (!apiKey) throw new Error("API key da OpenAI é obrigatória");    aiText = await callOpenAI(fullPrompt, apiKey, model);     break; }
+      case "gemini":     { if (!apiKey) throw new Error("API key do Gemini é obrigatória");    aiText = await callGemini(fullPrompt, apiKey, model);     break; }
+      case "anthropic":  { if (!apiKey) throw new Error("API key do Claude é obrigatória");    aiText = await callAnthropic(fullPrompt, apiKey, model);  break; }
+      case "perplexity": { if (!apiKey) throw new Error("API key do Perplexity é obrigatória"); aiText = await callPerplexity(fullPrompt, apiKey, model); break; }
+      default: throw new Error(`Provider inválido: ${provider}`);
     }
 
     if (!aiText.trim()) throw new Error("A IA retornou conteúdo vazio");
@@ -380,9 +309,10 @@ Deno.serve(async (req) => {
     console.error("apf-generate error:", e);
     const raw = e?.message ?? "Erro desconhecido";
     let friendly = raw;
-    if (/credit balance is too low/i.test(raw)) {
-      friendly =
-        "A conta Anthropic (Claude) associada à chave informada está sem créditos. Adicione créditos em https://console.anthropic.com/settings/billing ou selecione 'Lovable AI' como provedor.";
+    if (/context length|maximum context|token/i.test(raw)) {
+      friendly = "Os arquivos enviados são muito grandes para processar de uma vez. Tente reduzir o tamanho dos arquivos ou dividir as HUs em grupos menores.";
+    } else if (/credit balance is too low/i.test(raw)) {
+      friendly = "A conta Anthropic (Claude) está sem créditos. Adicione créditos em https://console.anthropic.com/settings/billing ou selecione 'Lovable AI'.";
     } else if (/invalid x-api-key|invalid api key|incorrect api key/i.test(raw)) {
       friendly = "Chave de API inválida para o provedor selecionado. Verifique e tente novamente.";
     } else if (/rate limit|429/i.test(raw)) {

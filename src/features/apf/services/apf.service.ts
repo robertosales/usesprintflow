@@ -31,7 +31,7 @@ export interface ApfGeneration {
   created_at: string;
 }
 
-// ─── Extensões que podem ser lidas como texto puro ───
+// ─ Extensões legíveis como texto puro ─
 const TEXT_EXTENSIONS = [".md", ".txt", ".csv", ".json", ".xml", ".html", ".htm"];
 
 function isTextFile(file: File): boolean {
@@ -42,41 +42,46 @@ function isTextFile(file: File): boolean {
 }
 
 /**
- * Converte um arquivo para a representação que a Edge Function espera:
- * - Arquivos de texto: envia o conteúdo bruto (truncado em 50 KB)
- * - Arquivos binários (xlsx, docx, pdf): envia base64 com prefixo data-URI
- *   para que a Edge Function possa identificá-los e processar adequadamente.
+ * Prepara arquivos para a Edge Function.
+ *
+ * - Texto (md, txt, csv...): envia conteúdo bruto truncado em 80 KB.
+ * - Binários (xlsx, docx, pdf): NÃO envia base64 — a Edge Function não consegue
+ *   extrair texto de xlsx/docx nativamente no Deno sem libs pesadas.
+ *   Em vez disso, envia uma descrição amigável para que a IA saiba que o arquivo
+ *   foi anexado mas não pode ser lido — isso é melhor do que mandar base64 gigante
+ *   que estoura o limite de tokens.
+ *
+ * Limite por arquivo: 80 KB de texto (~20 K tokens).
+ * A Edge Function ainda aplica um segundo corte no total do contexto.
  */
 async function fileToPayload(file: File): Promise<{ name: string; content: string }> {
+  const MAX_TEXT_BYTES = 80_000; // ~20 K tokens
+
   if (isTextFile(file)) {
     try {
       const text = await file.text();
-      const truncated = text.length > 50_000 ? text.slice(0, 50_000) + "\n[... conteúdo truncado ...]" : text;
+      const truncated =
+        text.length > MAX_TEXT_BYTES
+          ? text.slice(0, MAX_TEXT_BYTES) + `\n\n[... arquivo truncado — ${(file.size / 1024).toFixed(0)} KB total ...]`
+          : text;
       return { name: file.name, content: truncated };
     } catch {
-      return { name: file.name, content: `[Não foi possível ler ${file.name}]` };
+      return { name: file.name, content: `[Erro ao ler ${file.name}]` };
     }
   }
 
-  // Binário → base64
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string; // data:<mime>;base64,<data>
-      resolve({ name: file.name, content: result });
-    };
-    reader.onerror = () => {
-      resolve({
-        name: file.name,
-        content: `[Arquivo binário não legível: ${file.name} — ${(file.size / 1024).toFixed(1)} KB]`,
-      });
-    };
-    reader.readAsDataURL(file);
-  });
+  // Binário — descreve o arquivo sem enviar base64
+  const sizeKb = (file.size / 1024).toFixed(1);
+  return {
+    name: file.name,
+    content:
+      `[Arquivo binário anexado: ${file.name} (${file.type || "tipo desconhecido"}, ${sizeKb} KB).` +
+      ` Utilize as informações textuais dos demais arquivos e do prompt para gerar o documento.` +
+      ` Se este arquivo for a Baseline ou o Modelo de Contagem, baseie-se no nome do arquivo e nas instruções do template.]`,
+  };
 }
 
 /**
- * Prepara todos os arquivos para envio à Edge Function.
  * Exportado para uso no hook useApfGenerate.
  */
 export async function prepareFilesForEdgeFunction(
@@ -194,10 +199,6 @@ export async function createGeneration(payload: {
   return data as ApfGeneration;
 }
 
-/**
- * Invoca a Edge Function `apf-generate`.
- * Passa generationId para que a função possa atualizar o registro após gerar.
- */
 export async function invokeApfGeneration(body: {
   prompt: string;
   provider: string;
