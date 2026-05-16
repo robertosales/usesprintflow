@@ -76,9 +76,8 @@ export function ApfPokerReference({
             }))
           );
         }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      }, () => {})
+      .then(() => setLoading(false), () => setLoading(false));
   }, [open, currentTeamId, activeSprint]);
 
   const computedSp = (pfTotal: number) => Math.max(1, Math.round(pfTotal * conversionFactor));
