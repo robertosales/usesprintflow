@@ -205,9 +205,9 @@ export function useApfGenerate() {
       const filePayload = await prepareFilesForEdgeFunction(allFiles);
 
       const finalPrompt = applyAnswersToPrompt(
-        _template!.prompt_content,
-        _questions,
-        _answers,
+        selectedTemplate!.prompt_content,
+        questions,
+        answers,
       );
 
       // ── ETAPA 3: Chamar a IA ──
@@ -241,11 +241,10 @@ export function useApfGenerate() {
       console.error("Erro ao gerar APF:", e);
       // Marcar registro como error no banco se já foi criado
       if (generationId) {
-        await supabase
+        await (supabase
           .from("apf_generations")
           .update({ status: "error", error_message: e?.message ?? "Erro desconhecido" })
-          .eq("id", generationId)
-          .catch(() => {});
+          .eq("id", generationId) as unknown as PromiseLike<unknown>).then(() => {}, () => {});
         const updated = await fetchGenerations(currentTeamId!, selectedSprintId);
         setGenerations(updated);
       }
