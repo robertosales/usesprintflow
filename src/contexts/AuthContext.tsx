@@ -45,12 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentTeamId, setCurrentTeamIdState] = useState<string | null>(null);
   const [teams,    setTeams]    = useState<{ id: string; name: string; module: string }[]>([]);
 
-  // Ref para evitar que refreshTeams capture currentTeamId stale no closure
   const currentTeamIdRef = useRef<string | null>(null);
-  // Ref de guarda contra dupla chamada de loadUserData (race condition)
+  // Guard: impede apenas chamadas SIMULTANEAS (mesmo userId, ao mesmo tempo)
+  // NAO impede recarregamentos subsequentes (ex: TOKEN_REFRESHED, reload de pagina)
   const isLoadingUserDataRef = useRef(false);
-  // Ref do userId carregado para evitar recarregar o mesmo usuario
-  const loadedUserIdRef = useRef<string | null>(null);
 
   const setCurrentTeamId = (id: string | null) => {
     currentTeamIdRef.current = id;
@@ -119,7 +117,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const teamList = (data || []) as { id: string; name: string; module: string }[];
       setTeams(teamList);
-      // Usa a ref para evitar loop: nao depende do estado currentTeamId do closure
       if (teamList.length > 0 && !currentTeamIdRef.current) {
         const savedTeamId = localStorage.getItem("selectedTeamId");
         const validSaved  = savedTeamId && teamList.some((t) => t.id === savedTeamId);
@@ -136,15 +133,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   /**
-   * Carrega dados do usuario com protecao contra chamadas concorrentes.
-   * Usando isLoadingUserDataRef e loadedUserIdRef evitamos a race condition
-   * entre getSession() e onAuthStateChange que disparam simultaneamente.
+   * Carrega perfil, roles e times do usuario.
+   * Guard: bloqueia apenas chamadas simultaneas (isLoadingUserDataRef).
+   * Cada evento do Supabase (SIGNED_IN, TOKEN_REFRESHED, INITIAL_SESSION)
+   * dispara um novo carregamento completo para garantir que isAdmin
+   * reflita sempre o estado real do banco.
    */
   const loadUserData = async (userId: string) => {
-    // Evitar recarregar o mesmo usuario se ja esta em andamento
-    if (isLoadingUserDataRef.current && loadedUserIdRef.current === userId) return;
+    if (isLoadingUserDataRef.current) return; // bloqueia apenas chamadas simultaneas
     isLoadingUserDataRef.current = true;
-    loadedUserIdRef.current = userId;
     try {
       await Promise.all([fetchProfile(userId), fetchRoles(userId), refreshTeams()]);
     } catch (err) {
@@ -161,14 +158,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPermissions(new Set());
     setTeams([]);
     setCurrentTeamId(null);
-    loadedUserIdRef.current = null;
     isLoadingUserDataRef.current = false;
     clearLocalStorage();
   };
 
   useEffect(() => {
-    // Usar apenas onAuthStateChange como fonte da verdade.
-    // getSession() e chamado internamente pelo Supabase durante INITIAL_SESSION.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -176,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        // setTimeout(0) garante que o evento nao bloqueia o loop de eventos do Supabase
+        // setTimeout(0) desacopla do loop de eventos do Supabase
         setTimeout(() => {
           loadUserData(session.user.id).finally(() => setLoading(false));
         }, 0);
