@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Edit2, Trash2, Users, UserCircle } from "lucide-react";
+import { Plus, Edit2, Trash2, Users, UserCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { EmptyState } from "@/shared/components/common/EmptyState";
 
@@ -39,6 +39,17 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
   } | null>(null);
   const [teamMembers, setTeamMembers] = useState<Record<string, TeamMemberInfo[]>>({});
   const [allTeams, setAllTeams] = useState<any[]>([]);
+  // IDs dos cards com membros expandidos
+  const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (teamId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedTeams((prev) => {
+      const next = new Set(prev);
+      next.has(teamId) ? next.delete(teamId) : next.add(teamId);
+      return next;
+    });
+  };
 
   const loadTeams = async () => {
     let query = supabase.from("teams").select("*");
@@ -121,36 +132,12 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
 
     if (module === "sala_agil") {
       const defaultCols = [
-        {
-          key: "aguardando_desenvolvimento",
-          label: "Aguardando Desenvolvimento",
-          color_class: "bg-kanban-aguardando",
-          dot_color: "bg-muted-foreground",
-          sort_order: 0,
-        },
-        {
-          key: "em_desenvolvimento",
-          label: "Em Desenvolvimento",
-          color_class: "bg-kanban-desenvolvimento",
-          dot_color: "bg-info",
-          sort_order: 1,
-        },
-        {
-          key: "em_code_review",
-          label: "Em Code Review",
-          color_class: "bg-kanban-review",
-          dot_color: "bg-accent",
-          sort_order: 2,
-        },
+        { key: "aguardando_desenvolvimento", label: "Aguardando Desenvolvimento", color_class: "bg-kanban-aguardando", dot_color: "bg-muted-foreground", sort_order: 0 },
+        { key: "em_desenvolvimento", label: "Em Desenvolvimento", color_class: "bg-kanban-desenvolvimento", dot_color: "bg-info", sort_order: 1 },
+        { key: "em_code_review", label: "Em Code Review", color_class: "bg-kanban-review", dot_color: "bg-accent", sort_order: 2 },
         { key: "em_teste", label: "Em Teste", color_class: "bg-kanban-teste", dot_color: "bg-warning", sort_order: 3 },
         { key: "bug", label: "Bug", color_class: "bg-kanban-bug", dot_color: "bg-destructive", sort_order: 4 },
-        {
-          key: "pronto_para_publicacao",
-          label: "Pronto para Publicação",
-          color_class: "bg-kanban-pronto",
-          dot_color: "bg-success",
-          sort_order: 5,
-        },
+        { key: "pronto_para_publicacao", label: "Pronto para Publicação", color_class: "bg-kanban-pronto", dot_color: "bg-success", sort_order: 5 },
       ];
       await supabase.from("workflow_columns").insert(defaultCols.map((c) => ({ ...c, team_id: (data as any).id })));
     }
@@ -242,9 +229,7 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
                   <div>
                     <Label>Tipo de Time *</Label>
                     <Select value={module} onValueChange={setModule}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="sala_agil">Sala Ágil</SelectItem>
                         <SelectItem value="sustentacao">Sustentação</SelectItem>
@@ -252,9 +237,7 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
                     </Select>
                   </div>
                 )}
-                <Button onClick={handleCreate} className="w-full">
-                  Criar Time
-                </Button>
+                <Button onClick={handleCreate} className="w-full">Criar Time</Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -264,24 +247,38 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {allTeams.map((team) => {
           const members = teamMembers[team.id] || [];
+          const isExpanded = expandedTeams.has(team.id);
+          const isActive = currentTeamId === team.id;
+
           return (
             <Card
               key={team.id}
-              className={`cursor-pointer transition-all ${currentTeamId === team.id ? "ring-2 ring-primary" : "hover:shadow-md"}`}
-              onClick={() => setCurrentTeamId(team.id)}
+              className={`transition-all ${
+                isActive ? "ring-2 ring-primary" : "hover:shadow-md"
+              }`}
             >
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <div className="space-y-0.5">
-                  <CardTitle className="text-lg">{team.name}</CardTitle>
-                  <Badge variant="outline" className="text-[10px]">
-                    {MODULE_LABELS[team.module] || team.module}
-                  </Badge>
+              {/* Header — clica para selecionar time ativo */}
+              <CardHeader
+                className="flex flex-row items-center justify-between pb-2 cursor-pointer"
+                onClick={() => setCurrentTeamId(team.id)}
+              >
+                <div className="space-y-0.5 min-w-0 flex-1">
+                  <CardTitle className="text-lg leading-tight">{team.name}</CardTitle>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge variant="outline" className="text-[10px]">
+                      {MODULE_LABELS[team.module] || team.module}
+                    </Badge>
+                    {isActive && (
+                      <span className="text-[10px] text-primary font-semibold">● Ativo</span>
+                    )}
+                  </div>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-1 shrink-0 ml-2">
                   {canManage && (
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-7 w-7"
                       onClick={(e) => {
                         e.stopPropagation();
                         setEditingTeam({
@@ -292,42 +289,55 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
                         });
                       }}
                     >
-                      <Edit2 className="h-4 w-4" />
+                      <Edit2 className="h-3.5 w-3.5" />
                     </Button>
                   )}
                   {canManage && (
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-7 w-7"
                       onClick={(e) => {
                         e.stopPropagation();
                         setDeleteTarget(team.id);
                       }}
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
                     </Button>
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {currentTeamId === team.id && <span className="text-xs text-primary font-medium">● Time ativo</span>}
-                {members.length > 0 ? (
-                  <div className="space-y-1.5 pt-1 border-t border-border/50">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                      <Users className="h-3 w-3" /> {members.length} membro{members.length !== 1 ? "s" : ""}
-                    </p>
-                    {members.map((m) => (
-                      <div key={m.user_id} className="flex items-center gap-2 text-xs">
-                        <UserCircle className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="font-medium truncate flex-1">{m.display_name}</span>
-                        <Badge variant="secondary" className="text-[10px] shrink-0">
-                          {m.role}
-                        </Badge>
-                      </div>
-                    ))}
+
+              {/* Botão toggle membros */}
+              <CardContent className="pt-0 pb-3 space-y-2">
+                <button
+                  onClick={(e) => toggleExpanded(team.id, e)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors border border-border/50"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Users className="h-3 w-3" />
+                    {members.length} membro{members.length !== 1 ? "s" : ""}
+                  </span>
+                  {isExpanded
+                    ? <ChevronUp className="h-3.5 w-3.5" />
+                    : <ChevronDown className="h-3.5 w-3.5" />}
+                </button>
+
+                {/* Lista de membros — expandível */}
+                {isExpanded && (
+                  <div className="space-y-1.5 pt-1 border-t border-border/50 animate-in fade-in slide-in-from-top-1 duration-150">
+                    {members.length > 0 ? (
+                      members.map((m) => (
+                        <div key={m.user_id} className="flex items-center gap-2 text-xs px-1">
+                          <UserCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="font-medium truncate flex-1">{m.display_name}</span>
+                          <Badge variant="secondary" className="text-[10px] shrink-0">{m.role}</Badge>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground px-1 py-0.5">Nenhum membro cadastrado.</p>
+                    )}
                   </div>
-                ) : (
-                  <p className="text-[10px] text-muted-foreground pt-1">Nenhum membro</p>
                 )}
               </CardContent>
             </Card>
@@ -345,9 +355,7 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
 
       <Dialog open={!!editingTeam} onOpenChange={(o) => !o && setEditingTeam(null)}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Editar Time</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Editar Time</DialogTitle></DialogHeader>
           {editingTeam && (
             <div className="space-y-4">
               <div>
@@ -371,9 +379,7 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
                     value={editingTeam.module}
                     onValueChange={(v) => setEditingTeam({ ...editingTeam, module: v })}
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="sala_agil">Sala Ágil</SelectItem>
                       <SelectItem value="sustentacao">Sustentação</SelectItem>
@@ -381,13 +387,12 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
                   </Select>
                 </div>
               )}
-              <Button onClick={handleUpdate} className="w-full">
-                Salvar
-              </Button>
+              <Button onClick={handleUpdate} className="w-full">Salvar</Button>
             </div>
           )}
         </DialogContent>
       </Dialog>
+
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
