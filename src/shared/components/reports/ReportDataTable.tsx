@@ -19,7 +19,7 @@ interface ReportDataTableProps<T = any> {
   subtitle?: string;
   columns: TableColumn<T>[];
   data: T[];
-  rowKey?: (row: T) => string | number;
+  rowKey?: (row: T, index: number) => string | number;
   emptyMessage?: string;
   maxRows?: number;
   badge?: string | number;
@@ -110,7 +110,7 @@ export function ReportDataTable<T extends Record<string, any>>({
                 <tbody>
                   {paged.map((row, idx) => (
                     <tr
-                      key={rowKey ? rowKey(row) : idx}
+                      key={rowKey ? rowKey(row, page * perPage + idx) : idx}
                       className={cn(
                         "border-t transition-colors hover:bg-muted/30",
                         idx % 2 !== 0 && "bg-muted/10",

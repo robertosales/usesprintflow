@@ -104,7 +104,7 @@ export function useCapacityPlanner() {
       // undefined → Supabase omite o parâmetro → PostgreSQL usa DEFAULT NULL
       const teamId  = selectedTeam !== "all" ? selectedTeam : undefined;
 
-      const rpcParams: Record<string, unknown> = {
+      const rpcParams: { p_team_ids: string[]; p_team_id?: string; p_default_cap?: number } = {
         p_team_ids:    teamIds,
         p_default_cap: 40,
       };
@@ -115,7 +115,7 @@ export function useCapacityPlanner() {
       if (rpcErr) throw rpcErr;
       if (cancelledRef.current) return;
 
-      const rows    = (data ?? []) as RpcTeamRow[];
+      const rows    = (data ?? []) as unknown as RpcTeamRow[];
       const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
 
       const enriched: TeamCapacity[] = rows.map(row => {
@@ -192,6 +192,12 @@ export function useCapacityPlanner() {
 
   return {
     teamCapacities,
+    devStats: teamCapacities.flatMap(t => t.devs).map((d) => ({
+      ...d,
+      userId: d.devId,
+      husAtivas: d.wipCount,
+      pontosAtivos: d.allocatedHours,
+    })),
     overloadedDevs,
     unknownStatusDevs,
     loading,

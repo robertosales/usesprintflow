@@ -31,8 +31,6 @@ export interface ApfGeneration {
   storage_path: string | null;     // novo
   status: "pending" | "success" | "error";
   error_message: string | null;
-  pf_total?: number | null;
-  pf_breakdown?: Record<string, number> | null;
   created_at: string;
 }
 

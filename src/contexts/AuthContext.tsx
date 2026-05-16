@@ -16,6 +16,8 @@ interface Profile {
   role?: string;
 }
 
+type AuthTeam = { id: string; name: string; module: string };
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
@@ -24,8 +26,9 @@ interface AuthContextType {
   loading: boolean;
   signOut: () => Promise<void>;
   currentTeamId: string | null;
+  currentTeam: AuthTeam | null;
   setCurrentTeamId: (id: string | null) => void;
-  teams: { id: string; name: string; module: string }[];
+  teams: AuthTeam[];
   refreshTeams: () => Promise<void>;
   roles: AppRole[];
   hasPermission: (permission: Permission) => boolean;
@@ -43,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [permissions, setPermissions] = useState<Set<Permission>>(new Set());
   const [loading,     setLoading]     = useState(true);
   const [currentTeamId, setCurrentTeamIdState] = useState<string | null>(null);
-  const [teams,       setTeams]       = useState<{ id: string; name: string; module: string }[]>([]);
+  const [teams,       setTeams]       = useState<AuthTeam[]>([]);
 
   const currentTeamIdRef = useRef<string | null>(null);
   const mountedRef       = useRef(true);
@@ -97,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshTeams = async () => {
     const { data, error } = await supabase.from("teams").select("id, name, module");
     if (error) { console.error("[Auth] refreshTeams:", error); return; }
-    const teamList = (data ?? []) as { id: string; name: string; module: string }[];
+    const teamList = (data ?? []) as AuthTeam[];
     if (!mountedRef.current) return;
     setTeams(teamList);
     if (teamList.length > 0 && !currentTeamIdRef.current) {
@@ -176,7 +179,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       session, user, profile, isAdmin, loading, signOut,
-      currentTeamId, setCurrentTeamId, teams, refreshTeams,
+      currentTeamId, currentTeam: teams.find((t) => t.id === currentTeamId) ?? null,
+      setCurrentTeamId, teams, refreshTeams,
       roles, hasPermission, refreshProfile,
     }}>
       {children}

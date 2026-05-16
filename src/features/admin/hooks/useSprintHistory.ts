@@ -13,6 +13,7 @@ export interface DevStat {
 }
 
 export interface SprintMetrics {
+  id:              string;
   sprintId:        string;
   sprintName:      string;
   teamId:          string;
@@ -31,6 +32,7 @@ export interface SprintMetrics {
   impedimentos:    number;
   devStats:        DevStat[];
   durationWarning?: boolean;
+  delayDays?: number;
 }
 
 export type PeriodoFiltro = "3m" | "6m" | "12m" | "all";
@@ -124,7 +126,7 @@ export function useSprintHistory() {
       const teamId  = filters.teamId !== "all" ? filters.teamId : undefined;
       const cutoff  = cutoffDateStr(filters.periodo);
 
-      const rpcParams: Record<string, unknown> = { p_team_ids: teamIds };
+      const rpcParams: { p_team_ids: string[]; p_team_id?: string; p_cutoff?: string } = { p_team_ids: teamIds };
       if (teamId  !== undefined) rpcParams.p_team_id = teamId;
       if (cutoff  !== undefined) rpcParams.p_cutoff  = cutoff;
 
@@ -133,11 +135,12 @@ export function useSprintHistory() {
       if (rpcErr) throw rpcErr;
       if (cancelledRef.current) return;
 
-      const result  = data as { metrics: RpcMetricRow[]; comparativo: RpcComparativoRow[] };
+      const result  = data as unknown as { metrics: RpcMetricRow[]; comparativo: RpcComparativoRow[] };
       const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
 
       const enrichedMetrics: SprintMetrics[] = (result.metrics ?? []).map(row => ({
         ...row,
+        id:              row.sprintId,
         teamName:        teamMap[row.teamId]?.name ?? row.teamId,
         totalHUs:        Number(row.totalHUs),
         husConcluidadas: Number(row.husConcluidadas),
@@ -147,6 +150,7 @@ export function useSprintHistory() {
         horasRealizadas: Number(row.horasRealizadas),
         desvioHoras:     Number(row.desvioHoras),
         impedimentos:    Number(row.impedimentos),
+        delayDays:       0,
         durationWarning: Number(row.durationDays) < 0,
         devStats:        (row.devStats ?? []).map(d => ({
           ...d,
@@ -206,6 +210,7 @@ export function useSprintHistory() {
 
   return {
     metrics,
+    sprints: metrics,
     teamComparativo,
     loading,
     error,
