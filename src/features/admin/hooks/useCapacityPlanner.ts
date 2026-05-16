@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-// ── Tipos públicos ─────────────────────────────────────────────────────────
+// ── Tipos públicos ──────────────────────────────────────────────────────────
 
 export type CapacityStatus = "ok" | "warning" | "overloaded" | "idle" | "unknown";
 
@@ -37,7 +37,7 @@ export interface TeamCapacity {
   hasUnestimated: boolean;
 }
 
-// ── Raw shapes da RPC ──────────────────────────────────────────────────
+// ── Raw shapes da RPC ────────────────────────────────────────────────────
 
 interface RpcDevRow {
   devId:            string;
@@ -62,7 +62,7 @@ interface RpcTeamRow {
   devs:           RpcDevRow[];
 }
 
-// ── Helper: status do dev ────────────────────────────────────────────────
+// ── Helper: status do dev ───────────────────────────────────────────────────
 
 function calcStatus(
   husCount: number,
@@ -76,7 +76,7 @@ function calcStatus(
   return "idle";
 }
 
-// ── Hook ───────────────────────────────────────────────────────────────────
+// ── Hook ───────────────────────────────────────────────────────────────────────
 
 export function useCapacityPlanner() {
   const { teams } = useAuth();
@@ -100,13 +100,17 @@ export function useCapacityPlanner() {
 
     try {
       const teamIds = teams.map(t => t.id);
-      const teamId  = selectedTeam !== "all" ? selectedTeam : null;
 
-      const { data, error: rpcErr } = await supabase.rpc("get_capacity_planner", {
+      // undefined → Supabase omite o parâmetro → PostgreSQL usa DEFAULT NULL
+      const teamId  = selectedTeam !== "all" ? selectedTeam : undefined;
+
+      const rpcParams: Record<string, unknown> = {
         p_team_ids:    teamIds,
-        p_team_id:     teamId,
         p_default_cap: 40,
-      });
+      };
+      if (teamId !== undefined) rpcParams.p_team_id = teamId;
+
+      const { data, error: rpcErr } = await supabase.rpc("get_capacity_planner", rpcParams);
 
       if (rpcErr) throw rpcErr;
       if (cancelledRef.current) return;
@@ -115,10 +119,10 @@ export function useCapacityPlanner() {
       const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
 
       const enriched: TeamCapacity[] = rows.map(row => {
-        const teamInfo  = teamMap[row.teamId];
-        const totalCap  = Number(row.totalCapacity);
-        const totalAlloc= Number(row.totalAllocated);
-        const totalReal = Number(row.totalRealized);
+        const teamInfo   = teamMap[row.teamId];
+        const totalCap   = Number(row.totalCapacity);
+        const totalAlloc = Number(row.totalAllocated);
+        const totalReal  = Number(row.totalRealized);
 
         const devs: DevCapacity[] = (row.devs ?? []).map(d => {
           const cap      = Number(d.capacityHours);
@@ -175,8 +179,6 @@ export function useCapacityPlanner() {
     load();
     return () => { cancelledRef.current = true; };
   }, [load]);
-
-  // ── Derivados ────────────────────────────────────────────────────────────
 
   const overloadedDevs = useMemo(
     () => teamCapacities.flatMap(t => t.devs).filter(d => d.status === "overloaded"),

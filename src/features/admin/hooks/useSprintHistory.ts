@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-// ── Tipos públicos ─────────────────────────────────────────────────────────
+// ── Tipos públicos ──────────────────────────────────────────────────────────
 
 export interface DevStat {
   developerId:    string;
@@ -52,10 +52,10 @@ export interface TeamComparativo {
   semDados:          boolean;
 }
 
-// ── Helper: cutoff por período ────────────────────────────────────────────
+// ── Helper: cutoff por período ────────────────────────────────────────────────
 
-function cutoffDateStr(periodo: PeriodoFiltro): string | null {
-  if (periodo === "all") return null;
+function cutoffDateStr(periodo: PeriodoFiltro): string | undefined {
+  if (periodo === "all") return undefined; // omite o parâmetro → usa DEFAULT NULL
   const d = new Date();
   const months = periodo === "3m" ? 3 : periodo === "6m" ? 6 : 12;
   d.setMonth(d.getMonth() - months);
@@ -93,7 +93,7 @@ interface RpcComparativoRow {
   semDados:          boolean;
 }
 
-// ── Hook ───────────────────────────────────────────────────────────────────
+// ── Hook ───────────────────────────────────────────────────────────────────────
 
 export function useSprintHistory() {
   const { teams } = useAuth();
@@ -118,23 +118,24 @@ export function useSprintHistory() {
     setError(null);
 
     try {
-      const teamIds  = teams.map(t => t.id);
-      const teamId   = filters.teamId !== "all" ? filters.teamId : null;
-      const cutoff   = cutoffDateStr(filters.periodo);
+      const teamIds = teams.map(t => t.id);
 
-      const { data, error: rpcErr } = await supabase.rpc("get_sprint_history", {
-        p_team_ids: teamIds,
-        p_team_id:  teamId,
-        p_cutoff:   cutoff,
-      });
+      // undefined → Supabase omite o parâmetro → PostgreSQL usa DEFAULT NULL
+      const teamId  = filters.teamId !== "all" ? filters.teamId : undefined;
+      const cutoff  = cutoffDateStr(filters.periodo);
+
+      const rpcParams: Record<string, unknown> = { p_team_ids: teamIds };
+      if (teamId  !== undefined) rpcParams.p_team_id = teamId;
+      if (cutoff  !== undefined) rpcParams.p_cutoff  = cutoff;
+
+      const { data, error: rpcErr } = await supabase.rpc("get_sprint_history", rpcParams);
 
       if (rpcErr) throw rpcErr;
       if (cancelledRef.current) return;
 
-      const result   = data as { metrics: RpcMetricRow[]; comparativo: RpcComparativoRow[] };
-      const teamMap  = Object.fromEntries(teams.map(t => [t.id, t]));
+      const result  = data as { metrics: RpcMetricRow[]; comparativo: RpcComparativoRow[] };
+      const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
 
-      // Enriquece métricas com teamName (vem do AuthContext)
       const enrichedMetrics: SprintMetrics[] = (result.metrics ?? []).map(row => ({
         ...row,
         teamName:        teamMap[row.teamId]?.name ?? row.teamId,
@@ -155,19 +156,17 @@ export function useSprintHistory() {
         })),
       }));
 
-      // Enriquece comparativo com teamName e module
       const enrichedComp: TeamComparativo[] = (result.comparativo ?? []).map(row => ({
         ...row,
-        teamName:         teamMap[row.teamId]?.name   ?? row.teamId,
-        module:           teamMap[row.teamId]?.module ?? "",
-        totalSprints:     Number(row.totalSprints),
-        avgVelocity:      Number(row.avgVelocity),
-        avgTaxaConclusao: Number(row.avgTaxaConclusao),
-        avgDesvioHoras:   Number(row.avgDesvioHoras),
-        totalImpedimentos:Number(row.totalImpedimentos),
+        teamName:          teamMap[row.teamId]?.name   ?? row.teamId,
+        module:            teamMap[row.teamId]?.module ?? "",
+        totalSprints:      Number(row.totalSprints),
+        avgVelocity:       Number(row.avgVelocity),
+        avgTaxaConclusao:  Number(row.avgTaxaConclusao),
+        avgDesvioHoras:    Number(row.avgDesvioHoras),
+        totalImpedimentos: Number(row.totalImpedimentos),
       }));
 
-      // Times sem dados no período (presentes no AuthContext mas ausentes na RPC)
       const rpcTeamIds = new Set(enrichedComp.map(r => r.teamId));
       teams.forEach(t => {
         if (!rpcTeamIds.has(t.id)) {
@@ -200,7 +199,6 @@ export function useSprintHistory() {
     return () => { cancelledRef.current = true; };
   }, [load]);
 
-  // setFilterTeam e setFilterPeriodo mantidos por compatibilidade com testes
   const setFilterTeam   = useCallback((teamId: string) =>
     setFilters(f => ({ ...f, teamId })), []);
   const setFilterPeriod = useCallback((periodo: PeriodoFiltro) =>
