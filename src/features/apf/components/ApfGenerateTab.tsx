@@ -87,7 +87,6 @@ function FileUploadField({ field, file, onSelect, onRemove }: {
   );
 }
 
-/** Indicador de 3 etapas de progresso */
 const STEPS = [
   { step: "reading_files", label: "Lendo arquivos" },
   { step: "calling_ai",    label: "Gerando com IA" },
@@ -99,8 +98,8 @@ function ProgressSteps({ currentStep }: { currentStep: string }) {
   return (
     <div className="flex items-center justify-center gap-3 py-2">
       {STEPS.map((s, i) => {
-        const done    = currentIdx > i;
-        const active  = currentIdx === i;
+        const done   = currentIdx > i;
+        const active = currentIdx === i;
         return (
           <div key={s.step} className="flex items-center gap-1.5">
             {i > 0 && <div className={`h-px w-6 ${done ? "bg-primary" : "bg-border"}`} />}
@@ -153,7 +152,6 @@ export function ApfGenerateTab() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-      {/* Left Panel */}
       <div className="lg:col-span-3 space-y-5">
         <Card>
           <CardHeader className="pb-3"><CardTitle className="text-sm">Seleção</CardTitle></CardHeader>
@@ -228,7 +226,6 @@ export function ApfGenerateTab() {
           <CardHeader className="pb-3"><CardTitle className="text-sm">Arquivos de Entrada</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <FileUploadField field={BASELINE_FIELD} file={baselineFile} onSelect={setBaselineFile} onRemove={() => setBaselineFile(null)} />
-
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">
                 {HU_FIELD.label} <span className="text-muted-foreground">({huFiles.length} anexada{huFiles.length === 1 ? "" : "s"})</span>
@@ -260,12 +257,10 @@ export function ApfGenerateTab() {
                 />
               </label>
             </div>
-
             <FileUploadField field={MODEL_FIELD} file={modelFile} onSelect={setModelFile} onRemove={() => setModelFile(null)} />
           </CardContent>
         </Card>
 
-        {/* Botão de geração + indicador de progresso */}
         <div className="space-y-2">
           <Button className="w-full" size="lg" disabled={!canGenerate || generating} onClick={handleGenerateClick}>
             {generating ? (
@@ -276,12 +271,9 @@ export function ApfGenerateTab() {
               <><Eye className="h-4 w-4 mr-2" /> Gerar e visualizar documento</>
             )}
           </Button>
-
-          {/* Indicador de 3 etapas — visível apenas durante a geração */}
           {generating && progressStep !== "idle" && (
             <ProgressSteps currentStep={progressStep} />
           )}
-
           {questions.length > 0 && (
             <p className="text-[11px] text-muted-foreground px-1">
               ⓘ Este template contém {questions.length} pergunta{questions.length > 1 ? "s" : ""} interativa{questions.length > 1 ? "s" : ""} que você precisa responder antes da geração.
@@ -290,7 +282,6 @@ export function ApfGenerateTab() {
         </div>
       </div>
 
-      {/* Right Panel - Histórico */}
       <div className="lg:col-span-2">
         <Card className="h-full">
           <CardHeader className="pb-3"><CardTitle className="text-sm">Histórico desta Sprint</CardTitle></CardHeader>
@@ -313,11 +304,8 @@ export function ApfGenerateTab() {
                       <p className="text-[10px] text-muted-foreground">
                         {new Date(g.created_at).toLocaleString("pt-BR")}
                       </p>
-                      {/* PF total extraído */}
                       {g.pf_total != null && (
-                        <p className="text-[10px] font-semibold text-primary">
-                          📊 PF Total: {g.pf_total}
-                        </p>
+                        <p className="text-[10px] font-semibold text-primary">📊 PF Total: {g.pf_total}</p>
                       )}
                       {g.status === "success" && lastResult && g.output_filename?.startsWith(lastResult.baseFilename) && (
                         <div className="flex gap-1.5 mt-1">
@@ -342,7 +330,6 @@ export function ApfGenerateTab() {
         </Card>
       </div>
 
-      {/* Modal de perguntas */}
       <Dialog open={showQuestions} onOpenChange={setShowQuestions}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -387,7 +374,6 @@ export function ApfGenerateTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de pré-visualização */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminKpis } from "@/features/admin/hooks/useAdminKpis";
@@ -16,22 +16,34 @@ import { NotificationBell }    from "@/features/admin/components/NotificationBel
 import { Button }   from "@/components/ui/button";
 import { Badge }    from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LayoutDashboard, LogOut, Users, UsersRound, BarChart3, History, Gauge } from "lucide-react";
+import { LayoutDashboard, LogOut, Users, UsersRound, BarChart3, History, Gauge, AlertTriangle } from "lucide-react";
 
 export default function AdminDashboard() {
   const { profile, signOut, teams } = useAuth();
-  const { global: g, byTeam, loading } = useAdminKpis();
+  const { global: g, byTeam, loading, dataWarnings } = useAdminKpis();
   const { notifications, criticalCount, warningCount } = useNotifications(byTeam);
   const navigate = useNavigate();
   const [selectedTeam, setSelectedTeam] = useState("all");
 
-  const now  = new Date();
+  // Relogio atualizado a cada 30 segundos (fix #5: relogio congelado)
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, []);
   const hora = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const data = now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
+  // Sprint label corrigido (fix #3: exibia sprint do primeiro time encontrado ao inves de resumo)
   const sprintLabel = selectedTeam === "all"
-    ? byTeam.find(t => t.sprintAtivo)?.sprintAtivo ?? null
+    ? (() => {
+        const comSprint = byTeam.filter(t => t.sprintAtivo);
+        if (comSprint.length === 0) return null;
+        if (comSprint.length === 1) return comSprint[0].sprintAtivo;
+        return `${comSprint.length} sprints ativas`;
+      })()
     : byTeam.find(t => t.teamId === selectedTeam)?.sprintAtivo ?? null;
 
   return (
@@ -57,7 +69,7 @@ export default function AdminDashboard() {
             )}
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Users className="h-3.5 w-3.5" />
-              <span>{profile?.display_name || profile?.email}</span>
+              <span>{profile?.display_name || "Admin"}</span>
             </div>
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1"
               onClick={async () => { await signOut(); navigate("/auth"); }}>
@@ -72,6 +84,19 @@ export default function AdminDashboard() {
           <h1 className="text-xl font-bold">Olá, {profile?.display_name?.split(" ")[0] ?? "Admin"} 👋</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Visão consolidada de todos os módulos do Sistema AXION.</p>
         </div>
+
+        {/* Avisos de dados incompletos por volume (fix #2) */}
+        {dataWarnings.length > 0 && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Atenção:</strong> Alguns KPIs podem estar incompletos por volume excessivo de dados:
+              <ul className="mt-1 list-disc pl-4">
+                {dataWarnings.map((w, i) => <li key={i} className="text-xs">{w}</li>)}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Tabs defaultValue="visao-geral">
           <TabsList className="mb-6 flex-wrap h-auto gap-1">

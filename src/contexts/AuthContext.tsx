@@ -35,151 +35,150 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [roles, setRoles] = useState<AppRole[]>([]);
+  const [session,     setSession]     = useState<Session | null>(null);
+  const [user,        setUser]        = useState<User | null>(null);
+  const [profile,     setProfile]     = useState<Profile | null>(null);
+  const [isAdmin,     setIsAdmin]     = useState(false);
+  const [roles,       setRoles]       = useState<AppRole[]>([]);
   const [permissions, setPermissions] = useState<Set<Permission>>(new Set());
-  const [loading, setLoading] = useState(true);
+  const [loading,     setLoading]     = useState(true);
   const [currentTeamId, setCurrentTeamIdState] = useState<string | null>(null);
-  const [teams, setTeams] = useState<{ id: string; name: string; module: string }[]>([]);
+  const [teams,       setTeams]       = useState<{ id: string; name: string; module: string }[]>([]);
 
-  // ref para evitar que refreshTeams capture currentTeamId stale no closure
   const currentTeamIdRef = useRef<string | null>(null);
+  const mountedRef       = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const setCurrentTeamId = (id: string | null) => {
     currentTeamIdRef.current = id;
     setCurrentTeamIdState(id);
-    if (id) {
-      localStorage.setItem("selectedTeamId", id);
-    } else {
-      localStorage.removeItem("selectedTeamId");
-    }
+    if (id) localStorage.setItem("selectedTeamId", id);
+    else     localStorage.removeItem("selectedTeamId");
   };
 
   const fetchProfile = async (userId: string) => {
-    try {
-      const { data } = await supabase.from("profiles").select("*").eq("user_id", userId).single();
-      if (data) setProfile(data as Profile);
-    } catch (err) {
-      console.error("Error fetching profile:", err);
-    }
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
+    if (error) { console.error("[Auth] fetchProfile:", error); return; }
+    if (data && mountedRef.current) setProfile(data as Profile);
   };
 
   const refreshProfile = async () => {
     if (user?.id) await fetchProfile(user.id);
   };
 
-  const fetchRoles = async (userId: string) => {
+  const fetchRoles = async (userId: string): Promise<boolean> => {
+    const { data, error } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
+    if (error) { console.error("[Auth] fetchRoles:", error); return false; }
+    const userRoles = (data ?? []).map((r: any) => r.role as AppRole);
+    const admin     = userRoles.includes("admin");
+    if (!mountedRef.current) return admin;
+    setRoles(userRoles);
+    setIsAdmin(admin);
     try {
-      const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-      const userRoles = data?.map((r: any) => r.role as AppRole) ?? [];
-      setRoles(userRoles);
-      const admin = userRoles.includes("admin");
-      setIsAdmin(admin);
       const perms = await getPermissionsForRoles(userRoles);
-      setPermissions(perms);
-      return admin;
-    } catch (err) {
-      console.error("Error fetching roles:", err);
-      return false;
+      if (mountedRef.current) setPermissions(perms);
+    } catch (e) {
+      console.error("[Auth] getPermissionsForRoles:", e);
     }
+    return admin;
   };
 
   const refreshTeams = async () => {
-    try {
-      const { data } = await supabase.from("teams").select("id, name, module");
-      const teamList = (data || []) as { id: string; name: string; module: string }[];
-      setTeams(teamList);
-      // usa a ref para evitar loop: não depende do estado currentTeamId do closure
-      if (teamList.length > 0 && !currentTeamIdRef.current) {
-        const savedTeamId = localStorage.getItem("selectedTeamId");
-        const validSaved = savedTeamId && teamList.some((t) => t.id === savedTeamId);
-        const initialTeam = validSaved ? savedTeamId! : teamList[0].id;
-        setCurrentTeamId(initialTeam);
-      }
-    } catch (err) {
-      console.error("Error fetching teams:", err);
+    const { data, error } = await supabase.from("teams").select("id, name, module");
+    if (error) { console.error("[Auth] refreshTeams:", error); return; }
+    const teamList = (data ?? []) as { id: string; name: string; module: string }[];
+    if (!mountedRef.current) return;
+    setTeams(teamList);
+    if (teamList.length > 0 && !currentTeamIdRef.current) {
+      const saved = localStorage.getItem("selectedTeamId");
+      const valid = saved && teamList.some(t => t.id === saved);
+      setCurrentTeamId(valid ? saved! : teamList[0].id);
     }
   };
 
-  const hasPermission = (permission: Permission): boolean => {
-    return isAdmin || permissions.has(permission);
-  };
+  const hasPermission = (permission: Permission) => isAdmin || permissions.has(permission);
 
   const loadUserData = async (userId: string) => {
     try {
       await Promise.all([fetchProfile(userId), fetchRoles(userId), refreshTeams()]);
     } catch (err) {
-      console.error("Error loading user data:", err);
+      console.error("[Auth] loadUserData:", err);
     }
   };
 
-  useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        setTimeout(() => {
-          loadUserData(session.user.id).finally(() => setLoading(false));
-        }, 0);
-      } else {
-        setProfile(null);
-        setIsAdmin(false);
-        setRoles([]);
-        setPermissions(new Set());
-        setTeams([]);
-        setCurrentTeamId(null);
-        setLoading(false);
-      }
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadUserData(session.user.id).finally(() => setLoading(false));
-      } else {
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setSession(null);
-    setUser(null);
+  const resetAuthState = () => {
+    if (!mountedRef.current) return;
     setProfile(null);
     setIsAdmin(false);
     setRoles([]);
     setPermissions(new Set());
     setTeams([]);
     setCurrentTeamId(null);
+    localStorage.removeItem("selectedTeamId");
+  };
+
+  useEffect(() => {
+    let initialised = false;
+
+    // 1. Busca sessao existente (reload de pagina, token salvo)
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!mountedRef.current) return;
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        await loadUserData(session.user.id);
+      }
+      if (mountedRef.current) setLoading(false);
+      initialised = true;
+    });
+
+    // 2. Escuta mudancas de auth (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mountedRef.current) return;
+        setSession(session);
+        setUser(session?.user ?? null);
+
+        if (session?.user) {
+          // Evita duplicar carga se getSession ja fez isso
+          if (!initialised) return;
+          await loadUserData(session.user.id);
+        } else {
+          resetAuthState();
+        }
+
+        if (mountedRef.current && initialised) setLoading(false);
+      }
+    );
+
+    return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setUser(null);
+    resetAuthState();
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        session,
-        user,
-        profile,
-        isAdmin,
-        loading,
-        signOut,
-        currentTeamId,
-        setCurrentTeamId,
-        teams,
-        refreshTeams,
-        roles,
-        hasPermission,
-        refreshProfile,
-      }}
-    >
+    <AuthContext.Provider value={{
+      session, user, profile, isAdmin, loading, signOut,
+      currentTeamId, setCurrentTeamId, teams, refreshTeams,
+      roles, hasPermission, refreshProfile,
+    }}>
       {children}
     </AuthContext.Provider>
   );
