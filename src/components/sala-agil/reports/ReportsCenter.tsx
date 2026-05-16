@@ -49,7 +49,7 @@ export function ReportsCenter({
         )}
 
         {selected === 'individual' && data && (
-          <IndividualReport data={data} emittedBy={currentUserName} />
+          <IndividualReport data={data} sprints={sprints} emittedBy={currentUserName} />
         )}
         {selected === 'sprint' && data && (
           <SprintReport data={data} emittedBy={currentUserName} />

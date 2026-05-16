@@ -42,14 +42,16 @@ function resolveIcon(icon?: ReactNode | ElementType): ReactNode {
 interface ReportKPISummaryProps {
   items: KPIItem[];
   columns?: 2 | 3 | 4;
+  cols?: 2 | 3 | 4;
 }
 
-export function ReportKPISummary({ items, columns = 4 }: ReportKPISummaryProps) {
+export function ReportKPISummary({ items, columns, cols }: ReportKPISummaryProps) {
+  const resolvedColumns = columns ?? cols ?? 4;
   const gridClass = {
     2: "grid-cols-1 sm:grid-cols-2",
     3: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
     4: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
-  }[columns];
+  }[resolvedColumns];
 
   return (
     <div className={cn("grid gap-3", gridClass)}>
