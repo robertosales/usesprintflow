@@ -36,7 +36,6 @@ export interface ApfGeneration {
   created_at: string;
 }
 
-<<<<<<< HEAD
 // Converte File do browser para base64
 export async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -53,115 +52,6 @@ export function isBinaryFile(filename: string): boolean {
   return lower.endsWith(".xlsx") || lower.endsWith(".xls") ||
          lower.endsWith(".docx") || lower.endsWith(".doc") ||
          lower.endsWith(".pdf");
-=======
-// ─── Limites ───
-const MAX_TEXT_CHARS = 80_000; // ~20 K tokens por arquivo
-
-// ─── Helpers de extração ───
-
-function isXlsx(file: File): boolean {
-  return (
-    file.name.toLowerCase().endsWith(".xlsx") ||
-    file.name.toLowerCase().endsWith(".xls") ||
-    file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-    file.type === "application/vnd.ms-excel"
-  );
-}
-
-function isTextFile(file: File): boolean {
-  const name = file.name.toLowerCase();
-  const textExts = [".md", ".txt", ".csv", ".json", ".xml", ".html", ".htm"];
-  return textExts.some((e) => name.endsWith(e)) || file.type.startsWith("text/");
-}
-
-/**
- * Extrai texto de arquivo .xlsx/.xls usando SheetJS.
- * Cada planilha vira uma seção de texto com os dados em formato CSV simples.
- */
-async function extractXlsx(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array" });
-  const parts: string[] = [];
-
-  for (const sheetName of workbook.SheetNames) {
-    const sheet = workbook.Sheets[sheetName];
-    const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
-    const trimmed = csv.trim();
-    if (trimmed) {
-      parts.push(`=== Planilha: ${sheetName} ===\n${trimmed}`);
-    }
-  }
-
-  const result = parts.join("\n\n");
-  return result || "[Arquivo xlsx sem conteúdo legível]"; 
-}
-
-/**
- * Converte um arquivo para payload { name, content } para a Edge Function.
- *
- * Prioridade de extração:
- * 1. .xlsx/.xls  → SheetJS (CSV por planilha)
- * 2. texto puro  → file.text() truncado
- * 3. demais      → aviso descritivo (sem base64)
- */
-async function fileToPayload(file: File): Promise<{ name: string; content: string }> {
-  try {
-    if (isXlsx(file)) {
-      const raw = await extractXlsx(file);
-      const content =
-        raw.length > MAX_TEXT_CHARS
-          ? raw.slice(0, MAX_TEXT_CHARS) + `\n\n[... truncado — ${(file.size / 1024).toFixed(0)} KB total ...]`
-          : raw;
-      return { name: file.name, content };
-    }
-
-    if (isTextFile(file)) {
-      const raw = await file.text();
-      const content =
-        raw.length > MAX_TEXT_CHARS
-          ? raw.slice(0, MAX_TEXT_CHARS) + `\n\n[... truncado — ${(file.size / 1024).toFixed(0)} KB total ...]`
-          : raw;
-      return { name: file.name, content };
-    }
-
-    // .docx, .pdf e outros binários — não extraímos por ora
-    return {
-      name: file.name,
-      content:
-        `[Arquivo binário: ${file.name} (${file.type || "tipo desconhecido"}, ` +
-        `${(file.size / 1024).toFixed(1)} KB). ` +
-        `Conteúdo não pôde ser extraído automaticamente. ` +
-        `Utilize as informações dos demais arquivos e as instruções do template para gerar o documento.]`,
-    };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { name: file.name, content: `[Erro ao processar ${file.name}: ${msg}]` };
-  }
-}
-
-/**
- * Prepara todos os arquivos para envio à Edge Function.
- * Exportado para uso no hook useApfGenerate.
- */
-export async function prepareFilesForEdgeFunction(
-  files: File[],
-): Promise<Array<{ name: string; content: string }>> {
-  return Promise.all(files.map(fileToPayload));
-}
-
-/**
- * Verifica se pelo menos um arquivo tem conteúdo real extraível.
- * Retorna o nome dos arquivos sem conteúdo para exibir no toast.
- */
-export function validateFilePayloads(
-  payloads: Array<{ name: string; content: string }>,
-): { valid: boolean; emptyFiles: string[] } {
-  const PLACEHOLDER_RE = /^\[Arquivo binário:|^\[Erro ao processar|^\[Arquivo xlsx sem/;
-  const emptyFiles = payloads
-    .filter((p) => PLACEHOLDER_RE.test(p.content.trim()) || p.content.trim().length < 20)
-    .map((p) => p.name);
-  return { valid: emptyFiles.length < payloads.length, emptyFiles };
->>>>>>> origin/develop
 }
 
 export async function fetchTemplates(teamId: string): Promise<ApfTemplate[]> {
@@ -241,11 +131,7 @@ export async function toggleTemplateActive(id: string, isActive: boolean): Promi
 
 export async function fetchGenerations(
   teamId: string,
-<<<<<<< HEAD
-  sprintId: string
-=======
   sprintId: string,
->>>>>>> origin/develop
 ): Promise<(ApfGeneration & { template_name?: string })[]> {
   const { data, error } = await supabase
     .from("apf_generations")
@@ -280,7 +166,6 @@ export async function createGeneration(payload: {
   return data as ApfGeneration;
 }
 
-<<<<<<< HEAD
 /**
  * Retorna a URL públicaa (signed) de um arquivo gerado no Storage
  */
@@ -331,22 +216,15 @@ export async function prepareFilesForEdgeFunction(
  * - Passa generationId para persistência automática no banco
  * - Retorna pfBreakdown e pfTotal além do docx e markdown
  */
-=======
->>>>>>> origin/develop
 export async function invokeApfGeneration(body: {
   prompt: string;
   provider: string;
   apiKey?: string;
-<<<<<<< HEAD
   files: Array<{ name: string; content: string; encoding?: "base64" | "text"; mimeType?: string }>;
-=======
-  files: Array<{ name: string; content: string }>;
->>>>>>> origin/develop
   generationId?: string;
 }): Promise<{
   docxBase64: string;
   markdown: string;
-<<<<<<< HEAD
   pfBreakdown: Record<string, number>;
   pfTotal: number | null;
   outputFilename: string;
@@ -359,28 +237,15 @@ export async function invokeApfGeneration(body: {
       // service key não fica no cliente — a Edge Function usa SUPABASE_SERVICE_ROLE_KEY do env
     },
   });
-=======
-  pfTotal: number | null;
-  pfBreakdown: Record<string, number>;
-}> {
-  const { data, error } = await supabase.functions.invoke("apf-generate", { body });
->>>>>>> origin/develop
   if (error) throw new Error(error.message ?? "Erro ao chamar a IA");
   if (!data?.success || !data?.docxBase64) {
     throw new Error(data?.error ?? "A IA não retornou conteúdo");
   }
   return {
-<<<<<<< HEAD
     docxBase64: data.docxBase64,
     markdown: data.markdown ?? "",
     pfBreakdown: data.pfBreakdown ?? {},
     pfTotal: data.pfTotal ?? null,
     outputFilename: data.outputFilename ?? "Evidencia_APF.docx",
-=======
-    docxBase64:  data.docxBase64,
-    markdown:    data.markdown ?? "",
-    pfTotal:     data.pfTotal  ?? null,
-    pfBreakdown: data.pfBreakdown ?? {},
->>>>>>> origin/develop
   };
 }

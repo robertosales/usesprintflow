@@ -172,6 +172,8 @@ export type Database = {
           id: string
           model_file: string | null
           output_filename: string | null
+          pf_breakdown: Json | null
+          pf_total: number | null
           sprint_id: string | null
           status: string
           team_id: string
@@ -186,6 +188,8 @@ export type Database = {
           id?: string
           model_file?: string | null
           output_filename?: string | null
+          pf_breakdown?: Json | null
+          pf_total?: number | null
           sprint_id?: string | null
           status?: string
           team_id: string
@@ -200,6 +204,8 @@ export type Database = {
           id?: string
           model_file?: string | null
           output_filename?: string | null
+          pf_breakdown?: Json | null
+          pf_total?: number | null
           sprint_id?: string | null
           status?: string
           team_id?: string
@@ -1410,6 +1416,7 @@ export type Database = {
           is_active: boolean
           module_access: string
           must_change_password: boolean
+          team_id: string | null
           updated_at: string
           user_id: string
         }
@@ -1422,6 +1429,7 @@ export type Database = {
           is_active?: boolean
           module_access?: string
           must_change_password?: boolean
+          team_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1434,10 +1442,19 @@ export type Database = {
           is_active?: boolean
           module_access?: string
           must_change_password?: boolean
+          team_id?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       projetos: {
         Row: {
@@ -1882,7 +1899,9 @@ export type Database = {
       }
       sprints: {
         Row: {
+          closed_at: string | null
           created_at: string
+          delay_days: number | null
           end_date: string
           goal: string | null
           id: string
@@ -1893,7 +1912,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          closed_at?: string | null
           created_at?: string
+          delay_days?: number | null
           end_date: string
           goal?: string | null
           id?: string
@@ -1904,7 +1925,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          closed_at?: string | null
           created_at?: string
+          delay_days?: number | null
           end_date?: string
           goal?: string | null
           id?: string
@@ -2058,6 +2081,7 @@ export type Database = {
           id: string
           planning_status: string | null
           position: number
+          previous_sprint_id: string | null
           priority: string
           size_reference: string | null
           sprint_id: string | null
@@ -2085,6 +2109,7 @@ export type Database = {
           id?: string
           planning_status?: string | null
           position?: number
+          previous_sprint_id?: string | null
           priority?: string
           size_reference?: string | null
           sprint_id?: string | null
@@ -2112,6 +2137,7 @@ export type Database = {
           id?: string
           planning_status?: string | null
           position?: number
+          previous_sprint_id?: string | null
           priority?: string
           size_reference?: string | null
           sprint_id?: string | null
@@ -2130,6 +2156,13 @@ export type Database = {
             columns: ["epic_id"]
             isOneToOne: false
             referencedRelation: "epics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_stories_previous_sprint_id_fkey"
+            columns: ["previous_sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
             referencedColumns: ["id"]
           },
           {
@@ -2197,6 +2230,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _assert_team_access: {
+        Args: { p_team_ids: string[] }
+        Returns: undefined
+      }
+      get_admin_kpis: {
+        Args: { p_sla_dias?: number; p_team_ids: string[] }
+        Returns: Json
+      }
+      get_capacity_planner: {
+        Args: {
+          p_default_cap?: number
+          p_team_id?: string
+          p_team_ids: string[]
+        }
+        Returns: Json
+      }
+      get_my_module_access: { Args: never; Returns: string }
+      get_sprint_history: {
+        Args: { p_cutoff?: string; p_team_id?: string; p_team_ids: string[] }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2204,6 +2258,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin: { Args: never; Returns: boolean }
       is_team_member: {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
