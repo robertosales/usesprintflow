@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   ShieldCheck, Save, Search, Trash2, AlertTriangle,
-  ArrowRightLeft, Mail, KeyRound, Copy, CheckCircle2, Zap, Shield,
+  ArrowRightLeft, Mail, KeyRound, Copy, CheckCircle2, Zap, Shield, UserCog,
 } from "lucide-react";
 import { fetchAllRoles, getRoleLabel, type AppRole } from "@/hooks/usePermissions";
 import { getInitials, formatPersonName } from "@/lib/personName";
@@ -63,7 +63,8 @@ interface ResetState {
 }
 const RESET_INITIAL: ResetState = { user: null, mode: "temp_password", saving: false, generatedPassword: null, recoveryLink: null };
 
-/** Retorna o label correto de módulo baseado no module_access E nos roles reais do usuário */
+// ── Módulo helpers ────────────────────────────────────────────────────────────
+
 function getModuleLabel(module_access: string, roles: AppRole[]): string {
   const isAdmin = roles.includes("admin" as AppRole);
   if (module_access === "admin" && !isAdmin) return "Ambos";
@@ -73,13 +74,44 @@ function getModuleLabel(module_access: string, roles: AppRole[]): string {
   return module_access;
 }
 
-function getModuleIcon(module_access: string, roles: AppRole[]) {
+/** Badges coloridos representando os módulos do usuário */
+function ModuleBadges({ module_access, roles }: { module_access: string; roles: AppRole[] }) {
   const label = getModuleLabel(module_access, roles);
-  if (label === "Sala Ágil")   return <Zap className="h-3 w-3" />;
-  if (label === "Sustentação") return <Shield className="h-3 w-3" />;
-  if (label === "Admin")       return <ShieldCheck className="h-3 w-3" />;
-  return null;
+
+  if (label === "Ambos") {
+    return (
+      <span className="flex items-center gap-1">
+        <Badge className="text-[10px] gap-1 bg-violet-600/20 text-violet-400 border-violet-500/30 hover:bg-violet-600/30">
+          <Zap className="h-3 w-3" />Sala Ágil
+        </Badge>
+        <Badge className="text-[10px] gap-1 bg-blue-600/20 text-blue-400 border-blue-500/30 hover:bg-blue-600/30">
+          <Shield className="h-3 w-3" />Sustentação
+        </Badge>
+      </span>
+    );
+  }
+  if (label === "Sala Ágil") {
+    return (
+      <Badge className="text-[10px] gap-1 bg-violet-600/20 text-violet-400 border-violet-500/30 hover:bg-violet-600/30">
+        <Zap className="h-3 w-3" />Sala Ágil
+      </Badge>
+    );
+  }
+  if (label === "Sustentação") {
+    return (
+      <Badge className="text-[10px] gap-1 bg-blue-600/20 text-blue-400 border-blue-500/30 hover:bg-blue-600/30">
+        <Shield className="h-3 w-3" />Sustentação
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="text-[10px] gap-1 bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/30">
+      <ShieldCheck className="h-3 w-3" />Admin
+    </Badge>
+  );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function UserRolesManagerEmbed() {
   const [users, setUsers]               = useState<UserWithRoles[]>([]);
@@ -188,10 +220,10 @@ export function UserRolesManagerEmbed() {
           ...(moduleChanged && { module_access: pendingModule }),
         }).eq("user_id", userId);
       }
-      toast.success("Perfis atualizados com sucesso!");
+      toast.success("Perfil atualizado com sucesso!");
       setEditingUser(null); setPendingName("");
       await fetchUsers();
-    } catch { toast.error("Erro ao salvar perfis"); }
+    } catch { toast.error("Erro ao salvar perfil"); }
     finally { setSaving(false); }
   }
 
@@ -294,8 +326,11 @@ export function UserRolesManagerEmbed() {
         />
       </div>
 
-      {/* Total */}
-      <p className="text-xs text-muted-foreground">{users.length} usuário{users.length !== 1 ? "s" : ""} no sistema</p>
+      {/* Contador */}
+      <p className="text-xs text-muted-foreground">
+        {totalItems} usuário{totalItems !== 1 ? "s" : ""} encontrado{totalItems !== 1 ? "s" : ""}
+        {totalItems !== users.length && ` (de ${users.length} no sistema)`}
+      </p>
 
       {loading ? (
         <div className="flex items-center justify-center py-10">
@@ -305,8 +340,6 @@ export function UserRolesManagerEmbed() {
         <div className="grid gap-3">
           {paginatedItems.map((user) => {
             const isEditing = editingUser === user.user_id;
-            const moduleLabel = getModuleLabel(user.module_access, user.roles);
-            const moduleIcon  = getModuleIcon(user.module_access, user.roles);
             return (
               <Card key={user.user_id} className={!user.is_active ? "opacity-50" : ""}>
                 <CardHeader className="pb-2 flex flex-row items-start justify-between">
@@ -315,27 +348,25 @@ export function UserRolesManagerEmbed() {
                       {getInitials(user.display_name)}
                     </div>
                     <div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <CardTitle className="text-sm font-semibold">{formatPersonName(user.display_name)}</CardTitle>
                         {user.must_change_password && (
                           <Badge variant="outline" className="text-[9px] border-orange-400 text-orange-500">troca senha</Badge>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">{user.email}</p>
-                      {user.teams.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {user.teams.map(t => (
-                            <Badge key={t.id} variant="outline" className="text-[10px] font-normal">{t.name}</Badge>
-                          ))}
-                        </div>
-                      )}
+                      <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                        {/* Módulos como badges coloridos */}
+                        <ModuleBadges module_access={user.module_access} roles={user.roles} />
+                        {/* Times */}
+                        {user.teams.map(t => (
+                          <Badge key={t.id} variant="outline" className="text-[10px] font-normal">{t.name}</Badge>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
                   <div className="flex gap-2 items-center shrink-0">
-                    <Badge variant="outline" className="text-[10px] gap-1">
-                      {moduleIcon}{moduleLabel}
-                    </Badge>
                     {isEditing ? (
                       <div className="flex gap-1.5">
                         <Button size="sm" variant="ghost" className="text-xs" onClick={cancelEditing} disabled={saving}>Cancelar</Button>
@@ -346,7 +377,16 @@ export function UserRolesManagerEmbed() {
                       </div>
                     ) : (
                       <div className="flex gap-1.5">
-                        <Button size="sm" variant="outline" onClick={() => startEditing(user)}>Editar</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-xs"
+                          onClick={() => startEditing(user)}
+                          title="Gerenciar perfil, módulo e roles do usuário"
+                        >
+                          <UserCog className="h-3.5 w-3.5" />
+                          Gerenciar Perfil
+                        </Button>
                         <Button size="sm" variant="outline" title="Trocar e-mail" onClick={() => setEmailState({ user, newEmail: user.email, saving: false })}>
                           <Mail className="h-3.5 w-3.5" />
                         </Button>
