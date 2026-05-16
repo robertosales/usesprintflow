@@ -124,7 +124,7 @@ export function useSprintHistory() {
       const teamId  = filters.teamId !== "all" ? filters.teamId : undefined;
       const cutoff  = cutoffDateStr(filters.periodo);
 
-      const rpcParams: Record<string, unknown> = { p_team_ids: teamIds };
+      const rpcParams: { p_team_ids: string[]; p_team_id?: string; p_cutoff?: string } = { p_team_ids: teamIds };
       if (teamId  !== undefined) rpcParams.p_team_id = teamId;
       if (cutoff  !== undefined) rpcParams.p_cutoff  = cutoff;
 
@@ -133,7 +133,7 @@ export function useSprintHistory() {
       if (rpcErr) throw rpcErr;
       if (cancelledRef.current) return;
 
-      const result  = data as { metrics: RpcMetricRow[]; comparativo: RpcComparativoRow[] };
+      const result  = data as unknown as { metrics: RpcMetricRow[]; comparativo: RpcComparativoRow[] };
       const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
 
       const enrichedMetrics: SprintMetrics[] = (result.metrics ?? []).map(row => ({
@@ -206,6 +206,7 @@ export function useSprintHistory() {
 
   return {
     metrics,
+    sprints: metrics,
     teamComparativo,
     loading,
     error,

@@ -99,7 +99,7 @@ export function useAdminKpis(): AdminKpis {
         if (rpcErr) throw rpcErr;
         if (cancelledRef.current) return;
 
-        const rows = (data ?? []) as RpcTeamRow[];
+        const rows = (data ?? []) as unknown as RpcTeamRow[];
 
         // Enriquece com nome e módulo do time (vêm do AuthContext, não da RPC)
         const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
