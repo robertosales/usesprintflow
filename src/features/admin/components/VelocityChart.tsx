@@ -1,10 +1,13 @@
-import { useMemo } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { memo, useMemo } from "react";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend
+} from "recharts";
 import type { SprintMetrics } from "../hooks/useSprintHistory";
 
 interface Props { metrics: SprintMetrics[]; }
 
-export function VelocityChart({ metrics }: Props) {
+export const VelocityChart = memo(function VelocityChart({ metrics }: Props) {
   const data = useMemo(() => {
     return [...metrics]
       .sort((a, b) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime())
@@ -12,7 +15,7 @@ export function VelocityChart({ metrics }: Props) {
         sprint:       m.sprintName.length > 14 ? m.sprintName.slice(0, 14) + "…" : m.sprintName,
         "Velocity":   m.velocityPontos,
         "Conclusão %": m.taxaConclusao,
-        "Desvio Hrs":  m.desvioHoras,
+        "Desvio Hrs":  m.desvioHoras ?? 0,
       }));
   }, [metrics]);
 
@@ -37,4 +40,4 @@ export function VelocityChart({ metrics }: Props) {
       </div>
     </div>
   );
-}
+});

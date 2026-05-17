@@ -5,11 +5,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge }   from "@/components/ui/badge";
 import { Button }  from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, RefreshCw, HelpCircle } from "lucide-react";
 
 export function AdminCapacidadePage() {
   const { teams } = useAuth();
-  const { teamCapacities, overloadedDevs, loading, selectedTeam, setSelectedTeam, reload } = useCapacityPlanner();
+  const {
+    teamCapacities,
+    overloadedDevs,
+    unknownStatusDevs,
+    loading,
+    error,
+    selectedTeam,
+    setSelectedTeam,
+    reload,
+  } = useCapacityPlanner();
 
   const totalDevs     = teamCapacities.reduce((s, t) => s + t.devs.length, 0);
   const totalCapHrs   = teamCapacities.reduce((s, t) => s + t.totalCapacity,  0);
@@ -30,7 +39,8 @@ export function AdminCapacidadePage() {
                   <AlertTriangle className="h-3 w-3" />
                   {overloadedDevs.length} sobrecarregado{overloadedDevs.length !== 1 ? "s" : ""}
                 </Badge>
-              )}</>
+              )}
+              </>
             )}
           </p>
         </div>
@@ -48,23 +58,59 @@ export function AdminCapacidadePage() {
         </div>
       </div>
 
+      {/* Alerta de erro */}
+      {error && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+          <p className="text-sm text-destructive">{error}</p>
+        </div>
+      )}
+
+      {/* Alerta: devs com HUs sem estimativa (unknownStatusDevs) */}
+      {!loading && unknownStatusDevs.length > 0 && (
+        <div className="rounded-lg border border-yellow-400/40 bg-yellow-50/5 px-4 py-3 flex items-start gap-2">
+          <HelpCircle className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
+              {unknownStatusDevs.length} desenvolvedor{unknownStatusDevs.length !== 1 ? "es" : ""} com capacidade não calculável
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Todas as HUs atribuídas estão sem estimativa de horas. A utilização real pode ser maior do que o exibido.
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {unknownStatusDevs.map(d => (
+                <li key={d.devId} className="text-xs text-muted-foreground">
+                  · <span className="font-medium">{d.devName}</span> ({d.unestimatedCount} HU{d.unestimatedCount !== 1 ? "s" : ""} sem estimativa)
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
       {/* Alertas de sobrecarga */}
       {!loading && overloadedDevs.length > 0 && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-destructive">Atenção: desenvolvedores sobrecarregados</p>
+            <p className="text-sm font-medium text-destructive">
+              {overloadedDevs.length} desenvolvedor{overloadedDevs.length !== 1 ? "es" : ""} sobrecarregado{overloadedDevs.length !== 1 ? "s" : ""}
+            </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {overloadedDevs.map(d => d.devName).join(", ")} estão com alocação acima da capacidade declarada.
+              Desenvolvedores com alocação acima de 100% da capacidade disponível.
             </p>
           </div>
         </div>
       )}
 
-      {/* Grade */}
-      {loading
-        ? <div className="space-y-4">{[1,2].map(i => <Skeleton key={i} className="h-48 w-full rounded-xl" />)}</div>
-        : <CapacityGrid teamCapacities={teamCapacities} />}
+      {/* Grid */}
+      {loading ? (
+        <div className="space-y-3">
+          {[1,2,3].map(i => <Skeleton key={i} className="h-32 w-full rounded-xl" />)}
+        </div>
+      ) : (
+        <CapacityGrid teamCapacities={teamCapacities} />
+      )}
     </div>
   );
 }

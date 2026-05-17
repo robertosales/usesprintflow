@@ -80,14 +80,17 @@ function calcStatus(
 
 export function useCapacityPlanner() {
   const { teams } = useAuth();
-  const [teamCapacities,   setTeamCapacities]   = useState<TeamCapacity[]>([]);
-  const [loading,          setLoading]          = useState(true);
-  const [error,            setError]            = useState<string | null>(null);
-  const [selectedTeam,     setSelectedTeam]     = useState("all");
-  const cancelledRef = useRef(false);
+  const [teamCapacities, setTeamCapacities] = useState<TeamCapacity[]>([]);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState<string | null>(null);
+  const [selectedTeam,   setSelectedTeam]   = useState("all");
+
+  // Token único por invocação — evita race condition com cancelledRef compartilhado
+  const currentTokenRef = useRef<symbol | null>(null);
 
   const load = useCallback(async () => {
-    cancelledRef.current = false;
+    const token = Symbol();
+    currentTokenRef.current = token;
 
     if (teams.length === 0) {
       setTeamCapacities([]);
@@ -100,8 +103,6 @@ export function useCapacityPlanner() {
 
     try {
       const teamIds = teams.map(t => t.id);
-
-      // undefined → Supabase omite o parâmetro → PostgreSQL usa DEFAULT NULL
       const teamId  = selectedTeam !== "all" ? selectedTeam : undefined;
 
       const rpcParams: { p_team_ids: string[]; p_team_id?: string; p_default_cap?: number } = {
@@ -113,7 +114,9 @@ export function useCapacityPlanner() {
       const { data, error: rpcErr } = await supabase.rpc("get_capacity_planner", rpcParams);
 
       if (rpcErr) throw rpcErr;
-      if (cancelledRef.current) return;
+
+      // Descarta resultado se outra chamada foi iniciada após esta
+      if (currentTokenRef.current !== token) return;
 
       const rows    = (data ?? []) as unknown as RpcTeamRow[];
       const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
@@ -166,18 +169,19 @@ export function useCapacityPlanner() {
 
       setTeamCapacities(enriched);
     } catch (err: any) {
-      if (!cancelledRef.current) {
+      if (currentTokenRef.current === token) {
         console.error("[useCapacityPlanner] Erro na RPC:", err);
         setError(err?.message ?? "Erro ao carregar capacidade");
       }
     } finally {
-      if (!cancelledRef.current) setLoading(false);
+      if (currentTokenRef.current === token) setLoading(false);
     }
   }, [teams, selectedTeam]);
 
   useEffect(() => {
     load();
-    return () => { cancelledRef.current = true; };
+    // Invalida token ao desmontar
+    return () => { currentTokenRef.current = null; };
   }, [load]);
 
   const overloadedDevs = useMemo(
@@ -192,12 +196,6 @@ export function useCapacityPlanner() {
 
   return {
     teamCapacities,
-    devStats: teamCapacities.flatMap(t => t.devs).map((d) => ({
-      ...d,
-      userId: d.devId,
-      husAtivas: d.wipCount,
-      pontosAtivos: d.allocatedHours,
-    })),
     overloadedDevs,
     unknownStatusDevs,
     loading,
