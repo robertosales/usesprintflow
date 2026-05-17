@@ -201,8 +201,14 @@ export function useCapacityPlanner() {
     [teamCapacities]
   );
 
+  const devStats = useMemo(
+    () => teamCapacities.flatMap(t => t.devs),
+    [teamCapacities]
+  );
+
   return {
     teamCapacities,
+    devStats,
     overloadedDevs,
     unknownStatusDevs,
     loading,
