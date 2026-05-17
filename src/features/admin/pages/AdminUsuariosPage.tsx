@@ -9,6 +9,7 @@ import { UserRolesManagerEmbed } from "@/components/UserRolesManagerEmbed";
 export function AdminUsuariosPage() {
   const { createUser } = useUsersAdmin();
   const { teams } = useTeamsAdmin();
+  const agileTeams = teams.filter(t => t.module === "sala_agil");
   const [dialogOpen, setDialogOpen] = useState(false);
 
   return (
@@ -28,7 +29,7 @@ export function AdminUsuariosPage() {
       <UserFormDialog
         open={dialogOpen}
         user={null}
-        teams={teams}
+        teams={agileTeams}
         onClose={() => setDialogOpen(false)}
         onCreate={createUser}
         onUpdate={async () => false}

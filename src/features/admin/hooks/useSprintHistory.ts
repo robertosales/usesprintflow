@@ -99,6 +99,7 @@ interface RpcComparativoRow {
 
 export function useSprintHistory() {
   const { teams } = useAuth();
+  const agileTeams = useMemo(() => teams.filter(t => t.module === "sala_agil"), [teams]);
   const [metrics,          setMetrics]          = useState<SprintMetrics[]>([]);
   const [teamComparativo,  setTeamComparativo]  = useState<TeamComparativo[]>([]);
   const [loading,          setLoading]          = useState(true);
@@ -109,7 +110,7 @@ export function useSprintHistory() {
   const load = useCallback(async () => {
     cancelledRef.current = false;
 
-    if (teams.length === 0) {
+    if (agileTeams.length === 0) {
       setMetrics([]);
       setTeamComparativo([]);
       setLoading(false);
@@ -120,7 +121,7 @@ export function useSprintHistory() {
     setError(null);
 
     try {
-      const teamIds = teams.map(t => t.id);
+      const teamIds = agileTeams.map(t => t.id);
 
       // undefined → Supabase omite o parâmetro → PostgreSQL usa DEFAULT NULL
       const teamId  = filters.teamId !== "all" ? filters.teamId : undefined;
@@ -136,7 +137,7 @@ export function useSprintHistory() {
       if (cancelledRef.current) return;
 
       const result  = data as unknown as { metrics: RpcMetricRow[]; comparativo: RpcComparativoRow[] };
-      const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
+      const teamMap = Object.fromEntries(agileTeams.map(t => [t.id, t]));
 
       const enrichedMetrics: SprintMetrics[] = (result.metrics ?? []).map(row => ({
         ...row,
@@ -172,7 +173,7 @@ export function useSprintHistory() {
       }));
 
       const rpcTeamIds = new Set(enrichedComp.map(r => r.teamId));
-      teams.forEach(t => {
+      agileTeams.forEach(t => {
         if (!rpcTeamIds.has(t.id)) {
           enrichedComp.push({
             teamId: t.id, teamName: t.name, module: t.module,
@@ -196,7 +197,7 @@ export function useSprintHistory() {
     } finally {
       if (!cancelledRef.current) setLoading(false);
     }
-  }, [teams, filters]);
+  }, [agileTeams, filters]);
 
   useEffect(() => {
     load();

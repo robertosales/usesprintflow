@@ -9,6 +9,7 @@ import { AlertTriangle, RefreshCw, HelpCircle } from "lucide-react";
 
 export function AdminCapacidadePage() {
   const { teams } = useAuth();
+  const agileTeams = teams.filter(t => t.module === "sala_agil");
   const {
     teamCapacities,
     overloadedDevs,
@@ -49,7 +50,7 @@ export function AdminCapacidadePage() {
             <SelectTrigger className="h-8 text-xs w-44"><SelectValue placeholder="Todos os times" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all" className="text-xs">Todos os times</SelectItem>
-              {teams.map(t => <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>)}
+              {agileTeams.map(t => <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={reload} title="Atualizar">

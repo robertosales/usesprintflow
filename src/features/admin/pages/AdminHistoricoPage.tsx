@@ -20,13 +20,14 @@ import type { ReportConfig } from "../hooks/useReportBuilder";
 
 export function AdminHistoricoPage() {
   const { teams } = useAuth();
+  const agileTeams = teams.filter(t => t.module === "sala_agil");
   const { global: adminKpisGlobal } = useAdminKpis();
   const { metrics, teamComparativo, loading, filters, setFilters } = useSprintHistory();
   const { buildPayload } = useReportBuilder({
     adminKpis:      adminKpisGlobal,
     allMetrics:     metrics,
     allComparativo: teamComparativo,
-    teams,
+    teams:          agileTeams,
   });
 
   const [selected,      setSelected]      = useState<SprintMetrics | null>(null);
@@ -53,13 +54,13 @@ export function AdminHistoricoPage() {
           <h2 className="text-base font-semibold">Histórico de Sprints</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             {loading ? "Carregando..." : (
-              <>{metrics.length} sprint{metrics.length !== 1 ? "s" : ""} encerrado{metrics.length !== 1 ? "s" : ""}{" "}
+              <>{metrics.length} sprint{metrics.length !== 1 ? "s" : ""} encontrado{metrics.length !== 1 ? "s" : ""}{" "}
               <Badge variant="outline" className="text-[10px] ml-1">{filters.periodo === "all" ? "todo o histórico" : `últimos ${filters.periodo}`}</Badge></>
             )}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <SprintHistoryFiltersBar filters={filters} teams={teams} onChange={setFilters} />
+          <SprintHistoryFiltersBar filters={filters} teams={agileTeams} onChange={setFilters} />
           <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => setReportOpen(true)}>
             <Download className="h-3.5 w-3.5" /> Exportar
           </Button>
@@ -83,7 +84,7 @@ export function AdminHistoricoPage() {
       )}
 
       <SprintDetailDrawer  sprint={selected}    onClose={() => setSelected(null)} />
-      <ReportConfigDialog  open={reportOpen}    teams={teams} onClose={() => setReportOpen(false)} onExport={handleExport} />
+      <ReportConfigDialog  open={reportOpen}    teams={agileTeams} onClose={() => setReportOpen(false)} onExport={handleExport} />
     </div>
   );
 }

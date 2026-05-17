@@ -6,5 +6,5 @@ import { TeamManager } from "@/components/TeamManager";
  * a lógica de listagem, CRUD e visualização de membros.
  */
 export function AdminTimesPage() {
-  return <TeamManager />;
+  return <TeamManager moduleFilter="sala_agil" />;
 }
