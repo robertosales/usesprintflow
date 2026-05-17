@@ -80,6 +80,7 @@ function calcStatus(
 
 export function useCapacityPlanner() {
   const { teams } = useAuth();
+  const agileTeams = useMemo(() => teams.filter(t => t.module === "sala_agil"), [teams]);
   const [teamCapacities, setTeamCapacities] = useState<TeamCapacity[]>([]);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState<string | null>(null);
@@ -92,7 +93,7 @@ export function useCapacityPlanner() {
     const token = Symbol();
     currentTokenRef.current = token;
 
-    if (teams.length === 0) {
+    if (agileTeams.length === 0) {
       setTeamCapacities([]);
       setLoading(false);
       return;
@@ -102,8 +103,8 @@ export function useCapacityPlanner() {
     setError(null);
 
     try {
-      const teamIds = teams.map(t => t.id);
-      const teamId  = selectedTeam !== "all" ? selectedTeam : undefined;
+      const teamIds = agileTeams.map(t => t.id);
+      const teamId  = selectedTeam !== "all" && agileTeams.some(t => t.id === selectedTeam) ? selectedTeam : undefined;
 
       const rpcParams: { p_team_ids: string[]; p_team_id?: string; p_default_cap?: number } = {
         p_team_ids:    teamIds,
@@ -119,7 +120,7 @@ export function useCapacityPlanner() {
       if (currentTokenRef.current !== token) return;
 
       const rows    = (data ?? []) as unknown as RpcTeamRow[];
-      const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
+      const teamMap = Object.fromEntries(agileTeams.map(t => [t.id, t]));
 
       const enriched: TeamCapacity[] = rows.map(row => {
         const teamInfo   = teamMap[row.teamId];
@@ -176,7 +177,13 @@ export function useCapacityPlanner() {
     } finally {
       if (currentTokenRef.current === token) setLoading(false);
     }
-  }, [teams, selectedTeam]);
+  }, [agileTeams, selectedTeam]);
+
+  useEffect(() => {
+    if (selectedTeam !== "all" && !agileTeams.some(t => t.id === selectedTeam)) {
+      setSelectedTeam("all");
+    }
+  }, [agileTeams, selectedTeam]);
 
   useEffect(() => {
     load();
