@@ -8,6 +8,7 @@ export type CapacityStatus = "ok" | "warning" | "overloaded" | "idle" | "unknown
 
 export interface DevCapacity {
   devId:            string;
+  userId?:          string;
   devName:          string;
   teamId:           string;
   teamName:         string;
@@ -15,6 +16,8 @@ export interface DevCapacity {
   allocatedHours:   number;
   realizedHours:    number;
   wipCount:         number;
+  husAtivas?:       number;
+  pontosAtivos?:    number;
   utilizationPct:   number;
   realizationPct:   number;
   status:           CapacityStatus;
@@ -137,6 +140,7 @@ export function useCapacityPlanner() {
 
           return {
             devId:            d.devId,
+              userId:           d.devId,
             devName:          d.devName,
             teamId:           row.teamId,
             teamName:         teamInfo?.name ?? row.teamId,
@@ -144,6 +148,8 @@ export function useCapacityPlanner() {
             allocatedHours:   alloc,
             realizedHours:    realized,
             wipCount:         Number(d.wipCount),
+              husAtivas:        Number(d.wipCount),
+              pontosAtivos:     0,
             utilizationPct:   utilPct,
             realizationPct:   realPct,
             status:           calcStatus(Number(d.husCount), Number(d.unestimatedCount), utilPct),
