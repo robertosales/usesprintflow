@@ -2263,6 +2263,7 @@ export type Database = {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
       }
+      status_concluidos: { Args: never; Returns: string[] }
     }
     Enums: {
       app_role:
