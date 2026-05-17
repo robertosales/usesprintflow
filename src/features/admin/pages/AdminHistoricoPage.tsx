@@ -54,7 +54,7 @@ export function AdminHistoricoPage() {
           <h2 className="text-base font-semibold">Histórico de Sprints</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             {loading ? "Carregando..." : (
-              <>{metrics.length} sprint{metrics.length !== 1 ? "s" : ""} encerrado{metrics.length !== 1 ? "s" : ""}{" "}
+              <>{metrics.length} sprint{metrics.length !== 1 ? "s" : ""} encontrado{metrics.length !== 1 ? "s" : ""}{" "}
               <Badge variant="outline" className="text-[10px] ml-1">{filters.periodo === "all" ? "todo o histórico" : `últimos ${filters.periodo}`}</Badge></>
             )}
           </p>
