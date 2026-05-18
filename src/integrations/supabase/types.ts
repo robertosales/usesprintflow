@@ -710,6 +710,42 @@ export type Database = {
         }
         Relationships: []
       }
+      demanda_hours_backup_minutos: {
+        Row: {
+          backup_at: string | null
+          created_at: string | null
+          demanda_id: string | null
+          descricao: string | null
+          fase: string | null
+          horas_corrigida: number | null
+          horas_original: number | null
+          id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          backup_at?: string | null
+          created_at?: string | null
+          demanda_id?: string | null
+          descricao?: string | null
+          fase?: string | null
+          horas_corrigida?: number | null
+          horas_original?: number | null
+          id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          backup_at?: string | null
+          created_at?: string | null
+          demanda_id?: string | null
+          descricao?: string | null
+          fase?: string | null
+          horas_corrigida?: number | null
+          horas_original?: number | null
+          id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       demanda_responsaveis: {
         Row: {
           created_at: string
