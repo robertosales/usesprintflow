@@ -79,24 +79,61 @@ const PAPEL_LABELS: Record<string, string> = {
   gestor:        "Gestor",
 };
 
-// Labels de tipo para exibição no card
+// ── Labels explícitas dos tipos conhecidos (com acentuação correta) ─────────────
 const TIPO_LABELS: Record<string, string> = {
-  corretiva:            "Corretiva",
-  evolutiva:            "Evolutiva",
-  manutencao_corretiva: "Mnt. Corretiva",
+  corretiva:              "Corretiva",
+  evolutiva:              "Evolutiva",
+  manutencao_corretiva:   "Manutenção Corretiva",
+  manutencao_preventiva:  "Manutenção Preventiva",
+  manutencao_adaptativa:  "Manutenção Adaptativa",
+  manutencao_perfectiva:  "Manutenção Perfectiva",
+  incidente:              "Incidente",
+  problema:               "Problema",
+  mudanca:                "Mudança",
+  requisicao:             "Requisição",
+  projeto:                "Projeto",
+  demanda:                "Demanda",
 };
 
+// Paleta de cores por tipo (ciclicamente reutilizada para tipos não mapeados)
 const TIPO_COLORS: Record<string, { bg: string; text: string }> = {
-  corretiva:            { bg: "rgba(239,68,68,0.12)",  text: "#ef4444" },
-  evolutiva:            { bg: "rgba(16,185,129,0.12)", text: "#10b981" },
-  manutencao_corretiva: { bg: "rgba(245,158,11,0.12)", text: "#f59e0b" },
+  corretiva:              { bg: "rgba(239,68,68,0.12)",   text: "#ef4444" },
+  evolutiva:              { bg: "rgba(16,185,129,0.12)",  text: "#10b981" },
+  manutencao_corretiva:   { bg: "rgba(245,158,11,0.12)",  text: "#f59e0b" },
+  manutencao_preventiva:  { bg: "rgba(99,102,241,0.12)",  text: "#6366f1" },
+  manutencao_adaptativa:  { bg: "rgba(6,182,212,0.12)",   text: "#06b6d4" },
+  manutencao_perfectiva:  { bg: "rgba(139,92,246,0.12)",  text: "#8b5cf6" },
+  incidente:              { bg: "rgba(244,63,94,0.12)",   text: "#f43f5e" },
+  problema:               { bg: "rgba(249,115,22,0.12)",  text: "#f97316" },
+  mudanca:                { bg: "rgba(20,184,166,0.12)",  text: "#14b8a6" },
+  requisicao:             { bg: "rgba(59,130,246,0.12)",  text: "#3b82f6" },
+  projeto:                { bg: "rgba(236,72,153,0.12)",  text: "#ec4899" },
+  demanda:                { bg: "rgba(100,116,139,0.12)", text: "#64748b" },
 };
+
+// Fallback universal: converte qualquer snake_case em "Title Case" legível
+// Ex: "manutencao_preventiva" → "Manutencao Preventiva"
+// (sem acento no fallback, mas todos os tipos conhecidos já estão mapeados acima)
+function tipoSnakeToLabel(tipo: string): string {
+  if (!tipo) return "";
+  if (TIPO_LABELS[tipo]) return TIPO_LABELS[tipo];
+  return tipo
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function tipoGetStyle(tipo: string): { bg: string; text: string } {
+  if (TIPO_COLORS[tipo]) return TIPO_COLORS[tipo];
+  // Fallback: cinza neutro
+  return { bg: "rgba(100,116,139,0.12)", text: "#64748b" };
+}
 
 // Interface para coluna de workflow dinâmica
 export interface WorkflowColumn {
   key: string;
   label: string;
-  color?: string;  // hex color, opcional
+  color?: string;
   sort_order?: number;
 }
 
@@ -140,7 +177,7 @@ function getResponsaveisList(demanda: Demanda): RespItem[] {
     .map(([papel, nome]) => ({ papel, nome: nome!, created_at: "" }));
 }
 
-// ── Avatar individual ────────────────────────────────────────────
+// ── Avatar individual ────────────────────────────────────────────────
 function ResponsavelAvatar({
   nome, papel, size = "sm", highlight = false,
 }: { nome: string; papel: string; size?: "sm" | "md"; highlight?: boolean }) {
@@ -344,8 +381,8 @@ function DemandaCard({
 }: {
   demanda: Demanda;
   accentHex: string;
-  visibleCols: string[];      // todas as colunas visíveis na ordem
-  currentIndex: number;       // índice da coluna atual
+  visibleCols: string[];
+  currentIndex: number;
   onClick?: () => void;
   onMove?: (targetKey: string) => void;
   onNovaAtividade?: () => void;
@@ -355,12 +392,11 @@ function DemandaCard({
   const late   = slaD !== null && slaD < 0;
   const responsaveis = getResponsaveisList(demanda);
 
-  // Colunas anteriores e posteriores para avançar/regredir
-  const colsAntes    = visibleCols.slice(0, currentIndex);
-  const colsDepois   = visibleCols.slice(currentIndex + 1);
+  const colsAntes  = visibleCols.slice(0, currentIndex);
+  const colsDepois = visibleCols.slice(currentIndex + 1);
 
-  const tipoLabel = TIPO_LABELS[demanda.tipo] ?? demanda.tipo;
-  const tipoStyle = TIPO_COLORS[demanda.tipo] ?? { bg: "rgba(100,116,139,0.12)", text: "#64748b" };
+  const tipoLabel = tipoSnakeToLabel(demanda.tipo);
+  const tipoStyle = tipoGetStyle(demanda.tipo);
 
   return (
     <ContextMenu>
@@ -374,7 +410,6 @@ function DemandaCard({
             <p className="text-[13px] font-semibold leading-snug text-foreground line-clamp-2">
               {demanda.descricao ?? demanda.tipo ?? "Demanda"}
             </p>
-            {/* RM, Projeto e Tipo */}
             {(demanda.rhm || demanda.projeto || demanda.tipo) && (
               <div className="flex flex-wrap gap-1">
                 {demanda.rhm && (
@@ -388,7 +423,6 @@ function DemandaCard({
                     {demanda.projeto}
                   </span>
                 )}
-                {/* NOVO: badge do Tipo da Demanda */}
                 {demanda.tipo && (
                   <span
                     className="text-[10px] px-2 py-0.5 rounded-full font-medium"
@@ -450,7 +484,6 @@ function DemandaCard({
         {onMove && (
           <>
             <ContextMenuSeparator />
-            {/* Avançar status */}
             {colsDepois.length > 0 && (
               <ContextMenuSub>
                 <ContextMenuSubTrigger>
@@ -467,7 +500,6 @@ function DemandaCard({
                 </ContextMenuSubContent>
               </ContextMenuSub>
             )}
-            {/* Regredir status */}
             {colsAntes.length > 0 && (
               <ContextMenuSub>
                 <ContextMenuSubTrigger>
@@ -484,7 +516,6 @@ function DemandaCard({
                 </ContextMenuSubContent>
               </ContextMenuSub>
             )}
-            {/* Mover para qualquer coluna (fallback completo) */}
             <ContextMenuSub>
               <ContextMenuSubTrigger>
                 <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />Mover para
@@ -583,7 +614,6 @@ function ExpandedCol({ label, colKey, demandas, accentHex, visibleCols, onCollap
 
 export interface SustentacaoBoardProps {
   demandas?: Demanda[];
-  /** Colunas do workflow do time selecionado. Se não informadas, usa FLOWPRINCIPAL. */
   workflowColumns?: WorkflowColumn[];
   onSelectDemanda?: (demanda: Demanda, initialTab?: string) => void;
   onCreateDemanda?: (situacao?: string) => void;
@@ -603,7 +633,6 @@ export function SustentacaoBoard({
   const [selectedResp, setSelectedResp] = useState<string[]>([]);
   const [selectedProjetos, setSelectedProjetos] = useState<string[]>([]);
 
-  // ── Colunas dinâmicas: usa workflowColumns do time se disponível, senão usa padrão
   const visibleCols = useMemo<string[]>(() => {
     if (workflowColumns && workflowColumns.length > 0) {
       return [...workflowColumns]
@@ -613,7 +642,6 @@ export function SustentacaoBoard({
     return [...FLOWPRINCIPAL, "bloqueada", "rejeitada"] as string[];
   }, [workflowColumns]);
 
-  // Labels dinâmicas: merge entre workflow personalizado e WORKFLOWLABELS padrão
   const colLabels = useMemo<Record<string, string>>(() => {
     const base: Record<string, string> = { ...WORKFLOWLABELS };
     if (workflowColumns) {
@@ -622,7 +650,6 @@ export function SustentacaoBoard({
     return base;
   }, [workflowColumns]);
 
-  // Cores dinâmicas: merge entre workflow personalizado e COLUMN_COLORS padrão
   const colColors = useMemo<Record<string, string>>(() => {
     const base: Record<string, string> = {};
     Object.entries(COLUMN_COLORS).forEach(([k, v]) => { base[k] = v.hex; });
@@ -635,14 +662,12 @@ export function SustentacaoBoard({
   const toggle = (key: string) =>
     setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
-  // Lista única de projetos para o multi-select
   const projetosDisponiveis = useMemo<string[]>(() => {
     const set = new Set<string>();
     demandas.forEach((d) => { if (d.projeto) set.add(d.projeto); });
     return Array.from(set).sort();
   }, [demandas]);
 
-  // Responsáveis para filtro de avatares
   const responsaveisFilter = useMemo<ResponsavelFilterItem[]>(() => {
     const map = new Map<string, ResponsavelFilterItem>();
     demandas.forEach((d) => {
@@ -665,7 +690,6 @@ export function SustentacaoBoard({
         String(d.projeto ?? "").toLowerCase().includes(q) ||
         String(d.rhm ?? "").toLowerCase().includes(q));
     }
-    // Filtro multi-projeto: mostra UNIÃO dos projetos selecionados
     if (selectedProjetos.length > 0) {
       items = items.filter((d) => d.projeto && selectedProjetos.includes(d.projeto));
     }
@@ -693,9 +717,7 @@ export function SustentacaoBoard({
 
   return (
     <div className="flex flex-col h-full gap-3">
-      {/* Barra de filtros */}
       <div className="flex items-center gap-3 px-1 flex-wrap">
-        {/* Busca */}
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
@@ -709,8 +731,6 @@ export function SustentacaoBoard({
             </button>
           )}
         </div>
-
-        {/* Multi-select de projetos */}
         {projetosDisponiveis.length > 0 && (
           <ProjetoMultiSelect
             projetos={projetosDisponiveis}
@@ -718,8 +738,6 @@ export function SustentacaoBoard({
             onChange={setSelectedProjetos}
           />
         )}
-
-        {/* Filtro de responsáveis */}
         {responsaveisFilter.length > 0 && (
           <KanbanResponsavelFilter
             responsaveis={responsaveisFilter}
@@ -727,8 +745,6 @@ export function SustentacaoBoard({
             onChange={setSelectedResp}
           />
         )}
-
-        {/* Limpar todos os filtros */}
         {hasActiveFilters && (
           <button
             onClick={() => { setSelectedProjetos([]); setSelectedResp([]); }}
@@ -737,13 +753,10 @@ export function SustentacaoBoard({
             <X className="h-3 w-3" /> Limpar filtros
           </button>
         )}
-
         <Badge variant="outline" className="text-xs font-mono h-9 px-3">
           {filtered.length} demanda{filtered.length !== 1 ? "s" : ""}
         </Badge>
       </div>
-
-      {/* Board de colunas */}
       <div className="flex gap-2 pb-4 overflow-x-auto flex-1" style={{ minHeight: 120 }}>
         {visibleCols.map((key) => {
           const label = colLabels[key] ?? key;
