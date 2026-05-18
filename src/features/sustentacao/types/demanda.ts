@@ -60,7 +60,21 @@ export const SITUACAO_COLORS: Record<string, string> = {
   cancelada: "bg-gray-200 text-gray-700 border-gray-300",
 };
 
-export const FASES = ["analise", "planejamento", "execucao", "homologacao", "producao"] as const;
+/**
+ * Todas as fases disponíveis para lançamento de horas.
+ * A ordem aqui define a ordem no select do NovaAtividadeDialog.
+ */
+export const FASES = [
+  "analise",
+  "planejamento",
+  "execucao",
+  "homologacao",
+  "producao",
+  "reuniao_cliente",
+  "reuniao_interna",
+] as const;
+
+export type DemandaFase = (typeof FASES)[number];
 
 export const FASE_LABELS: Record<string, string> = {
   analise: "Análise",
@@ -68,6 +82,8 @@ export const FASE_LABELS: Record<string, string> = {
   execucao: "Execução",
   homologacao: "Homologação",
   producao: "Produção",
+  reuniao_cliente: "Reunião com o Cliente",
+  reuniao_interna: "Reunião Interna",
 };
 
 export const REQUIRES_JUSTIFICATIVA = ["rejeitada", "cancelada", "planejamento_ag_aprovacao"] as const;
@@ -78,11 +94,13 @@ export interface Demanda {
   team_id: string;
   rhm: string;
   projeto: string;
-  titulo?: string | null; // ← adicionar aqui
+  titulo?: string | null;
   tipo: DemandaTipo;
   situacao: string;
   descricao: string;
   sla: DemandaSLA;
+  demandante?: string | null;
+  data_previsao_encerramento?: string | null;
   responsavel_requisitos?: string | null;
   responsavel_dev?: string | null;
   responsavel_teste?: string | null;
@@ -118,10 +136,8 @@ export function isDemandaIniciada(demanda: Demanda): boolean {
 }
 
 export function getResponsavelAtivo(demanda: Demanda): string | null {
-  // ✅ CORRIGIDO: tenta pelo campo da fase atual, com fallback para qualquer preenchido
   const s = demanda.situacao;
 
-  // Tenta o responsável esperado para a fase
   const porFase = [
     "fila_atendimento",
     "planejamento_elaboracao",
@@ -137,7 +153,6 @@ export function getResponsavelAtivo(demanda: Demanda): string | null {
 
   if (porFase) return porFase;
 
-  // ✅ Fallback: retorna qualquer responsável preenchido
   return (
     demanda.responsavel_dev ??
     demanda.responsavel_requisitos ??
@@ -145,6 +160,14 @@ export function getResponsavelAtivo(demanda: Demanda): string | null {
     demanda.responsavel_arquiteto ??
     null
   );
+}
+
+/**
+ * Retorna o label legível de uma fase, com fallback seguro para valores
+ * antigos ou desconhecidos salvos no banco.
+ */
+export function getFaseLabel(fase: string): string {
+  return FASE_LABELS[fase] ?? fase;
 }
 
 /** @deprecated Use FLOW_PRINCIPAL */
