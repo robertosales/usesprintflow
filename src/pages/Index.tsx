@@ -127,8 +127,6 @@ const Index = () => {
         onClose={() => setShowTeamModal(false)}
       />
 
-      <OnboardingWizard open={showWizard && !loading} onComplete={completeOnboarding} />
-
       <div className="max-w-7xl mx-auto p-4 md:p-6">
         {loading && (
           <div className="flex items-center justify-center py-20">
