@@ -650,6 +650,9 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Versão atual do sistema — atualizado em src/lib/constants.ts a cada publicação */}
+            <VersionBadge collapsed={collapsed} />
           </div>
         </aside>
 
