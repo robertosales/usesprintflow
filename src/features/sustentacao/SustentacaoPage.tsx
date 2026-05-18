@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { SustentacaoBoard } from "./components/SustentacaoBoard";
 import type { Demanda } from "./types/demanda";
 import { useDemandas } from "./hooks/useDemandas";
+import { useWorkflowSteps } from "./hooks/useWorkflowSteps";
 import { DemandaDetail } from "./components/DemandaDetail";
 import { DemandaForm } from "./components/DemandaForm";
 import { SustentacaoDashboard } from "./components/SustentacaoDashboard";
@@ -87,9 +88,18 @@ export default function SustentacaoPage() {
 
 function SustentacaoSection({ active }: { active: string }) {
   const { demandas, loading, update, moveTo, create } = useDemandas();
+  const { steps: workflowSteps } = useWorkflowSteps();
   const [selected, setSelected] = useState<Demanda | null>(null);
   const [createSituacao, setCreateSituacao] = useState<string | undefined>();
   const [showCreate, setShowCreate] = useState(false);
+
+  // Converte WorkflowStep[] → WorkflowColumn[] (formato esperado pelo SustentacaoBoard)
+  const workflowColumns = workflowSteps.map((s) => ({
+    key: s.key,
+    label: s.label,
+    color: s.hex,
+    sort_order: s.ordem,
+  }));
 
   const handleCreateDemanda = useCallback((situacao?: string) => {
     setCreateSituacao(situacao);
@@ -137,6 +147,7 @@ function SustentacaoSection({ active }: { active: string }) {
           )}
           <SustentacaoBoard
             demandas={demandas}
+            workflowColumns={workflowColumns}
             onCreateDemanda={handleCreateDemanda}
             onSelectDemanda={handleSelectDemanda}
             onMoveDemanda={handleMoveDemanda}
