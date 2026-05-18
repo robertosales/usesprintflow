@@ -11,6 +11,9 @@ import {
   User,
   ActivitySquare,
   ChevronUp,
+  ChevronsLeft,
+  ChevronsRight,
+  Check,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -33,6 +36,7 @@ export type { Demanda };
 
 export const WORKFLOWLABELS: Record<string, string> = SITUACAO_LABELS;
 
+// Colunas padrão usadas como fallback quando workflowColumns não for passado
 export const FLOWPRINCIPAL = [
   "fila_atendimento",
   "planejamento_elaboracao",
@@ -75,6 +79,27 @@ const PAPEL_LABELS: Record<string, string> = {
   gestor:        "Gestor",
 };
 
+// Labels de tipo para exibição no card
+const TIPO_LABELS: Record<string, string> = {
+  corretiva:            "Corretiva",
+  evolutiva:            "Evolutiva",
+  manutencao_corretiva: "Mnt. Corretiva",
+};
+
+const TIPO_COLORS: Record<string, { bg: string; text: string }> = {
+  corretiva:            { bg: "rgba(239,68,68,0.12)",  text: "#ef4444" },
+  evolutiva:            { bg: "rgba(16,185,129,0.12)", text: "#10b981" },
+  manutencao_corretiva: { bg: "rgba(245,158,11,0.12)", text: "#f59e0b" },
+};
+
+// Interface para coluna de workflow dinâmica
+export interface WorkflowColumn {
+  key: string;
+  label: string;
+  color?: string;  // hex color, opcional
+  sort_order?: number;
+}
+
 function hexAlpha(hex: string, a: number) {
   const c = hex.replace("#", "");
   return `rgba(${parseInt(c.slice(0,2),16)},${parseInt(c.slice(2,4),16)},${parseInt(c.slice(4,6),16)},${a})`;
@@ -92,17 +117,10 @@ import { getInitials, formatDisplayName } from "@/lib/nameUtils";
 
 type RespItem = { papel: string; nome: string; created_at: string };
 
-/**
- * Retorna a lista de responsáveis priorizando responsaveis_list (campo enriquecido do hook),
- * com fallback para os campos legados responsavel_dev, etc.
- * Garante unicidade por nome e ordena cronologicamente (crédito ao campo created_at).
- * O ÚLTIMO do array = mais recentemente adicionado = exibido no card recolhido.
- */
 function getResponsaveisList(demanda: Demanda): RespItem[] {
   const lista = (demanda as any).responsaveis_list as RespItem[] | undefined;
 
   if (lista && lista.length > 0) {
-    // Já vem ordenado por created_at ASC do hook — último = mais recente
     const seen = new Set<string>();
     return lista.filter((r) => {
       if (!r.nome || seen.has(r.nome)) return false;
@@ -111,7 +129,6 @@ function getResponsaveisList(demanda: Demanda): RespItem[] {
     });
   }
 
-  // Fallback para campos legados
   const campos: [string, string | null | undefined][] = [
     ["desenvolvedor",  demanda.responsavel_dev],
     ["analista",       demanda.responsavel_requisitos],
@@ -123,7 +140,7 @@ function getResponsaveisList(demanda: Demanda): RespItem[] {
     .map(([papel, nome]) => ({ papel, nome: nome!, created_at: "" }));
 }
 
-// ── Avatar individual com tooltip nome + papel ────────────────────
+// ── Avatar individual ────────────────────────────────────────────
 function ResponsavelAvatar({
   nome, papel, size = "sm", highlight = false,
 }: { nome: string; papel: string; size?: "sm" | "md"; highlight?: boolean }) {
@@ -154,7 +171,7 @@ function ResponsavelAvatar({
   );
 }
 
-// ── Grupo expand/collapse ───────────────────────────────────────────
+// ── Grupo responsáveis expand/collapse ─────────────────────────────
 function ResponsaveisGroup({ responsaveis }: { responsaveis: RespItem[] }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -250,19 +267,100 @@ function ResponsaveisGroup({ responsaveis }: { responsaveis: RespItem[] }) {
   );
 }
 
-const ALL_COLS = [...FLOWPRINCIPAL, "bloqueada", "rejeitada"] as string[];
-const VISIBLE_COLS = ALL_COLS.filter((v, i, a) => a.indexOf(v) === i);
-
-function DemandaCard({
-  demanda, accentHex, onClick, onMove, onNovaAtividade,
+// ── Multi-select de projetos ────────────────────────────────────────
+function ProjetoMultiSelect({
+  projetos,
+  selected,
+  onChange,
 }: {
-  demanda: Demanda; accentHex: string;
-  onClick?: () => void; onMove?: (targetKey: string) => void; onNovaAtividade?: () => void;
+  projetos: string[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const toggle = (p: string) => {
+    onChange(selected.includes(p) ? selected.filter((s) => s !== p) : [...selected, p]);
+  };
+
+  const label =
+    selected.length === 0
+      ? "Todos os projetos"
+      : selected.length === 1
+        ? selected[0]
+        : `${selected.length} projetos`;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="h-9 px-3 rounded-lg border border-border bg-background text-sm flex items-center gap-2 hover:bg-muted transition-colors min-w-[160px] max-w-[240px]"
+      >
+        <span className="truncate flex-1 text-left text-foreground">{label}</span>
+        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute top-10 left-0 z-50 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[200px] max-h-[280px] overflow-y-auto">
+          <div className="px-2 pb-1 pt-0.5">
+            <button
+              onClick={() => onChange([])}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors text-muted-foreground"
+            >
+              <span className={`h-4 w-4 rounded border flex items-center justify-center ${
+                selected.length === 0 ? "bg-primary border-primary" : "border-border"
+              }`}>
+                {selected.length === 0 && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+              </span>
+              Todos
+            </button>
+          </div>
+          <div className="border-t border-border/50 my-0.5" />
+          {projetos.map((p) => (
+            <button
+              key={p}
+              onClick={() => toggle(p)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 rounded text-sm hover:bg-muted transition-colors text-foreground"
+            >
+              <span className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${
+                selected.includes(p) ? "bg-primary border-primary" : "border-border"
+              }`}>
+                {selected.includes(p) && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+              </span>
+              <span className="truncate">{p}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {open && (
+        <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+// ── Card da demanda ──────────────────────────────────────────────────
+function DemandaCard({
+  demanda, accentHex, visibleCols, currentIndex, onClick, onMove, onNovaAtividade,
+}: {
+  demanda: Demanda;
+  accentHex: string;
+  visibleCols: string[];      // todas as colunas visíveis na ordem
+  currentIndex: number;       // índice da coluna atual
+  onClick?: () => void;
+  onMove?: (targetKey: string) => void;
+  onNovaAtividade?: () => void;
 }) {
   const slaD = slaDaysRemaining(demanda);
   const urgent = slaD !== null && slaD <= 3 && slaD >= 0;
   const late   = slaD !== null && slaD < 0;
   const responsaveis = getResponsaveisList(demanda);
+
+  // Colunas anteriores e posteriores para avançar/regredir
+  const colsAntes    = visibleCols.slice(0, currentIndex);
+  const colsDepois   = visibleCols.slice(currentIndex + 1);
+
+  const tipoLabel = TIPO_LABELS[demanda.tipo] ?? demanda.tipo;
+  const tipoStyle = TIPO_COLORS[demanda.tipo] ?? { bg: "rgba(100,116,139,0.12)", text: "#64748b" };
 
   return (
     <ContextMenu>
@@ -276,7 +374,8 @@ function DemandaCard({
             <p className="text-[13px] font-semibold leading-snug text-foreground line-clamp-2">
               {demanda.descricao ?? demanda.tipo ?? "Demanda"}
             </p>
-            {(demanda.rhm || demanda.projeto) && (
+            {/* RM, Projeto e Tipo */}
+            {(demanda.rhm || demanda.projeto || demanda.tipo) && (
               <div className="flex flex-wrap gap-1">
                 {demanda.rhm && (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
@@ -287,6 +386,15 @@ function DemandaCard({
                 {demanda.projeto && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium truncate max-w-[140px]">
                     {demanda.projeto}
+                  </span>
+                )}
+                {/* NOVO: badge do Tipo da Demanda */}
+                {demanda.tipo && (
+                  <span
+                    className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                    style={{ backgroundColor: tipoStyle.bg, color: tipoStyle.text }}
+                  >
+                    {tipoLabel}
                   </span>
                 )}
               </div>
@@ -342,12 +450,47 @@ function DemandaCard({
         {onMove && (
           <>
             <ContextMenuSeparator />
+            {/* Avançar status */}
+            {colsDepois.length > 0 && (
+              <ContextMenuSub>
+                <ContextMenuSubTrigger>
+                  <ChevronsRight className="h-3.5 w-3.5 mr-2 text-emerald-500" />Avançar para
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent className="max-h-[50vh] overflow-y-auto w-52">
+                  {colsDepois.map((key) => (
+                    <ContextMenuItem key={key} onClick={() => onMove(key)}>
+                      <span className="inline-block h-2 w-2 rounded-full mr-2 shrink-0"
+                        style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }} />
+                      {WORKFLOWLABELS[key] ?? key}
+                    </ContextMenuItem>
+                  ))}
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            )}
+            {/* Regredir status */}
+            {colsAntes.length > 0 && (
+              <ContextMenuSub>
+                <ContextMenuSubTrigger>
+                  <ChevronsLeft className="h-3.5 w-3.5 mr-2 text-amber-500" />Regredir para
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent className="max-h-[50vh] overflow-y-auto w-52">
+                  {[...colsAntes].reverse().map((key) => (
+                    <ContextMenuItem key={key} onClick={() => onMove(key)}>
+                      <span className="inline-block h-2 w-2 rounded-full mr-2 shrink-0"
+                        style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }} />
+                      {WORKFLOWLABELS[key] ?? key}
+                    </ContextMenuItem>
+                  ))}
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            )}
+            {/* Mover para qualquer coluna (fallback completo) */}
             <ContextMenuSub>
               <ContextMenuSubTrigger>
                 <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />Mover para
               </ContextMenuSubTrigger>
               <ContextMenuSubContent className="max-h-[60vh] overflow-y-auto w-52">
-                {VISIBLE_COLS.map((key) => (
+                {visibleCols.map((key) => (
                   <ContextMenuItem key={key} disabled={key === demanda.situacao} onClick={() => onMove(key)}>
                     <span className="inline-block h-2 w-2 rounded-full mr-2 shrink-0"
                       style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }} />
@@ -382,12 +525,20 @@ function CollapsedCol({ label, count, accentHex, onClick }: { label: string; cou
   );
 }
 
-function ExpandedCol({ label, colKey, demandas, accentHex, onCollapse, onCardClick, onAdd, onMove, onNovaAtividade }: {
-  label: string; colKey: string; demandas: Demanda[]; accentHex: string;
-  onCollapse: () => void; onCardClick?: (d: Demanda) => void;
-  onAdd?: () => void; onMove?: (demanda: Demanda, targetKey: string) => void;
+function ExpandedCol({ label, colKey, demandas, accentHex, visibleCols, onCollapse, onCardClick, onAdd, onMove, onNovaAtividade }: {
+  label: string;
+  colKey: string;
+  demandas: Demanda[];
+  accentHex: string;
+  visibleCols: string[];
+  onCollapse: () => void;
+  onCardClick?: (d: Demanda) => void;
+  onAdd?: () => void;
+  onMove?: (demanda: Demanda, targetKey: string) => void;
   onNovaAtividade?: (demanda: Demanda) => void;
 }) {
+  const currentIndex = visibleCols.indexOf(colKey);
+
   return (
     <div className="flex-shrink-0 w-[280px] flex flex-col rounded-xl border border-border/60 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08)] transition-all"
       style={{ borderTop: `3px solid ${accentHex}` }}>
@@ -413,7 +564,12 @@ function ExpandedCol({ label, colKey, demandas, accentHex, onCollapse, onCardCli
           </div>
         ) : (
           demandas.map((d) => (
-            <DemandaCard key={d.id as string} demanda={d} accentHex={accentHex}
+            <DemandaCard
+              key={d.id as string}
+              demanda={d}
+              accentHex={accentHex}
+              visibleCols={visibleCols}
+              currentIndex={currentIndex}
               onClick={() => onCardClick?.(d)}
               onMove={onMove ? (targetKey) => onMove(d, targetKey) : undefined}
               onNovaAtividade={onNovaAtividade ? () => onNovaAtividade(d) : undefined}
@@ -427,21 +583,66 @@ function ExpandedCol({ label, colKey, demandas, accentHex, onCollapse, onCardCli
 
 export interface SustentacaoBoardProps {
   demandas?: Demanda[];
+  /** Colunas do workflow do time selecionado. Se não informadas, usa FLOWPRINCIPAL. */
+  workflowColumns?: WorkflowColumn[];
   onSelectDemanda?: (demanda: Demanda, initialTab?: string) => void;
   onCreateDemanda?: (situacao?: string) => void;
   onMoveDemanda?: (demanda: Demanda, targetKey: string) => void;
 }
 
-export function SustentacaoBoard({ demandas: demandasProp, onSelectDemanda, onCreateDemanda, onMoveDemanda }: SustentacaoBoardProps) {
+export function SustentacaoBoard({
+  demandas: demandasProp,
+  workflowColumns,
+  onSelectDemanda,
+  onCreateDemanda,
+  onMoveDemanda,
+}: SustentacaoBoardProps) {
   const demandas = demandasProp ?? [];
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [selectedResp, setSelectedResp] = useState<string[]>([]);
+  const [selectedProjetos, setSelectedProjetos] = useState<string[]>([]);
+
+  // ── Colunas dinâmicas: usa workflowColumns do time se disponível, senão usa padrão
+  const visibleCols = useMemo<string[]>(() => {
+    if (workflowColumns && workflowColumns.length > 0) {
+      return [...workflowColumns]
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+        .map((c) => c.key);
+    }
+    return [...FLOWPRINCIPAL, "bloqueada", "rejeitada"] as string[];
+  }, [workflowColumns]);
+
+  // Labels dinâmicas: merge entre workflow personalizado e WORKFLOWLABELS padrão
+  const colLabels = useMemo<Record<string, string>>(() => {
+    const base: Record<string, string> = { ...WORKFLOWLABELS };
+    if (workflowColumns) {
+      workflowColumns.forEach((c) => { base[c.key] = c.label; });
+    }
+    return base;
+  }, [workflowColumns]);
+
+  // Cores dinâmicas: merge entre workflow personalizado e COLUMN_COLORS padrão
+  const colColors = useMemo<Record<string, string>>(() => {
+    const base: Record<string, string> = {};
+    Object.entries(COLUMN_COLORS).forEach(([k, v]) => { base[k] = v.hex; });
+    if (workflowColumns) {
+      workflowColumns.forEach((c) => { if (c.color) base[c.key] = c.color; });
+    }
+    return base;
+  }, [workflowColumns]);
 
   const toggle = (key: string) =>
     setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
-  // Extrai lista única de pessoas para o filtro de avatares
+  // Lista única de projetos para o multi-select
+  const projetosDisponiveis = useMemo<string[]>(() => {
+    const set = new Set<string>();
+    demandas.forEach((d) => { if (d.projeto) set.add(d.projeto); });
+    return Array.from(set).sort();
+  }, [demandas]);
+
+  // Responsáveis para filtro de avatares
   const responsaveisFilter = useMemo<ResponsavelFilterItem[]>(() => {
     const map = new Map<string, ResponsavelFilterItem>();
     demandas.forEach((d) => {
@@ -464,6 +665,10 @@ export function SustentacaoBoard({ demandas: demandasProp, onSelectDemanda, onCr
         String(d.projeto ?? "").toLowerCase().includes(q) ||
         String(d.rhm ?? "").toLowerCase().includes(q));
     }
+    // Filtro multi-projeto: mostra UNIÃO dos projetos selecionados
+    if (selectedProjetos.length > 0) {
+      items = items.filter((d) => d.projeto && selectedProjetos.includes(d.projeto));
+    }
     if (selectedResp.length > 0) {
       items = items.filter((d) => {
         const nomes = getResponsaveisList(d).map((r) => r.nome);
@@ -471,22 +676,26 @@ export function SustentacaoBoard({ demandas: demandasProp, onSelectDemanda, onCr
       });
     }
     return items;
-  }, [demandas, search, selectedResp]);
+  }, [demandas, search, selectedProjetos, selectedResp]);
 
   const byStatus = useMemo(() => {
     const map: Record<string, Demanda[]> = {};
-    VISIBLE_COLS.forEach((k) => { map[k] = []; });
+    visibleCols.forEach((k) => { map[k] = []; });
     filtered.filter(Boolean).forEach((d) => {
       const key = (d.situacao as string) ?? "fila_atendimento";
       if (!map[key]) map[key] = [];
       map[key].push(d);
     });
     return map;
-  }, [filtered]);
+  }, [filtered, visibleCols]);
+
+  const hasActiveFilters = selectedProjetos.length > 0 || selectedResp.length > 0;
 
   return (
     <div className="flex flex-col h-full gap-3">
+      {/* Barra de filtros */}
       <div className="flex items-center gap-3 px-1 flex-wrap">
+        {/* Busca */}
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
@@ -500,29 +709,57 @@ export function SustentacaoBoard({ demandas: demandasProp, onSelectDemanda, onCr
             </button>
           )}
         </div>
-        {responsaveisFilter.length > 0 && (
-          <KanbanResponsavelFilter responsaveis={responsaveisFilter} selected={selectedResp} onChange={setSelectedResp} />
+
+        {/* Multi-select de projetos */}
+        {projetosDisponiveis.length > 0 && (
+          <ProjetoMultiSelect
+            projetos={projetosDisponiveis}
+            selected={selectedProjetos}
+            onChange={setSelectedProjetos}
+          />
         )}
-        {selectedResp.length > 0 && (
-          <button onClick={() => setSelectedResp([])}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-            <X className="h-3 w-3" /> Limpar filtro
+
+        {/* Filtro de responsáveis */}
+        {responsaveisFilter.length > 0 && (
+          <KanbanResponsavelFilter
+            responsaveis={responsaveisFilter}
+            selected={selectedResp}
+            onChange={setSelectedResp}
+          />
+        )}
+
+        {/* Limpar todos os filtros */}
+        {hasActiveFilters && (
+          <button
+            onClick={() => { setSelectedProjetos([]); setSelectedResp([]); }}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="h-3 w-3" /> Limpar filtros
           </button>
         )}
+
         <Badge variant="outline" className="text-xs font-mono h-9 px-3">
           {filtered.length} demanda{filtered.length !== 1 ? "s" : ""}
         </Badge>
       </div>
+
+      {/* Board de colunas */}
       <div className="flex gap-2 pb-4 overflow-x-auto flex-1" style={{ minHeight: 120 }}>
-        {VISIBLE_COLS.map((key) => {
-          const label = WORKFLOWLABELS[key] ?? key;
-          const color = COLUMN_COLORS[key] ?? { hex: "#94a3b8" };
+        {visibleCols.map((key) => {
+          const label = colLabels[key] ?? key;
+          const hex   = colColors[key] ?? "#94a3b8";
           const items = byStatus[key] ?? [];
           if (collapsed.has(key)) {
-            return <CollapsedCol key={key} label={label} count={items.length} accentHex={color.hex} onClick={() => toggle(key)} />;
+            return <CollapsedCol key={key} label={label} count={items.length} accentHex={hex} onClick={() => toggle(key)} />;
           }
           return (
-            <ExpandedCol key={key} colKey={key} label={label} demandas={items} accentHex={color.hex}
+            <ExpandedCol
+              key={key}
+              colKey={key}
+              label={label}
+              demandas={items}
+              accentHex={hex}
+              visibleCols={visibleCols}
               onCollapse={() => toggle(key)}
               onCardClick={(d) => onSelectDemanda?.(d)}
               onAdd={onCreateDemanda ? () => onCreateDemanda(key) : undefined}
