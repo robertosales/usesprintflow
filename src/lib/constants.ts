@@ -7,5 +7,5 @@ export const APP_FULL_NAME = "Axion – Operações e Fluxo Ágil";
  * ⚠️ Atualize manualmente este valor a cada publicação (Publish → Update).
  * Convenção: SemVer (MAJOR.MINOR.PATCH).
  */
-export const APP_VERSION = "1.0.0";
+export const APP_VERSION = "1.0.1";
 export const APP_BUILD_DATE = "2026-05-18";
