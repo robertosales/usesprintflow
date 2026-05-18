@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { MoreHorizontal, User, ArrowRightLeft, ChevronLeft } from "lucide-react";
+import { MoreHorizontal, User, ArrowRightLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -20,16 +20,7 @@ import {
 } from "@/components/ui/context-menu";
 import type { Demanda } from "../types/demanda";
 import { getResponsavelAtivo } from "../types/demanda";
-
-const TIPO_COLORS: Record<string, string> = {
-  incidente:   "#ef4444",
-  problema:    "#f97316",
-  mudanca:     "#8b5cf6",
-  requisicao:  "#3b82f6",
-  melhoria:    "#10b981",
-  corretiva:   "#f59e0b",
-  evolutiva:   "#06b6d4",
-};
+import { getTipoLabel } from "../types/imr";
 
 interface Props {
   demanda: Demanda;
@@ -37,7 +28,7 @@ interface Props {
   onDelete?: (d: Demanda) => void;
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent, d: Demanda) => void;
-  /** Colunas disponíveis para mover via menu de contexto. */
+  /** Colunas disponíveis para mover via menu de contexto (botão direito). */
   moveOptions?: { key: string; label: string }[];
   onMove?: (d: Demanda, targetKey: string) => void;
 }
@@ -54,18 +45,6 @@ export function DemandaCard({
   onMove,
 }: Props) {
   const responsavel = getResponsavelAtivo(demanda);
-
-  const tipoKey = (demanda.tipo ?? "").toLowerCase().replace(/\s+/g, "_");
-  const tipoColor = TIPO_COLORS[tipoKey] ?? "#64748b";
-  const hexAlpha = (hex: string, a: number) => {
-    const c = hex.replace("#", "");
-    return `rgba(${parseInt(c.slice(0,2),16)},${parseInt(c.slice(2,4),16)},${parseInt(c.slice(4,6),16)},${a})`;
-  };
-
-  // Colunas anteriores ao status atual para regressão
-  const currentIdx = (moveOptions ?? []).findIndex((o) => o.key === demanda.situacao);
-  const previousCols = currentIdx > 0 ? (moveOptions ?? []).slice(0, currentIdx) : [];
-  const nextCols = currentIdx >= 0 ? (moveOptions ?? []).slice(currentIdx + 1) : (moveOptions ?? []);
 
   return (
     <ContextMenu>
@@ -122,30 +101,20 @@ export function DemandaCard({
         </DropdownMenu>
       </div>
 
-      {/* ── LINHA 2: Título + projeto + TIPO ── */}
+      {/* ── LINHA 2: Título + projeto ── */}
       <div className="space-y-0.5 min-w-0">
         {demanda.descricao && (
           <p className="text-xs font-semibold leading-snug line-clamp-2 text-foreground">{demanda.descricao}</p>
         )}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <p className="text-[10px] text-muted-foreground truncate">{demanda.projeto}</p>
-          {/* NOVO: Tipo da demanda */}
-          {demanda.tipo && (
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded-full font-medium capitalize shrink-0"
-              style={{
-                backgroundColor: hexAlpha(tipoColor, 0.14),
-                color: tipoColor,
-              }}
-            >
-              {demanda.tipo}
-            </span>
-          )}
-        </div>
+        <p className="text-[10px] text-muted-foreground truncate">{demanda.projeto}</p>
       </div>
 
-      {/* ── LINHA 3: responsável ── */}
-      <div className="flex items-center justify-end gap-2 pt-0.5">
+      {/* ── LINHA 3: tipo + responsável ── */}
+      <div className="flex items-center justify-between gap-2 pt-0.5">
+        <Badge variant="outline" className="text-[10px] h-4 px-1.5 shrink-0">
+          {getTipoLabel(demanda.tipo)}
+        </Badge>
+
         {responsavel ? (
           <div className="flex items-center gap-1 min-w-0">
             <div
@@ -167,41 +136,27 @@ export function DemandaCard({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-56">
         <ContextMenuItem onClick={() => onOpen(demanda)}>Abrir detalhes</ContextMenuItem>
-        {moveOptions && onMove && (
-          <>
-            {/* Avançar status */}
-            {nextCols.length > 0 && (
-              <ContextMenuSub>
-                <ContextMenuSubTrigger>
-                  <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />
-                  Avançar para
-                </ContextMenuSubTrigger>
-                <ContextMenuSubContent className="max-h-[60vh] overflow-y-auto">
-                  {nextCols.map((opt) => (
-                    <ContextMenuItem key={opt.key} onClick={() => onMove(demanda, opt.key)}>
-                      {opt.label}
-                    </ContextMenuItem>
-                  ))}
-                </ContextMenuSubContent>
-              </ContextMenuSub>
-            )}
-            {/* Regredir status — NÃO aciona EncerramentoDialog */}
-            {previousCols.length > 0 && (
-              <ContextMenuSub>
-                <ContextMenuSubTrigger>
-                  <ChevronLeft className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                  Regredir para
-                </ContextMenuSubTrigger>
-                <ContextMenuSubContent className="max-h-[60vh] overflow-y-auto">
-                  {previousCols.map((opt) => (
-                    <ContextMenuItem key={opt.key} onClick={() => onMove(demanda, opt.key)}>
-                      {opt.label}
-                    </ContextMenuItem>
-                  ))}
-                </ContextMenuSubContent>
-              </ContextMenuSub>
-            )}
-          </>
+        {moveOptions && onMove && moveOptions.length > 0 && (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />
+              Mover para
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="max-h-[60vh] overflow-y-auto">
+              {moveOptions.map((opt) => (
+                <ContextMenuItem
+                  key={opt.key}
+                  disabled={opt.key === demanda.situacao}
+                  onClick={() => onMove(demanda, opt.key)}
+                >
+                  {opt.label}
+                  {opt.key === demanda.situacao && (
+                    <span className="ml-auto text-[10px] text-muted-foreground">(atual)</span>
+                  )}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
         )}
         {onDelete && (
           <>
