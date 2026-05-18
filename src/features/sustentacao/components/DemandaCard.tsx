@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/context-menu";
 import type { Demanda } from "../types/demanda";
 import { getResponsavelAtivo } from "../types/demanda";
+import { getTipoLabel } from "../types/imr";
 
 interface Props {
   demanda: Demanda;
@@ -110,8 +111,8 @@ export function DemandaCard({
 
       {/* ── LINHA 3: tipo + responsável ── */}
       <div className="flex items-center justify-between gap-2 pt-0.5">
-        <Badge variant="outline" className="text-[10px] h-4 px-1.5 capitalize shrink-0">
-          {demanda.tipo}
+        <Badge variant="outline" className="text-[10px] h-4 px-1.5 shrink-0">
+          {getTipoLabel(demanda.tipo)}
         </Badge>
 
         {responsavel ? (

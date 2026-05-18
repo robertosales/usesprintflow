@@ -24,6 +24,7 @@ import { DemandaForm } from "./DemandaForm";
 import { DemandaDetail } from "./DemandaDetail";
 import { SITUACAO_LABELS, SITUACAO_COLORS, isDemandaIniciada } from "../types/demanda";
 import type { Demanda } from "../types/demanda";
+import { getTipoLabel, TIPOS_DEMANDA_IMR } from "../types/imr";
 import { fetchResponsaveisWithPapelByDemandaIds } from "../services/profiles.service";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +75,8 @@ export function DemandasList() {
   }
 
   const situacoesUnicas = useMemo(() => [...new Set(demandas.map((d) => d.situacao))], [demandas]);
+  // Tipos únicos presentes nas demandas carregadas (para o filtro)
+  const tiposUnicos = useMemo(() => [...new Set(demandas.map((d) => d.tipo))], [demandas]);
 
   const filtered = useMemo(
     () =>
@@ -167,14 +170,14 @@ export function DemandasList() {
           <Input placeholder="Buscar por RHM, projeto ou título..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
         <Select value={filterTipo} onValueChange={setFilterTipo}>
-          <SelectTrigger className="h-9 w-[150px]">
+          <SelectTrigger className="h-9 w-[180px]">
             <Tag className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
             <SelectValue placeholder="Tipo" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os tipos</SelectItem>
-            {["corretiva", "evolutiva", "melhoria"].map((t) => (
-              <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
+            {tiposUnicos.map((t) => (
+              <SelectItem key={t} value={t}>{getTipoLabel(t)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -291,7 +294,7 @@ function CardView({
             </div>
             <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
               <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                <Badge variant="outline" className="text-[10px] capitalize shrink-0">{d.tipo}</Badge>
+                <Badge variant="outline" className="text-[10px] shrink-0">{getTipoLabel(d.tipo)}</Badge>
                 <Badge className={cn("text-[10px] shrink-0", SITUACAO_COLORS[d.situacao] || "")}>{SITUACAO_LABELS[d.situacao] || d.situacao}</Badge>
               </div>
               {responsavel && (
@@ -327,7 +330,7 @@ function TableView({
             <TableHead className="w-28">#</TableHead>
             <TableHead className="w-40">Projeto</TableHead>
             <TableHead>Título</TableHead>
-            <TableHead className="w-28">Tipo</TableHead>
+            <TableHead className="w-44">Tipo</TableHead>
             <TableHead className="w-44">Situação</TableHead>
             <TableHead className="w-36">Responsável</TableHead>
             <TableHead className="w-10" />
@@ -344,7 +347,7 @@ function TableView({
                 <TableCell>
                   {titulo ? <span className="text-sm font-medium truncate max-w-[260px] block">{titulo}</span> : <span className="text-muted-foreground text-xs">—</span>}
                 </TableCell>
-                <TableCell><Badge variant="outline" className="capitalize text-[10px]">{d.tipo}</Badge></TableCell>
+                <TableCell><Badge variant="outline" className="text-[10px]">{getTipoLabel(d.tipo)}</Badge></TableCell>
                 <TableCell><Badge className={cn("text-[10px]", SITUACAO_COLORS[d.situacao] || "")}>{SITUACAO_LABELS[d.situacao] || d.situacao}</Badge></TableCell>
                 <TableCell>{responsavel ? <span className="text-xs">{responsavel}</span> : <span className="text-muted-foreground">—</span>}</TableCell>
                 <TableCell>
