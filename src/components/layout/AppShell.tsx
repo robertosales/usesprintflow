@@ -43,13 +43,16 @@ import {
   PanelLeftOpen,
   Sun,
   Moon,
+  ClipboardList,
+  CheckSquare,
+  ArrowLeftRight,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { AxionLogo } from "@/components/AxionLogo";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 
-type ActiveModule = "sala_agil" | "sustentacao";
+type ActiveModule = "sala_agil" | "sustentacao" | "rdm";
 
 interface NavItem {
   key: string;
@@ -148,6 +151,16 @@ const NAV_SUSTENTACAO: NavItem[] = [
   { key: "automacoes", label: "Automações",         icon: Repeat,          path: "/sustentacao/automacoes",   group: "config" },
 ];
 
+const NAV_RDM: NavItem[] = [
+  { key: "dashboard", label: "Dashboard",     icon: LayoutDashboard, path: "/rdm",          group: "main" },
+  { key: "rdms",      label: "RDMs",          icon: ClipboardList,   path: "/rdm/rdms",     group: "main" },
+  { key: "checklist", label: "Checklists",    icon: CheckSquare,     path: "/rdm/checklist", group: "main" },
+  { key: "gonogo",    label: "Go/No-Go",      icon: ArrowLeftRight,  path: "/rdm/gonogo",   group: "main" },
+  { key: "times",     label: "Times",         icon: Users,           path: "/rdm/times",    group: "config" },
+  { key: "membros",   label: "Membros",        icon: User,            path: "/rdm/membros",  group: "config" },
+  { key: "perfis",    label: "Perfis (RBAC)",  icon: ShieldCheck,     path: "/rdm/perfis",   group: "config" },
+];
+
 const ACCENT = {
   sala_agil: {
     hex: "#01696f",
@@ -155,6 +168,8 @@ const ACCENT = {
     textCls: "text-[#4f98a3]",
     bgCls: "bg-[rgba(1,105,111,0.14)]",
     avatarBg: "#01696f",
+    label: "Sala Ágil",
+    icon: Zap,
   },
   sustentacao: {
     hex: "#d97706",
@@ -162,6 +177,17 @@ const ACCENT = {
     textCls: "text-amber-400",
     bgCls: "bg-amber-400/10",
     avatarBg: "#b45309",
+    label: "Sustentação",
+    icon: Wrench,
+  },
+  rdm: {
+    hex: "#7c3aed",
+    hexAlpha: (a: number) => `rgba(124,58,237,${a})`,
+    textCls: "text-violet-400",
+    bgCls: "bg-violet-400/10",
+    avatarBg: "#6d28d9",
+    label: "RDM",
+    icon: ClipboardList,
   },
 } as const;
 
@@ -309,7 +335,12 @@ function SidebarNav({
 }) {
   const location = useLocation();
   const { hasPermission } = useAuth();
-  const items = module === "sala_agil" ? NAV_SALA_AGIL : NAV_SUSTENTACAO;
+  const items =
+    module === "sala_agil"
+      ? NAV_SALA_AGIL
+      : module === "sustentacao"
+        ? NAV_SUSTENTACAO
+        : NAV_RDM;
   const filteredItems = items.filter((item) => {
     if (!item.roles) return true;
     return item.roles.some((r) => hasPermission(r as any));
@@ -319,7 +350,7 @@ function SidebarNav({
     .filter((g) => g.items.length > 0);
   const isItemActive = (item: NavItem) => {
     if (activeKey) return item.key === activeKey;
-    const roots = ["/sala-agil", "/sustentacao"];
+    const roots = ["/sala-agil", "/sustentacao", "/rdm"];
     if (roots.includes(item.path)) return location.pathname === item.path;
     return location.pathname.startsWith(item.path);
   };
@@ -354,68 +385,63 @@ function SidebarNav({
 // ─── ModuleSwitcher ───────────────────────────────────────────────────────────
 function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
   const navigate = useNavigate();
+  const modules: { key: ActiveModule; path: string; shortLabel: string }[] = [
+    { key: "sala_agil",   path: "/sala-agil",  shortLabel: "Ágil" },
+    { key: "sustentacao", path: "/sustentacao", shortLabel: "Sust." },
+    { key: "rdm",         path: "/rdm",         shortLabel: "RDM" },
+  ];
+
   if (collapsed) {
     return (
       <div className="mx-auto mb-2 flex flex-col items-center gap-1 w-full px-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => navigate("/sala-agil")}
-              className={cn(
-                "flex w-full items-center justify-center rounded-lg p-2 transition-all",
-                module === "sala_agil"
-                  ? "bg-[rgba(1,105,111,0.25)] text-[#4f98a3]"
-                  : "text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent",
-              )}
-            >
-              <Zap className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">Sala Ágil</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => navigate("/sustentacao")}
-              className={cn(
-                "flex w-full items-center justify-center rounded-lg p-2 transition-all",
-                module === "sustentacao"
-                  ? "bg-amber-500/20 text-amber-400"
-                  : "text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent",
-              )}
-            >
-              <Wrench className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">Sustentação</TooltipContent>
-        </Tooltip>
+        {modules.map(({ key, path, shortLabel }) => {
+          const acc = ACCENT[key];
+          const Icon = acc.icon;
+          return (
+            <Tooltip key={key}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => navigate(path)}
+                  className={cn(
+                    "flex w-full items-center justify-center rounded-lg p-2 transition-all",
+                    module === key
+                      ? `bg-[${acc.hex}]/20 ${acc.textCls}`
+                      : "text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent",
+                  )}
+                  style={module === key ? { backgroundColor: acc.hexAlpha(0.2) } : {}}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">{acc.label}</TooltipContent>
+            </Tooltip>
+          );
+        })}
       </div>
     );
   }
+
   return (
     <div className="mx-2 mb-2 flex items-center gap-1 rounded-xl bg-sidebar-accent p-1 border border-border">
-      <button
-        onClick={() => navigate("/sala-agil")}
-        className={cn(
-          "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-all",
-          module === "sala_agil"
-            ? "bg-[rgba(1,105,111,0.35)] text-[#4f98a3] shadow-sm"
-            : "text-sidebar-foreground/40 hover:text-sidebar-foreground",
-        )}
-      >
-        <Zap className="h-3 w-3" /> Ágil
-      </button>
-      <button
-        onClick={() => navigate("/sustentacao")}
-        className={cn(
-          "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-all",
-          module === "sustentacao"
-            ? "bg-amber-500/25 text-amber-400 shadow-sm"
-            : "text-sidebar-foreground/40 hover:text-sidebar-foreground",
-        )}
-      >
-        <Wrench className="h-3 w-3" /> Sust.
-      </button>
+      {modules.map(({ key, path, shortLabel }) => {
+        const acc = ACCENT[key];
+        const Icon = acc.icon;
+        return (
+          <button
+            key={key}
+            onClick={() => navigate(path)}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-all",
+              module === key
+                ? `${acc.textCls} shadow-sm`
+                : "text-sidebar-foreground/40 hover:text-sidebar-foreground",
+            )}
+            style={module === key ? { backgroundColor: acc.hexAlpha(0.3) } : {}}
+          >
+            <Icon className="h-3 w-3" /> {shortLabel}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -470,11 +496,16 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
   const { activeSprint } = useSprint();
   const location = useLocation();
   const accent = ACCENT[module];
-  const items = module === "sala_agil" ? NAV_SALA_AGIL : NAV_SUSTENTACAO;
+  const items =
+    module === "sala_agil"
+      ? NAV_SALA_AGIL
+      : module === "sustentacao"
+        ? NAV_SUSTENTACAO
+        : NAV_RDM;
   const activeItem = activeKey
     ? items.find((i) => i.key === activeKey)
     : items.find((i) => {
-        const roots = ["/sala-agil", "/sustentacao"];
+        const roots = ["/sala-agil", "/sustentacao", "/rdm"];
         if (roots.includes(i.path)) return location.pathname === i.path;
         return location.pathname.startsWith(i.path);
       });
@@ -484,7 +515,7 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
     <header className="h-12 shrink-0 flex items-center justify-between px-4 bg-sidebar border-b border-border overflow-hidden">
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <span className="text-[11px] text-muted-foreground font-medium hidden sm:block shrink-0">
-          {module === "sala_agil" ? "Sala Ágil" : "Sustentação"}
+          {accent.label}
         </span>
         <ChevronRight className="h-3 w-3 text-muted-foreground/50 hidden sm:block shrink-0" />
         <div className="flex items-center gap-2 min-w-0">
@@ -550,7 +581,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                 <div className="min-w-0">
                   <p className="text-[14px] font-bold text-foreground tracking-tight leading-none">Axion</p>
                   <p className="text-[9px] text-muted-foreground uppercase tracking-widest leading-none mt-0.5">
-                    {module === "sala_agil" ? "Sala Ágil" : "Sustentação"}
+                    {accent.label}
                   </p>
                 </div>
               </div>
@@ -588,12 +619,8 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                   accent.textCls,
                 )}
               >
-                {module === "sala_agil" ? (
-                  <Zap className="h-3.5 w-3.5 shrink-0" />
-                ) : (
-                  <Wrench className="h-3.5 w-3.5 shrink-0" />
-                )}
-                {!collapsed && (module === "sala_agil" ? "Sala Ágil" : "Sustentação")}
+                <accent.icon className="h-3.5 w-3.5 shrink-0" />
+                {!collapsed && accent.label}
               </div>
             )}
           </div>
@@ -652,15 +679,13 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Versão atual do sistema — atualizado em src/lib/constants.ts a cada publicação */}
             <VersionBadge collapsed={collapsed} />
           </div>
         </aside>
 
-        {/* Conteúdo principal — flex-1 + min-w-0 garante que não ultrapasse a viewport */}
+        {/* Conteúdo principal */}
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <Topbar module={module} activeKey={activeKey} />
-          {/* overflow-y-auto aqui garante scroll interno sem estourar o layout */}
           <main className="flex-1 overflow-y-auto overflow-x-hidden bg-background">{children}</main>
         </div>
       </div>

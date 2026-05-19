@@ -17,6 +17,7 @@ import NotFound from "./pages/NotFound.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import ForcePasswordChange from "./pages/ForcePasswordChange.tsx";
 import SustentacaoPage from "./features/sustentacao/SustentacaoPage";
+import RdmPage from "./features/rdm/RdmPage";
 import { ModuleSelector } from "./features/sustentacao/components/ModuleSelector";
 import AdminDashboard from "./pages/AdminDashboard";
 import PlanningPokerPage from "./pages/PlanningPokerPage";
@@ -45,8 +46,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     <>
       {children}
       <SessionTimeoutAlert />
-      {/* Tutorial global — aparece em qualquer rota autenticada,
-          independentemente do método de login (email/senha ou Google OAuth) */}
       <OnboardingWizard open={showWizard} onComplete={completeOnboarding} />
     </>
   );
@@ -58,6 +57,7 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   if (!session) return <>{children}</>;
   if (isAdmin || profile?.module_access === "admin") return <Navigate to="/dashboard-admin" replace />;
   if (profile?.module_access === "sustentacao") return <Navigate to="/sustentacao" replace />;
+  if (profile?.module_access === "rdm") return <Navigate to="/rdm" replace />;
   return <Navigate to="/sala-agil/dashboard" replace />;
 }
 
@@ -66,10 +66,17 @@ function ModuleRedirect() {
   if (loading) return null;
   if (isAdmin || profile?.module_access === "admin") return <Navigate to="/dashboard-admin" replace />;
   if (profile?.module_access === "sustentacao") return <Navigate to="/sustentacao" replace />;
+  if (profile?.module_access === "rdm") return <Navigate to="/rdm" replace />;
   return <Navigate to="/sala-agil/dashboard" replace />;
 }
 
-function ModuleGuard({ module, children }: { module: "sala_agil" | "sustentacao"; children: React.ReactNode }) {
+function ModuleGuard({
+  module,
+  children,
+}: {
+  module: "sala_agil" | "sustentacao" | "rdm";
+  children: React.ReactNode;
+}) {
   const { profile, isAdmin } = useAuth();
   const moduleAccess = profile?.module_access || "sala_agil";
   if (isAdmin || moduleAccess === "admin" || moduleAccess === module) {
@@ -143,6 +150,12 @@ const App = () => (
               <Route
                 path="/sustentacao/*"
                 element={<ProtectedRoute><ModuleGuard module="sustentacao"><SustentacaoPage /></ModuleGuard></ProtectedRoute>}
+              />
+
+              {/* RDM — Requisição de Mudança */}
+              <Route
+                path="/rdm/*"
+                element={<ProtectedRoute><ModuleGuard module="rdm"><RdmPage /></ModuleGuard></ProtectedRoute>}
               />
 
               <Route path="*" element={<NotFound />} />
