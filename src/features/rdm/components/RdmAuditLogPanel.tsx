@@ -1,7 +1,25 @@
-import { Loader2, Clock } from "lucide-react";
+import { Loader2, Clock, User } from "lucide-react";
 import { useRdmAuditLog }  from "../hooks/useRdmAuditLog";
 
 interface Props { rdmId: string }
+
+// Labels amigáveis para campos do audit log
+const CAMPO_LABELS: Record<string, string> = {
+  status:                 "Status",
+  nome:                   "Nome",
+  objetivo:               "Objetivo",
+  sistema_modulo:         "Sistema / Módulo",
+  tipo_mudanca:           "Tipo de Mudança",
+  risco:                  "Risco",
+  ambiente:               "Ambiente",
+  data_implantacao:       "Data de Implantação",
+  hora_inicio:            "Hora Início",
+  hora_fim_prevista:      "Hora Fim Prevista",
+  downtime_previsto:      "Downtime Previsto",
+  rollback_previsto:      "Rollback Previsto",
+  tempo_rollback_minutos: "Tempo de Rollback (min)",
+  observacoes:            "Observações",
+};
 
 export function RdmAuditLogPanel({ rdmId }: Props) {
   const { logs, loading, error } = useRdmAuditLog(rdmId);
@@ -34,18 +52,28 @@ export function RdmAuditLogPanel({ rdmId }: Props) {
           </div>
           <div className="flex-1 min-w-0 pt-1.5">
             <p className="text-sm font-semibold text-foreground">
-              {log.campo}
+              {CAMPO_LABELS[log.campo] ?? log.campo}
             </p>
             {(log.valor_anterior !== null || log.valor_novo !== null) && (
               <p className="text-xs text-muted-foreground mt-0.5">
-                {log.valor_anterior ?? "—"}
+                <span className="line-through opacity-70">{log.valor_anterior ?? "—"}</span>
                 {" → "}
                 <span className="text-foreground font-medium">{log.valor_novo ?? "—"}</span>
               </p>
             )}
-            <p className="text-[10px] text-muted-foreground/60 mt-1">
-              {new Date(log.created_at).toLocaleString("pt-BR")}
-            </p>
+            <div className="flex items-center gap-1.5 mt-1">
+              <User className="h-3 w-3 text-muted-foreground/50" />
+              <span
+                className="text-[10px] text-muted-foreground/60 font-mono"
+                title={log.profile_id}
+              >
+                {log.profile_id.slice(0, 8)}…
+              </span>
+              <span className="text-[10px] text-muted-foreground/40">·</span>
+              <span className="text-[10px] text-muted-foreground/60">
+                {new Date(log.created_at).toLocaleString("pt-BR")}
+              </span>
+            </div>
           </div>
         </div>
       ))}

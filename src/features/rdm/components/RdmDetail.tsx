@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ArrowLeft, Calendar, Clock, Boxes, AlertTriangle,
   RefreshCw, Users, CheckSquare, ThumbsUp, History,
@@ -9,7 +9,7 @@ import { Badge }    from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Rdm, RdmUpdate } from "../types/rdm";
 import {
-  RDM_STATUS, RDM_STATUS_LABELS,
+  RDM_STATUS_LABELS,
   RDM_TIPO_LABELS, RDM_AMBIENTE_LABELS,
 } from "../types/rdm";
 import { RdmStatusBadge }        from "./RdmStatusBadge";
@@ -22,6 +22,23 @@ import { RdmSprintsPanel }       from "./RdmSprintsPanel";
 import { RdmForm }               from "./RdmForm";
 import { useAuth }               from "@/contexts/AuthContext";
 
+// Fluxo de transições válidas (sequencial)
+const STATUS_TRANSITIONS: Record<string, string[]> = {
+  rascunho:     ["aprovada", "rejeitada"],
+  aprovada:     ["em_execucao", "rejeitada", "rascunho"],
+  em_execucao:  ["executada", "rejeitada"],
+  executada:    [],
+  rejeitada:    ["rascunho"],
+};
+
+// Formata data "YYYY-MM-DD" sem bug de timezone (UTC→local)
+function formatDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const [year, month, day] = dateStr.split("-");
+  return new Date(Number(year), Number(month) - 1, Number(day))
+    .toLocaleDateString("pt-BR");
+}
+
 interface Props {
   rdm:      Rdm;
   onBack:   () => void;
@@ -30,9 +47,14 @@ interface Props {
 
 export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
   const { profile, isAdmin } = useAuth();
-  const [updating, setUpdating]     = useState(false);
+  const [updating, setUpdating]         = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
-  const [localRdm, setLocalRdm]     = useState<Rdm>(rdm);
+  const [localRdm, setLocalRdm]         = useState<Rdm>(rdm);
+
+  // Sincroniza localRdm quando a prop rdm mudar (ex: refresh do pai)
+  useEffect(() => {
+    setLocalRdm(rdm);
+  }, [rdm]);
 
   const canEdit = isAdmin || localRdm.criado_por === profile?.id;
 
@@ -46,13 +68,16 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
     }
   };
 
-  const handleEdit = async (values: Omit<any, "id" | "codigo" | "updated_at" | "team_id" | "criado_por">) => {
+  const handleEdit = async (
+    values: Omit<RdmUpdate, "id" | "codigo" | "updated_at" | "team_id" | "criado_por">
+  ) => {
     await onUpdate(localRdm.id, values);
     setLocalRdm((prev) => ({ ...prev, ...values }));
     setShowEditForm(false);
   };
 
-  const nextStatuses = RDM_STATUS.filter((s) => s !== localRdm.status);
+  // Apenas transições válidas para o status atual
+  const nextStatuses = STATUS_TRANSITIONS[localRdm.status] ?? [];
 
   return (
     <div className="space-y-5">
@@ -85,7 +110,7 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
         </Badge>
         <Badge variant="outline" className="gap-1.5 text-xs">
           <Calendar className="h-3 w-3" />
-          {new Date(localRdm.data_implantacao).toLocaleDateString("pt-BR")}
+          {formatDate(localRdm.data_implantacao)}
         </Badge>
         <Badge variant="outline" className="gap-1.5 text-xs">
           <Clock className="h-3 w-3" />
@@ -125,16 +150,18 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
         </div>
       )}
 
-      {/* Transição de status */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-muted-foreground font-medium">Mover para:</span>
-        {nextStatuses.map((s) => (
-          <Button key={s} variant="outline" size="sm" disabled={updating}
-            onClick={() => handleStatusChange(s)} className="text-xs h-7">
-            {RDM_STATUS_LABELS[s]}
-          </Button>
-        ))}
-      </div>
+      {/* Transição de status — só mostra se houver transições válidas */}
+      {canEdit && nextStatuses.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground font-medium">Mover para:</span>
+          {nextStatuses.map((s) => (
+            <Button key={s} variant="outline" size="sm" disabled={updating}
+              onClick={() => handleStatusChange(s)} className="text-xs h-7">
+              {RDM_STATUS_LABELS[s]}
+            </Button>
+          ))}
+        </div>
+      )}
 
       {/* Abas */}
       <Tabs defaultValue="checklist">
