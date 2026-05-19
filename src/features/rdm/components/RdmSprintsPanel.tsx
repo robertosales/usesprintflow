@@ -45,6 +45,8 @@ export function RdmSprintsPanel({ rdmId }: Props) {
   // Redmine form
   const [editingRedmine, setEditingRedmine] = useState<EditingRedmine | null>(null);
   const [savingRedmine, setSavingRedmine]   = useState(false);
+  // Controla sucesso separado de loading para evitar race condition de desmontagem
+  const [redmineSaved, setRedmineSaved]     = useState(false);
 
   // Expanded
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -60,8 +62,8 @@ export function RdmSprintsPanel({ rdmId }: Props) {
   const [deletingSprint, setDeletingSprint]   = useState(false);
   const confirmSprint = sprints.find((s) => s.id === confirmSprintId);
 
-  // ── helpers de formulário ────────────────────────────────────────────────
-  const openNewSprintForm = () => {
+  // ── helpers ──────────────────────────────────────────────────────────────
+const openNewSprintForm = () => {
     setEditingSprintId(null);
     setSprintNome("");
     setShowSprintForm(true);
@@ -73,7 +75,7 @@ export function RdmSprintsPanel({ rdmId }: Props) {
     setSprintNome("");
   };
 
-  // ── Sprint handlers ───────────────────────────────────────────────────────
+  // ── Sprint handlers ──────────────────────────────────────────────────────
   const handleSaveSprint = async () => {
     if (!sprintNome.trim()) return;
     setSavingSprint(true);
@@ -87,7 +89,6 @@ export function RdmSprintsPanel({ rdmId }: Props) {
       }
       closeSprintForm();
     } catch (e: any) {
-      // FIX: mensagem real do Supabase/hook agora chega aqui
       toast.error("Erro ao salvar sprint: " + (e?.message ?? "erro desconhecido"));
     } finally {
       setSavingSprint(false);
@@ -118,6 +119,8 @@ export function RdmSprintsPanel({ rdmId }: Props) {
   const handleSaveRedmine = async () => {
     if (!editingRedmine || !editingRedmine.numero.trim()) return;
     setSavingRedmine(true);
+    setRedmineSaved(false);
+    let success = false;
     try {
       if (editingRedmine.redmineId) {
         await updateRedmine(editingRedmine.sprintId, editingRedmine.redmineId, {
@@ -132,11 +135,17 @@ export function RdmSprintsPanel({ rdmId }: Props) {
         });
         toast.success("Redmine adicionado.");
       }
-      setEditingRedmine(null);
+      success = true;
     } catch (e: any) {
       toast.error("Erro ao salvar Redmine: " + (e?.message ?? ""));
     } finally {
+      // FIX: setSavingRedmine(false) SEMPRE antes de setEditingRedmine(null)
+      // Evita que a desmontagem do formulário inline interrompa o reset do
+      // estado loading no React 18 Strict Mode, causando trava permanente.
       setSavingRedmine(false);
+      if (success) {
+        setEditingRedmine(null);
+      }
     }
   };
 
@@ -214,7 +223,7 @@ export function RdmSprintsPanel({ rdmId }: Props) {
         </div>
       )}
 
-      {/* FIX: estado vazio com botão funcional */}
+      {/* Estado vazio */}
       {sprints.length === 0 && !showSprintForm && (
         <div className="flex flex-col items-center justify-center py-10 text-muted-foreground space-y-3">
           <GitBranch className="h-8 w-8 opacity-30" />
@@ -402,6 +411,7 @@ export function RdmSprintsPanel({ rdmId }: Props) {
                       <Button
                         size="sm" variant="ghost" className="h-7 px-2"
                         onClick={() => setEditingRedmine(null)}
+                        disabled={savingRedmine}
                       >
                         <X className="h-3 w-3" />
                       </Button>
