@@ -11,9 +11,12 @@ import {
   RDM_STATUS, RDM_STATUS_LABELS,
   RDM_TIPO_LABELS, RDM_AMBIENTE_LABELS,
 } from "../types/rdm";
-import { RdmStatusBadge }    from "./RdmStatusBadge";
-import { RdmRiscoBadge }     from "./RdmRiscoBadge";
-import { RdmChecklistPanel } from "./RdmChecklistPanel";
+import { RdmStatusBadge }       from "./RdmStatusBadge";
+import { RdmRiscoBadge }        from "./RdmRiscoBadge";
+import { RdmChecklistPanel }    from "./RdmChecklistPanel";
+import { RdmGoNogoPanel }       from "./RdmGoNogoPanel";
+import { RdmParticipantesPanel } from "./RdmParticipantesPanel";
+import { RdmAuditLogPanel }     from "./RdmAuditLogPanel";
 
 interface Props {
   rdm:      Rdm;
@@ -91,6 +94,14 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
         <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{rdm.objetivo}</p>
       </div>
 
+      {/* Observações */}
+      {rdm.observacoes && (
+        <div className="rounded-lg border border-border bg-muted/30 p-4">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Observações</p>
+          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{rdm.observacoes}</p>
+        </div>
+      )}
+
       {/* Transição de status */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-muted-foreground font-medium">Mover para:</span>
@@ -108,7 +119,7 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
         ))}
       </div>
 
-      {/* Abas */}
+      {/* Abas — agora todas implementadas */}
       <Tabs defaultValue="checklist">
         <TabsList className="h-8">
           <TabsTrigger value="checklist" className="text-xs gap-1.5">
@@ -130,21 +141,15 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
         </TabsContent>
 
         <TabsContent value="gonogo" className="mt-4">
-          <p className="text-sm text-muted-foreground text-center py-8">
-            Painel Go/No-Go — em breve
-          </p>
+          <RdmGoNogoPanel rdmId={rdm.id} />
         </TabsContent>
 
         <TabsContent value="participantes" className="mt-4">
-          <p className="text-sm text-muted-foreground text-center py-8">
-            Lista de participantes — em breve
-          </p>
+          <RdmParticipantesPanel rdmId={rdm.id} />
         </TabsContent>
 
         <TabsContent value="historico" className="mt-4">
-          <p className="text-sm text-muted-foreground text-center py-8">
-            Audit log da RDM — em breve
-          </p>
+          <RdmAuditLogPanel rdmId={rdm.id} />
         </TabsContent>
       </Tabs>
     </div>
