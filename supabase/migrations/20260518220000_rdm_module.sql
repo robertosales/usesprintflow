@@ -1,10 +1,6 @@
 -- ============================================================
 -- MIGRATION CONSOLIDADA: Módulo RDM — Reunião de Mudança
--- Versão: 2 (arquivo único, corrigido, idempotente)
--- Correção aplicada: cast app_role::text em todas as policies
---   que comparam user_roles.role (ENUM) com role_permissions.role_name (TEXT)
--- Reutiliza: teams, sprints, user_stories, profiles,
---            team_members, user_roles, role_permissions
+-- Versão: 3 (corrige FK app_permissions → role_permissions)
 -- ============================================================
 
 -- ════════════════════════════════════════════════════════════
@@ -220,8 +216,6 @@ CREATE TRIGGER trg_rdms_audit
 
 -- ════════════════════════════════════════════════════════════
 -- 3. FUNÇÕES HELPER PARA RLS
---    Encapsulam o cast app_role::text, evitando o erro:
---    "operator does not exist: text = app_role"
 -- ════════════════════════════════════════════════════════════
 
 -- 3a. Verifica se o usuário tem uma permission key do módulo RDM
@@ -242,7 +236,6 @@ AS $$
 $$;
 
 -- 3b. Retorna todos os team_ids do usuário autenticado
---    (via team_members E via profiles.team_id)
 CREATE OR REPLACE FUNCTION fn_rdm_user_team_ids()
 RETURNS SETOF uuid
 LANGUAGE sql
@@ -389,9 +382,23 @@ CREATE POLICY "rdm_audit_insert" ON rdm_audit_log
 
 
 -- ════════════════════════════════════════════════════════════
--- 5. SEEDS — Permission keys por role
+-- 5. SEEDS — Permission keys
+-- ATENÇÃO: inserir em app_permissions PRIMEIRO (FK obrigatória),
+--          depois em role_permissions.
 -- ════════════════════════════════════════════════════════════
 
+-- 5a. Registra as permission keys do módulo RDM na tabela mãe
+INSERT INTO app_permissions (key)
+VALUES
+  ('rdm.view'),
+  ('rdm.create'),
+  ('rdm.edit'),
+  ('rdm.approve'),
+  ('rdm.execute'),
+  ('rdm.admin')
+ON CONFLICT (key) DO NOTHING;
+
+-- 5b. Associa as permissions por role
 INSERT INTO role_permissions (role_name, permission_key) VALUES
   ('admin',         'rdm.view'),
   ('admin',         'rdm.create'),
