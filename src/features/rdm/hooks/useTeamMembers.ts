@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth }  from "@/contexts/AuthContext";
 
 export interface TeamMember {
   id:           string;
@@ -10,26 +9,48 @@ export interface TeamMember {
   role:         string | null;
 }
 
-export function useTeamMembers() {
-  const { profile } = useAuth();
+// Mapa role do perfil → papel válido no CHECK do banco (rdm_participantes)
+export const ROLE_TO_PAPEL: Record<string, string> = {
+  architect:     "arquiteto",
+  scrum_master:  "scrum_master",
+  admin:         "ad",
+  ad:            "ad",
+  product_owner: "product_owner",
+  analyst:       "requisitos",
+  developer:     "desenvolvedor",
+  qa_analyst:    "desenvolvedor",
+  member:        "desenvolvedor",
+};
+
+export function useTeamMembers(teamId: string | null) {
   const [members, setMembers]   = useState<TeamMember[]>([]);
   const [loading, setLoading]   = useState(false);
 
   const load = useCallback(async () => {
-    if (!profile?.team_id) return;
+    if (!teamId) { setMembers([]); return; }
     setLoading(true);
     try {
+      // Busca via team_members (N:N) JOIN profiles
       const { data, error } = await supabase
-        .from("profiles")
-        .select("id, display_name, email, avatar_url, role")
-        .eq("team_id", profile.team_id)
-        .order("display_name");
+        .from("team_members")
+        .select(`
+          profile:profiles!team_members_user_id_fkey(
+            id, display_name, email, avatar_url, role
+          )
+        `)
+        .eq("team_id", teamId);
       if (error) throw error;
-      setMembers((data ?? []) as TeamMember[]);
+      const mapped = (data ?? [])
+        .map((row: any) => row.profile)
+        .filter(Boolean) as TeamMember[];
+      mapped.sort((a, b) =>
+        (a.display_name ?? a.email ?? "").localeCompare(b.display_name ?? b.email ?? "")
+      );
+      setMembers(mapped);
     } finally {
       setLoading(false);
     }
-  }, [profile?.team_id]);
+  }, [teamId]);
 
   useEffect(() => { load(); }, [load]);
 
