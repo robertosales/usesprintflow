@@ -14,10 +14,10 @@ import {
   AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useRdmParticipantes }             from "../hooks/useRdmParticipantes";
-import { useTeams }                        from "../hooks/useTeams";
-import { useTeamMembers, ROLE_TO_PAPEL }   from "../hooks/useTeamMembers";
-import { toast }                           from "sonner";
+import { useRdmParticipantes }           from "../hooks/useRdmParticipantes";
+import { useTeams }                      from "../hooks/useTeams";
+import { useTeamMembers, ROLE_TO_PAPEL } from "../hooks/useTeamMembers";
+import { toast }                         from "sonner";
 
 const PAPEIS = [
   { value: "arquiteto",     label: "Arquiteto" },
@@ -56,7 +56,7 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
   const [selectedTeam,   setSelectedTeam]   = useState<string>("");
   const [selectedMember, setSelectedMember] = useState<string>("");
   const [selectedPapel,  setSelectedPapel]  = useState<string>("desenvolvedor");
-  const [submitting, setSubmitting]         = useState(false);
+  const [submitting,     setSubmitting]     = useState(false);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [removing, setRemoving]               = useState(false);
 
@@ -75,10 +75,8 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
 
   const handleMemberChange = (memberId: string) => {
     setSelectedMember(memberId);
-    const member = members.find((m) => m.id === memberId);
-    if (member?.role) {
-      setSelectedPapel(ROLE_TO_PAPEL[member.role] ?? "desenvolvedor");
-    }
+    const m = members.find((m) => m.id === memberId);
+    if (m?.role) setSelectedPapel(ROLE_TO_PAPEL[m.role] ?? "desenvolvedor");
   };
 
   const handleAdd = async () => {
@@ -134,15 +132,14 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
           <p className="text-[11px] text-muted-foreground flex items-center gap-1">
             <Building2 className="h-3 w-3" /> Time
           </p>
-          <Select
-            value={selectedTeam}
-            onValueChange={handleTeamChange}
-            disabled={loadingTeams}
-          >
+          <Select value={selectedTeam} onValueChange={handleTeamChange} disabled={loadingTeams}>
             <SelectTrigger className="h-8 text-sm">
               <SelectValue placeholder={loadingTeams ? "Carregando times…" : "Selecione um time…"} />
             </SelectTrigger>
             <SelectContent>
+              {teams.length === 0 && !loadingTeams && (
+                <SelectItem value="__none" disabled>Nenhum time encontrado</SelectItem>
+              )}
               {teams.map((t) => (
                 <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
               ))}
@@ -150,26 +147,19 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
           </Select>
         </div>
 
-        {/* Membro + Papel + Botão — só aparece após selecionar time */}
+        {/* Membro + Papel + Botão — só após selecionar time */}
         {selectedTeam && (
           <div className="flex flex-col sm:flex-row gap-2">
 
-            {/* Membro */}
             <div className="flex-1 space-y-1">
               <p className="text-[11px] text-muted-foreground">Membro</p>
-              <Select
-                value={selectedMember}
-                onValueChange={handleMemberChange}
-                disabled={loadingM}
-              >
+              <Select value={selectedMember} onValueChange={handleMemberChange} disabled={loadingM}>
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder={loadingM ? "Carregando…" : "Selecione um membro…"} />
                 </SelectTrigger>
                 <SelectContent>
                   {!loadingM && members.length === 0 && (
-                    <SelectItem value="__none" disabled>
-                      Nenhum membro neste time
-                    </SelectItem>
+                    <SelectItem value="__none" disabled>Nenhum membro neste time</SelectItem>
                   )}
                   {members.map((m) => {
                     const name        = displayOf(m.display_name, m.email, m.id);
@@ -194,7 +184,6 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
               </Select>
             </div>
 
-            {/* Papel — pré-preenchido pelo role do perfil, editável */}
             <div className="sm:w-44 space-y-1">
               <p className="text-[11px] text-muted-foreground">Papel na RDM</p>
               <Select value={selectedPapel} onValueChange={setSelectedPapel}>
@@ -207,7 +196,6 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
               </Select>
             </div>
 
-            {/* Botão adicionar */}
             <div className="sm:self-end">
               <Button
                 size="sm"
@@ -215,9 +203,7 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
                 disabled={submitting || !selectedMember}
                 className="gap-1.5 h-8 w-full sm:w-auto"
               >
-                {submitting
-                  ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : <Plus    className="h-4 w-4" />}
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Adicionar
               </Button>
             </div>
@@ -255,10 +241,7 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
                     <p className="text-[11px] text-muted-foreground truncate">{p.profile.email}</p>
                   )}
                 </div>
-                <Badge
-                  variant="outline"
-                  className={`text-[10px] h-5 shrink-0 ${PAPEL_COLORS[p.papel] ?? ""}`}
-                >
+                <Badge variant="outline" className={`text-[10px] h-5 shrink-0 ${PAPEL_COLORS[p.papel] ?? ""}`}>
                   {papelLabel}
                 </Badge>
                 <Button
@@ -276,19 +259,15 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
       )}
 
       {/* ======== Confirmar remoção ======== */}
-      <AlertDialog
-        open={!!confirmRemoveId}
-        onOpenChange={(o) => !o && !removing && setConfirmRemoveId(null)}
-      >
+      <AlertDialog open={!!confirmRemoveId} onOpenChange={(o) => !o && !removing && setConfirmRemoveId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
               <Trash2 className="h-4 w-4" /> Remover Participante
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Remover{" "}
-              <span className="font-semibold text-foreground">{confirmName}</span>{" "}
-              desta RDM? Esta ação não pode ser desfeita.
+              Remover <span className="font-semibold text-foreground">{confirmName}</span> desta RDM?
+              Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

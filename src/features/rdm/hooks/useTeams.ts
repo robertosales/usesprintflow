@@ -12,12 +12,13 @@ export function useTeams() {
 
   useEffect(() => {
     setLoading(true);
+    // RLS permite ver apenas times em que o usuário é membro (ou admin vê todos)
     supabase
       .from("teams")
       .select("id, name")
       .order("name")
-      .then(({ data }) => {
-        setTeams((data ?? []) as Team[]);
+      .then(({ data, error }) => {
+        if (!error) setTeams((data ?? []) as Team[]);
         setLoading(false);
       });
   }, []);
