@@ -17,28 +17,18 @@ import type { Rdm, RdmUpdate } from "./types/rdm";
 
 export default function RdmPage() {
   const [active, setActive] = useState("dashboard");
-  const {
-    loading: authLoading,
-    currentTeamId,
-    setCurrentTeamId,
-    teams,
-  } = useAuth();
+  const { loading: authLoading, currentTeamId, setCurrentTeamId, teams } = useAuth();
   const [showTeamModal, setShowTeamModal] = useState(false);
 
-  // Times do módulo RDM (opcional — se não houver, continua sem bloquear)
   const moduleTeams = teams.filter((t) => t.module === "rdm");
 
   useEffect(() => {
     if (authLoading) return;
-    // Se já tem um time válido ou não há times RDM, não faz nada
     if (!moduleTeams.length) return;
     const currentIsValid = currentTeamId && moduleTeams.some((t) => t.id === currentTeamId);
     if (currentIsValid) return;
-    if (moduleTeams.length === 1) {
-      setCurrentTeamId(moduleTeams[0].id);
-    } else {
-      setShowTeamModal(true);
-    }
+    if (moduleTeams.length === 1) setCurrentTeamId(moduleTeams[0].id);
+    else setShowTeamModal(true);
   }, [authLoading, teams]); // eslint-disable-line
 
   return (
@@ -52,7 +42,6 @@ export default function RdmPage() {
           onClose={() => setShowTeamModal(false)}
         />
       )}
-
       <div className="max-w-7xl mx-auto p-4 md:p-6">
         {authLoading ? (
           <div className="flex items-center justify-center py-20">
@@ -67,14 +56,13 @@ export default function RdmPage() {
 }
 
 function RdmSection({
-  active,
-  setActive,
+  active, setActive,
 }: {
   active: string;
   setActive: (v: string) => void;
 }) {
-  const { rdms, loading, create, update, load } = useRdms();
-  const { profile, currentTeamId } = useAuth();
+  const { rdms, loading, create, update, remove, load } = useRdms();
+  const { profile } = useAuth();
   const [selected, setSelected] = useState<Rdm | null>(null);
   const [showForm, setShowForm] = useState(false);
 
@@ -98,7 +86,16 @@ function RdmSection({
     }
   };
 
-  // Detalhes sobrepõem qualquer view
+  const handleDelete = async (id: string) => {
+    try {
+      await remove(id);
+      toast.success("RDM excluída com sucesso.");
+    } catch (e: any) {
+      toast.error("Erro ao excluir RDM: " + (e?.message ?? ""));
+      throw e;
+    }
+  };
+
   if (selected) {
     return (
       <RdmDetail
@@ -122,6 +119,7 @@ function RdmSection({
             onNew={() => setShowForm(true)}
             onSelect={setSelected}
             onRefresh={load}
+            onDelete={handleDelete}
           />
           <RdmForm
             open={showForm}
@@ -146,14 +144,9 @@ function RdmSection({
         </div>
       );
 
-    case "times":
-      return <TeamManager moduleFilter="rdm" />;
-    case "membros":
-      return <TeamMembersManager />;
-    case "perfis":
-      return <UserRolesManager />;
-
-    default:
-      return <RdmDashboard rdms={rdms} />;
+    case "times":   return <TeamManager moduleFilter="rdm" />;
+    case "membros": return <TeamMembersManager />;
+    case "perfis":  return <UserRolesManager />;
+    default:        return <RdmDashboard rdms={rdms} />;
   }
 }

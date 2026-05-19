@@ -1,28 +1,43 @@
 import { useState } from "react";
-import { Plus, Search, RefreshCw, FileText, Calendar, Boxes } from "lucide-react";
+import { Plus, Search, RefreshCw, FileText, Calendar, Boxes, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { Input }  from "@/components/ui/input";
+import { Badge }  from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn }       from "@/lib/utils";
+import { useAuth }  from "@/contexts/AuthContext";
 import type { Rdm } from "../types/rdm";
 import {
   RDM_STATUS, RDM_STATUS_LABELS,
   RDM_TIPO_LABELS, RDM_AMBIENTE_LABELS,
 } from "../types/rdm";
 import { RdmStatusBadge } from "./RdmStatusBadge";
-import { RdmRiscoBadge } from "./RdmRiscoBadge";
+import { RdmRiscoBadge }  from "./RdmRiscoBadge";
 
 interface Props {
-  rdms:     Rdm[];
-  loading:  boolean;
-  onNew:    () => void;
-  onSelect: (rdm: Rdm) => void;
+  rdms:      Rdm[];
+  loading:   boolean;
+  onNew:     () => void;
+  onSelect:  (rdm: Rdm) => void;
   onRefresh: () => void;
+  onDelete:  (id: string) => Promise<void>;
 }
 
-export function RdmList({ rdms, loading, onNew, onSelect, onRefresh }: Props) {
-  const [search, setSearch] = useState("");
+export function RdmList({ rdms, loading, onNew, onSelect, onRefresh, onDelete }: Props) {
+  const { profile, isAdmin } = useAuth();
+  const [search, setSearch]             = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
+  const [confirmId, setConfirmId]       = useState<string | null>(null);
+  const [deleting, setDeleting]         = useState(false);
 
   const filtered = rdms.filter((r) => {
     const matchesSearch =
@@ -33,6 +48,22 @@ export function RdmList({ rdms, loading, onNew, onSelect, onRefresh }: Props) {
     const matchesStatus = statusFilter === "todos" || r.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const canDelete = (rdm: Rdm) =>
+    isAdmin || rdm.criado_por === profile?.id;
+
+  const handleConfirmDelete = async () => {
+    if (!confirmId) return;
+    setDeleting(true);
+    try {
+      await onDelete(confirmId);
+    } finally {
+      setDeleting(false);
+      setConfirmId(null);
+    }
+  };
+
+  const confirmRdm = rdms.find((r) => r.id === confirmId);
 
   return (
     <div className="space-y-4">
@@ -116,54 +147,103 @@ export function RdmList({ rdms, loading, onNew, onSelect, onRefresh }: Props) {
       {!loading && filtered.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((rdm) => (
-            <button
+            <div
               key={rdm.id}
-              onClick={() => onSelect(rdm)}
-              className="text-left rounded-xl border border-border bg-card p-4 hover:border-primary/30
+              className="relative rounded-xl border border-border bg-card p-4 hover:border-primary/30
                 hover:bg-card/80 transition-all shadow-sm group space-y-3"
             >
-              {/* Header do card */}
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  {rdm.codigo && (
-                    <p className="text-[10px] font-mono text-muted-foreground mb-0.5">{rdm.codigo}</p>
-                  )}
-                  <p className="text-sm font-semibold text-foreground truncate leading-snug group-hover:text-primary transition-colors">
-                    {rdm.nome}
-                  </p>
-                </div>
-                <RdmStatusBadge status={rdm.status} className="shrink-0" />
-              </div>
+              {/* Botão excluir */}
+              {canDelete(rdm) && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setConfirmId(rdm.id); }}
+                  className="absolute top-3 right-3 h-7 w-7 flex items-center justify-center
+                    rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10
+                    opacity-0 group-hover:opacity-100 transition-all z-10"
+                  title="Excluir RDM"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
 
-              {/* Meta */}
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <Boxes className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{rdm.sistema_modulo}</span>
+              {/* Conteúdo clicavel */}
+              <button
+                className="w-full text-left space-y-3"
+                onClick={() => onSelect(rdm)}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between gap-2 pr-6">
+                  <div className="flex-1 min-w-0">
+                    {rdm.codigo && (
+                      <p className="text-[10px] font-mono text-muted-foreground mb-0.5">{rdm.codigo}</p>
+                    )}
+                    <p className="text-sm font-semibold text-foreground truncate leading-snug group-hover:text-primary transition-colors">
+                      {rdm.nome}
+                    </p>
+                  </div>
+                  <RdmStatusBadge status={rdm.status} className="shrink-0" />
                 </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <Calendar className="h-3.5 w-3.5 shrink-0" />
-                  <span>
-                    {new Date(rdm.data_implantacao).toLocaleDateString("pt-BR")} &middot;
-                    {" "}{rdm.hora_inicio} → {rdm.hora_fim_prevista}
-                  </span>
-                </div>
-              </div>
 
-              {/* Badges inferiores */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="outline" className="text-[10px] h-5">
-                  {RDM_TIPO_LABELS[rdm.tipo_mudanca as keyof typeof RDM_TIPO_LABELS] ?? rdm.tipo_mudanca}
-                </Badge>
-                <Badge variant="outline" className="text-[10px] h-5">
-                  {RDM_AMBIENTE_LABELS[rdm.ambiente as keyof typeof RDM_AMBIENTE_LABELS] ?? rdm.ambiente}
-                </Badge>
-                <RdmRiscoBadge risco={rdm.risco} />
-              </div>
-            </button>
+                {/* Meta */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <Boxes className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{rdm.sistema_modulo}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <Calendar className="h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      {new Date(rdm.data_implantacao).toLocaleDateString("pt-BR")} &middot;
+                      {" "}{rdm.hora_inicio} → {rdm.hora_fim_prevista}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Badges */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge variant="outline" className="text-[10px] h-5">
+                    {RDM_TIPO_LABELS[rdm.tipo_mudanca as keyof typeof RDM_TIPO_LABELS] ?? rdm.tipo_mudanca}
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px] h-5">
+                    {RDM_AMBIENTE_LABELS[rdm.ambiente as keyof typeof RDM_AMBIENTE_LABELS] ?? rdm.ambiente}
+                  </Badge>
+                  <RdmRiscoBadge risco={rdm.risco} />
+                </div>
+              </button>
+            </div>
           ))}
         </div>
       )}
+
+      {/* Dialog de confirmação */}
+      <AlertDialog open={!!confirmId} onOpenChange={(o) => !o && !deleting && setConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-4 w-4" /> Excluir RDM
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir{" "}
+              <span className="font-semibold text-foreground">
+                {confirmRdm?.codigo} — {confirmRdm?.nome}
+              </span>?
+              <br />
+              <span className="text-xs text-muted-foreground mt-1 block">
+                Todos os itens de checklist, participantes e votos Go/No-Go desta RDM serão removidos permanentemente.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="bg-destructive hover:bg-destructive/90 text-white"
+            >
+              {deleting ? "Excluindo…" : "Confirmar exclusão"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
