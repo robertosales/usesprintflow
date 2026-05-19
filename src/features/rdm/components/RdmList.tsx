@@ -13,8 +13,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { cn }       from "@/lib/utils";
-import { useAuth }  from "@/contexts/AuthContext";
+import { cn }      from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Rdm } from "../types/rdm";
 import {
   RDM_STATUS, RDM_STATUS_LABELS,
@@ -149,34 +149,22 @@ export function RdmList({ rdms, loading, onNew, onSelect, onRefresh, onDelete }:
           {filtered.map((rdm) => (
             <div
               key={rdm.id}
-              className="relative rounded-xl border border-border bg-card p-4 hover:border-primary/30
-                hover:bg-card/80 transition-all shadow-sm group space-y-3"
+              className="relative flex flex-col rounded-xl border border-border bg-card
+                hover:border-primary/30 hover:bg-card/80 transition-all shadow-sm group"
             >
-              {/* Botão excluir */}
-              {canDelete(rdm) && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setConfirmId(rdm.id); }}
-                  className="absolute top-3 right-3 h-7 w-7 flex items-center justify-center
-                    rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10
-                    opacity-0 group-hover:opacity-100 transition-all z-10"
-                  title="Excluir RDM"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
-
-              {/* Conteúdo clicavel */}
+              {/* Área clicavel — abre detalhes */}
               <button
-                className="w-full text-left space-y-3"
+                className="flex-1 text-left p-4 space-y-3"
                 onClick={() => onSelect(rdm)}
               >
                 {/* Header */}
-                <div className="flex items-start justify-between gap-2 pr-6">
+                <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     {rdm.codigo && (
                       <p className="text-[10px] font-mono text-muted-foreground mb-0.5">{rdm.codigo}</p>
                     )}
-                    <p className="text-sm font-semibold text-foreground truncate leading-snug group-hover:text-primary transition-colors">
+                    <p className="text-sm font-semibold text-foreground truncate leading-snug
+                      group-hover:text-primary transition-colors">
                       {rdm.nome}
                     </p>
                   </div>
@@ -209,6 +197,21 @@ export function RdmList({ rdms, loading, onNew, onSelect, onRefresh, onDelete }:
                   <RdmRiscoBadge risco={rdm.risco} />
                 </div>
               </button>
+
+              {/* Rodapé — botão excluir sempre visível (canto inferior esquerdo) */}
+              {canDelete(rdm) && (
+                <div className="px-4 pb-3 pt-0">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setConfirmId(rdm.id); }}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground
+                      hover:text-destructive transition-colors"
+                    title="Excluir RDM"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Excluir
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -228,7 +231,7 @@ export function RdmList({ rdms, loading, onNew, onSelect, onRefresh, onDelete }:
               </span>?
               <br />
               <span className="text-xs text-muted-foreground mt-1 block">
-                Todos os itens de checklist, participantes e votos Go/No-Go desta RDM serão removidos permanentemente.
+                Todos os itens de checklist, participantes e votos Go/No-Go serão removidos permanentemente.
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
