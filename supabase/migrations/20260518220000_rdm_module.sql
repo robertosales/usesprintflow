@@ -1,6 +1,6 @@
 -- ============================================================
 -- MIGRATION CONSOLIDADA: Módulo RDM — Reunião de Mudança
--- Versão: 3 (corrige FK app_permissions → role_permissions)
+-- Versão: 4 (corrige INSERT app_permissions com label e group_key)
 -- ============================================================
 
 -- ════════════════════════════════════════════════════════════
@@ -147,7 +147,6 @@ CREATE INDEX IF NOT EXISTS idx_rdm_audit_created ON rdm_audit_log (created_at DE
 -- 2. TRIGGERS
 -- ════════════════════════════════════════════════════════════
 
--- 2a. updated_at automático (reutiliza a função já existente no banco)
 DROP TRIGGER IF EXISTS trg_rdms_updated_at           ON rdms;
 DROP TRIGGER IF EXISTS trg_rdm_checklist_updated_at  ON rdm_checklist_items;
 
@@ -159,7 +158,6 @@ CREATE TRIGGER trg_rdm_checklist_updated_at
   BEFORE UPDATE ON rdm_checklist_items
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- 2b. Geração automática do código RDM: "RDM-YYYY-NNNN"
 CREATE OR REPLACE FUNCTION fn_rdm_generate_codigo()
 RETURNS TRIGGER LANGUAGE plpgsql
 SET search_path = public
@@ -185,7 +183,6 @@ CREATE TRIGGER trg_rdms_codigo
   WHEN (NEW.codigo IS NULL)
   EXECUTE FUNCTION fn_rdm_generate_codigo();
 
--- 2c. Auditoria automática de campos críticos
 CREATE OR REPLACE FUNCTION fn_rdm_audit_changes()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = public
@@ -218,7 +215,6 @@ CREATE TRIGGER trg_rdms_audit
 -- 3. FUNÇÕES HELPER PARA RLS
 -- ════════════════════════════════════════════════════════════
 
--- 3a. Verifica se o usuário tem uma permission key do módulo RDM
 CREATE OR REPLACE FUNCTION fn_rdm_has_permission(p_permission_key text)
 RETURNS boolean
 LANGUAGE sql
@@ -235,7 +231,6 @@ AS $$
   )
 $$;
 
--- 3b. Retorna todos os team_ids do usuário autenticado
 CREATE OR REPLACE FUNCTION fn_rdm_user_team_ids()
 RETURNS SETOF uuid
 LANGUAGE sql
@@ -383,19 +378,18 @@ CREATE POLICY "rdm_audit_insert" ON rdm_audit_log
 
 -- ════════════════════════════════════════════════════════════
 -- 5. SEEDS — Permission keys
--- ATENÇÃO: inserir em app_permissions PRIMEIRO (FK obrigatória),
---          depois em role_permissions.
+-- ORDEM: app_permissions PRIMEIRO (com label + group_key),
+--        depois role_permissions.
 -- ════════════════════════════════════════════════════════════
 
--- 5a. Registra as permission keys do módulo RDM na tabela mãe
-INSERT INTO app_permissions (key)
-VALUES
-  ('rdm.view'),
-  ('rdm.create'),
-  ('rdm.edit'),
-  ('rdm.approve'),
-  ('rdm.execute'),
-  ('rdm.admin')
+-- 5a. Registra as permission keys do módulo RDM
+INSERT INTO app_permissions (key, label, group_key) VALUES
+  ('rdm.view',    'Visualizar RDM',  'rdm'),
+  ('rdm.create',  'Criar RDM',       'rdm'),
+  ('rdm.edit',    'Editar RDM',      'rdm'),
+  ('rdm.approve', 'Aprovar RDM',     'rdm'),
+  ('rdm.execute', 'Executar RDM',    'rdm'),
+  ('rdm.admin',   'Admin RDM',       'rdm')
 ON CONFLICT (key) DO NOTHING;
 
 -- 5b. Associa as permissions por role
@@ -454,7 +448,6 @@ ON CONFLICT DO NOTHING;
 -- 7. RPCs
 -- ════════════════════════════════════════════════════════════
 
--- 7a. Cria RDM + popula checklist padrão atomicamente
 CREATE OR REPLACE FUNCTION fn_rdm_criar_com_checklist(
   p_nome                   text,
   p_objetivo               text,
@@ -506,7 +499,6 @@ BEGIN
 END;
 $$;
 
--- 7b. KPIs agregados para o Dashboard
 CREATE OR REPLACE FUNCTION fn_rdm_dashboard_kpis(
   p_team_id uuid   DEFAULT NULL,
   p_inicio  date   DEFAULT (date_trunc('month', now()))::date,
@@ -563,10 +555,4 @@ $$;
 
 -- ════════════════════════════════════════════════════════════
 -- FIM DA MIGRATION
--- Tabelas: rdms, rdm_sprint_items, rdm_participantes,
---          rdm_checklist_templates, rdm_checklist_items,
---          rdm_gonogo, rdm_audit_log
--- Funções: fn_rdm_generate_codigo, fn_rdm_audit_changes,
---          fn_rdm_has_permission, fn_rdm_user_team_ids,
---          fn_rdm_criar_com_checklist, fn_rdm_dashboard_kpis
 -- ════════════════════════════════════════════════════════════
