@@ -1,20 +1,37 @@
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, ShieldCheck, ShieldOff, KeyRound, Zap, Shield } from "lucide-react";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { Badge }   from "@/components/ui/badge";
+import { Button }  from "@/components/ui/button";
+import { Switch }  from "@/components/ui/switch";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  MoreHorizontal, Pencil, ShieldCheck, ShieldOff, KeyRound,
+  Zap, Shield, FileText,
+} from "lucide-react";
+import { getRoleLabel } from "@/hooks/usePermissions";
 import type { UserAdmin } from "../hooks/useUsersAdmin";
 
 interface Props {
-  users: UserAdmin[];
-  onEdit: (user: UserAdmin) => void;
-  onToggleAdmin: (userId: string, isAdmin: boolean) => Promise<boolean>;
-  onToggleActive: (userId: string, active: boolean) => Promise<boolean>;
-  onResetPassword: (email: string) => Promise<boolean>;
+  users:           UserAdmin[];
+  onEdit:          (user: UserAdmin) => void;
+  onToggleAdmin:   (userId: string, isAdmin: boolean)  => Promise<boolean>;
+  onToggleActive:  (userId: string, active: boolean)   => Promise<boolean>;
+  onResetPassword: (email: string)                     => Promise<boolean>;
 }
 
-export function UsersTable({ users, onEdit, onToggleAdmin, onToggleActive, onResetPassword }: Props) {
+const MODULE_META: Record<string, { icon: React.ElementType; color: string; label: string }> = {
+  sala_agil:   { icon: Zap,      color: "text-blue-400",    label: "Sala Ágil"   },
+  sustentacao: { icon: Shield,   color: "text-emerald-400", label: "Sustentação" },
+  rdm:         { icon: FileText, color: "text-purple-400",  label: "RDM"         },
+};
+
+export function UsersTable({
+  users, onEdit, onToggleAdmin, onToggleActive, onResetPassword,
+}: Props) {
   return (
     <Table>
       <TableHeader>
@@ -22,7 +39,7 @@ export function UsersTable({ users, onEdit, onToggleAdmin, onToggleActive, onRes
           <TableHead>Nome</TableHead>
           <TableHead>E-mail</TableHead>
           <TableHead>Times</TableHead>
-          <TableHead>Módulo</TableHead>
+          <TableHead>Módulos & Perfis</TableHead>
           <TableHead className="text-center">Admin</TableHead>
           <TableHead className="text-center">Ativo</TableHead>
           <TableHead className="text-right">Ações</TableHead>
@@ -38,6 +55,8 @@ export function UsersTable({ users, onEdit, onToggleAdmin, onToggleActive, onRes
         )}
         {users.map(u => (
           <TableRow key={u.id} className={!u.is_active ? "opacity-50" : ""}>
+
+            {/* Nome */}
             <TableCell className="font-medium">
               <div className="flex items-center gap-1.5">
                 {u.display_name}
@@ -49,9 +68,10 @@ export function UsersTable({ users, onEdit, onToggleAdmin, onToggleActive, onRes
               </div>
             </TableCell>
 
+            {/* E-mail */}
             <TableCell className="text-xs text-muted-foreground">{u.email}</TableCell>
 
-            {/* Times — suporta múltiplos via team_members */}
+            {/* Times */}
             <TableCell>
               {u.teams.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
@@ -66,19 +86,32 @@ export function UsersTable({ users, onEdit, onToggleAdmin, onToggleActive, onRes
               )}
             </TableCell>
 
+            {/* Módulos & Perfis — NOVO: tags modulo:perfil coloridas */}
             <TableCell>
-              <Badge
-                variant={u.module_access === "sala_agil" ? "default" : u.module_access === "admin" ? "destructive" : "secondary"}
-                className="gap-1 text-[10px]"
-              >
-                {u.module_access === "sala_agil"   ? <Zap    className="h-3 w-3" /> : null}
-                {u.module_access === "sustentacao" ? <Shield className="h-3 w-3" /> : null}
-                {u.module_access === "sala_agil"   ? "Sala Ágil"
-                  : u.module_access === "sustentacao" ? "Sustentação"
-                  : "Admin"}
-              </Badge>
+              <div className="flex flex-wrap gap-1">
+                {u.module_roles.map(mr => {
+                  const meta = MODULE_META[mr.module];
+                  if (!meta) return null;
+                  const Icon = meta.icon;
+                  return (
+                    <Badge
+                      key={`${mr.module}-${mr.role_name}`}
+                      variant="outline"
+                      className={`gap-1 text-[10px] font-normal ${meta.color} border-current`}
+                      title={`${meta.label}: ${getRoleLabel(mr.role_name)}`}
+                    >
+                      <Icon className="h-2.5 w-2.5" />
+                      {getRoleLabel(mr.role_name)}
+                    </Badge>
+                  );
+                })}
+                {u.module_roles.length === 0 && (
+                  <span className="text-xs text-muted-foreground italic">sem módulo</span>
+                )}
+              </div>
             </TableCell>
 
+            {/* Admin */}
             <TableCell className="text-center">
               <Switch
                 checked={u.is_admin}
@@ -87,6 +120,7 @@ export function UsersTable({ users, onEdit, onToggleAdmin, onToggleActive, onRes
               />
             </TableCell>
 
+            {/* Ativo */}
             <TableCell className="text-center">
               <Switch
                 checked={u.is_active}
@@ -95,6 +129,7 @@ export function UsersTable({ users, onEdit, onToggleAdmin, onToggleActive, onRes
               />
             </TableCell>
 
+            {/* Ações */}
             <TableCell className="text-right">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -110,9 +145,12 @@ export function UsersTable({ users, onEdit, onToggleAdmin, onToggleActive, onRes
                   <DropdownMenuItem onClick={() => onResetPassword(u.email)} className="gap-2">
                     <KeyRound className="h-3.5 w-3.5" /> Resetar senha
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onToggleAdmin(u.user_id, !u.is_admin)} className="gap-2">
+                  <DropdownMenuItem
+                    onClick={() => onToggleAdmin(u.user_id, !u.is_admin)}
+                    className="gap-2"
+                  >
                     {u.is_admin
-                      ? <ShieldOff className="h-3.5 w-3.5" />
+                      ? <ShieldOff  className="h-3.5 w-3.5" />
                       : <ShieldCheck className="h-3.5 w-3.5" />}
                     {u.is_admin ? "Remover admin" : "Promover a admin"}
                   </DropdownMenuItem>
