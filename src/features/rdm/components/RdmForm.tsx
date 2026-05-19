@@ -16,12 +16,12 @@ import { Button }   from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Switch }   from "@/components/ui/switch";
-import { Label }    from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Label }  from "@/components/ui/label";
 import {
   RDM_TIPO_MUDANCA, RDM_TIPO_LABELS,
-  RDM_RISCO, RDM_RISCO_LABELS,
-  RDM_AMBIENTE, RDM_AMBIENTE_LABELS,
+  RDM_RISCO,        RDM_RISCO_LABELS,
+  RDM_AMBIENTE,     RDM_AMBIENTE_LABELS,
 } from "../types/rdm";
 import type { RdmInsert } from "../types/rdm";
 
@@ -29,9 +29,9 @@ const schema = z.object({
   nome:                    z.string().min(3, "Mínimo 3 caracteres"),
   objetivo:               z.string().min(10, "Descreva o objetivo (mín. 10 caracteres)"),
   sistema_modulo:         z.string().min(2, "Informe o sistema/módulo"),
-  tipo_mudanca:           z.enum(RDM_TIPO_MUDANCA),
-  risco:                  z.enum(RDM_RISCO),
-  ambiente:               z.enum(RDM_AMBIENTE),
+  tipo_mudanca:           z.enum(RDM_TIPO_MUDANCA),   // evolutiva | corretiva | emergencial
+  risco:                  z.enum(RDM_RISCO),           // baixo | medio | alto
+  ambiente:               z.enum(RDM_AMBIENTE),        // producao | homologacao | desenvolvimento
   data_implantacao:       z.string().min(1, "Informe a data"),
   hora_inicio:            z.string().regex(/^\d{2}:\d{2}$/, "Formato HH:MM"),
   hora_fim_prevista:      z.string().regex(/^\d{2}:\d{2}$/, "Formato HH:MM"),
@@ -59,7 +59,7 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
       nome:                    "",
       objetivo:               "",
       sistema_modulo:         "",
-      tipo_mudanca:           "normal",
+      tipo_mudanca:           "evolutiva",   // default alinhado ao banco
       risco:                  "baixo",
       ambiente:               "producao",
       data_implantacao:       "",
@@ -78,8 +78,8 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
       await onSubmit({
         ...values,
         tempo_rollback_minutos: values.tempo_rollback_minutos ?? null,
-        observacoes: values.observacoes || null,
-        status: "rascunho",
+        observacoes:            values.observacoes || null,
+        status:                 "rascunho",
       } as any);
       form.reset();
       onClose();
@@ -97,10 +97,8 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5">
-            {/* Linha 1 */}
-            <FormField
-              control={form.control}
-              name="nome"
+
+            <FormField control={form.control} name="nome"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nome da Mudança *</FormLabel>
@@ -110,28 +108,19 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="objetivo"
+            <FormField control={form.control} name="objetivo"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Objetivo *</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder="Descreva o objetivo e escopo da mudança…"
-                      className="resize-none"
-                      rows={3}
-                      {...field}
-                    />
+                    <Textarea placeholder="Descreva o objetivo e escopo da mudança…" className="resize-none" rows={3} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="sistema_modulo"
+            <FormField control={form.control} name="sistema_modulo"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Sistema / Módulo *</FormLabel>
@@ -141,18 +130,13 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
               )}
             />
 
-            {/* Linha 2 — selects */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <FormField
-                control={form.control}
-                name="tipo_mudanca"
+              <FormField control={form.control} name="tipo_mudanca"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Tipo de Mudança *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                      </FormControl>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                       <SelectContent>
                         {RDM_TIPO_MUDANCA.map((t) => (
                           <SelectItem key={t} value={t}>{RDM_TIPO_LABELS[t]}</SelectItem>
@@ -164,16 +148,12 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="risco"
+              <FormField control={form.control} name="risco"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Risco *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                      </FormControl>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                       <SelectContent>
                         {RDM_RISCO.map((r) => (
                           <SelectItem key={r} value={r}>{RDM_RISCO_LABELS[r]}</SelectItem>
@@ -185,16 +165,12 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="ambiente"
+              <FormField control={form.control} name="ambiente"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Ambiente *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                      </FormControl>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                       <SelectContent>
                         {RDM_AMBIENTE.map((a) => (
                           <SelectItem key={a} value={a}>{RDM_AMBIENTE_LABELS[a]}</SelectItem>
@@ -207,11 +183,8 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
               />
             </div>
 
-            {/* Linha 3 — data e horários */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <FormField
-                control={form.control}
-                name="data_implantacao"
+              <FormField control={form.control} name="data_implantacao"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Data de Implantação *</FormLabel>
@@ -220,9 +193,7 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="hora_inicio"
+              <FormField control={form.control} name="hora_inicio"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Hora Início *</FormLabel>
@@ -231,9 +202,7 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="hora_fim_prevista"
+              <FormField control={form.control} name="hora_fim_prevista"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Hora Fim Prevista *</FormLabel>
@@ -244,45 +213,32 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
               />
             </div>
 
-            {/* Linha 4 — switches */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="downtime_previsto"
+              <FormField control={form.control} name="downtime_previsto"
                 render={({ field }) => (
                   <FormItem className="flex items-center gap-3 space-y-0 rounded-lg border border-border p-3">
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
+                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                     <Label className="cursor-pointer">Downtime Previsto</Label>
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="rollback_previsto"
+              <FormField control={form.control} name="rollback_previsto"
                 render={({ field }) => (
                   <FormItem className="flex items-center gap-3 space-y-0 rounded-lg border border-border p-3">
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
+                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                     <Label className="cursor-pointer">Plano de Rollback</Label>
                   </FormItem>
                 )}
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="tempo_rollback_minutos"
+            <FormField control={form.control} name="tempo_rollback_minutos"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Tempo de Rollback (minutos)</FormLabel>
                   <FormControl>
                     <Input
-                      type="number"
-                      min={0}
-                      placeholder="Ex.: 30"
+                      type="number" min={0} placeholder="Ex.: 30"
                       {...field}
                       value={field.value ?? ""}
                       onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
@@ -293,19 +249,12 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="observacoes"
+            <FormField control={form.control} name="observacoes"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Observações</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder="Informações adicionais, dependências, riscos específicos…"
-                      className="resize-none"
-                      rows={3}
-                      {...field}
-                    />
+                    <Textarea placeholder="Informações adicionais, dependências, riscos específicos…" className="resize-none" rows={3} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

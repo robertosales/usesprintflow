@@ -20,51 +20,56 @@ export type RdmGoNogoInsert            = TablesInsert<"rdm_gonogo">;
 export type RdmUpdate              = TablesUpdate<"rdms">;
 export type RdmChecklistItemUpdate = TablesUpdate<"rdm_checklist_items">;
 
-// ── Enums / constantes de domínio ───────────────────────────────────────────
+// ── STATUS ─────────────────────────────────────────────────────────────────
+// Valores exatos do CHECK CONSTRAINT: rdms_status_check
 export const RDM_STATUS = [
   "rascunho",
   "em_aprovacao",
   "aprovada",
   "em_execucao",
-  "concluida",
+  "implantada",
+  "rollback_executado",
   "cancelada",
-  "rollback",
 ] as const;
 export type RdmStatus = (typeof RDM_STATUS)[number];
 
 export const RDM_STATUS_LABELS: Record<RdmStatus, string> = {
-  rascunho:     "Rascunho",
-  em_aprovacao: "Em Aprovação",
-  aprovada:     "Aprovada",
-  em_execucao:  "Em Execução",
-  concluida:    "Concluída",
-  cancelada:    "Cancelada",
-  rollback:     "Rollback",
+  rascunho:           "Rascunho",
+  em_aprovacao:       "Em Aprovação",
+  aprovada:           "Aprovada",
+  em_execucao:        "Em Execução",
+  implantada:         "Implantada",
+  rollback_executado: "Rollback Executado",
+  cancelada:          "Cancelada",
 };
 
 export const RDM_STATUS_COLORS: Record<RdmStatus, string> = {
-  rascunho:     "bg-slate-500/15 text-slate-400 border-slate-500/20",
-  em_aprovacao: "bg-yellow-500/15 text-yellow-400 border-yellow-500/20",
-  aprovada:     "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-  em_execucao:  "bg-blue-500/15 text-blue-400 border-blue-500/20",
-  concluida:    "bg-green-500/15 text-green-400 border-green-500/20",
-  cancelada:    "bg-red-500/15 text-red-400 border-red-500/20",
-  rollback:     "bg-orange-500/15 text-orange-400 border-orange-500/20",
+  rascunho:           "bg-slate-500/15 text-slate-400 border-slate-500/20",
+  em_aprovacao:       "bg-yellow-500/15 text-yellow-400 border-yellow-500/20",
+  aprovada:           "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+  em_execucao:        "bg-blue-500/15 text-blue-400 border-blue-500/20",
+  implantada:         "bg-green-500/15 text-green-400 border-green-500/20",
+  rollback_executado: "bg-orange-500/15 text-orange-400 border-orange-500/20",
+  cancelada:          "bg-red-500/15 text-red-400 border-red-500/20",
 };
 
+// ── TIPO DE MUDANÇA ────────────────────────────────────────────────────────
+// Valores exatos do CHECK CONSTRAINT: rdms_tipo_mudanca_check
 export const RDM_TIPO_MUDANCA = [
-  "normal",
-  "padrao",
+  "evolutiva",
+  "corretiva",
   "emergencial",
 ] as const;
 export type RdmTipoMudanca = (typeof RDM_TIPO_MUDANCA)[number];
 
 export const RDM_TIPO_LABELS: Record<RdmTipoMudanca, string> = {
-  normal:       "Normal",
-  padrao:       "Padrão",
-  emergencial:  "Emergencial",
+  evolutiva:   "Evolutiva",
+  corretiva:   "Corretiva",
+  emergencial: "Emergencial",
 };
 
+// ── RISCO ──────────────────────────────────────────────────────────────────
+// Valores exatos do CHECK CONSTRAINT: rdms_risco_check
 export const RDM_RISCO = ["baixo", "medio", "alto"] as const;
 export type RdmRisco = (typeof RDM_RISCO)[number];
 
@@ -80,15 +85,17 @@ export const RDM_RISCO_COLORS: Record<RdmRisco, string> = {
   alto:  "bg-red-500/15 text-red-400 border-red-500/20",
 };
 
+// ── AMBIENTE ───────────────────────────────────────────────────────────────
 export const RDM_AMBIENTE = ["producao", "homologacao", "desenvolvimento"] as const;
 export type RdmAmbiente = (typeof RDM_AMBIENTE)[number];
 
 export const RDM_AMBIENTE_LABELS: Record<RdmAmbiente, string> = {
-  producao:       "Produção",
-  homologacao:    "Homologação",
-  desenvolvimento:"Desenvolvimento",
+  producao:        "Produção",
+  homologacao:     "Homologação",
+  desenvolvimento: "Desenvolvimento",
 };
 
+// ── GO/NO-GO PAPEIS ────────────────────────────────────────────────────────
 export const RDM_GONOGO_PAPEL = [
   "gestor_ti",
   "gestor_negocio",
@@ -99,24 +106,25 @@ export const RDM_GONOGO_PAPEL = [
 export type RdmGoNogoPapel = (typeof RDM_GONOGO_PAPEL)[number];
 
 export const RDM_GONOGO_PAPEL_LABELS: Record<RdmGoNogoPapel, string> = {
-  gestor_ti:       "Gestor TI",
-  gestor_negocio:  "Gestor Negócio",
-  arquiteto:       "Arquiteto",
-  qa_lead:         "QA Lead",
-  scrum_master:    "Scrum Master",
+  gestor_ti:      "Gestor TI",
+  gestor_negocio: "Gestor Negócio",
+  arquiteto:      "Arquiteto",
+  qa_lead:        "QA Lead",
+  scrum_master:   "Scrum Master",
 };
 
+// ── CHECKLIST STATUS ───────────────────────────────────────────────────────
 export const RDM_CHECKLIST_STATUS = ["pendente", "em_andamento", "concluido", "nao_aplicavel"] as const;
 export type RdmChecklistStatus = (typeof RDM_CHECKLIST_STATUS)[number];
 
 export const RDM_CHECKLIST_STATUS_LABELS: Record<RdmChecklistStatus, string> = {
-  pendente:        "Pendente",
-  em_andamento:    "Em Andamento",
-  concluido:       "Concluído",
-  nao_aplicavel:   "N/A",
+  pendente:      "Pendente",
+  em_andamento:  "Em Andamento",
+  concluido:     "Concluído",
+  nao_aplicavel: "N/A",
 };
 
-// ── Tipo enriquecido (JOIN com profiles) ────────────────────────────────────
+// ── Tipo enriquecido (JOIN com profiles) ───────────────────────────────────
 export interface RdmComParticipantes extends Rdm {
   participantes?: (RdmParticipante & { profile?: { display_name: string; email: string } | null })[];
   gonogo?:        RdmGoNogo[];
