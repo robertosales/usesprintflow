@@ -47,9 +47,18 @@ export function useRdmParticipantes(rdmId: string | null) {
 
   const add = useCallback(
     async (payload: { rdm_id: string; profile_id: string; papel: string }) => {
+      // Upsert por (rdm_id, profile_id) — evita duplicatas do mesmo usuário
+      // Se já existir, atualiza o papel
       const { error: err } = await supabase
         .from("rdm_participantes")
-        .insert(payload);
+        .upsert(
+          {
+            rdm_id:     payload.rdm_id,
+            profile_id: payload.profile_id,
+            papel:      payload.papel,
+          },
+          { onConflict: "rdm_id,profile_id" }
+        );
       if (err) throw err;
       await load();
     },

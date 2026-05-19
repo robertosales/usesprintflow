@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, Loader2, Users } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Loader2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge }  from "@/components/ui/badge";
 import { Label }  from "@/components/ui/label";
@@ -51,17 +51,20 @@ interface Props { rdmId: string }
 export function RdmParticipantesPanel({ rdmId }: Props) {
   const { profile } = useAuth();
   const { participantes, loading, add, remove } = useRdmParticipantes(rdmId);
-  const [papel, setPapel]                 = useState<string>("desenvolvedor");
-  const [submitting, setSubmitting]       = useState(false);
+  const [papel, setPapel]                     = useState<string>("desenvolvedor");
+  const [submitting, setSubmitting]           = useState(false);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
-  const [removing, setRemoving]           = useState(false);
+  const [removing, setRemoving]               = useState(false);
+
+  // Verifica se o usuário atual já é participante
+  const jaParticipa = participantes.some((p) => p.profile_id === profile?.id);
 
   const handleAdd = async () => {
     if (!profile?.id) return;
     setSubmitting(true);
     try {
       await add({ rdm_id: rdmId, profile_id: profile.id, papel });
-      toast.success("Participação registrada.");
+      toast.success(jaParticipa ? "Papel atualizado." : "Participação registrada.");
     } catch (e: any) {
       toast.error("Erro: " + (e?.message ?? ""));
     } finally {
@@ -86,7 +89,7 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
   const confirmParticipante = participantes.find((p) => p.id === confirmRemoveId);
   const confirmName = confirmParticipante?.profile?.display_name
     ?? confirmParticipante?.profile?.email
-    ?? confirmParticipante?.profile_id.slice(0, 8) + "…";
+    ?? (confirmParticipante?.profile_id.slice(0, 8) + "…");
 
   if (loading) return (
     <div className="flex justify-center py-8">
@@ -115,7 +118,6 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
               <div key={p.id}
                 className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
 
-                {/* Avatar */}
                 <Avatar className="h-8 w-8 shrink-0">
                   <AvatarImage
                     src={p.profile?.avatar_url ?? undefined}
@@ -126,7 +128,6 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
                   </AvatarFallback>
                 </Avatar>
 
-                {/* Dados */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
                   {p.profile?.email && (
@@ -134,7 +135,6 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
                   )}
                 </div>
 
-                {/* Papel */}
                 <Badge
                   variant="outline"
                   className={`text-[10px] h-5 shrink-0 ${PAPEL_COLORS[p.papel] ?? ""}`}
@@ -142,7 +142,6 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
                   {paperLabel}
                 </Badge>
 
-                {/* Remover */}
                 <Button
                   variant="ghost" size="icon"
                   className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
@@ -157,10 +156,12 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
         </div>
       )}
 
-      {/* Formulário: adicionar-me */}
+      {/* Formulário: entrar / atualizar papel */}
       <div className="flex items-end gap-3 rounded-xl border border-border p-4">
         <div className="flex-1 space-y-1.5">
-          <Label className="text-xs">Meu papel nesta RDM</Label>
+          <Label className="text-xs">
+            {jaParticipa ? "Alterar meu papel nesta RDM" : "Meu papel nesta RDM"}
+          </Label>
           <Select value={papel} onValueChange={setPapel}>
             <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -175,15 +176,18 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
           onClick={handleAdd}
           disabled={submitting}
           className="gap-1.5 h-8"
+          variant={jaParticipa ? "outline" : "default"}
         >
           {submitting
-            ? <Loader2 className="h-4 w-4 animate-spin" />
-            : <Plus    className="h-4 w-4" />}
-          Participar
+            ? <Loader2    className="h-4 w-4 animate-spin" />
+            : jaParticipa
+              ? <RefreshCw className="h-4 w-4" />
+              : <Plus      className="h-4 w-4" />}
+          {jaParticipa ? "Atualizar papel" : "Participar"}
         </Button>
       </div>
 
-      {/* AlertDialog — confirmar remoção */}
+      {/* AlertDialog — confirmar remoção */}
       <AlertDialog
         open={!!confirmRemoveId}
         onOpenChange={(o) => !o && !removing && setConfirmRemoveId(null)}
@@ -196,7 +200,7 @@ export function RdmParticipantesPanel({ rdmId }: Props) {
             <AlertDialogDescription>
               Remover{" "}
               <span className="font-semibold text-foreground">{confirmName}</span>{" "}
-              desta RDM? Esta ação não pode ser desfeita.
+              desta RDM? Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

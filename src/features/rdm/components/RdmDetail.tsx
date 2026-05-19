@@ -155,7 +155,7 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
         </div>
       )}
 
-      {/* Transição de status — só mostra se o usuário puder editar e houver transições */}
+      {/* Transição de status */}
       {canEdit && nextStatuses.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-muted-foreground font-medium">Mover para:</span>
@@ -168,17 +168,25 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
         </div>
       )}
 
-      {/* Abas */}
+      {/* =====================================================
+          ORDEM DAS ABAS — fluxo operacional da RDM:
+          1. Checklist       — pré-requisitos e validações
+          2. Sprints         — escopo técnico (sprints + redmines)
+          3. Tarefas         — chamados operacionais de deploy
+          4. Go/No-Go        — aprovação executiva
+          5. Participantes   — equipe envolvida
+          6. Histórico       — auditoria / rastreabilidade
+          ===================================================== */}
       <Tabs defaultValue="checklist">
         <TabsList className="h-8 flex-wrap">
           <TabsTrigger value="checklist" className="text-xs gap-1.5">
             <CheckSquare className="h-3.5 w-3.5" /> Checklist
           </TabsTrigger>
+          <TabsTrigger value="sprints" className="text-xs gap-1.5">
+            <GitBranch className="h-3.5 w-3.5" /> Sprints &amp; Redmines
+          </TabsTrigger>
           <TabsTrigger value="tarefas" className="text-xs gap-1.5">
             <ClipboardList className="h-3.5 w-3.5" /> Tarefas
-          </TabsTrigger>
-          <TabsTrigger value="sprints" className="text-xs gap-1.5">
-            <GitBranch className="h-3.5 w-3.5" /> Sprints & Redmines
           </TabsTrigger>
           <TabsTrigger value="gonogo" className="text-xs gap-1.5">
             <ThumbsUp className="h-3.5 w-3.5" /> Go/No-Go
@@ -195,12 +203,12 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
           <RdmChecklistPanel rdmId={localRdm.id} />
         </TabsContent>
 
-        <TabsContent value="tarefas" className="mt-4">
-          <RdmDeploymentTasksPanel rdmId={localRdm.id} />
-        </TabsContent>
-
         <TabsContent value="sprints" className="mt-4">
           <RdmSprintsPanel rdmId={localRdm.id} />
+        </TabsContent>
+
+        <TabsContent value="tarefas" className="mt-4">
+          <RdmDeploymentTasksPanel rdmId={localRdm.id} />
         </TabsContent>
 
         <TabsContent value="gonogo" className="mt-4">
