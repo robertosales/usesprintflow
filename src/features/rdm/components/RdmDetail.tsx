@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   ArrowLeft, Calendar, Clock, Boxes, AlertTriangle,
   RefreshCw, Users, CheckSquare, ThumbsUp, History,
-  Pencil, GitBranch,
+  Pencil, GitBranch, ClipboardList,
 } from "lucide-react";
 import { Button }   from "@/components/ui/button";
 import { Badge }    from "@/components/ui/badge";
@@ -12,23 +12,28 @@ import {
   RDM_STATUS_LABELS,
   RDM_TIPO_LABELS, RDM_AMBIENTE_LABELS,
 } from "../types/rdm";
-import { RdmStatusBadge }        from "./RdmStatusBadge";
-import { RdmRiscoBadge }         from "./RdmRiscoBadge";
-import { RdmChecklistPanel }     from "./RdmChecklistPanel";
-import { RdmGoNogoPanel }        from "./RdmGoNogoPanel";
-import { RdmParticipantesPanel } from "./RdmParticipantesPanel";
-import { RdmAuditLogPanel }      from "./RdmAuditLogPanel";
-import { RdmSprintsPanel }       from "./RdmSprintsPanel";
-import { RdmForm }               from "./RdmForm";
-import { useAuth }               from "@/contexts/AuthContext";
+import { RdmStatusBadge }            from "./RdmStatusBadge";
+import { RdmRiscoBadge }             from "./RdmRiscoBadge";
+import { RdmChecklistPanel }         from "./RdmChecklistPanel";
+import { RdmGoNogoPanel }            from "./RdmGoNogoPanel";
+import { RdmParticipantesPanel }     from "./RdmParticipantesPanel";
+import { RdmAuditLogPanel }          from "./RdmAuditLogPanel";
+import { RdmSprintsPanel }           from "./RdmSprintsPanel";
+import { RdmDeploymentTasksPanel }   from "./RdmDeploymentTasksPanel";
+import { RdmForm }                   from "./RdmForm";
+import { useAuth }                   from "@/contexts/AuthContext";
 
-// Fluxo de transições válidas (sequencial)
+// Fluxo de transições válidas — alinhado com o CHECK do banco:
+// status IN ('rascunho','em_aprovacao','aprovada','em_execucao',
+//            'implantada','rollback_executado','cancelada')
 const STATUS_TRANSITIONS: Record<string, string[]> = {
-  rascunho:     ["aprovada", "rejeitada"],
-  aprovada:     ["em_execucao", "rejeitada", "rascunho"],
-  em_execucao:  ["executada", "rejeitada"],
-  executada:    [],
-  rejeitada:    ["rascunho"],
+  rascunho:           ["em_aprovacao", "cancelada"],
+  em_aprovacao:       ["aprovada", "cancelada", "rascunho"],
+  aprovada:           ["em_execucao", "cancelada"],
+  em_execucao:        ["implantada", "rollback_executado"],
+  implantada:         [],
+  rollback_executado: ["rascunho"],
+  cancelada:          ["rascunho"],
 };
 
 // Formata data "YYYY-MM-DD" sem bug de timezone (UTC→local)
@@ -150,7 +155,7 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
         </div>
       )}
 
-      {/* Transição de status — só mostra se houver transições válidas */}
+      {/* Transição de status — só mostra se o usuário puder editar e houver transições */}
       {canEdit && nextStatuses.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-muted-foreground font-medium">Mover para:</span>
@@ -169,6 +174,9 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
           <TabsTrigger value="checklist" className="text-xs gap-1.5">
             <CheckSquare className="h-3.5 w-3.5" /> Checklist
           </TabsTrigger>
+          <TabsTrigger value="tarefas" className="text-xs gap-1.5">
+            <ClipboardList className="h-3.5 w-3.5" /> Tarefas
+          </TabsTrigger>
           <TabsTrigger value="sprints" className="text-xs gap-1.5">
             <GitBranch className="h-3.5 w-3.5" /> Sprints & Redmines
           </TabsTrigger>
@@ -185,6 +193,10 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
 
         <TabsContent value="checklist" className="mt-4">
           <RdmChecklistPanel rdmId={localRdm.id} />
+        </TabsContent>
+
+        <TabsContent value="tarefas" className="mt-4">
+          <RdmDeploymentTasksPanel rdmId={localRdm.id} />
         </TabsContent>
 
         <TabsContent value="sprints" className="mt-4">
