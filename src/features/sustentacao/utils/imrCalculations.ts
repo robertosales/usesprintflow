@@ -1,113 +1,136 @@
-import type { Demanda } from "../types/demanda";
+// src/features/sustentacao/utils/imrCalculations.ts
+// Cálculos dos indicadores IMR Grupo 2 (IAP, IQS, ICT, ISS) e glosas por evento
 
-// Extended Demanda with IMR fields
-export interface DemandaIMR extends Demanda {
-  demandante?: string | null;
-  ordem_servico?: string | null;
-  tipo_defeito?: string | null;
-  originada_diagnostico?: boolean;
-  prazo_inicio_atendimento?: string | null;
+import { EVENTOS_CONFIG } from "../types/imr";
+
+// ─── Tipos públicos ──────────────────────────────────────────────────────────
+export interface DemandaIMR {
+  id: string;
+  situacao: string;
+  created_at: string;
+  updated_at: string;
+  resolved_at?: string | null;
   prazo_solucao?: string | null;
-  data_previsao_encerramento?: string | null;
-  nota_satisfacao?: number | null;
-  cobertura_testes?: number | null;
-  artefatos_atualizados?: string | null;
-  hard_code_identificado?: boolean | null;
-  reincidencia_defeito?: boolean | null;
-  contador_rejeicoes?: number;
+  rejeitada?: boolean;          // IQS: demanda rejeitada pelo cliente
+  possui_teste?: boolean;       // ICT: demanda possui evidência de teste
+  nota_satisfacao?: number | null; // ISS: nota 0–10
+  [key: string]: any;
 }
 
 export interface DemandaEvento {
   id: string;
-  demanda_id: string;
-  tipo_evento: string;
-  descricao: string;
-  redutor: number;
-  incidencia: string;
-  user_id: string;
+  demanda_id?: string | null;
+  codigo: string;               // ex: "E1", "E8"
+  quantidade?: number;          // multiplicador (dias, ocorrências)
   created_at: string;
+  [key: string]: any;
 }
 
-// ── IAP — Índice de Atendimento de Prazo ──
-export function calcIAP(demandas: DemandaIMR[]): { valor: number; qdap: number; qdtot: number } {
-  // Qdtot = demandas with data_previsao_encerramento in the period
-  const comPrazo = demandas.filter(d => d.data_previsao_encerramento);
-  const qdtot = comPrazo.length;
-  if (qdtot === 0) return { valor: 0, qdap: 0, qdtot: 0 };
-
-  // Qdap = demandas encerradas (aceite_final) dentro do prazo
-  const qdap = comPrazo.filter(d => {
-    if (d.situacao !== 'aceite_final' || !d.aceite_data) return false;
-    const aceite = new Date(d.aceite_data);
-    const prazo = new Date(d.prazo_solucao || d.data_previsao_encerramento!);
-    return aceite <= prazo;
-  }).length;
-
-  return { valor: qdtot > 0 ? (qdap / qdtot) * 100 : 0, qdap, qdtot };
+// ─── IAP — Índice de Atendimento de Prazo ─────────────────────────────────────
+export interface IAPResult {
+  valor: number;   // 0–100 (%)
+  qdap: number;    // demandas atendidas no prazo
+  qdtot: number;   // total de demandas com prazo definido
 }
 
-// ── IQS — Índice de Qualidade de Serviço ──
-export function calcIQS(demandas: DemandaIMR[]): { valor: number; qdr: number; qde: number } {
-  // Qde = delivered for homologation or homologated
-  const qde = demandas.filter(d =>
-    ['aguardando_homologacao', 'homologada', 'fila_producao', 'producao', 'aceite_final'].includes(d.situacao)
+export function calcIAP(demandas: DemandaIMR[]): IAPResult {
+  const RESOLVED = ["resolvida", "fechada", "concluida", "aceite_final"];
+
+  const comPrazo = demandas.filter(
+    (d) => d.prazo_solucao && RESOLVED.includes(d.situacao) && d.resolved_at
+  );
+
+  if (comPrazo.length === 0) return { valor: 100, qdap: 0, qdtot: 0 };
+
+  const noPrazo = comPrazo.filter(
+    (d) => new Date(d.resolved_at!) <= new Date(d.prazo_solucao!)
   ).length;
-  if (qde === 0) return { valor: 0, qdr: 0, qde: 0 };
 
-  // Qdr = demandas with at least 1 rejection
-  const qdr = demandas.filter(d => (d.contador_rejeicoes || 0) > 0).length;
-
-  return { valor: (1 - qdr / qde) * 100, qdr, qde };
+  return {
+    valor: (noPrazo / comPrazo.length) * 100,
+    qdap:  noPrazo,
+    qdtot: comPrazo.length,
+  };
 }
 
-// ── ICT — Índice de Cobertura de Testes ──
-export function calcICT(demandas: DemandaIMR[]): { valor: number; total: number } {
-  const concluidas = demandas.filter(d => d.situacao === 'aceite_final' && d.cobertura_testes != null);
-  if (concluidas.length === 0) return { valor: 0, total: 0 };
-  const sum = concluidas.reduce((s, d) => s + Number(d.cobertura_testes || 0), 0);
-  return { valor: sum / concluidas.length, total: concluidas.length };
+// ─── IQS — Índice de Qualidade de Serviço ──────────────────────────────────────
+export interface IQSResult {
+  valor: number;  // 0–100 (%)
+  qde:   number;  // total de demandas entregues
+  qdr:   number;  // demandas rejeitadas
 }
 
-// ── ISS — Índice de Satisfação do Serviço ──
-export function calcISS(demandas: DemandaIMR[]): { valor: number; total: number } {
-  const avaliadas = demandas.filter(d => d.situacao === 'aceite_final' && d.nota_satisfacao != null);
-  if (avaliadas.length === 0) return { valor: 0, total: 0 };
-  const sum = avaliadas.reduce((s, d) => s + Number(d.nota_satisfacao || 0), 0);
-  return { valor: sum / avaliadas.length, total: avaliadas.length };
+export function calcIQS(demandas: DemandaIMR[]): IQSResult {
+  const RESOLVED = ["resolvida", "fechada", "concluida", "aceite_final"];
+  const entregues = demandas.filter((d) => RESOLVED.includes(d.situacao));
+  if (entregues.length === 0) return { valor: 100, qde: 0, qdr: 0 };
+
+  const rejeitadas = entregues.filter((d) => d.rejeitada).length;
+  const valor = ((entregues.length - rejeitadas) / entregues.length) * 100;
+
+  return { valor, qde: entregues.length, qdr: rejeitadas };
 }
 
-// ── Glosas Summary ──
-export function calcGlosasSummary(eventos: DemandaEvento[]) {
+// ─── ICT — Índice de Cobertura de Testes ───────────────────────────────────────
+export interface ICTResult {
+  valor: number;  // 0–100 (%)
+  total: number;  // total avaliadas
+}
+
+export function calcICT(demandas: DemandaIMR[]): ICTResult {
+  const RESOLVED = ["resolvida", "fechada", "concluida", "aceite_final"];
+  const avaliadas = demandas.filter((d) => RESOLVED.includes(d.situacao));
+  if (avaliadas.length === 0) return { valor: 100, total: 0 };
+
+  const comTeste = avaliadas.filter((d) => d.possui_teste).length;
+  return {
+    valor: (comTeste / avaliadas.length) * 100,
+    total: avaliadas.length,
+  };
+}
+
+// ─── ISS — Índice de Satisfação do Serviço ──────────────────────────────────────
+export interface ISSResult {
+  valor: number;  // média das notas (0–10)
+  total: number;  // total avaliadas
+}
+
+export function calcISS(demandas: DemandaIMR[]): ISSResult {
+  const avaliadas = demandas.filter(
+    (d) => d.nota_satisfacao !== null && d.nota_satisfacao !== undefined
+  );
+  if (avaliadas.length === 0) return { valor: 10, total: 0 };
+
+  const soma  = avaliadas.reduce((s, d) => s + (d.nota_satisfacao ?? 0), 0);
+  return { valor: soma / avaliadas.length, total: avaliadas.length };
+}
+
+// ─── calcGlosasSummary ──────────────────────────────────────────────────────────
+export interface GlosasSummary {
+  totalIntegral: number; // soma das glosas de incidência="integral"
+  totalLimitada: number; // soma das glosas de incidência="limitada"
+  byEvento: Record<string, { count: number; total: number }>;
+}
+
+export function calcGlosasSummary(eventos: DemandaEvento[]): GlosasSummary {
+  const byEvento: Record<string, { count: number; total: number }> = {};
   let totalIntegral = 0;
   let totalLimitada = 0;
-  const byEvento: Record<string, { count: number; total: number }> = {};
 
-  eventos.forEach(e => {
-    if (e.incidencia === 'integral') totalIntegral += Number(e.redutor);
-    else totalLimitada += Number(e.redutor);
+  eventos.forEach((ev) => {
+    const config = EVENTOS_CONFIG.find((c) => c.codigo === ev.codigo);
+    if (!config) return;
 
-    if (!byEvento[e.tipo_evento]) byEvento[e.tipo_evento] = { count: 0, total: 0 };
-    byEvento[e.tipo_evento].count++;
-    byEvento[e.tipo_evento].total += Number(e.redutor);
+    const quantidade = ev.quantidade ?? 1;
+    const glosa      = config.redutor * quantidade;
+
+    if (!byEvento[ev.codigo]) byEvento[ev.codigo] = { count: 0, total: 0 };
+    byEvento[ev.codigo].count += quantidade;
+    byEvento[ev.codigo].total += glosa;
+
+    if (config.incidencia === "integral") totalIntegral += glosa;
+    else totalLimitada += glosa;
   });
 
   return { totalIntegral, totalLimitada, byEvento };
-}
-
-// ── Auto-detect E8 events ──
-export function detectE8Alerts(demandas: DemandaIMR[]): Array<{ demanda: DemandaIMR; diasAtraso: number; tipo: 'alerta' | 'glosa' }> {
-  const now = new Date();
-  const alerts: Array<{ demanda: DemandaIMR; diasAtraso: number; tipo: 'alerta' | 'glosa' }> = [];
-
-  demandas.forEach(d => {
-    if (d.situacao === 'aceite_final') return;
-    if (!d.prazo_solucao && !d.data_previsao_encerramento) return;
-    const prazo = new Date(d.prazo_solucao || d.data_previsao_encerramento!);
-    const diasAtraso = Math.floor((now.getTime() - prazo.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (diasAtraso >= 60) alerts.push({ demanda: d, diasAtraso, tipo: 'glosa' });
-    else if (diasAtraso >= 45) alerts.push({ demanda: d, diasAtraso, tipo: 'alerta' });
-  });
-
-  return alerts.sort((a, b) => b.diasAtraso - a.diasAtraso);
 }

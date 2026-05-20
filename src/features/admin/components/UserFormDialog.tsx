@@ -1,99 +1,186 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription,
+} from "@/components/ui/form";
+import { Input }  from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import type { UserAdmin } from "../hooks/useUsersAdmin";
+import { Badge }  from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label }  from "@/components/ui/label";
+import { Zap, Shield, FileText, ChevronDown, ChevronUp } from "lucide-react";
+import type { UserAdmin, UserModuleRole } from "../hooks/useUsersAdmin";
 import type { TeamAdmin } from "../hooks/useTeamsAdmin";
+import { fetchAllRoles } from "@/hooks/usePermissions";
 
-interface EditValues  { display_name: string; module_access: string; team_id: string; }
-interface CreateValues extends EditValues { email: string; password: string; }
+// ── Definição dos módulos disponíveis ────────────────────────────────────────
+const MODULES = [
+  { key: "sala_agil",   label: "Sala Ágil",   icon: Zap,      color: "text-blue-400" },
+  { key: "sustentacao", label: "Sustentação", icon: Shield,   color: "text-emerald-400" },
+  { key: "rdm",         label: "RDM",         icon: FileText, color: "text-purple-400" },
+] as const;
+
+type ModuleKey = (typeof MODULES)[number]["key"];
+
+interface FormValues {
+  display_name: string;
+  email:        string;
+  password:     string;
+  team_id:      string;
+}
 
 interface Props {
-  open: boolean;
-  user?: UserAdmin | null;
-  teams: TeamAdmin[];
-  onClose: () => void;
-  onCreate: (data: CreateValues) => Promise<boolean>;
-  onUpdate: (userId: string, data: EditValues) => Promise<boolean>;
+  open:     boolean;
+  user?:    UserAdmin | null;
+  teams:    TeamAdmin[];
+  onClose:  () => void;
+  onCreate: (data: FormValues & { module_roles: UserModuleRole[] }) => Promise<boolean>;
+  onUpdate: (userId: string, data: Partial<FormValues> & { module_roles: UserModuleRole[] }) => Promise<boolean>;
 }
 
 export function UserFormDialog({ open, user, teams, onClose, onCreate, onUpdate }: Props) {
   const isEdit = !!user;
-  const form = useForm<CreateValues>({
-    defaultValues: { display_name: "", email: "", password: "", module_access: "sala_agil", team_id: "none" },
+
+  const form = useForm<FormValues>({
+    defaultValues: { display_name: "", email: "", password: "", team_id: "none" },
   });
 
+  // Estado dos módulos ativos e perfis selecionados
+  const [moduleEnabled, setModuleEnabled] = useState<Record<ModuleKey, boolean>>({
+    sala_agil: true, sustentacao: false, rdm: false,
+  });
+  const [moduleRole, setModuleRole] = useState<Record<ModuleKey, string>>({
+    sala_agil: "member", sustentacao: "member", rdm: "member",
+  });
+  const [expandedModule, setExpandedModule] = useState<ModuleKey | null>("sala_agil");
+  const [availableRoles, setAvailableRoles] = useState<{ name: string; label: string }[]>([]);
+
+  // Carrega roles do banco
   useEffect(() => {
-    if (open) {
-      form.reset(isEdit
-        ? { display_name: user!.display_name, email: user!.email, password: "", module_access: user!.module_access, team_id: user!.team_id ?? "none" }
-        : { display_name: "", email: "", password: "", module_access: "sala_agil", team_id: "none" }
-      );
+    fetchAllRoles().then(setAvailableRoles);
+  }, []);
+
+  // Inicializa form ao abrir
+  useEffect(() => {
+    if (!open) return;
+    form.reset(
+      isEdit
+        ? { display_name: user!.display_name, email: user!.email, password: "", team_id: user!.team_id ?? "none" }
+        : { display_name: "", email: "", password: "", team_id: "none" }
+    );
+
+    if (isEdit && user!.module_roles.length > 0) {
+      const enabled: Record<ModuleKey, boolean>  = { sala_agil: false, sustentacao: false, rdm: false };
+      const roles:   Record<ModuleKey, string>   = { sala_agil: "member", sustentacao: "member", rdm: "member" };
+      user!.module_roles.forEach(mr => {
+        if (mr.module in enabled) {
+          enabled[mr.module as ModuleKey] = true;
+          roles[mr.module as ModuleKey]   = mr.role_name;
+        }
+      });
+      setModuleEnabled(enabled);
+      setModuleRole(roles);
+      const firstActive = MODULES.find(m => enabled[m.key])?.key ?? null;
+      setExpandedModule(firstActive);
+    } else {
+      setModuleEnabled({ sala_agil: true, sustentacao: false, rdm: false });
+      setModuleRole({ sala_agil: "member", sustentacao: "member", rdm: "member" });
+      setExpandedModule("sala_agil");
     }
   }, [open, user]);
 
-  const onSubmit = async (values: CreateValues) => {
+  const buildModuleRoles = (): UserModuleRole[] =>
+    MODULES
+      .filter(m => moduleEnabled[m.key])
+      .map(m => ({ module: m.key, role_name: moduleRole[m.key] }));
+
+  const onSubmit = async (values: FormValues) => {
+    const moduleRoles = buildModuleRoles();
+    if (moduleRoles.length === 0) {
+      form.setError("display_name", { message: "Ative pelo menos um módulo." });
+      return;
+    }
     const teamId = values.team_id === "none" ? null : values.team_id;
     let ok: boolean;
     if (isEdit) {
-      ok = await onUpdate(user!.user_id, { display_name: values.display_name, module_access: values.module_access, team_id: teamId });
+      ok = await onUpdate(user!.user_id, {
+        display_name: values.display_name,
+        team_id:      teamId,
+        module_roles: moduleRoles,
+      });
     } else {
-      ok = await onCreate({ ...values, team_id: teamId });
+      ok = await onCreate({ ...values, team_id: teamId, module_roles: moduleRoles });
     }
     if (ok) onClose();
   };
 
+  // Filtro de roles por módulo: RDM usa roles próprios, demais usam os genéricos
+  const getRolesForModule = (moduleKey: ModuleKey) => {
+    if (moduleKey === "rdm") {
+      return availableRoles.filter(r =>
+        ["rdm_gestor", "rdm_aprovador", "rdm_executor", "admin", "member"].includes(r.name)
+      );
+    }
+    return availableRoles.filter(r =>
+      !["rdm_gestor", "rdm_aprovador", "rdm_executor"].includes(r.name)
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar Usuário" : "Novo Usuário"}</DialogTitle>
         </DialogHeader>
+
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+
+            {/* Nome */}
             <FormField control={form.control} name="display_name" rules={{ required: "Nome obrigatório" }}
               render={({ field }) => (
-                <FormItem><FormLabel>Nome</FormLabel><FormControl><Input placeholder="João Silva" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem>
+                  <FormLabel>Nome</FormLabel>
+                  <FormControl><Input placeholder="João Silva" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
             />
+
+            {/* Email e Senha — só na criação */}
             {!isEdit && (
               <>
                 <FormField control={form.control} name="email" rules={{ required: "E-mail obrigatório" }}
                   render={({ field }) => (
-                    <FormItem><FormLabel>E-mail</FormLabel><FormControl><Input type="email" placeholder="joao@empresa.com" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem>
+                      <FormLabel>E-mail</FormLabel>
+                      <FormControl><Input type="email" placeholder="joao@empresa.com" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
                 />
-                <FormField control={form.control} name="password" rules={{ required: "Senha obrigatória", minLength: { value: 6, message: "Mínimo 6 caracteres" } }}
+                <FormField control={form.control} name="password"
+                  rules={{ required: "Senha obrigatória", minLength: { value: 6, message: "Mínimo 6 caracteres" } }}
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Senha temporária</FormLabel>
                       <FormControl><Input type="password" placeholder="Mínimo 6 caracteres" {...field} /></FormControl>
-                      <FormDescription className="text-[11px]">O usuário será obrigado a trocar no primeiro acesso.</FormDescription>
+                      <FormDescription className="text-[11px]">
+                        O usuário será obrigado a trocar no primeiro acesso.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </>
             )}
-            <FormField control={form.control} name="module_access"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Módulo de acesso</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value="sala_agil">⚡ Sala Ágil</SelectItem>
-                      <SelectItem value="sustentacao">🛡 Sustentação</SelectItem>
-                      <SelectItem value="admin">Ambos os módulos</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+
+            {/* Time */}
             <FormField control={form.control} name="team_id"
               render={({ field }) => (
                 <FormItem>
@@ -109,6 +196,97 @@ export function UserFormDialog({ open, user, teams, onClose, onCreate, onUpdate 
                 </FormItem>
               )}
             />
+
+            {/* ── Módulos & Perfis ───────────────────────────────────────────── */}
+            <div className="space-y-2">
+              <FormLabel className="text-sm font-semibold">Módulos & Perfis</FormLabel>
+              <p className="text-[11px] text-muted-foreground">
+                Ative os módulos que este usuário pode acessar e escolha o perfil em cada um.
+              </p>
+
+              {MODULES.map(mod => {
+                const Icon      = mod.icon;
+                const isOn      = moduleEnabled[mod.key];
+                const isOpen    = expandedModule === mod.key;
+                const roles     = getRolesForModule(mod.key);
+                const noRoles   = roles.length === 0;
+
+                return (
+                  <div key={mod.key}
+                    className={`rounded-lg border transition-colors ${
+                      isOn ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20"
+                    }`}
+                  >
+                    {/* Cabeçalho do módulo */}
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 flex-1 text-left"
+                        onClick={() => isOn && setExpandedModule(isOpen ? null : mod.key)}
+                      >
+                        <Icon className={`h-4 w-4 ${isOn ? mod.color : "text-muted-foreground"}`} />
+                        <span className={`text-sm font-medium ${
+                          isOn ? "text-foreground" : "text-muted-foreground"
+                        }`}>
+                          {mod.label}
+                        </span>
+                        {isOn && (
+                          <Badge variant="outline" className={`text-[9px] ml-1 ${mod.color} border-current`}>
+                            {availableRoles.find(r => r.name === moduleRole[mod.key])?.label ?? moduleRole[mod.key]}
+                          </Badge>
+                        )}
+                        {isOn && (
+                          isOpen
+                            ? <ChevronUp   className="h-3.5 w-3.5 text-muted-foreground ml-auto" />
+                            : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground ml-auto" />
+                        )}
+                      </button>
+                      <Switch
+                        checked={isOn}
+                        onCheckedChange={v => {
+                          setModuleEnabled(prev => ({ ...prev, [mod.key]: v }));
+                          if (v) setExpandedModule(mod.key);
+                          else if (expandedModule === mod.key) setExpandedModule(null);
+                        }}
+                        className="ml-3 scale-90"
+                      />
+                    </div>
+
+                    {/* Perfis do módulo — expande ao ligar */}
+                    {isOn && isOpen && (
+                      <div className="border-t border-border px-4 pb-3 pt-2">
+                        {noRoles ? (
+                          <p className="text-xs text-muted-foreground italic">
+                            Carregando perfis...
+                          </p>
+                        ) : (
+                          <RadioGroup
+                            value={moduleRole[mod.key]}
+                            onValueChange={v =>
+                              setModuleRole(prev => ({ ...prev, [mod.key]: v }))
+                            }
+                            className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1"
+                          >
+                            {roles.map(r => (
+                              <div key={r.name} className="flex items-center gap-2">
+                                <RadioGroupItem value={r.name} id={`${mod.key}-${r.name}`} />
+                                <Label
+                                  htmlFor={`${mod.key}-${r.name}`}
+                                  className="text-xs cursor-pointer"
+                                >
+                                  {r.label}
+                                </Label>
+                              </div>
+                            ))}
+                          </RadioGroup>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>

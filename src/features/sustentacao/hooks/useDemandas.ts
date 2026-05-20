@@ -1,144 +1,163 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import * as svc from "../services/demandas.service";
-import type { Demanda, DemandaTransition, DemandaHour } from "../types/demanda";
-import { REQUIRES_JUSTIFICATIVA } from "../types/demanda";
-
 /**
- * Enriquece as demandas com TODOS os responsáveis da tabela demanda_responsaveis.
- * Cada demanda recebe:
- *   - responsavel_dev / responsavel_requisitos / etc. → primeiro por papel (compat. legada)
- *   - responsaveis_list → LISTA COMPLETA [{papel, nome, created_at}] ordenada por created_at
+ * useDemandas — migrado para TanStack Query (Semana 2)
+ *
+ * ANTES: useState + useEffect + loadingRef manual
+ *   - fetch em todo mount, sem cache, sem deduplicação
+ *   - realtime atualizava state local (não compartilhado)
+ *
+ * DEPOIS: useQuery com staleTime: 30s
+ *   - cache compartilhado entre todos os componentes
+ *   - realtime invalida queryClient → todos os subscribers atualizam
+ *   - mutations usam invalidateQueries para coerência
+ *   - API pública idêntica (demandas, loading, error, reload, create, update, moveTo, remove)
  */
+
+import { useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import * as svc from '../services/demandas.service';
+import type { Demanda, DemandaTransition, DemandaHour } from '../types/demanda';
+import { REQUIRES_JUSTIFICATIVA } from '../types/demanda';
+import { KEYS } from '@/lib/queryKeys';
+import { STALE } from '@/lib/queryClient';
+
+// ─── Enrich responsáveis (inalterado) ────────────────────────────────────────
 async function enrichComResponsaveis(demandas: Demanda[]): Promise<Demanda[]> {
   if (demandas.length === 0) return demandas;
   const ids = demandas.map((d) => d.id);
 
   const { data } = await supabase
-    .from("demanda_responsaveis")
-    .select("demanda_id, papel, created_at, profiles(display_name)")
-    .in("demanda_id", ids)
-    .order("created_at", { ascending: true });
+    .from('demanda_responsaveis')
+    .select('demanda_id, papel, created_at, profiles(display_name)')
+    .in('demanda_id', ids)
+    .order('created_at', { ascending: true });
 
   const rows = (data || []) as any[];
 
   return demandas.map((d) => {
     const resp = rows.filter((r) => r.demanda_id === d.id);
-
-    // Compat. legada: primeiro por papel
     const getPorPapel = (papel: string) =>
       resp.find((r) => r.papel === papel)?.profiles?.display_name ?? null;
-
-    // NOVO: lista completa com todos, preservando ordem cronológica
-    const responsaveis_list = resp.map((r) => ({
-      papel: r.papel as string,
-      nome: (r.profiles?.display_name ?? "") as string,
-      created_at: r.created_at as string,
-    })).filter((r) => !!r.nome);
+    const responsaveis_list = resp
+      .map((r) => ({
+        papel:      r.papel as string,
+        nome:       (r.profiles?.display_name ?? '') as string,
+        created_at: r.created_at as string,
+      }))
+      .filter((r) => !!r.nome);
 
     return {
       ...d,
-      responsavel_dev:        getPorPapel("desenvolvedor") ?? d.responsavel_dev,
-      responsavel_requisitos: getPorPapel("analista")      ?? d.responsavel_requisitos,
-      responsavel_arquiteto:  getPorPapel("arquiteto")     ?? d.responsavel_arquiteto,
-      responsavel_teste:      getPorPapel("testador")      ?? d.responsavel_teste,
-      // ⭐ campo novo consumido pelo board
+      responsavel_dev:        getPorPapel('desenvolvedor') ?? d.responsavel_dev,
+      responsavel_requisitos: getPorPapel('analista')      ?? d.responsavel_requisitos,
+      responsavel_arquiteto:  getPorPapel('arquiteto')     ?? d.responsavel_arquiteto,
+      responsavel_teste:      getPorPapel('testador')      ?? d.responsavel_teste,
       responsaveis_list,
     } as Demanda & { responsaveis_list: { papel: string; nome: string; created_at: string }[] };
   });
 }
 
+// ─── Fetch principal ──────────────────────────────────────────────────────────
+async function fetchDemandasEnriched(teamId: string): Promise<Demanda[]> {
+  const data = await svc.fetchDemandas(teamId);
+  return enrichComResponsaveis(data);
+}
+
+// ─── Hook principal ───────────────────────────────────────────────────────────
 export function useDemandas() {
   const { currentTeamId, user } = useAuth();
-  const [demandas, setDemandas] = useState<Demanda[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const loadingRef = useRef(false);
+  const qc = useQueryClient();
 
-  const load = useCallback(async () => {
-    if (!currentTeamId || loadingRef.current) return;
-    loadingRef.current = true;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await svc.fetchDemandas(currentTeamId);
-      const enriched = await enrichComResponsaveis(data);
-      setDemandas(enriched);
-    } catch (err: any) {
-      setError(err.message);
-      toast.error("Erro ao carregar demandas");
-    } finally {
-      setLoading(false);
-      loadingRef.current = false;
-    }
-  }, [currentTeamId]);
+  // ── Query ──────────────────────────────────────────────────────────────────
+  const queryKey = KEYS.demandas.list(currentTeamId ?? '');
 
-  useEffect(() => { load(); }, [load]);
+  const { data: demandas = [], isLoading: loading, error: queryError } = useQuery({
+    queryKey,
+    queryFn:   () => fetchDemandasEnriched(currentTeamId!),
+    enabled:   !!currentTeamId,
+    staleTime: STALE.REALTIME,
+  });
 
+  const error = queryError ? (queryError as Error).message : null;
+
+  // ── Realtime: invalida cache em vez de atualizar state local ──────────────
   useEffect(() => {
     if (!currentTeamId) return;
+
     const channel = supabase
       .channel(`demandas-rt-${currentTeamId}`)
-      .on("postgres_changes",
-        { event: "*", schema: "public", table: "demandas", filter: `team_id=eq.${currentTeamId}` },
-        async (payload) => {
-          if (payload.eventType === "DELETE") {
-            setDemandas((prev) => prev.filter((d) => d.id !== payload.old.id));
-            return;
-          }
-          if (payload.eventType === "INSERT") {
-            const [enriched] = await enrichComResponsaveis([payload.new as Demanda]);
-            setDemandas((prev) => [...prev, enriched]);
-            return;
-          }
-          if (payload.eventType === "UPDATE") {
-            const [enriched] = await enrichComResponsaveis([payload.new as Demanda]);
-            setDemandas((prev) => prev.map((d) => (d.id === enriched.id ? enriched : d)));
-            return;
-          }
-        })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'demandas', filter: `team_id=eq.${currentTeamId}` },
+        () => {
+          // Invalida a query → TanStack Query refaz fetch automaticamente
+          // para todos os componentes subscritos
+          qc.invalidateQueries({ queryKey: KEYS.demandas.all(currentTeamId) });
+        },
+      )
       .subscribe();
+
     return () => { supabase.removeChannel(channel); };
-  }, [currentTeamId]);
+  }, [currentTeamId, qc]);
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
+  const invalidate = () => qc.invalidateQueries({ queryKey: KEYS.demandas.all(currentTeamId!) });
 
   const create = async (d: Partial<Demanda>) => {
     if (!currentTeamId) return;
     try {
       const created = await svc.createDemanda({ ...d, team_id: currentTeamId, rhm: d.rhm! });
       if (user) {
-        await svc.addTransition({ demanda_id: created.id, from_status: null, to_status: "nova", user_id: user.id, justificativa: null });
+        await svc.addTransition({
+          demanda_id:   created.id,
+          from_status:  null,
+          to_status:    'nova',
+          user_id:      user.id,
+          justificativa: null,
+        });
       }
-      toast.success("Demanda criada com sucesso");
+      toast.success('Demanda criada com sucesso');
+      // Realtime dispara invalidação, mas invalidamos aqui também
+      // para resposta imediata caso Realtime tenha latência
+      await invalidate();
     } catch {
-      toast.error("Erro ao criar demanda");
+      toast.error('Erro ao criar demanda');
     }
   };
 
   const update = async (id: string, updates: Partial<Demanda>) => {
     try {
       await svc.updateDemanda(id, updates);
-      toast.success("Demanda atualizada com sucesso");
+      toast.success('Demanda atualizada com sucesso');
+      await invalidate();
     } catch {
-      toast.error("Erro ao atualizar demanda");
+      toast.error('Erro ao atualizar demanda');
     }
   };
 
   const moveTo = async (demanda: Demanda, newStatus: string, justificativa?: string) => {
     if ((REQUIRES_JUSTIFICATIVA as readonly string[]).includes(newStatus) && !justificativa) {
-      toast.error("Justificativa obrigatória para este status");
+      toast.error('Justificativa obrigatória para este status');
       return false;
     }
     try {
       await svc.updateDemanda(demanda.id, { situacao: newStatus });
       if (user) {
-        await svc.addTransition({ demanda_id: demanda.id, from_status: demanda.situacao, to_status: newStatus, user_id: user.id, justificativa: justificativa || null });
+        await svc.addTransition({
+          demanda_id:   demanda.id,
+          from_status:  demanda.situacao,
+          to_status:    newStatus,
+          user_id:      user.id,
+          justificativa: justificativa || null,
+        });
       }
-      toast.success("Status atualizado com sucesso");
+      toast.success('Status atualizado com sucesso');
+      await invalidate();
       return true;
     } catch {
-      toast.error("Erro ao atualizar status");
+      toast.error('Erro ao atualizar status');
       return false;
     }
   };
@@ -146,57 +165,58 @@ export function useDemandas() {
   const remove = async (id: string) => {
     try {
       await svc.deleteDemanda(id);
-      toast.success("Demanda excluída com sucesso");
+      toast.success('Demanda excluída com sucesso');
+      await invalidate();
     } catch {
-      toast.error("Erro ao excluir demanda");
+      toast.error('Erro ao excluir demanda');
     }
   };
 
-  return { demandas, loading, error, reload: load, create, update, moveTo, remove };
+  return {
+    demandas,
+    loading,
+    error,
+    reload: invalidate,   // API pública mantida: reload() agora = invalidate
+    create,
+    update,
+    moveTo,
+    remove,
+  };
 }
 
+// ─── useTransitions (migrado) ─────────────────────────────────────────────────
 export function useTransitions(demandaId: string | null) {
-  const [transitions, setTransitions] = useState<DemandaTransition[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!demandaId) return;
-    setLoading(true);
-    try {
-      const data = await svc.fetchTransitions(demandaId);
-      setTransitions(data);
-    } finally {
-      setLoading(false);
-    }
-  }, [demandaId]);
-
-  useEffect(() => { load(); }, [load]);
-  return { transitions, loading, reload: load };
+  const { data: transitions = [], isLoading: loading, refetch } = useQuery({
+    queryKey:  KEYS.demandas.transitions(demandaId ?? ''),
+    queryFn:   () => svc.fetchTransitions(demandaId!),
+    enabled:   !!demandaId,
+    staleTime: STALE.REALTIME,
+  });
+  return { transitions, loading, reload: refetch };
 }
 
+// ─── useHours (migrado) ───────────────────────────────────────────────────────
 export function useHours(demandaId: string | null) {
   const { user } = useAuth();
-  const [hours, setHours] = useState<DemandaHour[]>([]);
-  const [loading, setLoading] = useState(false);
+  const qc = useQueryClient();
 
-  const load = useCallback(async () => {
-    if (!demandaId) return;
-    setLoading(true);
-    const data = await svc.fetchHours(demandaId);
-    setHours(data);
-    setLoading(false);
-  }, [demandaId]);
+  const { data: hours = [], isLoading: loading } = useQuery({
+    queryKey:  KEYS.demandas.hours(demandaId ?? ''),
+    queryFn:   () => svc.fetchHours(demandaId!),
+    enabled:   !!demandaId,
+    staleTime: STALE.REALTIME,
+  });
 
-  useEffect(() => { load(); }, [load]);
+  const invalidate = () => qc.invalidateQueries({ queryKey: KEYS.demandas.hours(demandaId!) });
 
   const add = async (h: { horas: number; fase: string; descricao: string; created_at?: string }) => {
     if (!demandaId || !user) return;
     try {
       await svc.addHours({ demanda_id: demandaId, user_id: user.id, ...h });
-      toast.success("Horas registradas com sucesso");
-      await load();
+      toast.success('Horas registradas com sucesso');
+      await invalidate();
     } catch {
-      toast.error("Erro ao registrar horas");
+      toast.error('Erro ao registrar horas');
     }
   };
 
@@ -206,23 +226,23 @@ export function useHours(demandaId: string | null) {
   ) => {
     try {
       await svc.updateHour(id, h);
-      toast.success("Registro atualizado com sucesso");
-      await load();
+      toast.success('Registro atualizado com sucesso');
+      await invalidate();
     } catch {
-      toast.error("Erro ao atualizar registro");
+      toast.error('Erro ao atualizar registro');
     }
   };
 
   const remove = async (id: string) => {
     try {
       await svc.deleteHour(id);
-      toast.success("Registro excluído com sucesso");
-      await load();
+      toast.success('Registro excluído com sucesso');
+      await invalidate();
     } catch {
-      toast.error("Erro ao excluir registro");
+      toast.error('Erro ao excluir registro');
     }
   };
 
   const total = hours.reduce((s, h) => s + Number(h.horas), 0);
-  return { hours, loading, add, update, remove, total, reload: load };
+  return { hours, loading, add, update, remove, total, reload: invalidate };
 }

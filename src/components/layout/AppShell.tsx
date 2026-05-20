@@ -127,12 +127,12 @@ const NAV_SALA_AGIL: NavItem[] = [
   },
   { key: "metricas",  label: "Métricas",  icon: BarChart3, path: "/sala-agil/metricas",  group: "org" },
   { key: "historico", label: "Histórico", icon: History,   path: "/sala-agil/historico", group: "org" },
-  { key: "times",     label: "Times",         icon: Users,       path: "/sala-agil/times",     group: "config" },
-  { key: "membros",   label: "Membros",        icon: User,        path: "/sala-agil/membros",   group: "config" },
-  { key: "perfis",    label: "Perfis (RBAC)",  icon: ShieldCheck, path: "/sala-agil/perfis",    group: "config" },
-  { key: "fluxo",     label: "Fluxo",          icon: GitBranch,   path: "/sala-agil/fluxo",     group: "config" },
-  { key: "campos",    label: "Campos Custom",  icon: Settings,    path: "/sala-agil/campos",    group: "config" },
-  { key: "automacoes",label: "Automações",     icon: Repeat,      path: "/sala-agil/automacoes", group: "config" },
+  { key: "times",      label: "Times",         icon: Users,       path: "/sala-agil/times",     group: "config" },
+  { key: "membros",    label: "Membros",        icon: User,        path: "/sala-agil/membros",   group: "config" },
+  { key: "perfis",     label: "Perfis (RBAC)",  icon: ShieldCheck, path: "/sala-agil/perfis",    group: "config" },
+  { key: "fluxo",      label: "Fluxo",          icon: GitBranch,   path: "/sala-agil/fluxo",     group: "config" },
+  { key: "campos",     label: "Campos Custom",  icon: Settings,    path: "/sala-agil/campos",    group: "config" },
+  { key: "automacoes", label: "Automações",     icon: Repeat,      path: "/sala-agil/automacoes", group: "config" },
 ];
 
 const NAV_SUSTENTACAO: NavItem[] = [
@@ -152,13 +152,13 @@ const NAV_SUSTENTACAO: NavItem[] = [
 ];
 
 const NAV_RDM: NavItem[] = [
-  { key: "dashboard", label: "Dashboard",     icon: LayoutDashboard, path: "/rdm",          group: "main" },
-  { key: "rdms",      label: "RDMs",          icon: ClipboardList,   path: "/rdm/rdms",     group: "main" },
-  { key: "checklist", label: "Checklists",    icon: CheckSquare,     path: "/rdm/checklist", group: "main" },
-  { key: "gonogo",    label: "Go/No-Go",      icon: ArrowLeftRight,  path: "/rdm/gonogo",   group: "main" },
-  { key: "times",     label: "Times",         icon: Users,           path: "/rdm/times",    group: "config" },
-  { key: "membros",   label: "Membros",        icon: User,            path: "/rdm/membros",  group: "config" },
-  { key: "perfis",    label: "Perfis (RBAC)",  icon: ShieldCheck,     path: "/rdm/perfis",   group: "config" },
+  { key: "dashboard", label: "Dashboard",    icon: LayoutDashboard, path: "/rdm",           group: "main" },
+  { key: "rdms",      label: "RDMs",         icon: ClipboardList,   path: "/rdm/rdms",      group: "main" },
+  { key: "checklist", label: "Checklists",   icon: CheckSquare,     path: "/rdm/checklist", group: "main" },
+  { key: "gonogo",    label: "Go/No-Go",     icon: ArrowLeftRight,  path: "/rdm/gonogo",    group: "main" },
+  { key: "times",     label: "Times",        icon: Users,           path: "/rdm/times",     group: "config" },
+  { key: "membros",   label: "Membros",       icon: User,            path: "/rdm/membros",   group: "config" },
+  { key: "perfis",    label: "Perfis (RBAC)", icon: ShieldCheck,     path: "/rdm/perfis",    group: "config" },
 ];
 
 const ACCENT = {
@@ -194,9 +194,13 @@ const ACCENT = {
 // ─── TeamSwitcher ─────────────────────────────────────────────────────────────
 function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
   const { teams, currentTeamId, setCurrentTeamId } = useAuth();
+
+  // teams agora vem de team_modules (N:N) — filtro simples por module funciona
   const moduleTeams = teams.filter((t) => t.module === module);
-  const activeTeam = moduleTeams.find((t) => t.id === currentTeamId);
+  const activeTeam  = moduleTeams.find((t) => t.id === currentTeamId);
+
   if (moduleTeams.length <= 1) return null;
+
   if (collapsed) {
     return (
       <Tooltip>
@@ -211,6 +215,7 @@ function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: 
       </Tooltip>
     );
   }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

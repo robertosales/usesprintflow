@@ -73,7 +73,6 @@ export async function fetchTransitions(demandaId: string): Promise<DemandaTransi
 }
 
 export async function addHours(h: Omit<DemandaHour, "id" | "created_at"> & { created_at?: string }) {
-  // Garante que horas é sempre number decimal — nunca string como "1:00"
   const payload = { ...h, horas: toDecimalHours(h.horas) };
   const { error } = await supabase.from("demanda_hours" as any).insert(payload as any);
   if (error) throw error;
@@ -89,14 +88,10 @@ export async function fetchHours(demandaId: string): Promise<DemandaHour[]> {
   return (data || []) as unknown as DemandaHour[];
 }
 
-/** Atualiza um lançamento de horas.
- *  user_id é opcional — quando informado, reatribui o lançamento a outro membro.
- */
 export async function updateHour(
   id: string,
   data: { horas: number | string; fase: string; descricao: string; user_id?: string },
 ) {
-  // Garante que horas é sempre number decimal — nunca string como "1:00"
   const payload = { ...data, horas: toDecimalHours(data.horas) };
   const { error } = await supabase
     .from("demanda_hours" as any)
@@ -113,71 +108,36 @@ export async function deleteHour(id: string) {
   if (error) throw error;
 }
 
+export type UpsertDemandaRow = {
+  rhm: string;
+  projeto: string;
+  situacao: string;
+  tipo: string;
+  sla?: string;
+  descricao?: string;
+  tipo_defeito?: string;
+  originada_diagnostico?: boolean;
+  data_previsao_encerramento?: string;
+  prazo_inicio_atendimento?: string;
+  prazo_solucao?: string;
+};
+
+/**
+ * Upsert em lote via RPC upsert_demandas_batch.
+ * Substitui o antigo loop N+1 (SELECT + INSERT/UPDATE por linha).
+ * 100 linhas = 1 roundtrip HTTP no lugar de ~200 requests sequenciais.
+ */
 export async function upsertDemandas(
   teamId: string,
-  rows: Array<{
-    rhm: string;
-    projeto: string;
-    situacao: string;
-    tipo: string;
-    sla?: string;
-    descricao?: string;
-    tipo_defeito?: string;
-    originada_diagnostico?: boolean;
-    data_previsao_encerramento?: string;
-    prazo_inicio_atendimento?: string;
-    prazo_solucao?: string;
-  }>,
-) {
-  const results = { importados: 0, atualizados: 0, erros: 0 };
+  rows: UpsertDemandaRow[],
+): Promise<{ importados: number; atualizados: number; erros: number }> {
+  if (rows.length === 0) return { importados: 0, atualizados: 0, erros: 0 };
 
-  for (const row of rows) {
-    try {
-      const { data: existing } = await supabase
-        .from("demandas" as any)
-        .select("id")
-        .eq("team_id", teamId)
-        .eq("rhm", row.rhm)
-        .maybeSingle();
+  const { data, error } = await supabase.rpc("upsert_demandas_batch" as any, {
+    p_team_id: teamId,
+    p_rows:    rows,
+  });
 
-      if ((existing as any)?.id) {
-        await supabase
-          .from("demandas" as any)
-          .update({
-            projeto: row.projeto,
-            situacao: row.situacao,
-            tipo: row.tipo,
-            sla: row.sla,
-            descricao: row.descricao,
-            tipo_defeito: row.tipo_defeito,
-            originada_diagnostico: row.originada_diagnostico,
-            data_previsao_encerramento: row.data_previsao_encerramento,
-            prazo_inicio_atendimento: row.prazo_inicio_atendimento,
-            prazo_solucao: row.prazo_solucao,
-          } as any)
-          .eq("id", (existing as any).id);
-        results.atualizados++;
-      } else {
-        await supabase.from("demandas" as any).insert({
-          team_id: teamId,
-          rhm: row.rhm,
-          projeto: row.projeto,
-          situacao: row.situacao,
-          tipo: row.tipo,
-          sla: row.sla,
-          descricao: row.descricao,
-          tipo_defeito: row.tipo_defeito,
-          originada_diagnostico: row.originada_diagnostico,
-          data_previsao_encerramento: row.data_previsao_encerramento,
-          prazo_inicio_atendimento: row.prazo_inicio_atendimento,
-          prazo_solucao: row.prazo_solucao,
-        } as any);
-        results.importados++;
-      }
-    } catch {
-      results.erros++;
-    }
-  }
-
-  return results;
+  if (error) throw error;
+  return data as { importados: number; atualizados: number; erros: number };
 }
