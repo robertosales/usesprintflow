@@ -114,7 +114,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
 
   const [activeId, setActiveId]         = useState<string | null>(null);
   const [dragOverCol, setDragOverCol]   = useState<string | null>(null);
-  const [confirmMove, setConfirmMove]   = useState<{ huId: string; toKey: string } | null>(null);
   const [expandedCols, setExpandedCols] = useState<Set<string>>(
     new Set((workflowColumns ?? []).map((c: WorkflowColumn) => c.key)),
   );
@@ -259,7 +258,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
   );
 
   const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
+    async (event: DragEndEvent) => {
       setActiveId(null);
       setDragOverCol(null);
       const { active, over } = event;
@@ -274,6 +273,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         sprintStories.find((h: any) => h.id === overIdStr)?.status;
       if (!targetColKey) return;
       if (draggedHu.status === targetColKey) {
+        // reordenacao dentro da mesma coluna
         const colItems = sprintStories.filter((h: any) => h.status === draggedHu.status);
         const oldIdx = colItems.findIndex((h: any) => h.id === activeIdStr);
         const newIdx = colItems.findIndex((h: any) => h.id === overIdStr);
@@ -287,23 +287,16 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         });
         reorderUserStories(updates);
       } else {
-        setConfirmMove({ huId: draggedHu.id, toKey: targetColKey });
+        // mover para outra coluna diretamente, sem confirmacao
+        try {
+          await updateUserStoryStatus(draggedHu.id, targetColKey as KanbanStatus);
+        } catch {
+          toast.error("Erro ao mover card");
+        }
       }
     },
-    [canMove, sprintStories, workflowColumns, reorderUserStories],
+    [canMove, sprintStories, workflowColumns, reorderUserStories, updateUserStoryStatus],
   );
-
-  const handleConfirmMove = useCallback(async () => {
-    if (!confirmMove) return;
-    try {
-      await updateUserStoryStatus(confirmMove.huId, confirmMove.toKey as KanbanStatus);
-      toast.success("Card movido com sucesso");
-    } catch {
-      toast.error("Erro ao mover card");
-    } finally {
-      setConfirmMove(null);
-    }
-  }, [confirmMove, updateUserStoryStatus]);
 
   const activeHu = activeId ? sprintStories.find((h: any) => h.id === activeId) : null;
 
@@ -318,14 +311,14 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
 
   return (
     <>
-      {/* ── Banner de impedimentos da sprint ── */}
+      {/* Banner de impedimentos da sprint */}
       {currentSprint && (
         <div className="mb-3">
           <SprintImpedimentsBanner sprint={currentSprint} />
         </div>
       )}
 
-      {/* ── Container dos filtros + Finalizar Sprint no lado direito ── */}
+      {/* Container dos filtros + Finalizar Sprint no lado direito */}
       <div className="rounded-xl border border-border/60 bg-card px-4 py-3 mb-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
@@ -341,7 +334,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
             />
           </div>
 
-          {/* Botão Finalizar Sprint — lado direito do container de filtros */}
+          {/* Botão Finalizar Sprint */}
           {canFinalizeSprint && sprintFinalizavel && (
             <div className="flex flex-col items-end gap-1 shrink-0 pt-0.5">
               {!(sprintFinalizavel.isActive || sprintFinalizavel.is_active) && (
@@ -474,24 +467,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         </DragOverlay>
       </DndContext>
 
-      {/* ── Modal mover card ── */}
-      <AlertDialog open={!!confirmMove} onOpenChange={(o) => !o && setConfirmMove(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Mover card?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Deseja mover este card para a coluna{" "}
-              <strong>{(workflowColumns ?? []).find((c: WorkflowColumn) => c.key === confirmMove?.toKey)?.label ?? confirmMove?.toKey}</strong>?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmMove}>Confirmar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* ── Modal Finalizar Sprint ── */}
+      {/* Modal Finalizar Sprint */}
       <AlertDialog open={finalizeOpen} onOpenChange={(o) => { if (!finalizing) setFinalizeOpen(o); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -509,7 +485,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
                 )}
                 {!(sprintFinalizavel?.isActive || sprintFinalizavel?.is_active) && (
                   <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-2 rounded-lg">
-                    ⚠️ Esta sprint não foi encerrada formalmente. Encerrá-la agora irá marcar a data de término como hoje e mover as HUs incompletas para o backlog.
+                    ⚠️ Esta sprint não foi encerrada formalmente. Encerá-la agora irá marcar a data de término como hoje e mover as HUs incompletas para o backlog.
                   </p>
                 )}
                 {sprintSummary && (
