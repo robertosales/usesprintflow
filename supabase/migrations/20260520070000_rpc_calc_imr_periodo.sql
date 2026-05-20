@@ -86,12 +86,12 @@ AS $$
         jsonb_build_object(
           'demandaId',  d.id,
           'rhm',        d.rhm,
-          'titulo',     d.titulo,
           'projeto',    d.projeto,
+          'tipo',       d.tipo,
           'situacao',   d.situacao,
           'prazo',      d.data_previsao_encerramento,
           'diasAtraso', EXTRACT(DAY FROM (NOW() - d.data_previsao_encerramento::TIMESTAMPTZ))::INT,
-          'tipo',       CASE WHEN EXTRACT(DAY FROM (NOW() - d.data_previsao_encerramento::TIMESTAMPTZ)) >= p_e8_glosa THEN 'glosa' ELSE 'alerta' END
+          'tipo_alerta', CASE WHEN EXTRACT(DAY FROM (NOW() - d.data_previsao_encerramento::TIMESTAMPTZ)) >= p_e8_glosa THEN 'glosa' ELSE 'alerta' END
         )
         ORDER BY EXTRACT(DAY FROM (NOW() - d.data_previsao_encerramento::TIMESTAMPTZ)) DESC
       ),
