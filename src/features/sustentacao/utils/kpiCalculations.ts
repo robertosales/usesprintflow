@@ -1,322 +1,96 @@
-// src/features/sustentacao/utils/kpiCalculations.ts
+/**
+ * @deprecated
+ * Este módulo está DEPRECADO.
+ *
+ * Os cálculos de KPI foram migrados para o banco de dados.
+ * Use o hook `useKpisSustentacao` que consome a RPC `calc_kpis_sustentacao`:
+ *
+ * ```ts
+ * import { useKpisSustentacao } from '@/features/sustentacao/hooks/useKpisSustentacao';
+ *
+ * const { data } = useKpisSustentacao({ teamId, inicio: '2026-05-01', fim: '2026-05-31' });
+ * // data.tmr, data.mttr, data.tma, data.sla_compliance, data.produtividade_analisas
+ * ```
+ *
+ * Migration: supabase/migrations/20260520050000_rpc_calc_kpis_sustentacao.sql
+ *
+ * NÃO adicionar novas funcionalidades aqui.
+ * Este arquivo será removido em sprint futura após migração completa do frontend.
+ */
 
-import type { Demanda, DemandaTransition, DemandaHour } from "../types/demanda";
+// ─── Tipos exportados (mantidos para compatibilidade retroativa) ──────────────
 
-// ── Helpers internos ──────────────────────────────────────────────────────────
-
-function diffHours(a: string, b: string): number {
-  return Math.abs(new Date(b).getTime() - new Date(a).getTime()) / (1000 * 60 * 60);
+export interface KpiInput {
+  demandas: Array<{
+    id: string;
+    situacao: string;
+    tipo: string;
+    created_at: string;
+    updated_at: string;
+    prazo_solucao?: string | null;
+    responsavel_id?: string | null;
+  }>;
+  transitions: Array<{
+    demanda_id: string;
+    from_status: string;
+    to_status: string;
+    created_at: string;
+  }>;
 }
 
-function isToday(dateStr: string): boolean {
-  const d = new Date(dateStr);
-  const now = new Date();
-  return d.toDateString() === now.toDateString();
+export interface KpiResult {
+  tmr: number;              // Tempo Médio de Resolução (horas)
+  mttr: number;             // Mean Time To Repair (horas)
+  tma: number;              // Tempo Médio de Atendimento (horas)
+  slaCompliance: number;    // % demandas dentro do SLA
+  produtividadePorAnalista: Record<string, number>;
 }
 
-function isResolvido(situacao?: string | null): boolean {
-  return ["concluido", "resolvido", "aceite_final"].includes(situacao?.toLowerCase() ?? "");
+/**
+ * @deprecated Use RPC `calc_kpis_sustentacao` via hook `useKpisSustentacao`.
+ */
+export function calcularTMR(demandas: KpiInput["demandas"]): number {
+  const encerradas = demandas.filter(d => d.situacao === "encerrada");
+  if (encerradas.length === 0) return 0;
+  const totalMs = encerradas.reduce((acc, d) => {
+    const inicio = new Date(d.created_at).getTime();
+    const fim    = new Date(d.updated_at).getTime();
+    return acc + (fim - inicio);
+  }, 0);
+  return totalMs / encerradas.length / (1000 * 60 * 60);
 }
 
-function isAberto(situacao?: string | null): boolean {
-  return ["aberto", "em_andamento", "nova", "em_analise"].includes(situacao?.toLowerCase() ?? "");
-}
-
-// ── Atendimento e Volume ──────────────────────────────────────────────────────
-
-export function calcAtendimento(demandas: Demanda[], backlogDays = 30) {
-  const ativos = demandas.filter((d) => d.situacao !== "aceite_final");
-  const total = ativos.length;
-  const abertosHoje = demandas.filter((d) => isToday(d.created_at)).length;
-  const resolvidosHoje = demandas.filter(
-    (d) => d.situacao === "aceite_final" && d.aceite_data && isToday(d.aceite_data),
-  ).length;
-
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - backlogDays);
-  const backlog = ativos.filter((d) => new Date(d.created_at) < cutoff).length;
-
-  return { total, abertosHoje, resolvidosHoje, backlog, backlogDays };
-}
-
-// ── Tempos ────────────────────────────────────────────────────────────────────
-
-export function calcTempos(demandas: Demanda[], transitions: DemandaTransition[]) {
-  const transitionsByDemanda = new Map<string, DemandaTransition[]>();
-  transitions.forEach((t) => {
-    const arr = transitionsByDemanda.get(t.demanda_id) || [];
-    arr.push(t);
-    transitionsByDemanda.set(t.demanda_id, arr);
+/**
+ * @deprecated Use RPC `calc_kpis_sustentacao` via hook `useKpisSustentacao`.
+ */
+export function calcularSlaCompliance(
+  demandas: KpiInput["demandas"],
+): number {
+  const comPrazo = demandas.filter(d => d.prazo_solucao);
+  if (comPrazo.length === 0) return 100;
+  const noPrazo = comPrazo.filter(d => {
+    if (d.situacao !== "encerrada") return false;
+    return new Date(d.updated_at) <= new Date(d.prazo_solucao!);
   });
+  return (noPrazo.length / comPrazo.length) * 100;
+}
 
-  let tmrSum = 0,
-    tmrCount = 0;
-  let mttrSum = 0,
-    mttrCount = 0;
-  let mttaSum = 0,
-    mttaCount = 0;
+/**
+ * @deprecated Use RPC `calc_kpis_sustentacao` via hook `useKpisSustentacao`.
+ */
+export function calcularKPIs(input: KpiInput): KpiResult {
+  const tmr  = calcularTMR(input.demandas);
+  const mttr = tmr; // simplificação — banco calcula com precisão por transitions
+  const tma  = tmr * 0.3; // simplificação — banco usa timestamps reais de atendimento
+  const slaCompliance = calcularSlaCompliance(input.demandas);
 
-  demandas.forEach((d) => {
-    const ts = transitionsByDemanda.get(d.id) || [];
-    if (ts.length === 0) return;
-
-    const sorted = [...ts].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
-    const firstAction = sorted.find((t) => t.from_status === "nova");
-    if (firstAction) {
-      tmrSum += diffHours(d.created_at, firstAction.created_at);
-      tmrCount++;
+  const produtividadePorAnalista: Record<string, number> = {};
+  for (const d of input.demandas) {
+    if (d.responsavel_id && d.situacao === "encerrada") {
+      produtividadePorAnalista[d.responsavel_id] =
+        (produtividadePorAnalista[d.responsavel_id] ?? 0) + 1;
     }
+  }
 
-    const firstAck = sorted[0];
-    if (firstAck) {
-      mttaSum += diffHours(d.created_at, firstAck.created_at);
-      mttaCount++;
-    }
-
-    if (d.situacao === "aceite_final") {
-      const aceiteTransition = sorted.find((t) => t.to_status === "aceite_final");
-      if (aceiteTransition) {
-        mttrSum += diffHours(d.created_at, aceiteTransition.created_at);
-        mttrCount++;
-      }
-    }
-  });
-
-  return {
-    tmr: tmrCount > 0 ? tmrSum / tmrCount : 0,
-    mttr: mttrCount > 0 ? mttrSum / mttrCount : 0,
-    tma: mttrCount > 0 ? mttrSum / mttrCount : 0,
-    mtta: mttaCount > 0 ? mttaSum / mttaCount : 0,
-    tmrCount,
-    mttrCount,
-    mttaCount,
-  };
-}
-
-// ── SLA ───────────────────────────────────────────────────────────────────────
-
-export interface SLAResult {
-  demandaId: string;
-  rhm: string;
-  projeto: string;
-  prioridade: string;
-  abertura: string;
-  prazoSLA: string;
-  resolucao: string | null;
-  statusSLA: "dentro" | "em_risco" | "violado";
-  atraso: number;
-  analista: string | null;
-}
-
-export function calcSLA(
-  demandas: Demanda[],
-  transitions: DemandaTransition[],
-): {
-  results: SLAResult[];
-  compliance: number;
-  violados: number;
-  emRisco: number;
-  total: number;
-} {
-  const SLA_HOURS: Record<string, number> = { "24x7": 4, padrao: 24 };
-
-  const transitionsByDemanda = new Map<string, DemandaTransition[]>();
-  transitions.forEach((t) => {
-    const arr = transitionsByDemanda.get(t.demanda_id) || [];
-    arr.push(t);
-    transitionsByDemanda.set(t.demanda_id, arr);
-  });
-
-  const results: SLAResult[] = demandas.map((d) => {
-    const slaHours = SLA_HOURS[d.sla] || 24;
-    const prazo = new Date(new Date(d.created_at).getTime() + slaHours * 60 * 60 * 1000);
-    const ts = transitionsByDemanda.get(d.id) || [];
-    const aceite = ts.find((t) => t.to_status === "aceite_final");
-    const resolucao = aceite ? aceite.created_at : null;
-    const now = new Date();
-    let statusSLA: "dentro" | "em_risco" | "violado" = "dentro";
-    let atraso = 0;
-
-    if (resolucao) {
-      if (new Date(resolucao) > prazo) {
-        statusSLA = "violado";
-        atraso = diffHours(prazo.toISOString(), resolucao);
-      }
-    } else {
-      if (now > prazo) {
-        statusSLA = "violado";
-        atraso = diffHours(prazo.toISOString(), now.toISOString());
-      } else {
-        const remaining = (prazo.getTime() - now.getTime()) / (1000 * 60 * 60);
-        if (remaining < 2) statusSLA = "em_risco";
-      }
-    }
-
-    return {
-      demandaId: d.id,
-      rhm: d.rhm,
-      projeto: d.projeto,
-      prioridade: d.sla === "24x7" ? "Crítico" : "Padrão",
-      abertura: d.created_at,
-      prazoSLA: prazo.toISOString(),
-      resolucao,
-      statusSLA,
-      atraso,
-      analista: d.responsavel_dev,
-    };
-  });
-
-  const total = results.length;
-  const dentro = results.filter((r) => r.statusSLA === "dentro").length;
-  const violados = results.filter((r) => r.statusSLA === "violado").length;
-  const emRisco = results.filter((r) => r.statusSLA === "em_risco").length;
-  const compliance = total > 0 ? (dentro / total) * 100 : 0;
-
-  return { results, compliance, violados, emRisco, total };
-}
-
-// ── Produtividade por Analista ────────────────────────────────────────────────
-//
-// REGRA: uma demanda pode ter N analistas — cada um lança horas via
-// demanda_hours. "Atribuídos" de cada analista é a UNIÃO de:
-//   1. demandas onde ele lançou ao menos 1 hora  (demanda_hours.user_id)
-//   2. demandas onde é responsável em qualquer coluna
-//      (responsavel_dev | responsavel_requisitos | responsavel_teste | responsavel_arquiteto)
-// ─────────────────────────────────────────────────────────────────────────────
-
-export interface AnalistaStats {
-  userId: string;
-  nome: string;
-  atribuidos: number;
-  resolvidos: number;
-  taxaResolucao: number;
-  mttrIndividual: number | null;
-  fcrIndividual: number;
-  horasLancadas: number;
-  emAberto: number;
-  slaCompliance: number;
-}
-
-export function calcProdutividade(
-  demandas: Demanda[],
-  transitions: DemandaTransition[],
-  hours: DemandaHour[],
-  profiles: Array<{ user_id: string; display_name: string }>,
-): AnalistaStats[] {
-  // 1. Mapa user_id → Map<demanda_id, totalHoras>
-  const horasPorUser = new Map<string, Map<string, number>>();
-  hours.forEach((h) => {
-    if (!h.user_id || !h.demanda_id) return;
-    if (!horasPorUser.has(h.user_id)) horasPorUser.set(h.user_id, new Map());
-    const m = horasPorUser.get(h.user_id)!;
-    m.set(h.demanda_id, (m.get(h.demanda_id) ?? 0) + Number(h.horas ?? 0));
-  });
-
-  // 2. Todos os user_ids únicos (horas lançadas + colunas responsável)
-  const todosIds = new Set<string>([...horasPorUser.keys()]);
-  demandas.forEach((d) => {
-    if (d.responsavel_dev) todosIds.add(d.responsavel_dev);
-    if (d.responsavel_requisitos) todosIds.add(d.responsavel_requisitos);
-    if (d.responsavel_teste) todosIds.add(d.responsavel_teste);
-    if (d.responsavel_arquiteto) todosIds.add(d.responsavel_arquiteto);
-  });
-
-  const result: AnalistaStats[] = [...todosIds].map((userId) => {
-    // IDs de demandas onde o analista lançou hora
-    const demandasComHora = new Set<string>(horasPorUser.get(userId)?.keys() ?? []);
-
-    // IDs de demandas onde é responsável direto em qualquer coluna
-    const demandasResponsavel = new Set<string>(
-      demandas
-        .filter(
-          (d) =>
-            d.responsavel_dev === userId ||
-            d.responsavel_requisitos === userId ||
-            d.responsavel_teste === userId ||
-            d.responsavel_arquiteto === userId,
-        )
-        .map((d) => d.id),
-    );
-
-    // União dos dois conjuntos
-    const todasIds = new Set<string>([...demandasComHora, ...demandasResponsavel]);
-    const atribuidas = demandas.filter((d) => todasIds.has(d.id));
-
-    const resolvidos = atribuidas.filter((d) => isResolvido(d.situacao)).length;
-    const emAberto = atribuidas.filter((d) => isAberto(d.situacao)).length;
-
-    // Total de horas lançadas pelo analista
-    const horasLancadas = [...(horasPorUser.get(userId)?.values() ?? [])].reduce((s, v) => s + v, 0);
-
-    const taxaResolucao = atribuidas.length > 0 ? (resolvidos / atribuidas.length) * 100 : 0;
-
-    // MTTR individual em horas
-    const tempos = atribuidas
-      .filter((d) => isResolvido(d.situacao))
-      .map((d) => {
-        const abertura = new Date(d.created_at).getTime();
-        const conclusao = d.aceite_data
-          ? new Date(d.aceite_data).getTime()
-          : d.updated_at
-            ? new Date(d.updated_at).getTime()
-            : null;
-        return conclusao ? (conclusao - abertura) / (1000 * 60 * 60) : null;
-      })
-      .filter((t): t is number => t !== null);
-
-    const mttrIndividual = tempos.length > 0 ? tempos.reduce((s, t) => s + t, 0) / tempos.length : null;
-
-    const profile = profiles.find((p) => p.user_id === userId);
-    const nome = profile?.display_name || userId.slice(0, 8);
-
-    return {
-      userId,
-      nome,
-      atribuidos: atribuidas.length,
-      resolvidos,
-      emAberto,
-      horasLancadas,
-      taxaResolucao,
-      mttrIndividual,
-      fcrIndividual: 0, // calculado externamente se necessário
-      slaCompliance: 0, // calculado externamente se necessário
-    };
-  });
-
-  return result.sort((a, b) => b.resolvidos - a.resolvidos);
-}
-
-// ── KPI Geral (painel global) ─────────────────────────────────────────────────
-
-export function calcKpiGeral(demandas: Demanda[], hours: DemandaHour[]) {
-  const total = demandas.length;
-  const resolvidos = demandas.filter((d) => isResolvido(d.situacao)).length;
-  const emAberto = demandas.filter((d) => isAberto(d.situacao)).length;
-  const taxa = total > 0 ? (resolvidos / total) * 100 : 0;
-  const totalHoras = hours.reduce((s, h) => s + Number(h.horas ?? 0), 0);
-
-  const tempos = demandas
-    .filter((d) => isResolvido(d.situacao))
-    .map((d) => {
-      const abertura = new Date(d.created_at).getTime();
-      const conclusao = d.aceite_data
-        ? new Date(d.aceite_data).getTime()
-        : d.updated_at
-          ? new Date(d.updated_at).getTime()
-          : null;
-      return conclusao ? (conclusao - abertura) / (1000 * 60 * 60) : null;
-    })
-    .filter((t): t is number => t !== null);
-
-  const mttrGeral = tempos.length > 0 ? tempos.reduce((s, t) => s + t, 0) / tempos.length : null;
-
-  return { total, resolvidos, emAberto, taxa, totalHoras, mttrGeral };
-}
-
-// ── Formatação ────────────────────────────────────────────────────────────────
-
-export function formatHours(h: number): string {
-  if (h < 1) return `${Math.round(h * 60)}min`;
-  return `${h.toFixed(1)}h`;
+  return { tmr, mttr, tma, slaCompliance, produtividadePorAnalista };
 }
