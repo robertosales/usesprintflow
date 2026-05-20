@@ -145,7 +145,7 @@ function RdmSection({
         </div>
       );
 
-    case "times":   return <TeamManager moduleFilter="rdm" />;
+    case "times":   return <TeamManager />;
     case "membros": return <TeamMembersManager />;
     case "perfis":  return <UserRolesManager />;
     default:        return <RdmDashboard rdms={rdms} />;
