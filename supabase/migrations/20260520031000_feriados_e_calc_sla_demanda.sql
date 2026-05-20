@@ -1,23 +1,27 @@
 -- ============================================================
 -- STEP 1: Tabela feriados configurável
--- Unicidade garantida via CONSTRAINT inline no CREATE TABLE.
--- CREATE UNIQUE INDEX separado falha no Supabase (mesma transaction).
+-- Unicidade via colunas geradas uf_key e municipio_key,
+-- que materializam COALESCE(uf,'') e COALESCE(municipio,'').
+-- Postgres não aceita expressões em CONSTRAINT UNIQUE nem em
+-- CREATE UNIQUE INDEX dentro da mesma transaction de migration.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS feriados (
-  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  data        DATE        NOT NULL,
-  nome        TEXT        NOT NULL,
-  tipo        TEXT        NOT NULL DEFAULT 'nacional'
-               CHECK (tipo IN ('nacional','estadual','municipal')),
-  uf          CHAR(2),
-  municipio   TEXT,
-  ativo       BOOLEAN     NOT NULL DEFAULT TRUE,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  data          DATE        NOT NULL,
+  nome          TEXT        NOT NULL,
+  tipo          TEXT        NOT NULL DEFAULT 'nacional'
+                 CHECK (tipo IN ('nacional','estadual','municipal')),
+  uf            CHAR(2),
+  municipio     TEXT,
+  ativo         BOOLEAN     NOT NULL DEFAULT TRUE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-  -- Unicidade inline: nacional só por data; estadual por data+uf; municipal por data+uf+municipio
-  -- Usa NULLIF para tratar NULLs como string vazia e forçar unicidade entre tipos
-  CONSTRAINT uq_feriados_chave UNIQUE (data, tipo, COALESCE(uf, ''), COALESCE(municipio, ''))
+  -- Colunas geradas para garantir unicidade sem NULLs
+  uf_key        TEXT GENERATED ALWAYS AS (COALESCE(uf, ''))        STORED,
+  municipio_key TEXT GENERATED ALWAYS AS (COALESCE(municipio, '')) STORED,
+
+  CONSTRAINT uq_feriados_chave UNIQUE (data, tipo, uf_key, municipio_key)
 );
 
 CREATE INDEX IF NOT EXISTS idx_feriados_data_ativo
