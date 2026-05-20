@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { useUsersAdmin } from "../hooks/useUsersAdmin";
 import { useTeamsAdmin } from "../hooks/useTeamsAdmin";
 import { UserFormDialog } from "../components/UserFormDialog";
-import { UserRolesManagerEmbed } from "@/components/UserRolesManagerEmbed";
+import { UserRolesManager } from "@/components/UserRolesManager";
 
 export function AdminUsuariosPage() {
   const { createUser } = useUsersAdmin();
@@ -23,7 +23,7 @@ export function AdminUsuariosPage() {
         </Button>
       </div>
 
-      <UserRolesManagerEmbed />
+      <UserRolesManager />
 
       <UserFormDialog
         open={dialogOpen}
