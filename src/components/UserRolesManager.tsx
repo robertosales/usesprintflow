@@ -63,6 +63,7 @@ const PROFILES_BY_MODULE: Record<ModuleKey, { value: string; label: string }[]> 
   ],
 };
 
+// A coluna no banco se chama 'role_name', nao 'role'
 interface ModuleAccess { module: ModuleKey; role: string; }
 
 interface UserRow {
@@ -139,7 +140,7 @@ function ModuleTags({ moduleRoles, module_access }: { moduleRoles: ModuleAccess[
       {effective.map(({ module, role }) => {
         const mod = MODULES.find(m => m.key === module);
         if (!mod) return null;
-        const roleLabel = PROFILES_BY_MODULE[module]?.find(p => p.value === role)?.label ?? role;
+        const roleLabel = PROFILES_BY_MODULE[module as ModuleKey]?.find(p => p.value === role)?.label ?? role;
         return (
           <Badge key={module} className={`text-[10px] gap-1 ${mod.badgeClass}`}>
             {mod.icon}{mod.label}: {roleLabel}
@@ -167,17 +168,34 @@ function AuditLog({ userId }: { userId: string }) {
     if (loaded) return;
     setLoading(true);
     try {
+      // Busca log sem join em auth.users (PostgREST nao expoe FK para auth schema)
+      // Em seguida busca display_name dos actors via profiles
       const { data, error } = await supabase
         .from("user_management_audit_log")
-        .select("id, action, payload, created_at, actor:actor_id(display_name)")
+        .select("id, action, payload, created_at, actor_id")
         .eq("target_id", userId)
         .order("created_at", { ascending: false })
         .limit(10);
       if (error) throw error;
+
+      const rows = data || [];
+      const actorIds = [...new Set(rows.map((r: any) => r.actor_id).filter(Boolean))];
+
+      let actorNames: Record<string, string> = {};
+      if (actorIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("user_id, display_name")
+          .in("user_id", actorIds);
+        (profiles || []).forEach((p: any) => {
+          actorNames[p.user_id] = p.display_name ?? "Sistema";
+        });
+      }
+
       setEntries(
-        (data || []).map((r: any) => ({
+        rows.map((r: any) => ({
           id:                 r.id,
-          actor_display_name: r.actor?.display_name ?? "Sistema",
+          actor_display_name: actorNames[r.actor_id] ?? "Sistema",
           action:             r.action,
           payload:            r.payload ?? {},
           created_at:         r.created_at,
@@ -254,7 +272,7 @@ async function writeAudit(
       payload,
     });
   } catch {
-    // Auditoria é best-effort — não bloqueia a operação principal
+    // Auditoria e best-effort — nao bloqueia a operacao principal
   }
 }
 
@@ -280,7 +298,8 @@ export function UserRolesManager() {
     try {
       const [profilesRes, umrRes, membersRes] = await Promise.all([
         supabase.from("profiles").select("user_id, display_name, email, module_access, is_active, must_change_password"),
-        supabase.from("user_module_roles").select("user_id, module, role"),
+        // Coluna correta e 'role_name', nao 'role'
+        supabase.from("user_module_roles").select("user_id, module, role_name"),
         supabase.from("team_members").select("user_id, teams(id, name)"),
       ]);
 
@@ -309,7 +328,8 @@ export function UserRolesManager() {
           teams:                teamsMap[p.user_id] || [],
           moduleRoles:          umrList
             .filter((r: any) => r.user_id === p.user_id)
-            .map((r: any) => ({ module: r.module as ModuleKey, role: r.role })),
+            // Mapeia role_name -> role para manter compatibilidade com o restante do componente
+            .map((r: any) => ({ module: r.module as ModuleKey, role: r.role_name })),
         }))
       );
     } catch {
@@ -389,6 +409,7 @@ export function UserRolesManager() {
 
     setSaving(true);
     try {
+      // Delete + insert usando a coluna CORRETA 'role_name'
       const { error: delErr } = await supabase
         .from("user_module_roles")
         .delete()
@@ -398,9 +419,9 @@ export function UserRolesManager() {
       const { error: insErr } = await supabase
         .from("user_module_roles")
         .insert(enabledModules.map(m => ({
-          user_id: userId,
-          module:  m.key,
-          role:    pendingModules[m.key].role,
+          user_id:   userId,
+          module:    m.key,
+          role_name: pendingModules[m.key].role,  // 'role_name', nao 'role'
         })));
       if (insErr) throw insErr;
 
@@ -417,7 +438,6 @@ export function UserRolesManager() {
         .eq("user_id", userId);
       if (profErr) throw profErr;
 
-      // Auditoria: change_role
       const { data: { user: actor } } = await supabase.auth.getUser();
       if (actor) {
         await writeAudit(actor.id, userId, "change_role", {
@@ -436,7 +456,6 @@ export function UserRolesManager() {
     }
   }
 
-  // ── Toggle ativo/inativo ───────────────────────────────────────────────────
   async function confirmToggleActive() {
     const { user } = toggleState;
     if (!user) return;
@@ -467,7 +486,6 @@ export function UserRolesManager() {
     }
   }
 
-  // ── Delete ─────────────────────────────────────────────────────────────────
   async function handleDeleteClick(user: UserRow) {
     setDeleteState({ ...DELETE_INITIAL, user, checking: true });
     try {
@@ -512,7 +530,6 @@ export function UserRolesManager() {
       }
       await supabase.from("user_module_roles").delete().eq("user_id", user.user_id);
 
-      // Auditoria antes de deletar
       const { data: { user: actor } } = await supabase.auth.getUser();
       if (actor) {
         await writeAudit(actor.id, user.user_id, "delete_user", {
@@ -541,7 +558,6 @@ export function UserRolesManager() {
     [users, deleteState.user]
   );
 
-  // ── E-mail ──────────────────────────────────────────────────────────────────
   async function submitChangeEmail() {
     const { user, newEmail } = emailState;
     if (!user) return;
@@ -573,7 +589,6 @@ export function UserRolesManager() {
     }
   }
 
-  // ── Reset senha ─────────────────────────────────────────────────────────────
   async function submitResetPassword() {
     const { user, mode } = resetState;
     if (!user) return;
@@ -611,10 +626,8 @@ export function UserRolesManager() {
     );
   }
 
-  // ─── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center gap-2">
         <ShieldCheck className="h-5 w-5 text-primary" />
         <div>
@@ -623,7 +636,6 @@ export function UserRolesManager() {
         </div>
       </div>
 
-      {/* Busca */}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
@@ -704,7 +716,6 @@ export function UserRolesManager() {
                           onClick={() => setResetState({ ...RESET_INITIAL, user })}>
                           <KeyRound className="h-3.5 w-3.5" />
                         </Button>
-                        {/* ✅ Item 4: botão ativar/desativar */}
                         <Button
                           size="sm"
                           variant="outline"
@@ -732,7 +743,6 @@ export function UserRolesManager() {
                 {isEditing && (
                   <CardContent className="pt-0">
                     <div className="space-y-5 mt-2">
-                      {/* Nome */}
                       <div className="max-w-xs">
                         <Label className="text-xs font-semibold">Nome de Exibição</Label>
                         <Input
@@ -744,7 +754,6 @@ export function UserRolesManager() {
                         />
                       </div>
 
-                      {/* Módulos & Perfis */}
                       <div>
                         <Label className="text-xs font-semibold">Módulos & Perfis</Label>
                         <div className="mt-2 space-y-3">
@@ -786,7 +795,6 @@ export function UserRolesManager() {
                   </CardContent>
                 )}
 
-                {/* ✅ Item 5: Histórico de auditoria (accordion colapsável) */}
                 <CardContent className="pt-0 pb-2">
                   <AuditLog userId={user.user_id} />
                 </CardContent>
@@ -804,7 +812,6 @@ export function UserRolesManager() {
 
       <PaginationControls currentPage={currentPage} totalItems={totalItems} pageSize={pageSize} onPageChange={setCurrentPage} />
 
-      {/* Modal: Confirmar troca de card em edição */}
       <Dialog open={!!switchTarget} onOpenChange={open => { if (!open) setSwitchTarget(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -828,7 +835,6 @@ export function UserRolesManager() {
         </DialogContent>
       </Dialog>
 
-      {/* ✅ Modal: Confirmar toggle ativo/inativo (Item 4) */}
       <Dialog open={!!toggleState.user} onOpenChange={open => { if (!open && !toggleState.saving) setToggleState(TOGGLE_INITIAL); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -874,7 +880,6 @@ export function UserRolesManager() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Excluir */}
       <Dialog open={!!deleteState.user} onOpenChange={open => { if (!open && !deleteState.deleting) setDeleteState(DELETE_INITIAL); }}>
         <DialogContent className="max-w-md">
           {deleteState.checking ? (
@@ -959,7 +964,6 @@ export function UserRolesManager() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Trocar e-mail */}
       <Dialog open={!!emailState.user} onOpenChange={open => { if (!open && !emailState.saving) setEmailState(EMAIL_INITIAL); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -1002,7 +1006,6 @@ export function UserRolesManager() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Reset senha */}
       <Dialog open={!!resetState.user} onOpenChange={open => { if (!open && !resetState.saving) setResetState(RESET_INITIAL); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
