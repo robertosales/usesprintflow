@@ -37,14 +37,14 @@ export interface ImrGlosas {
 }
 
 export interface ImrE8Alert {
-  demandaId:  string;
-  rhm:        string;
-  titulo:     string | null;
-  projeto:    string;
-  situacao:   string;
-  prazo:      string | null;
-  diasAtraso: number;
-  tipo:       'alerta' | 'glosa';
+  demandaId:   string;
+  rhm:         string;
+  projeto:     string;
+  tipo:        string;        // tipo da demanda (ex: 'manutencao_corretiva')
+  situacao:    string;
+  prazo:       string | null;
+  diasAtraso:  number;
+  tipo_alerta: 'alerta' | 'glosa';  // classificação do alerta E8
 }
 
 export interface ImrPeriodo {
