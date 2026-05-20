@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Badge }  from "@/components/ui/badge";
 import { AlertTriangle, GripVertical, User } from "lucide-react";
 import type { KanbanCard } from "../hooks/useKanbanBoard";
@@ -21,10 +20,16 @@ interface Props {
 }
 
 export function KanbanCardItem({ card, isDragging, onDragStart, onDragEnd }: Props) {
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    e.dataTransfer.setData("text/plain", card.id);
+    e.dataTransfer.effectAllowed = "move";
+    onDragStart(card.id);
+  };
+
   return (
     <div
       draggable
-      onDragStart={() => onDragStart(card.id)}
+      onDragStart={handleDragStart}
       onDragEnd={onDragEnd}
       className={`rounded-lg border bg-background p-3 space-y-2 cursor-grab active:cursor-grabbing shadow-sm transition-all ${
         isDragging ? "opacity-40 scale-95" : "hover:shadow-md"

@@ -60,8 +60,8 @@ export function KanbanPage() {
             draggingId={dragging}
             onDragStart={id => setDragging(id)}
             onDragEnd={() => setDragging(null)}
-            onDrop={colKey => {
-              if (dragging) moveCard(dragging, colKey);
+            onDrop={(cardId, colKey) => {
+              moveCard(cardId, colKey);
               setDragging(null);
             }}
           />

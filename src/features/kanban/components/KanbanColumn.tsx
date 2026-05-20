@@ -9,15 +9,23 @@ interface Props {
   draggingId:  string | null;
   onDragStart: (id: string) => void;
   onDragEnd:   () => void;
-  onDrop:      (colKey: string) => void;
+  onDrop:      (cardId: string, colKey: string) => void;
 }
 
 export function KanbanColumnItem({ column, cards, wipCount, draggingId, onDragStart, onDragEnd, onDrop }: Props) {
   const isOverLimit = column.wip_limit !== null && wipCount > column.wip_limit;
   const isAtLimit   = column.wip_limit !== null && wipCount === column.wip_limit;
 
-  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); };
-  const handleDrop     = (e: React.DragEvent) => { e.preventDefault(); onDrop(column.key); };
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const cardId = e.dataTransfer.getData("text/plain");
+    if (cardId) onDrop(cardId, column.key);
+  };
 
   return (
     <div
