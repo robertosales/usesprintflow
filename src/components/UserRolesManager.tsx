@@ -175,34 +175,43 @@ export function UserRolesManager() {
     setSaving(true);
     try {
       const toRemove = currentUser.roles.filter((r) => !pendingRoles.includes(r));
-      const toAdd = pendingRoles.filter((r) => !currentUser.roles.includes(r));
-      for (const role of toRemove) {
-        await supabase
+      const toAdd    = pendingRoles.filter((r) => !currentUser.roles.includes(r));
+
+      // ✅ Duas chamadas totais em vez de um await por role (corrige N+1)
+      if (toRemove.length > 0) {
+        const { error } = await supabase
           .from("user_roles")
           .delete()
           .eq("user_id", userId)
-          .eq("role", role as any);
+          .in("role", toRemove as any[]);
+        if (error) throw error;
       }
-      for (const role of toAdd) {
-        await supabase.from("user_roles").insert({ user_id: userId, role: role as any });
+      if (toAdd.length > 0) {
+        const { error } = await supabase
+          .from("user_roles")
+          .insert(toAdd.map((role) => ({ user_id: userId, role: role as any })));
+        if (error) throw error;
       }
-      const nameChanged = trimmedName !== currentUser.display_name && trimmedName !== "—";
+
+      const nameChanged   = trimmedName !== currentUser.display_name && trimmedName !== "—";
       const moduleChanged = currentUser.module_access !== pendingModule;
       if (nameChanged || moduleChanged) {
-        await supabase
+        const { error } = await supabase
           .from("profiles")
           .update({
-            ...(nameChanged && { display_name: trimmedName }),
+            ...(nameChanged   && { display_name: trimmedName }),
             ...(moduleChanged && { module_access: pendingModule }),
           })
           .eq("user_id", userId);
+        if (error) throw error;
       }
+
       toast.success("Perfis atualizados com sucesso!");
       setEditingUser(null);
       setPendingName("");
       await fetchUsers();
-    } catch {
-      toast.error("Erro ao salvar perfis");
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao salvar perfis");
     } finally {
       setSaving(false);
     }
@@ -299,7 +308,7 @@ export function UserRolesManager() {
     [users, deleteState.user],
   );
 
-  // ── Trocar e-mail (troca direta + obriga reset de senha no próximo login) ─
+  // ── Trocar e-mail ─────────────────────────────────────────────────────────
   async function submitChangeEmail() {
     const { user, newEmail } = emailState;
     if (!user) return;
@@ -409,7 +418,6 @@ export function UserRolesManager() {
               <Card key={user.user_id}>
                 <CardHeader className="pb-2 flex flex-row items-start justify-between">
                   <div className="flex items-center gap-3">
-                    {/* ✅ Avatar com iniciais do primeiro e último nome */}
                     <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 font-bold text-sm">
                       {getInitials(user.display_name)}
                     </div>
