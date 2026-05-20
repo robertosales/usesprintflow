@@ -151,6 +151,9 @@ export function UserRolesManager() {
   const [emailState, setEmailState]     = useState<EmailState>(EMAIL_INITIAL);
   const [resetState, setResetState]     = useState<ResetState>(RESET_INITIAL);
 
+  // ✅ Item 3: estado do dialog de confirmação de troca de card
+  const [switchTarget, setSwitchTarget] = useState<UserRow | null>(null);
+
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
@@ -212,7 +215,8 @@ export function UserRolesManager() {
 
   const { paginatedItems, currentPage, setCurrentPage, totalItems, pageSize } = usePagination(filteredUsers, { pageSize: 20 });
 
-  function startEditing(user: UserRow) {
+  // Aplica a edição no usuário alvo (reutilizado após confirmação)
+  function applyEditing(user: UserRow) {
     setEditingUser(user.user_id);
     setPendingName(user.display_name === "—" ? "" : user.display_name);
     const effective = user.moduleRoles.length > 0 ? user.moduleRoles : legacyToModuleRoles(user.module_access);
@@ -222,6 +226,22 @@ export function UserRolesManager() {
       init[key] = { enabled: !!found, role: found?.role || PROFILES_BY_MODULE[key][0].value };
     });
     setPendingModules(init);
+  }
+
+  // ✅ Intercepta clique em "Gerenciar Perfil": pede confirmação se já há edição em andamento
+  function requestEditing(user: UserRow) {
+    if (editingUser && editingUser !== user.user_id) {
+      setSwitchTarget(user);
+    } else {
+      applyEditing(user);
+    }
+  }
+
+  // Confirma troca: descarta alterações do card anterior e abre o novo
+  function confirmSwitch() {
+    if (!switchTarget) return;
+    applyEditing(switchTarget);
+    setSwitchTarget(null);
   }
 
   function cancelEditing() { setEditingUser(null); setPendingName(""); }
@@ -251,7 +271,6 @@ export function UserRolesManager() {
 
     setSaving(true);
     try {
-      // ✅ Batch: apaga todos e reinsere os habilitados — 2 chamadas no total
       const { error: delErr } = await supabase
         .from("user_module_roles")
         .delete()
@@ -267,7 +286,6 @@ export function UserRolesManager() {
         })));
       if (insErr) throw insErr;
 
-      // Atualiza module_access legado para compatibilidade
       let legacyModule = enabledModules[0].key as string;
       if (enabledModules.length > 1) legacyModule = "admin";
 
@@ -482,7 +500,8 @@ export function UserRolesManager() {
                       </div>
                     ) : (
                       <div className="flex gap-1.5">
-                        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => startEditing(user)}>
+                        {/* ✅ Usa requestEditing em vez de applyEditing diretamente */}
+                        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => requestEditing(user)}>
                           <UserCog className="h-3.5 w-3.5" /> Gerenciar Perfil
                         </Button>
                         <Button size="sm" variant="outline" title="Trocar e-mail"
@@ -572,6 +591,32 @@ export function UserRolesManager() {
       )}
 
       <PaginationControls currentPage={currentPage} totalItems={totalItems} pageSize={pageSize} onPageChange={setCurrentPage} />
+
+      {/* ✅ Modal: Confirmar troca de card em edição (Item 3) */}
+      <Dialog open={!!switchTarget} onOpenChange={open => { if (!open) setSwitchTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              Alterações não salvas
+            </DialogTitle>
+            <DialogDescription>
+              Você está editando outro usuário. As alterações não salvas serão <strong>descartadas</strong>.
+              Deseja continuar e editar{" "}
+              <span className="font-semibold text-foreground">
+                {switchTarget ? formatPersonName(switchTarget.display_name) : ""}
+              </span>
+              ?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setSwitchTarget(null)}>Cancelar</Button>
+            <Button size="sm" onClick={confirmSwitch}>
+              Descartar e continuar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal: Excluir */}
       <Dialog open={!!deleteState.user} onOpenChange={open => { if (!open && !deleteState.deleting) setDeleteState(DELETE_INITIAL); }}>
