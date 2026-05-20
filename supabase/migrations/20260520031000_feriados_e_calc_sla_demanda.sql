@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS feriados (
   id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   data        DATE        NOT NULL,
   nome        TEXT        NOT NULL,
-  tipo        TEXT        NOT NULL DEFAULT 'nacional'  -- nacional | estadual | municipal
+  tipo        TEXT        NOT NULL DEFAULT 'nacional'
                CHECK (tipo IN ('nacional','estadual','municipal')),
   uf          CHAR(2),     -- NULL = nacional, ex: 'SP', 'RJ'
   municipio   TEXT,        -- NULL = estadual/nacional
@@ -16,9 +16,23 @@ CREATE TABLE IF NOT EXISTS feriados (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_feriados_data_uf_municipio
-  ON feriados (data, COALESCE(uf,'BR'), COALESCE(municipio,''));
+-- Três índices únicos parciais — Postgres não aceita COALESCE em CREATE UNIQUE INDEX
+-- Nacional: só data, uf e municipio são sempre NULL
+CREATE UNIQUE INDEX IF NOT EXISTS uq_feriados_nacional
+  ON feriados (data)
+  WHERE tipo = 'nacional';
 
+-- Estadual: data + uf
+CREATE UNIQUE INDEX IF NOT EXISTS uq_feriados_estadual
+  ON feriados (data, uf)
+  WHERE tipo = 'estadual';
+
+-- Municipal: data + uf + municipio
+CREATE UNIQUE INDEX IF NOT EXISTS uq_feriados_municipal
+  ON feriados (data, uf, municipio)
+  WHERE tipo = 'municipal';
+
+-- Índice de busca por data (usado por is_feriado)
 CREATE INDEX IF NOT EXISTS idx_feriados_data_ativo
   ON feriados (data) WHERE ativo = TRUE;
 
@@ -92,7 +106,7 @@ ON CONFLICT DO NOTHING;
 -- Verifica se uma data é feriado (nacional ou de uma UF)
 CREATE OR REPLACE FUNCTION is_feriado(
   p_data DATE,
-  p_uf   CHAR(2) DEFAULT NULL  -- NULL = só nacionais
+  p_uf   CHAR(2) DEFAULT NULL
 )
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -106,7 +120,7 @@ AS $$
       AND f.ativo = TRUE
       AND (
         f.tipo = 'nacional'
-        OR (f.tipo = 'estadual'  AND f.uf = p_uf)
+        OR (f.tipo = 'estadual' AND f.uf = p_uf)
       )
   );
 $$;
@@ -148,8 +162,8 @@ DECLARE
   v_total      NUMERIC := 0;
   v_atual      TIMESTAMPTZ;
   v_dia_fim    TIMESTAMPTZ;
-  v_hora_ini   CONSTANT INT := 8;   -- 08:00
-  v_hora_fim   CONSTANT INT := 20;  -- 20:00
+  v_hora_ini   CONSTANT INT := 8;
+  v_hora_fim   CONSTANT INT := 20;
   v_hora_atual NUMERIC;
   v_hora_efim  NUMERIC;
 BEGIN
@@ -157,53 +171,44 @@ BEGIN
     RETURN 0;
   END IF;
 
-  -- Regime contínuo: 24x7, conta tudo
   IF p_regime = 'continuo' THEN
     RETURN EXTRACT(EPOCH FROM (p_fim - p_inicio)) / 3600.0;
   END IF;
 
-  -- Regime padrão: 08h-20h, seg-sex, sem feriados
   v_atual := p_inicio;
 
   WHILE v_atual < p_fim LOOP
-    -- Se não for dia útil, avança para o próximo dia 08h
     IF NOT is_dia_util(v_atual::DATE, p_uf) THEN
-      v_atual := DATE_TRUNC('day', v_atual) + INTERVAL '1 day' + (v_hora_ini || ' hours')::INTERVAL;
+      v_atual := DATE_TRUNC('day', v_atual) + INTERVAL '1 day'
+                 + (v_hora_ini || ' hours')::INTERVAL;
       CONTINUE;
     END IF;
 
-    v_hora_atual := EXTRACT(HOUR FROM v_atual AT TIME ZONE 'America/Sao_Paulo')
-                    + EXTRACT(MINUTE FROM v_atual AT TIME ZONE 'America/Sao_Paulo') / 60.0;
+    v_hora_atual := EXTRACT(HOUR   FROM v_atual AT TIME ZONE 'America/Sao_Paulo')
+                  + EXTRACT(MINUTE FROM v_atual AT TIME ZONE 'America/Sao_Paulo') / 60.0;
 
-    -- Antes do horário comercial → avança para 08h
     IF v_hora_atual < v_hora_ini THEN
       v_atual := DATE_TRUNC('day', v_atual) + (v_hora_ini || ' hours')::INTERVAL;
       CONTINUE;
     END IF;
 
-    -- Após o horário comercial → avança para o próximo dia útil 08h
     IF v_hora_atual >= v_hora_fim THEN
-      v_atual := DATE_TRUNC('day', v_atual) + INTERVAL '1 day' + (v_hora_ini || ' hours')::INTERVAL;
+      v_atual := DATE_TRUNC('day', v_atual) + INTERVAL '1 day'
+                 + (v_hora_ini || ' hours')::INTERVAL;
       CONTINUE;
     END IF;
 
-    -- Fim do dia comercial ou fim do período, o que vier primeiro
     v_dia_fim := DATE_TRUNC('day', v_atual) + (v_hora_fim || ' hours')::INTERVAL;
 
     IF p_fim <= v_dia_fim THEN
-      -- Período termina dentro deste dia
-      v_hora_efim := EXTRACT(HOUR FROM p_fim AT TIME ZONE 'America/Sao_Paulo')
-                     + EXTRACT(MINUTE FROM p_fim AT TIME ZONE 'America/Sao_Paulo') / 60.0;
+      v_hora_efim := EXTRACT(HOUR   FROM p_fim AT TIME ZONE 'America/Sao_Paulo')
+                   + EXTRACT(MINUTE FROM p_fim AT TIME ZONE 'America/Sao_Paulo') / 60.0;
       v_total := v_total + LEAST(v_hora_efim, v_hora_fim) - v_hora_atual;
       EXIT;
     ELSE
-      -- Conta o restante do dia e avança
-      v_total := v_total + (v_hora_fim - v_hora_atual);
-      v_atual := v_dia_fim + INTERVAL '1 day' - (v_hora_fim || ' hours')::INTERVAL
-                 + (v_hora_ini || ' hours')::INTERVAL;
-      -- Simplificado: próximo dia 08h
-      v_atual := DATE_TRUNC('day', v_atual) + INTERVAL '1 day';
-      v_atual := DATE_TRUNC('day', v_atual) + (v_hora_ini || ' hours')::INTERVAL;
+      v_total  := v_total + (v_hora_fim - v_hora_atual);
+      v_atual  := DATE_TRUNC('day', v_atual) + INTERVAL '1 day'
+                  + (v_hora_ini || ' hours')::INTERVAL;
     END IF;
   END LOOP;
 
@@ -216,13 +221,11 @@ GRANT EXECUTE ON FUNCTION calc_horas_uteis(TIMESTAMPTZ, TIMESTAMPTZ, TEXT, CHAR)
 -- ============================================================
 -- STEP 3: RPC calc_sla_demanda
 -- Substitui calcSLAElapsedFromTransitions() de slaEngine.ts
--- Calcula horas SLA acumuladas considerando apenas status ativos
--- e o regime configurado. Retorna resultado consistente no servidor.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION calc_sla_demanda(
   p_demanda_id  UUID,
-  p_regime      TEXT     DEFAULT 'padrao',   -- 'padrao' | 'continuo'
+  p_regime      TEXT     DEFAULT 'padrao',
   p_uf          CHAR(2)  DEFAULT NULL
 )
 RETURNS JSONB
@@ -240,8 +243,6 @@ DECLARE
   v_prazo_horas   NUMERIC;
   v_status_sla    TEXT;
   v_atraso        NUMERIC;
-
-  -- Status que contam para o SLA (equivalente a SLA_VALID_STATUSES de slaEngine.ts)
   v_sla_ativos    TEXT[] := ARRAY[
     'nova',
     'planejamento',
@@ -249,7 +250,6 @@ DECLARE
     'execucao_dev'
   ];
 BEGIN
-  -- Busca demanda
   SELECT id, created_at, situacao, sla, aceite_data
   INTO   v_demanda
   FROM   demandas
@@ -260,16 +260,14 @@ BEGIN
   END IF;
 
   v_ultimo_ts     := v_demanda.created_at;
-  v_ultimo_status := 'nova';  -- status inicial
+  v_ultimo_status := 'nova';
 
-  -- Itera transitions ordenadas por data
   FOR v_transitions IN
     SELECT from_status, to_status, created_at
     FROM   demanda_transitions
     WHERE  demanda_id = p_demanda_id
     ORDER  BY created_at ASC
   LOOP
-    -- Se o status anterior era SLA-ativo, acumula horas
     IF v_ultimo_status = ANY(v_sla_ativos) THEN
       v_total_horas := v_total_horas +
         calc_horas_uteis(v_ultimo_ts, v_transitions.created_at, p_regime, p_uf);
@@ -278,42 +276,39 @@ BEGIN
     v_ultimo_status := v_transitions.to_status;
   END LOOP;
 
-  -- Acumula tempo no status atual se ainda for SLA-ativo
   IF v_ultimo_status = ANY(v_sla_ativos) AND v_demanda.situacao != 'aceite_final' THEN
     v_total_horas := v_total_horas +
       calc_horas_uteis(v_ultimo_ts, NOW(), p_regime, p_uf);
   END IF;
 
-  -- Prazo SLA em horas (baseado no campo sla da demanda)
   v_prazo_horas := CASE v_demanda.sla
-    WHEN '24x7'  THEN 4
+    WHEN '24x7'   THEN 4
     WHEN 'padrao' THEN 24
     ELSE 24
   END;
 
-  -- Status do SLA
   IF v_demanda.situacao = 'aceite_final' THEN
     v_status_sla := 'concluido';
-    v_atraso := GREATEST(0, v_total_horas - v_prazo_horas);
+    v_atraso     := GREATEST(0, v_total_horas - v_prazo_horas);
   ELSIF v_total_horas > v_prazo_horas THEN
     v_status_sla := 'violado';
-    v_atraso := v_total_horas - v_prazo_horas;
+    v_atraso     := v_total_horas - v_prazo_horas;
   ELSIF v_total_horas > (v_prazo_horas * 0.85) THEN
     v_status_sla := 'em_risco';
-    v_atraso := 0;
+    v_atraso     := 0;
   ELSE
     v_status_sla := 'dentro';
-    v_atraso := 0;
+    v_atraso     := 0;
   END IF;
 
   RETURN jsonb_build_object(
-    'demandaId',    p_demanda_id,
+    'demandaId',       p_demanda_id,
     'horasAcumuladas', ROUND(v_total_horas::NUMERIC, 2),
-    'prazoHoras',   v_prazo_horas,
-    'statusSLA',    v_status_sla,
-    'atrasoHoras',  ROUND(v_atraso::NUMERIC, 2),
-    'regime',       p_regime,
-    'calculadoEm',  NOW()
+    'prazoHoras',      v_prazo_horas,
+    'statusSLA',       v_status_sla,
+    'atrasoHoras',     ROUND(v_atraso::NUMERIC, 2),
+    'regime',          p_regime,
+    'calculadoEm',     NOW()
   );
 END;
 $$;
