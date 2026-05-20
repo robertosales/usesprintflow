@@ -194,9 +194,17 @@ const ACCENT = {
 // ─── TeamSwitcher ─────────────────────────────────────────────────────────────
 function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
   const { teams, currentTeamId, setCurrentTeamId } = useAuth();
-  const moduleTeams = teams.filter((t) => t.module === module);
-  const activeTeam = moduleTeams.find((t) => t.id === currentTeamId);
+
+  // RDM não tem times próprios — exibe todos os times do usuário como fallback
+  const moduleTeams = module === "rdm"
+    ? teams
+    : teams.filter((t) => t.module === module);
+
+  const activeTeam = moduleTeams.find((t) => t.id === currentTeamId)
+    ?? (module === "rdm" ? teams.find((t) => t.id === currentTeamId) : undefined);
+
   if (moduleTeams.length <= 1) return null;
+
   if (collapsed) {
     return (
       <Tooltip>
@@ -211,6 +219,7 @@ function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: 
       </Tooltip>
     );
   }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
