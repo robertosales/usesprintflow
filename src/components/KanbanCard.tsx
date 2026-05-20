@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import {
   Bug, Plus, ArrowRightLeft, AlertTriangle, Eye, Pencil, Copy, ListChecks, Clock,
 } from "lucide-react";
-import { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { QuickActivityDialog } from "./QuickActivityDialog";
 import { HUPreviewSheet } from "./HUPreviewSheet";
@@ -76,9 +76,8 @@ function hoursColor(
   return { text: "text-green-600 dark:text-green-400",  bg: "bg-green-50 dark:bg-green-950/30",  border: "border-green-300 dark:border-green-800" };
 }
 
-// ─── #3: Aging badge ─────────────────────────────────────────────────────────────────
+// ─── #3: Aging badge ────────────────────────────────────────────────────────────
 function calcAgingDays(hu: UserStory): number {
-  // Usa statusChangedAt se existir (campo futuro na tabela), senso createdAt como fallback
   const ref = (hu as any).statusChangedAt || hu.createdAt;
   if (!ref) return 0;
   const refDate = new Date(ref);
@@ -90,7 +89,6 @@ function calcAgingDays(hu: UserStory): number {
 function AgingBadge({ days, colHex }: { days: number; colHex?: string }) {
   if (days <= 0) return null;
 
-  // Cores de severity: verde (<= 2d), amarelo (3-5d), laranja (6-9d), vermelho (>= 10d)
   let colorCls: string;
   let label: string;
   if (days >= 10) {
@@ -125,7 +123,9 @@ function AgingBadge({ days, colHex }: { days: number; colHex?: string }) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function KanbanCard({ hu, colHex }: Props) {
+// React.memo: card só re-renderiza se hu ou colHex mudar.
+// Durante drag, o board re-renderiza mas cards não arrastados ficam intactos.
+export const KanbanCard = React.memo(function KanbanCard({ hu, colHex }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: hu.id });
   const { developers, epics, activities, workflowColumns, updateUserStoryStatus, addImpediment } = useSprint() as any;
 
@@ -138,9 +138,9 @@ export function KanbanCard({ hu, colHex }: Props) {
   const [editMounted,     setEditMounted]     = useState(false);
   const [impedimentOpen,  setImpedimentOpen]  = useState(false);
 
-  function openQuick()   { setQuickMounted(true);   setQuickOpen(true); }
-  function openPreview() { setPreviewMounted(true);  setPreviewOpen(true); }
-  function openEdit()    { setEditMounted(true);     setEditOpen(true); }
+  const openQuick   = useCallback(() => { setQuickMounted(true);   setQuickOpen(true);   }, []);
+  const openPreview = useCallback(() => { setPreviewMounted(true); setPreviewOpen(true); }, []);
+  const openEdit    = useCallback(() => { setEditMounted(true);    setEditOpen(true);    }, []);
 
   const [expanded,            setExpanded]            = useState(false);
   const [impedimentReason,    setImpedimentReason]    = useState("");
@@ -153,9 +153,19 @@ export function KanbanCard({ hu, colHex }: Props) {
     ...(colHex ? { background: `color-mix(in srgb, ${colHex} 8%, var(--card))`, borderLeft: `3px solid ${colHex}` } : {}),
   };
 
-  const assignee      = hu.assigneeId ? developers.find((d: any) => d.id === hu.assigneeId) : null;
-  const epic          = hu.epicId     ? epics.find((e: any) => e.id === hu.epicId)          : null;
-  const huActivities  = (activities ?? []).filter((a: any) => a.huId === hu.id);
+  const assignee = useMemo(
+    () => hu.assigneeId ? developers.find((d: any) => d.id === hu.assigneeId) : null,
+    [hu.assigneeId, developers],
+  );
+  const epic = useMemo(
+    () => hu.epicId ? epics.find((e: any) => e.id === hu.epicId) : null,
+    [hu.epicId, epics],
+  );
+  const huActivities = useMemo(
+    () => (activities ?? []).filter((a: any) => a.huId === hu.id),
+    [activities, hu.id],
+  );
+
   const hasOpenBug    = huActivities.some((a: any) => a.activityType === "bug" && !a.isClosed);
   const assigneeShort = assignee?.name ? formatPersonName(assignee.name) : null;
   const initials      = assignee?.name ? getInitials(assignee.name) : "?";
@@ -172,11 +182,11 @@ export function KanbanCard({ hu, colHex }: Props) {
   const showHoursBadge = huActivities.length > 0;
   const overBudget     = estimatedHours && launchedHours > estimatedHours;
 
-  // ── #3: Aging ─────────────────────────────────────────────────────────────────
+  // ── #3: Aging ─────────────────────────────────────────────────────────────────────────────
   const agingDays = calcAgingDays(hu);
   // ─────────────────────────────────────────────────────────────────────────────
 
-  async function handleConfirmImpediment() {
+  const handleConfirmImpediment = useCallback(async () => {
     const reason = impedimentReason.trim();
     if (!reason) { toast.error("Informe o motivo do impedimento."); return; }
     try {
@@ -190,14 +200,14 @@ export function KanbanCard({ hu, colHex }: Props) {
     } catch (err: any) {
       toast.error(err?.message ?? "Erro ao registrar impedimento.");
     }
-  }
+  }, [impedimentReason, impedimentStartedAt, addImpediment, hu.id]);
 
-  function handleCopyId() {
+  const handleCopyId = useCallback(() => {
     navigator.clipboard.writeText(hu.code).then(
       () => toast.success(`ID copiado: ${hu.code}`),
       () => toast.error("Não foi possível copiar."),
     );
-  }
+  }, [hu.code]);
 
   return (
     <>
@@ -433,4 +443,4 @@ export function KanbanCard({ hu, colHex }: Props) {
     )}
     </>
   );
-}
+});
