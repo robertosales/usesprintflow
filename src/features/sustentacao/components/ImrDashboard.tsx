@@ -1,17 +1,11 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useDemandas } from "../hooks/useDemandas";
-import { useProjetos } from "../hooks/useProjetos";
-import { useAuth } from "@/contexts/AuthContext";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
-import { calcIAP, calcIQS, calcICT, calcISS, calcGlosasSummary } from "../utils/imrCalculations";
-import type { DemandaIMR, DemandaEvento } from "../utils/imrCalculations";
+import { useImrPeriodo, inicioDeMes } from "../hooks/useImrPeriodo";
 import { INDICADORES_GRUPO2, getIndicadorFaixa, EVENTOS_CONFIG } from "../types/imr";
-import { getIAPPeriodOptions, getIAPGlosa, countAtraso60Dias } from "../utils/slaEngine";
-import * as eventosSvc from "../services/eventos.service";
 import { Target, Shield, TestTube, Star, DollarSign, Clock, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -25,113 +19,97 @@ const INDICATOR_ICONS: Record<string, any> = {
   ISS: Star,
 };
 const COR_MAP: Record<string, string> = {
-  green: "text-emerald-600",
+  green:  "text-emerald-600",
   yellow: "text-yellow-600",
   orange: "text-orange-600",
-  red: "text-destructive",
+  red:    "text-destructive",
 };
 const COR_BG_MAP: Record<string, string> = {
-  green: "bg-emerald-500/10 border-emerald-500/30",
+  green:  "bg-emerald-500/10 border-emerald-500/30",
   yellow: "bg-yellow-500/10 border-yellow-500/30",
   orange: "bg-orange-500/10 border-orange-500/30",
-  red: "bg-destructive/10 border-destructive/30",
+  red:    "bg-destructive/10 border-destructive/30",
 };
 const EMOJI_MAP: Record<string, string> = {
-  green: "🟢",
+  green:  "🟢",
   yellow: "🟡",
   orange: "🟠",
-  red: "🔴",
+  red:    "🔴",
 };
+
+// ─── Period helpers ───────────────────────────────────────────────────────────
+
+interface PeriodOption {
+  value: string; // "YYYY-MM"
+  label: string;
+  start: Date;
+  end:   Date;
+}
+
+function buildPeriodOptions(monthsBack = 6): PeriodOption[] {
+  const opts: PeriodOption[] = [];
+  const now = new Date();
+  for (let i = 0; i < monthsBack; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const start = new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+    const end   = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    opts.push({ value, label, start, end });
+  }
+  return opts;
+}
+
+function defaultPeriod(opts: PeriodOption[]): string {
+  const now  = new Date();
+  const day  = now.getDate();
+  const cur  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  if (day >= 11) return cur;
+  // Antes do dia 11 usa o mês anterior
+  return opts[1]?.value ?? cur;
+}
 
 // ─── ImrDashboard ─────────────────────────────────────────────────────────────
 
 export function ImrDashboard() {
-  const { demandas, loading } = useDemandas();
-  const { currentTeamId } = useAuth();
-  const [eventos, setEventos] = useState<DemandaEvento[]>([]);
+  const periodOptions = useMemo(() => buildPeriodOptions(6), []);
+  const [selectedPeriod, setSelectedPeriod] = useState(() => defaultPeriod(periodOptions));
   const [atrasadosPage, setAtrasadosPage] = useState(1);
 
-  // ── Period selection ──────────────────────────────────────────────────────
-  const periodOptions = useMemo(() => getIAPPeriodOptions(6), []);
-  const [selectedPeriod, setSelectedPeriod] = useState(() => {
-    const now = new Date();
-    const day = now.getDate();
-    const month = now.getMonth() + 1;
-    const year = now.getFullYear();
-    if (day >= 11) return `${year}-${String(month).padStart(2, "0")}`;
-    if (month === 1) return `${year - 1}-12`;
-    return `${year}-${String(month - 1).padStart(2, "0")}`;
-  });
-
   const activePeriod = useMemo(
-    () => periodOptions.find((p) => p.value === selectedPeriod) || periodOptions[0],
+    () => periodOptions.find((p) => p.value === selectedPeriod) ?? periodOptions[0],
     [selectedPeriod, periodOptions],
   );
 
-  // ── Load eventos ──────────────────────────────────────────────────────────
-  const loadEventos = useCallback(async () => {
-    if (!currentTeamId) return;
-    try {
-      setEventos(await eventosSvc.fetchEventosByTeam(currentTeamId));
-    } catch {
-      /* ignore */
-    }
-  }, [currentTeamId]);
+  // ── Dados do banco via RPC calc_imr_periodo ───────────────────────────────
+  const { iap, iqs, ict, iss, glosas, e8Alerts, loading } = useImrPeriodo({
+    inicio:   activePeriod?.start ?? inicioDeMes(),
+    fim:      activePeriod?.end   ?? new Date(),
+    e8Alerta: 45,
+    e8Glosa:  60,
+  });
 
-  useEffect(() => {
-    loadEventos();
-  }, [loadEventos]);
-
-  // ── Filtered data ─────────────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    const items = demandas as unknown as DemandaIMR[];
-    if (!activePeriod) return items;
-    return items.filter((d) => {
-      const created = new Date(d.created_at);
-      return created >= activePeriod.start && created <= activePeriod.end;
-    });
-  }, [demandas, activePeriod]);
-
-  const iapFiltered = useMemo(() => {
-    const items = demandas as unknown as DemandaIMR[];
-    if (!activePeriod) return items;
-    return items.filter((d) => {
-      if (d.situacao !== "aceite_final") return false;
-      const aceite = d.aceite_data ? new Date(d.aceite_data) : new Date(d.updated_at);
-      return aceite >= activePeriod.start && aceite <= activePeriod.end;
-    });
-  }, [demandas, activePeriod]);
-
-  // ── KPIs ──────────────────────────────────────────────────────────────────
-  const iap = useMemo(() => calcIAP(iapFiltered), [iapFiltered]);
-  const iqs = useMemo(() => calcIQS(filtered), [filtered]);
-  const ict = useMemo(() => calcICT(filtered), [filtered]);
-  const iss = useMemo(() => calcISS(filtered), [filtered]);
-  const glosas = useMemo(() => calcGlosasSummary(eventos), [eventos]);
-
-  // ── Atraso >60 dias ───────────────────────────────────────────────────────
-  const atraso60 = useMemo(() => countAtraso60Dias(demandas as any), [demandas]);
-
-  const atrasadosList = useMemo(
-    () =>
-      (demandas as unknown as DemandaIMR[])
-        .filter((d) => Math.floor((Date.now() - new Date(d.updated_at).getTime()) / 86_400_000) > 60)
-        .map((d) => ({
-          id: d.id,
-          rhm: d.rhm,
-          projeto: d.projeto,
-          diasAtraso: Math.floor((Date.now() - new Date(d.updated_at).getTime()) / 86_400_000),
-        }))
-        .sort((a, b) => b.diasAtraso - a.diasAtraso),
-    [demandas],
+  // ── Atraso E8 (substitui countAtraso60Dias + atrasadosList locais) ────────
+  const atrasadosGlosa  = useMemo(() => e8Alerts.filter(a => a.tipo_alerta === "glosa"),  [e8Alerts]);
+  const atrasadosAlerta = useMemo(() => e8Alerts.filter(a => a.tipo_alerta === "alerta"), [e8Alerts]);
+  const atrasadosList   = useMemo(
+    () => [...atrasadosGlosa, ...atrasadosAlerta].sort((a, b) => b.diasAtraso - a.diasAtraso),
+    [atrasadosGlosa, atrasadosAlerta],
   );
 
   const atrasadosVisiveis = atrasadosList.slice(0, atrasadosPage * PAGE_SIZE);
   const temMais = atrasadosVisiveis.length < atrasadosList.length;
 
-  // ── Glosas ────────────────────────────────────────────────────────────────
-  const glosa60 = atraso60.count * 0.2;
-  const iapGlosa = getIAPGlosa(iap.valor);
+  // ── Glosa IAP (tabela contratual) ─────────────────────────────────────────
+  function getIAPGlosa(valor: number): number {
+    if (valor >= 90) return 0;
+    if (valor >= 80) return 5;
+    if (valor >= 70) return 10;
+    return 20;
+  }
+
+  const glosa60      = atrasadosGlosa.length * 0.2;
+  const iapGlosa     = getIAPGlosa(iap.valor);
   const glosaTotalCalc = iapGlosa + glosa60;
 
   if (loading) return <SkeletonList count={4} />;
@@ -181,15 +159,12 @@ export function ImrDashboard() {
         {INDICADORES_GRUPO2.map((ind) => {
           const valor = indicatorValues[ind.sigla as keyof typeof indicatorValues];
           const faixa = getIndicadorFaixa(ind, valor);
-          const Icon = INDICATOR_ICONS[ind.sigla] || Target;
+          const Icon  = INDICATOR_ICONS[ind.sigla] || Target;
           const hasData =
-            ind.sigla === "ISS"
-              ? iss.total > 0
-              : ind.sigla === "ICT"
-                ? ict.total > 0
-                : ind.sigla === "IQS"
-                  ? iqs.qde > 0
-                  : iap.qdtot > 0;
+            ind.sigla === "ISS" ? iss.total > 0
+            : ind.sigla === "ICT" ? ict.total > 0
+            : ind.sigla === "IQS" ? iqs.qde  > 0
+            : iap.qdtot > 0;
 
           return (
             <Card key={ind.sigla} className={`${COR_BG_MAP[faixa.cor]} transition-colors`}>
@@ -205,8 +180,7 @@ export function ImrDashboard() {
                       {!hasData ? "N/A" : ind.sigla === "ISS" ? valor.toFixed(1) : `${valor.toFixed(1)}%`}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      Meta: ≥ {ind.meta}
-                      {ind.unidade}
+                      Meta: ≥ {ind.meta}{ind.unidade}
                     </p>
                     {ind.sigla === "IAP" && activePeriod && (
                       <p className="text-[10px] text-muted-foreground italic">Período: {activePeriod.label}</p>
@@ -223,27 +197,34 @@ export function ImrDashboard() {
                     <Icon className="h-4 w-4" />
                   </div>
                 </div>
-                {hasData && <p className="text-[10px] text-muted-foreground mt-1">{indicatorDetails[ind.sigla]}</p>}
+                {hasData && (
+                  <p className="text-[10px] text-muted-foreground mt-1">{indicatorDetails[ind.sigla]}</p>
+                )}
               </CardContent>
             </Card>
           );
         })}
       </div>
 
-      {/* ── Atraso >60 dias: contador + lista paginada ────────── */}
+      {/* ── Atraso E8: contador + lista paginada ──────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
         {/* Contador — 2/5 */}
-        <Card className={`lg:col-span-2 ${atraso60.count > 0 ? "border-destructive/30" : ""}`}>
+        <Card className={`lg:col-span-2 ${atrasadosGlosa.length > 0 ? "border-destructive/30" : ""}`}>
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wide">
-                  Atraso &gt; 60 dias
+                  Atraso &gt; 60 dias (E8)
                 </p>
-                <p className={`text-5xl font-bold mt-2 ${atraso60.count > 0 ? "text-destructive" : ""}`}>
-                  {atraso60.count}
+                <p className={`text-5xl font-bold mt-2 ${atrasadosGlosa.length > 0 ? "text-destructive" : ""}`}>
+                  {atrasadosGlosa.length}
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-1">demandas em atraso crítico</p>
+                {atrasadosAlerta.length > 0 && (
+                  <p className="text-[11px] text-yellow-600 mt-0.5">
+                    {atrasadosAlerta.length} em alerta (&gt;45 dias)
+                  </p>
+                )}
                 {glosa60 > 0 && (
                   <Badge variant="destructive" className="mt-3 text-[11px] px-2">
                     Glosa acumulada: {glosa60.toFixed(2)}%
@@ -252,7 +233,7 @@ export function ImrDashboard() {
               </div>
               <div
                 className={`h-16 w-16 rounded-2xl flex items-center justify-center shrink-0 ${
-                  atraso60.count > 0 ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"
+                  atrasadosGlosa.length > 0 ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"
                 }`}
               >
                 <Clock className="h-8 w-8" />
@@ -261,13 +242,13 @@ export function ImrDashboard() {
           </CardContent>
         </Card>
 
-        {/* Lista paginada — 3/5 — altura fixa + scroll interno */}
+        {/* Lista paginada — 3/5 */}
         <Card className="lg:col-span-3 flex flex-col" style={{ height: "280px" }}>
           <CardHeader className="pb-2 shrink-0">
             <CardTitle className="text-sm flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-destructive" />
-                Demandas com atraso crítico
+                Demandas com atraso E8
               </span>
               {atrasadosList.length > 0 && (
                 <Badge variant="destructive" className="text-[10px] h-5 px-1.5 font-bold">
@@ -279,36 +260,49 @@ export function ImrDashboard() {
 
           <CardContent className="pt-0 flex-1 flex flex-col min-h-0">
             {atrasadosList.length === 0 ? (
-              /* Estado vazio */
               <div className="flex flex-col items-center justify-center flex-1 gap-2">
                 <Clock className="h-8 w-8 text-muted-foreground/40" />
-                <p className="text-sm text-muted-foreground">Nenhuma demanda com atraso &gt; 60 dias</p>
+                <p className="text-sm text-muted-foreground">Nenhuma demanda com atraso E8</p>
               </div>
             ) : (
               <>
-                {/* Scroll interno — não expande a página */}
                 <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-muted">
                   {atrasadosVisiveis.map((a) => (
                     <div
-                      key={a.id}
-                      className="flex items-center gap-3 p-2.5 rounded-lg border border-destructive/20 bg-destructive/5"
+                      key={a.demandaId}
+                      className={`flex items-center gap-3 p-2.5 rounded-lg border ${
+                        a.tipo_alerta === "glosa"
+                          ? "border-destructive/20 bg-destructive/5"
+                          : "border-yellow-500/20 bg-yellow-500/5"
+                      }`}
                     >
-                      <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />
+                      <span
+                        className={`h-2 w-2 rounded-full shrink-0 ${
+                          a.tipo_alerta === "glosa" ? "bg-destructive" : "bg-yellow-500"
+                        }`}
+                      />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{a.rhm}</p>
                         <p className="text-[10px] text-muted-foreground truncate">{a.projeto}</p>
                       </div>
                       <div className="text-right shrink-0">
-                        <span className="text-[11px] font-bold text-destructive bg-destructive/10 rounded px-1.5 py-0.5">
+                        <span
+                          className={`text-[11px] font-bold rounded px-1.5 py-0.5 ${
+                            a.tipo_alerta === "glosa"
+                              ? "text-destructive bg-destructive/10"
+                              : "text-yellow-700 bg-yellow-500/10"
+                          }`}
+                        >
                           {a.diasAtraso}d
                         </span>
-                        <p className="text-[9px] text-muted-foreground mt-0.5">Glosa 0,2%</p>
+                        <p className="text-[9px] text-muted-foreground mt-0.5">
+                          {a.tipo_alerta === "glosa" ? "Glosa 0,2%" : "Alerta"}
+                        </p>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                {/* Rodapé paginação */}
                 <div className="flex items-center justify-between pt-2 shrink-0 border-t border-border/40 mt-1">
                   <span className="text-[11px] text-muted-foreground">
                     Exibindo <strong>{atrasadosVisiveis.length}</strong> de <strong>{atrasadosList.length}</strong>
@@ -359,12 +353,16 @@ export function ImrDashboard() {
               active={iapGlosa > 0}
             />
             <GlosaCell
-              label="Glosa +60"
+              label="Glosa E8 (+60d)"
               value={`${glosa60.toFixed(2)}%`}
-              sub={`${atraso60.count} demandas`}
+              sub={`${atrasadosGlosa.length} demandas`}
               active={glosa60 > 0}
             />
-            <GlosaCell label="Glosa Total" value={`${glosaTotalCalc.toFixed(2)}%`} active={glosaTotalCalc > 0} />
+            <GlosaCell
+              label="Glosa Total"
+              value={`${glosaTotalCalc.toFixed(2)}%`}
+              active={glosaTotalCalc > 0}
+            />
           </div>
 
           {Object.keys(glosas.byEvento).length > 0 && (
@@ -378,9 +376,7 @@ export function ImrDashboard() {
                       {ev} — {cfg?.descricao.slice(0, 40)}...
                     </span>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="secondary" className="text-[10px]">
-                        {data.count}x
-                      </Badge>
+                      <Badge variant="secondary" className="text-[10px]">{data.count}x</Badge>
                       <span className="text-destructive font-medium">{data.total.toFixed(2)}%</span>
                     </div>
                   </div>
@@ -389,7 +385,7 @@ export function ImrDashboard() {
             </div>
           )}
 
-          {eventos.length === 0 && glosas.totalIntegral === 0 && glosas.totalLimitada === 0 && (
+          {Object.keys(glosas.byEvento).length === 0 && glosas.totalIntegral === 0 && glosas.totalLimitada === 0 && (
             <p className="text-sm text-muted-foreground text-center py-2">Nenhum evento de glosa registrado.</p>
           )}
         </CardContent>
