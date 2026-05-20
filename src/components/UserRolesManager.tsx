@@ -9,13 +9,16 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Accordion, AccordionContent, AccordionItem, AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   ShieldCheck, Save, Search, Trash2, AlertTriangle,
   ArrowRightLeft, Mail, KeyRound, Copy, CheckCircle2,
-  Zap, Shield, BookOpen, UserCog,
+  Zap, Shield, BookOpen, UserCog, UserX, UserCheck, History,
 } from "lucide-react";
 import { getInitials, formatPersonName } from "@/lib/personName";
 import { PaginationControls } from "@/shared/components/common/Pagination";
@@ -73,6 +76,14 @@ interface UserRow {
   moduleRoles: ModuleAccess[];
 }
 
+interface AuditEntry {
+  id: string;
+  actor_display_name: string;
+  action: string;
+  payload: Record<string, any>;
+  created_at: string;
+}
+
 const DEMANDAS_TABLE = "demandas";
 const DEMANDAS_USER_COLS = [
   "responsavel_requisitos", "responsavel_dev", "responsavel_teste",
@@ -100,6 +111,9 @@ interface ResetState {
   recoveryLink: string | null;
 }
 const RESET_INITIAL: ResetState = { user: null, mode: "temp_password", saving: false, generatedPassword: null, recoveryLink: null };
+
+interface ToggleActiveState { user: UserRow | null; saving: boolean; }
+const TOGGLE_INITIAL: ToggleActiveState = { user: null, saving: false };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -136,6 +150,114 @@ function ModuleTags({ moduleRoles, module_access }: { moduleRoles: ModuleAccess[
   );
 }
 
+const ACTION_LABELS: Record<string, string> = {
+  toggle_active:  "Status alterado",
+  change_role:    "Perfil alterado",
+  change_email:   "E-mail trocado",
+  reset_password: "Senha resetada",
+  delete_user:    "Usuário excluído",
+};
+
+function AuditLog({ userId }: { userId: string }) {
+  const [entries, setEntries]   = useState<AuditEntry[]>([]);
+  const [loading, setLoading]   = useState(false);
+  const [loaded, setLoaded]     = useState(false);
+
+  async function load() {
+    if (loaded) return;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("user_management_audit_log")
+        .select("id, action, payload, created_at, actor:actor_id(display_name)")
+        .eq("target_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      setEntries(
+        (data || []).map((r: any) => ({
+          id:                 r.id,
+          actor_display_name: r.actor?.display_name ?? "Sistema",
+          action:             r.action,
+          payload:            r.payload ?? {},
+          created_at:         r.created_at,
+        }))
+      );
+      setLoaded(true);
+    } catch {
+      toast.error("Erro ao carregar histórico");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Accordion type="single" collapsible>
+      <AccordionItem value="audit" className="border-0">
+        <AccordionTrigger
+          className="text-[11px] text-muted-foreground hover:no-underline py-1 gap-1"
+          onClick={load}
+        >
+          <span className="flex items-center gap-1.5">
+            <History className="h-3 w-3" /> Histórico de alterações
+          </span>
+        </AccordionTrigger>
+        <AccordionContent>
+          {loading ? (
+            <div className="flex justify-center py-3">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+            </div>
+          ) : entries.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground py-1">Nenhuma alteração registrada.</p>
+          ) : (
+            <ul className="space-y-1.5 mt-1">
+              {entries.map(e => (
+                <li key={e.id} className="text-[11px] flex items-start gap-2">
+                  <span className="text-muted-foreground shrink-0 tabular-nums">
+                    {new Date(e.created_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                  </span>
+                  <span>
+                    <span className="font-medium">{ACTION_LABELS[e.action] ?? e.action}</span>
+                    {" por "}
+                    <span className="text-muted-foreground">{e.actor_display_name}</span>
+                    {e.payload && Object.keys(e.payload).length > 0 && (
+                      <span className="text-muted-foreground">
+                        {" — "}
+                        {Object.entries(e.payload)
+                          .map(([k, v]) => `${k}: ${v}`)
+                          .join(", ")}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  );
+}
+
+// ─── Helper de auditoria ────────────────────────────────────────────────────
+async function writeAudit(
+  actorId: string,
+  targetId: string,
+  action: string,
+  payload: Record<string, any> = {}
+) {
+  try {
+    await supabase.from("user_management_audit_log").insert({
+      actor_id:  actorId,
+      target_id: targetId,
+      action,
+      payload,
+    });
+  } catch {
+    // Auditoria é best-effort — não bloqueia a operação principal
+  }
+}
+
 // ─── Componente principal ────────────────────────────────────────────────────
 
 export function UserRolesManager() {
@@ -150,8 +272,7 @@ export function UserRolesManager() {
   const [deleteState, setDeleteState]   = useState<DeleteState>(DELETE_INITIAL);
   const [emailState, setEmailState]     = useState<EmailState>(EMAIL_INITIAL);
   const [resetState, setResetState]     = useState<ResetState>(RESET_INITIAL);
-
-  // ✅ Item 3: estado do dialog de confirmação de troca de card
+  const [toggleState, setToggleState]   = useState<ToggleActiveState>(TOGGLE_INITIAL);
   const [switchTarget, setSwitchTarget] = useState<UserRow | null>(null);
 
   const fetchUsers = useCallback(async () => {
@@ -215,7 +336,6 @@ export function UserRolesManager() {
 
   const { paginatedItems, currentPage, setCurrentPage, totalItems, pageSize } = usePagination(filteredUsers, { pageSize: 20 });
 
-  // Aplica a edição no usuário alvo (reutilizado após confirmação)
   function applyEditing(user: UserRow) {
     setEditingUser(user.user_id);
     setPendingName(user.display_name === "—" ? "" : user.display_name);
@@ -228,7 +348,6 @@ export function UserRolesManager() {
     setPendingModules(init);
   }
 
-  // ✅ Intercepta clique em "Gerenciar Perfil": pede confirmação se já há edição em andamento
   function requestEditing(user: UserRow) {
     if (editingUser && editingUser !== user.user_id) {
       setSwitchTarget(user);
@@ -237,7 +356,6 @@ export function UserRolesManager() {
     }
   }
 
-  // Confirma troca: descarta alterações do card anterior e abre o novo
   function confirmSwitch() {
     if (!switchTarget) return;
     applyEditing(switchTarget);
@@ -299,6 +417,15 @@ export function UserRolesManager() {
         .eq("user_id", userId);
       if (profErr) throw profErr;
 
+      // Auditoria: change_role
+      const { data: { user: actor } } = await supabase.auth.getUser();
+      if (actor) {
+        await writeAudit(actor.id, userId, "change_role", {
+          modules: enabledModules.map(m => `${m.key}:${pendingModules[m.key].role}`).join(", "),
+          ...(nameChanged && { nome: trimmedName }),
+        });
+      }
+
       toast.success("Perfil atualizado com sucesso!");
       setEditingUser(null); setPendingName("");
       await fetchUsers();
@@ -306,6 +433,37 @@ export function UserRolesManager() {
       toast.error(err?.message || "Erro ao salvar perfil");
     } finally {
       setSaving(false);
+    }
+  }
+
+  // ── Toggle ativo/inativo ───────────────────────────────────────────────────
+  async function confirmToggleActive() {
+    const { user } = toggleState;
+    if (!user) return;
+    setToggleState(p => ({ ...p, saving: true }));
+    const newActive = !user.is_active;
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ is_active: newActive })
+        .eq("user_id", user.user_id);
+      if (error) throw error;
+
+      const { data: { user: actor } } = await supabase.auth.getUser();
+      if (actor) {
+        await writeAudit(actor.id, user.user_id, "toggle_active", {
+          status: newActive ? "ativado" : "desativado",
+        });
+      }
+
+      toast.success(
+        newActive ? `${user.display_name} foi ativado.` : `${user.display_name} foi desativado.`
+      );
+      setToggleState(TOGGLE_INITIAL);
+      await fetchUsers();
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao alterar status");
+      setToggleState(p => ({ ...p, saving: false }));
     }
   }
 
@@ -353,6 +511,17 @@ export function UserRolesManager() {
         }
       }
       await supabase.from("user_module_roles").delete().eq("user_id", user.user_id);
+
+      // Auditoria antes de deletar
+      const { data: { user: actor } } = await supabase.auth.getUser();
+      if (actor) {
+        await writeAudit(actor.id, user.user_id, "delete_user", {
+          nome:  user.display_name,
+          email: user.email,
+          ...(reassignToId && { transferido_para: reassignToId }),
+        });
+      }
+
       const { error: fnError } = await supabase.functions.invoke("delete-user", { body: { user_id: user.user_id } });
       if (fnError) throw new Error(fnError.message);
       toast.success(affectedCount > 0
@@ -386,6 +555,15 @@ export function UserRolesManager() {
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
+
+      const { data: { user: actor } } = await supabase.auth.getUser();
+      if (actor) {
+        await writeAudit(actor.id, user.user_id, "change_email", {
+          email_anterior: user.email,
+          email_novo:     trimmed,
+        });
+      }
+
       toast.success("E-mail trocado. O usuário deverá redefinir a senha no próximo login.");
       setEmailState(EMAIL_INITIAL);
       await fetchUsers();
@@ -407,6 +585,12 @@ export function UserRolesManager() {
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       const result = data as any;
+
+      const { data: { user: actor } } = await supabase.auth.getUser();
+      if (actor) {
+        await writeAudit(actor.id, user.user_id, "reset_password", { modo: mode });
+      }
+
       if (mode === "temp_password") {
         setResetState(p => ({ ...p, saving: false, generatedPassword: result.temp_password }));
         toast.success("Senha temporária gerada. Copie e repasse ao usuário.");
@@ -427,7 +611,7 @@ export function UserRolesManager() {
     );
   }
 
-  // ─── Render ─────────────────────────────────────────────────────────────────
+  // ─── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -464,7 +648,13 @@ export function UserRolesManager() {
           {paginatedItems.map(user => {
             const isEditing = editingUser === user.user_id;
             return (
-              <Card key={user.user_id} className={!user.is_active ? "opacity-50" : ""}>
+              <Card
+                key={user.user_id}
+                className={[
+                  !user.is_active ? "opacity-60 border-dashed" : "",
+                  "transition-opacity",
+                ].join(" ")}
+              >
                 <CardHeader className="pb-2 flex flex-row items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 font-bold text-sm">
@@ -473,6 +663,9 @@ export function UserRolesManager() {
                     <div>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <CardTitle className="text-sm font-semibold">{formatPersonName(user.display_name)}</CardTitle>
+                        {!user.is_active && (
+                          <Badge variant="outline" className="text-[9px] border-rose-400 text-rose-500">inativo</Badge>
+                        )}
                         {user.must_change_password && (
                           <Badge variant="outline" className="text-[9px] border-orange-400 text-orange-500">troca senha</Badge>
                         )}
@@ -500,7 +693,6 @@ export function UserRolesManager() {
                       </div>
                     ) : (
                       <div className="flex gap-1.5">
-                        {/* ✅ Usa requestEditing em vez de applyEditing diretamente */}
                         <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => requestEditing(user)}>
                           <UserCog className="h-3.5 w-3.5" /> Gerenciar Perfil
                         </Button>
@@ -511,6 +703,21 @@ export function UserRolesManager() {
                         <Button size="sm" variant="outline" title="Resetar senha"
                           onClick={() => setResetState({ ...RESET_INITIAL, user })}>
                           <KeyRound className="h-3.5 w-3.5" />
+                        </Button>
+                        {/* ✅ Item 4: botão ativar/desativar */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title={user.is_active ? "Desativar usuário" : "Ativar usuário"}
+                          className={user.is_active
+                            ? "text-amber-600 hover:bg-amber-50 border-amber-300 dark:hover:bg-amber-950/30"
+                            : "text-emerald-600 hover:bg-emerald-50 border-emerald-300 dark:hover:bg-emerald-950/30"
+                          }
+                          onClick={() => setToggleState({ user, saving: false })}
+                        >
+                          {user.is_active
+                            ? <UserX    className="h-3.5 w-3.5" />
+                            : <UserCheck className="h-3.5 w-3.5" />}
                         </Button>
                         <Button size="sm" variant="outline"
                           className="text-destructive hover:bg-destructive/10 border-destructive/30"
@@ -578,6 +785,11 @@ export function UserRolesManager() {
                     </div>
                   </CardContent>
                 )}
+
+                {/* ✅ Item 5: Histórico de auditoria (accordion colapsável) */}
+                <CardContent className="pt-0 pb-2">
+                  <AuditLog userId={user.user_id} />
+                </CardContent>
               </Card>
             );
           })}
@@ -592,7 +804,7 @@ export function UserRolesManager() {
 
       <PaginationControls currentPage={currentPage} totalItems={totalItems} pageSize={pageSize} onPageChange={setCurrentPage} />
 
-      {/* ✅ Modal: Confirmar troca de card em edição (Item 3) */}
+      {/* Modal: Confirmar troca de card em edição */}
       <Dialog open={!!switchTarget} onOpenChange={open => { if (!open) setSwitchTarget(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -611,8 +823,52 @@ export function UserRolesManager() {
           </DialogHeader>
           <DialogFooter className="gap-2 pt-2">
             <Button variant="ghost" size="sm" onClick={() => setSwitchTarget(null)}>Cancelar</Button>
-            <Button size="sm" onClick={confirmSwitch}>
-              Descartar e continuar
+            <Button size="sm" onClick={confirmSwitch}>Descartar e continuar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ✅ Modal: Confirmar toggle ativo/inativo (Item 4) */}
+      <Dialog open={!!toggleState.user} onOpenChange={open => { if (!open && !toggleState.saving) setToggleState(TOGGLE_INITIAL); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {toggleState.user?.is_active
+                ? <UserX     className="h-4 w-4 text-amber-500" />
+                : <UserCheck className="h-4 w-4 text-emerald-500" />}
+              {toggleState.user?.is_active ? "Desativar usuário" : "Ativar usuário"}
+            </DialogTitle>
+            <DialogDescription>
+              {toggleState.user?.is_active ? (
+                <>
+                  <span className="font-semibold text-foreground">{toggleState.user?.display_name}</span> será{" "}
+                  <strong>desativado</strong> e não conseguirá fazer login até ser reativado.
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-foreground">{toggleState.user?.display_name}</span> será{" "}
+                  <strong>reativado</strong> e poderá voltar a fazer login normalmente.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setToggleState(TOGGLE_INITIAL)} disabled={toggleState.saving}>Cancelar</Button>
+            <Button
+              size="sm"
+              className={toggleState.user?.is_active
+                ? "bg-amber-600 hover:bg-amber-700 text-white"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white"
+              }
+              onClick={confirmToggleActive}
+              disabled={toggleState.saving}
+            >
+              {toggleState.saving
+                ? <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1" />
+                : toggleState.user?.is_active
+                  ? <UserX    className="h-3.5 w-3.5 mr-1" />
+                  : <UserCheck className="h-3.5 w-3.5 mr-1" />}
+              {toggleState.user?.is_active ? "Desativar" : "Ativar"}
             </Button>
           </DialogFooter>
         </DialogContent>
