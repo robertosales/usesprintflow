@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -58,12 +58,10 @@ function saveFiltros(f: KanbanFiltros) {
 function loadExpandedCols(allKeys: string[]): Set<string> {
   try {
     const raw = sessionStorage.getItem(SS_EXPANDED_KEY);
-    if (!raw) return new Set(allKeys); // padrão: tudo expandido
+    if (!raw) return new Set(allKeys);
     const parsed = JSON.parse(raw) as string[];
-    // Garante que novas colunas adicionadas após salvar apareçam expandidas
     const saved = new Set(parsed);
     allKeys.forEach((k) => { if (!parsed.includes(k) && !parsed.includes(`__hidden__${k}`)) saved.add(k); });
-    // Remove prefixo de colunas explicitamente recolhidas
     const hiddenKeys = parsed.filter((k) => k.startsWith("__hidden__")).map((k) => k.replace("__hidden__", ""));
     hiddenKeys.forEach((k) => saved.delete(k));
     return saved;
@@ -72,7 +70,6 @@ function loadExpandedCols(allKeys: string[]): Set<string> {
 
 function saveExpandedCols(expanded: Set<string>, allKeys: string[]) {
   try {
-    // Salva expanded + marca os recolhidos com prefixo para distinguir "nunca visto" de "recolhido"
     const payload: string[] = [
       ...Array.from(expanded),
       ...allKeys.filter((k) => !expanded.has(k)).map((k) => `__hidden__${k}`),
@@ -97,7 +94,10 @@ function getColumnHex(col: WorkflowColumn): string {
   return COLUMN_COLORS[col.key] ?? "#6b7280";
 }
 
-function DroppableColumn({
+// ─── DroppableColumn memoizado ────────────────────────────────────────────────
+// React.memo evita re-montar o droppable do DnD a cada render do KanbanBoard
+// quando apenas outras colunas ou estado não-relacionado mudam.
+const DroppableColumn = React.memo(function DroppableColumn({
   colKey,
   colHex,
   isOver,
@@ -140,7 +140,8 @@ function DroppableColumn({
       </div>
     </SortableContext>
   );
-}
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface Props {
   sprintId?: string;
@@ -178,7 +179,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     saveFiltros(next);
   }, []);
 
-  // Auto-seleciona sprint ativa apenas se filtro ainda estiver em "all" e não houver filtro salvo
   useEffect(() => {
     if (!activeSprint) return;
     setFiltros((prev) => {
@@ -225,16 +225,16 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     () => loadExpandedCols(allColKeys),
   );
 
-  // Quando workflowColumns chegar (assíncrono), re-hidrata se o estado ainda for vazio
   useEffect(() => {
     if (allColKeys.length === 0) return;
     setExpandedCols((prev) => {
-      if (prev.size > 0) return prev; // já hidratado
+      if (prev.size > 0) return prev;
       return loadExpandedCols(allColKeys);
     });
   }, [allColKeys.join(",")]);
 
-  function toggleCol(key: string) {
+  // #11: useCallback para estabilizar referência enviada aos filhos
+  const toggleCol = useCallback((key: string) => {
     setExpandedCols((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -242,7 +242,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
       saveExpandedCols(next, allColKeys);
       return next;
     });
-  }
+  }, [allColKeys]);
   // ─────────────────────────────────────────────────────────────────────────
 
   const [localPositions, setLocalPositions] = useState<Record<string, number>>({});
@@ -300,6 +300,24 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         (localPositions[a.id] ?? a.position ?? 0) - (localPositions[b.id] ?? b.position ?? 0),
     );
   }, [sprintBase, filtros, localPositions]);
+
+  // #11: Pré-agrupa cards por coluna — elimina N .filter() inline no render
+  const colItemsMap = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    (workflowColumns ?? []).forEach((col: WorkflowColumn) => {
+      map[col.key] = sprintStories.filter((h: any) => h.status === col.key);
+    });
+    return map;
+  }, [workflowColumns, sprintStories]);
+
+  // #11: Pré-calcula cores por coluna — elimina N getColumnHex() inline no render
+  const colHexMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    (workflowColumns ?? []).forEach((col: WorkflowColumn) => {
+      map[col.key] = getColumnHex(col);
+    });
+    return map;
+  }, [workflowColumns]);
 
   const sprintSummary = useMemo(() => {
     if (!sprintFinalizavel) return null;
@@ -482,8 +500,8 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
       >
         <div className="flex gap-3 overflow-x-auto pb-4 items-start">
           {(workflowColumns ?? []).map((col: WorkflowColumn) => {
-            const colHex   = getColumnHex(col);
-            const colItems = sprintStories.filter((h: any) => h.status === col.key);
+            const colHex   = colHexMap[col.key] ?? "#6b7280";
+            const colItems = colItemsMap[col.key] ?? [];
             const isExpanded = expandedCols.has(col.key);
             const isOver     = dragOverCol === col.key;
 
