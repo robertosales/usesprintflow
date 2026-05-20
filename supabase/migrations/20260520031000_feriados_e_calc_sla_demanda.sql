@@ -1,7 +1,7 @@
 -- ============================================================
 -- STEP 1: Tabela feriados configurável
--- Remove o hardcode de slaEngine.ts e permite configurar
--- feriados nacionais, estaduais e municipais por organização.
+-- Unicidade garantida via CONSTRAINT inline no CREATE TABLE.
+-- CREATE UNIQUE INDEX separado falha no Supabase (mesma transaction).
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS feriados (
@@ -10,33 +10,20 @@ CREATE TABLE IF NOT EXISTS feriados (
   nome        TEXT        NOT NULL,
   tipo        TEXT        NOT NULL DEFAULT 'nacional'
                CHECK (tipo IN ('nacional','estadual','municipal')),
-  uf          CHAR(2),     -- NULL = nacional, ex: 'SP', 'RJ'
-  municipio   TEXT,        -- NULL = estadual/nacional
+  uf          CHAR(2),
+  municipio   TEXT,
   ativo       BOOLEAN     NOT NULL DEFAULT TRUE,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  -- Unicidade inline: nacional só por data; estadual por data+uf; municipal por data+uf+municipio
+  -- Usa NULLIF para tratar NULLs como string vazia e forçar unicidade entre tipos
+  CONSTRAINT uq_feriados_chave UNIQUE (data, tipo, COALESCE(uf, ''), COALESCE(municipio, ''))
 );
 
--- Três índices únicos parciais — Postgres não aceita COALESCE em CREATE UNIQUE INDEX
--- Nacional: só data, uf e municipio são sempre NULL
-CREATE UNIQUE INDEX IF NOT EXISTS uq_feriados_nacional
-  ON feriados (data)
-  WHERE tipo = 'nacional';
-
--- Estadual: data + uf
-CREATE UNIQUE INDEX IF NOT EXISTS uq_feriados_estadual
-  ON feriados (data, uf)
-  WHERE tipo = 'estadual';
-
--- Municipal: data + uf + municipio
-CREATE UNIQUE INDEX IF NOT EXISTS uq_feriados_municipal
-  ON feriados (data, uf, municipio)
-  WHERE tipo = 'municipal';
-
--- Índice de busca por data (usado por is_feriado)
 CREATE INDEX IF NOT EXISTS idx_feriados_data_ativo
-  ON feriados (data) WHERE ativo = TRUE;
+  ON feriados (data, ativo);
 
--- RLS: apenas admins inserem/atualizam; todos autenticados podem ler
+-- RLS
 ALTER TABLE feriados ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY feriados_select ON feriados
@@ -47,8 +34,7 @@ CREATE POLICY feriados_insert ON feriados
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM profiles
-      WHERE user_id = auth.uid()
-        AND role = 'admin'
+      WHERE user_id = auth.uid() AND role = 'admin'
     )
   );
 
@@ -57,53 +43,45 @@ CREATE POLICY feriados_update ON feriados
   USING (
     EXISTS (
       SELECT 1 FROM profiles
-      WHERE user_id = auth.uid()
-        AND role = 'admin'
+      WHERE user_id = auth.uid() AND role = 'admin'
     )
   );
 
 -- ============================================================
--- SEED: 8 feriados nacionais fixos (migrados de slaEngine.ts)
--- Inseridos para 2025, 2026 e 2027. Adicionar novos anos via admin.
+-- SEED: 8 feriados nacionais × 3 anos (2025-2027)
 -- ============================================================
 
 INSERT INTO feriados (data, nome, tipo) VALUES
-  -- 2025
-  ('2025-01-01', 'Confraternização Universal',    'nacional'),
-  ('2025-04-21', 'Tiradentes',                    'nacional'),
-  ('2025-05-01', 'Dia do Trabalho',               'nacional'),
-  ('2025-09-07', 'Independência do Brasil',       'nacional'),
-  ('2025-10-12', 'Nossa Sra. Aparecida',          'nacional'),
-  ('2025-11-02', 'Finados',                       'nacional'),
-  ('2025-11-15', 'Proclamação da República',      'nacional'),
-  ('2025-12-25', 'Natal',                         'nacional'),
-  -- 2026
-  ('2026-01-01', 'Confraternização Universal',    'nacional'),
-  ('2026-04-21', 'Tiradentes',                    'nacional'),
-  ('2026-05-01', 'Dia do Trabalho',               'nacional'),
-  ('2026-09-07', 'Independência do Brasil',       'nacional'),
-  ('2026-10-12', 'Nossa Sra. Aparecida',          'nacional'),
-  ('2026-11-02', 'Finados',                       'nacional'),
-  ('2026-11-15', 'Proclamação da República',      'nacional'),
-  ('2026-12-25', 'Natal',                         'nacional'),
-  -- 2027
-  ('2027-01-01', 'Confraternização Universal',    'nacional'),
-  ('2027-04-21', 'Tiradentes',                    'nacional'),
-  ('2027-05-01', 'Dia do Trabalho',               'nacional'),
-  ('2027-09-07', 'Independência do Brasil',       'nacional'),
-  ('2027-10-12', 'Nossa Sra. Aparecida',          'nacional'),
-  ('2027-11-02', 'Finados',                       'nacional'),
-  ('2027-11-15', 'Proclamação da República',      'nacional'),
-  ('2027-12-25', 'Natal',                         'nacional')
+  ('2025-01-01', 'Confraternização Universal',  'nacional'),
+  ('2025-04-21', 'Tiradentes',                  'nacional'),
+  ('2025-05-01', 'Dia do Trabalho',             'nacional'),
+  ('2025-09-07', 'Independência do Brasil',     'nacional'),
+  ('2025-10-12', 'Nossa Sra. Aparecida',        'nacional'),
+  ('2025-11-02', 'Finados',                     'nacional'),
+  ('2025-11-15', 'Proclamação da República',    'nacional'),
+  ('2025-12-25', 'Natal',                       'nacional'),
+  ('2026-01-01', 'Confraternização Universal',  'nacional'),
+  ('2026-04-21', 'Tiradentes',                  'nacional'),
+  ('2026-05-01', 'Dia do Trabalho',             'nacional'),
+  ('2026-09-07', 'Independência do Brasil',     'nacional'),
+  ('2026-10-12', 'Nossa Sra. Aparecida',        'nacional'),
+  ('2026-11-02', 'Finados',                     'nacional'),
+  ('2026-11-15', 'Proclamação da República',    'nacional'),
+  ('2026-12-25', 'Natal',                       'nacional'),
+  ('2027-01-01', 'Confraternização Universal',  'nacional'),
+  ('2027-04-21', 'Tiradentes',                  'nacional'),
+  ('2027-05-01', 'Dia do Trabalho',             'nacional'),
+  ('2027-09-07', 'Independência do Brasil',     'nacional'),
+  ('2027-10-12', 'Nossa Sra. Aparecida',        'nacional'),
+  ('2027-11-02', 'Finados',                     'nacional'),
+  ('2027-11-15', 'Proclamação da República',    'nacional'),
+  ('2027-12-25', 'Natal',                       'nacional')
 ON CONFLICT DO NOTHING;
 
 -- ============================================================
--- STEP 2: Funções auxiliares de calendário em PL/pgSQL
--- Substituem getFixedHolidays(), isHoliday(), isBusinessDay()
--- de slaEngine.ts
+-- STEP 2: Funções auxiliares de calendário
 -- ============================================================
 
--- Verifica se uma data é feriado (nacional ou de uma UF)
 CREATE OR REPLACE FUNCTION is_feriado(
   p_data DATE,
   p_uf   CHAR(2) DEFAULT NULL
@@ -127,7 +105,6 @@ $$;
 
 GRANT EXECUTE ON FUNCTION is_feriado(DATE, CHAR) TO authenticated;
 
--- Verifica se é dia útil (seg-sex, não feriado)
 CREATE OR REPLACE FUNCTION is_dia_util(
   p_data DATE,
   p_uf   CHAR(2) DEFAULT NULL
@@ -139,18 +116,17 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT
-    EXTRACT(DOW FROM p_data) NOT IN (0, 6)  -- 0=dom, 6=sab
+    EXTRACT(DOW FROM p_data) NOT IN (0, 6)
     AND NOT is_feriado(p_data, p_uf);
 $$;
 
 GRANT EXECUTE ON FUNCTION is_dia_util(DATE, CHAR) TO authenticated;
 
--- Calcula horas úteis entre dois timestamps (regime padrão 08h-20h seg-sex)
 CREATE OR REPLACE FUNCTION calc_horas_uteis(
   p_inicio   TIMESTAMPTZ,
   p_fim      TIMESTAMPTZ,
-  p_regime   TEXT        DEFAULT 'padrao',  -- 'padrao' | 'continuo'
-  p_uf       CHAR(2)     DEFAULT NULL
+  p_regime   TEXT    DEFAULT 'padrao',
+  p_uf       CHAR(2) DEFAULT NULL
 )
 RETURNS NUMERIC
 LANGUAGE plpgsql
@@ -167,9 +143,7 @@ DECLARE
   v_hora_atual NUMERIC;
   v_hora_efim  NUMERIC;
 BEGIN
-  IF p_inicio >= p_fim THEN
-    RETURN 0;
-  END IF;
+  IF p_inicio >= p_fim THEN RETURN 0; END IF;
 
   IF p_regime = 'continuo' THEN
     RETURN EXTRACT(EPOCH FROM (p_fim - p_inicio)) / 3600.0;
@@ -179,8 +153,7 @@ BEGIN
 
   WHILE v_atual < p_fim LOOP
     IF NOT is_dia_util(v_atual::DATE, p_uf) THEN
-      v_atual := DATE_TRUNC('day', v_atual) + INTERVAL '1 day'
-                 + (v_hora_ini || ' hours')::INTERVAL;
+      v_atual := DATE_TRUNC('day', v_atual) + INTERVAL '1 day' + (v_hora_ini || ' hours')::INTERVAL;
       CONTINUE;
     END IF;
 
@@ -193,8 +166,7 @@ BEGIN
     END IF;
 
     IF v_hora_atual >= v_hora_fim THEN
-      v_atual := DATE_TRUNC('day', v_atual) + INTERVAL '1 day'
-                 + (v_hora_ini || ' hours')::INTERVAL;
+      v_atual := DATE_TRUNC('day', v_atual) + INTERVAL '1 day' + (v_hora_ini || ' hours')::INTERVAL;
       CONTINUE;
     END IF;
 
@@ -206,9 +178,8 @@ BEGIN
       v_total := v_total + LEAST(v_hora_efim, v_hora_fim) - v_hora_atual;
       EXIT;
     ELSE
-      v_total  := v_total + (v_hora_fim - v_hora_atual);
-      v_atual  := DATE_TRUNC('day', v_atual) + INTERVAL '1 day'
-                  + (v_hora_ini || ' hours')::INTERVAL;
+      v_total := v_total + (v_hora_fim - v_hora_atual);
+      v_atual := DATE_TRUNC('day', v_atual) + INTERVAL '1 day' + (v_hora_ini || ' hours')::INTERVAL;
     END IF;
   END LOOP;
 
@@ -220,13 +191,12 @@ GRANT EXECUTE ON FUNCTION calc_horas_uteis(TIMESTAMPTZ, TIMESTAMPTZ, TEXT, CHAR)
 
 -- ============================================================
 -- STEP 3: RPC calc_sla_demanda
--- Substitui calcSLAElapsedFromTransitions() de slaEngine.ts
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION calc_sla_demanda(
   p_demanda_id  UUID,
-  p_regime      TEXT     DEFAULT 'padrao',
-  p_uf          CHAR(2)  DEFAULT NULL
+  p_regime      TEXT    DEFAULT 'padrao',
+  p_uf          CHAR(2) DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -243,12 +213,7 @@ DECLARE
   v_prazo_horas   NUMERIC;
   v_status_sla    TEXT;
   v_atraso        NUMERIC;
-  v_sla_ativos    TEXT[] := ARRAY[
-    'nova',
-    'planejamento',
-    'planejamento_aprovado',
-    'execucao_dev'
-  ];
+  v_sla_ativos    TEXT[] := ARRAY['nova','planejamento','planejamento_aprovado','execucao_dev'];
 BEGIN
   SELECT id, created_at, situacao, sla, aceite_data
   INTO   v_demanda
@@ -277,8 +242,7 @@ BEGIN
   END LOOP;
 
   IF v_ultimo_status = ANY(v_sla_ativos) AND v_demanda.situacao != 'aceite_final' THEN
-    v_total_horas := v_total_horas +
-      calc_horas_uteis(v_ultimo_ts, NOW(), p_regime, p_uf);
+    v_total_horas := v_total_horas + calc_horas_uteis(v_ultimo_ts, NOW(), p_regime, p_uf);
   END IF;
 
   v_prazo_horas := CASE v_demanda.sla
@@ -316,8 +280,5 @@ $$;
 REVOKE ALL ON FUNCTION calc_sla_demanda(UUID, TEXT, CHAR) FROM PUBLIC;
 GRANT  EXECUTE ON FUNCTION calc_sla_demanda(UUID, TEXT, CHAR) TO authenticated;
 
-COMMENT ON FUNCTION calc_sla_demanda IS
-  'Calcula horas SLA acumuladas de uma demanda no servidor. Substitui slaEngine.ts do frontend.';
-
-COMMENT ON TABLE feriados IS
-  'Feriados configuráveis — nacionais, estaduais e municipais. Substitui hardcode em slaEngine.ts.';
+COMMENT ON FUNCTION calc_sla_demanda IS 'Calcula horas SLA acumuladas no servidor. Substitui slaEngine.ts.';
+COMMENT ON TABLE feriados IS 'Feriados configuráveis — nacionais, estaduais, municipais. Substitui hardcode em slaEngine.ts.';
