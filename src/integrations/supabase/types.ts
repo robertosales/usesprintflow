@@ -1675,6 +1675,63 @@ export type Database = {
         }
         Relationships: []
       }
+      rdm_deployment_tasks: {
+        Row: {
+          categoria: string
+          concluido_em: string | null
+          created_at: string
+          descricao: string | null
+          id: string
+          ordem: number
+          rdm_id: string
+          responsavel_id: string | null
+          status: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          categoria: string
+          concluido_em?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          ordem?: number
+          rdm_id: string
+          responsavel_id?: string | null
+          status?: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          categoria?: string
+          concluido_em?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          ordem?: number
+          rdm_id?: string
+          responsavel_id?: string | null
+          status?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rdm_deployment_tasks_rdm_id_fkey"
+            columns: ["rdm_id"]
+            isOneToOne: false
+            referencedRelation: "rdms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rdm_deployment_tasks_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rdm_gonogo: {
         Row: {
           comentario: string | null
@@ -1794,6 +1851,83 @@ export type Database = {
             columns: ["user_story_id"]
             isOneToOne: false
             referencedRelation: "user_stories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rdm_sprint_redmines: {
+        Row: {
+          created_at: string
+          descricao: string | null
+          id: string
+          numero: string
+          rdm_sprint_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          numero: string
+          rdm_sprint_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          numero?: string
+          rdm_sprint_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rdm_sprint_redmines_rdm_sprint_id_fkey"
+            columns: ["rdm_sprint_id"]
+            isOneToOne: false
+            referencedRelation: "rdm_sprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rdm_sprints: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string
+          rdm_id: string
+          sprint_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome: string
+          rdm_id: string
+          sprint_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string
+          rdm_id?: string
+          sprint_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rdm_sprints_rdm_id_fkey"
+            columns: ["rdm_id"]
+            isOneToOne: false
+            referencedRelation: "rdms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rdm_sprints_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
             referencedColumns: ["id"]
           },
         ]
@@ -2432,6 +2566,38 @@ export type Database = {
         }
         Relationships: []
       }
+      user_module_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          module: string
+          role_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          module: string
+          role_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          module?: string
+          role_name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_module_roles_role_name_fkey"
+            columns: ["role_name"]
+            isOneToOne: false
+            referencedRelation: "app_roles"
+            referencedColumns: ["name"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -2621,33 +2787,34 @@ export type Database = {
       }
       fn_rdm_criar_com_checklist: {
         Args: {
+          p_ambiente: string
+          p_criado_por: string
+          p_data_implantacao: string
+          p_downtime_previsto: boolean
+          p_hora_fim_prevista: string
+          p_hora_inicio: string
           p_nome: string
           p_objetivo: string
-          p_sistema_modulo: string
-          p_team_id: string
-          p_sprint_id: string | null
-          p_tipo_mudanca: string
+          p_observacoes: string
           p_risco: string
-          p_ambiente: string
-          p_data_implantacao: string
-          p_hora_inicio: string
-          p_hora_fim_prevista: string
-          p_downtime_previsto: boolean
           p_rollback_previsto: boolean
-          p_tempo_rollback_minutos: number | null
-          p_observacoes: string | null
-          p_criado_por: string
+          p_sistema_modulo: string
+          p_sprint_id: string
+          p_team_id: string
+          p_tempo_rollback_minutos: number
+          p_tipo_mudanca: string
         }
         Returns: string
       }
       fn_rdm_dashboard_kpis: {
-        Args: {
-          p_team_id?: string
-          p_inicio?: string
-          p_fim?: string
-        }
+        Args: { p_fim?: string; p_inicio?: string; p_team_id?: string }
         Returns: Json
       }
+      fn_rdm_has_permission: {
+        Args: { p_permission_key: string }
+        Returns: boolean
+      }
+      fn_rdm_user_team_ids: { Args: never; Returns: string[] }
       get_admin_kpis: {
         Args: { p_sla_dias?: number; p_team_ids: string[] }
         Returns: Json
