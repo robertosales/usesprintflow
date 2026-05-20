@@ -4,9 +4,12 @@
 --       foreign key constraint "user_module_roles_role_name_fkey"
 --
 -- Causa: a FK aponta para uma tabela de lookup que nao contém
---        todos os valores usados pelo app (incluindo 'architect').
+--        todos os valores usados pelo app (PROFILES_BY_MODULE em
+--        UserRolesManager.tsx define mais roles do que a tabela
+--        de lookup continha).
 --
--- Solução: remover FK, normalizar dados, aplicar CHECK.
+-- Solução: remover FK, normalizar dados sujos, aplicar CHECK
+--          com TODOS os valores válidos do front-end.
 -- =============================================================
 
 -- 1. Remove a FK problemática
@@ -17,28 +20,45 @@ ALTER TABLE public.user_module_roles
 ALTER TABLE public.user_module_roles
   DROP CONSTRAINT IF EXISTS chk_user_module_roles_role_name;
 
--- 3. Normaliza valores que estejam fora da lista válida
---    (deve rodar ANTES do ADD CONSTRAINT)
+-- 3. Normaliza valores fora da lista válida ANTES do CHECK
 UPDATE public.user_module_roles
   SET role_name = 'member'
 WHERE role_name NOT IN (
-  'admin', 'scrum_master', 'developer',
-  'member', 'viewer', 'product_owner', 'tech_lead',
-  'architect'
+  -- roles globais
+  'admin',
+  'member',
+  'viewer',
+  -- sala_agil + sustentacao
+  'scrum_master',
+  'product_owner',
+  'developer',
+  'tech_lead',
+  'architect',
+  'analyst',
+  'qa',
+  -- rdm
+  'change_manager',
+  'rdm_approver',
+  'rdm_executor'
 );
 
--- 4. Adiciona CHECK com todos os valores válidos
+-- 4. Aplica CHECK com todos os valores válidos do front-end
 ALTER TABLE public.user_module_roles
   ADD CONSTRAINT chk_user_module_roles_role_name
   CHECK (
     role_name IN (
       'admin',
-      'scrum_master',
-      'developer',
       'member',
       'viewer',
+      'scrum_master',
       'product_owner',
+      'developer',
       'tech_lead',
-      'architect'
+      'architect',
+      'analyst',
+      'qa',
+      'change_manager',
+      'rdm_approver',
+      'rdm_executor'
     )
   );
