@@ -9,6 +9,7 @@ import {
   closestCenter,
   useSensor,
   useSensors,
+  useDroppable,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -51,6 +52,53 @@ const DONE_STATUSES = ["pronto_para_publicacao"];
 function getColumnHex(col: WorkflowColumn): string {
   if (col.hex) return col.hex;
   return COLUMN_COLORS[col.key] ?? "#6b7280";
+}
+
+// Componente interno que registra a coluna como droppable no dnd-kit
+// Isso garante que colunas vazias tambem recebam drops corretamente
+function DroppableColumn({
+  colKey,
+  colHex,
+  isOver,
+  activeId,
+  colItems,
+}: {
+  colKey: string;
+  colHex: string;
+  isOver: boolean;
+  activeId: string | null;
+  colItems: any[];
+}) {
+  const { setNodeRef } = useDroppable({ id: colKey });
+
+  return (
+    <SortableContext items={colItems.map((h: any) => h.id)} strategy={verticalListSortingStrategy}>
+      <div
+        ref={setNodeRef}
+        className="flex flex-col gap-2 p-2 min-h-[80px] max-h-[calc(100vh-300px)] overflow-y-auto"
+      >
+        {colItems.map((hu: any) => {
+          const isDragging = hu.id === activeId;
+          return (
+            <div key={hu.id} style={{ opacity: isDragging ? 0.3 : 1, transition: "opacity 0.15s" }}>
+              <KanbanCard hu={hu} colHex={colHex} />
+            </div>
+          );
+        })}
+        {colItems.length === 0 && (
+          <div
+            className="flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-[11px] text-muted-foreground/50 transition-colors"
+            style={{
+              borderColor: isOver ? `color-mix(in srgb, ${colHex} 50%, transparent)` : undefined,
+              color: isOver ? colHex : undefined,
+            }}
+          >
+            {isOver ? "Soltar aqui" : "Sem cards"}
+          </div>
+        )}
+      </div>
+    </SortableContext>
+  );
 }
 
 interface Props {
@@ -268,12 +316,12 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
       if (activeIdStr === overIdStr) return;
       const draggedHu = sprintStories.find((h: any) => h.id === activeIdStr);
       if (!draggedHu) return;
+      // over.id pode ser o colKey (droppable vazio) ou o id de um card
       const targetColKey =
         (workflowColumns ?? []).find((c: WorkflowColumn) => c.key === overIdStr)?.key ??
         sprintStories.find((h: any) => h.id === overIdStr)?.status;
       if (!targetColKey) return;
       if (draggedHu.status === targetColKey) {
-        // reordenacao dentro da mesma coluna
         const colItems = sprintStories.filter((h: any) => h.status === draggedHu.status);
         const oldIdx = colItems.findIndex((h: any) => h.id === activeIdStr);
         const newIdx = colItems.findIndex((h: any) => h.id === overIdStr);
@@ -287,7 +335,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         });
         reorderUserStories(updates);
       } else {
-        // mover para outra coluna diretamente, sem confirmacao
         try {
           await updateUserStoryStatus(draggedHu.id, targetColKey as KanbanStatus);
         } catch {
@@ -311,14 +358,12 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
 
   return (
     <>
-      {/* Banner de impedimentos da sprint */}
       {currentSprint && (
         <div className="mb-3">
           <SprintImpedimentsBanner sprint={currentSprint} />
         </div>
       )}
 
-      {/* Container dos filtros + Finalizar Sprint no lado direito */}
       <div className="rounded-xl border border-border/60 bg-card px-4 py-3 mb-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
@@ -333,8 +378,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
               currentUserId={currentUserId}
             />
           </div>
-
-          {/* Botão Finalizar Sprint */}
           {canFinalizeSprint && sprintFinalizavel && (
             <div className="flex flex-col items-end gap-1 shrink-0 pt-0.5">
               {!(sprintFinalizavel.isActive || sprintFinalizavel.is_active) && (
@@ -433,26 +476,13 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
                   </span>
                 </div>
 
-                <SortableContext items={colItems.map((h: any) => h.id)} strategy={verticalListSortingStrategy}>
-                  <div id={col.key} className="flex flex-col gap-2 p-2 min-h-[80px] max-h-[calc(100vh-300px)] overflow-y-auto">
-                    {colItems.map((hu: any) => {
-                      const isDragging = hu.id === activeId;
-                      return (
-                        <div key={hu.id} style={{ opacity: isDragging ? 0.3 : 1, transition: "opacity 0.15s" }}>
-                          <KanbanCard hu={hu} colHex={colHex} />
-                        </div>
-                      );
-                    })}
-                    {colItems.length === 0 && (
-                      <div
-                        className="flex items-center justify-center h-16 rounded-lg border-2 border-dashed text-[11px] text-muted-foreground/50 transition-colors"
-                        style={{ borderColor: isOver ? `color-mix(in srgb, ${colHex} 50%, transparent)` : undefined, color: isOver ? colHex : undefined }}
-                      >
-                        {isOver ? "Soltar aqui" : "Sem cards"}
-                      </div>
-                    )}
-                  </div>
-                </SortableContext>
+                <DroppableColumn
+                  colKey={col.key}
+                  colHex={colHex}
+                  isOver={isOver}
+                  activeId={activeId}
+                  colItems={colItems}
+                />
               </div>
             );
           })}
@@ -467,7 +497,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         </DragOverlay>
       </DndContext>
 
-      {/* Modal Finalizar Sprint */}
       <AlertDialog open={finalizeOpen} onOpenChange={(o) => { if (!finalizing) setFinalizeOpen(o); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
