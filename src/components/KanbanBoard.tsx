@@ -568,9 +568,8 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
             return (
               <div
                 key={col.key}
-                className={`flex flex-col rounded-xl border transition-all duration-200 shrink-0 ${ isOver ? "ring-2 ring-offset-1" : "ring-0" }`}
+                className={`flex flex-col rounded-xl border transition-all duration-200 shrink-0 flex-1 min-w-[260px] max-w-[350px] ${ isOver ? "ring-2 ring-offset-1" : "ring-0" }`}
                 style={{
-                  width: 260,
                   background: `color-mix(in srgb, ${colHex} 5%, var(--background))`,
                   borderColor: `color-mix(in srgb, ${colHex} 30%, transparent)`,
                   ...(isOver ? { "--tw-ring-color": colHex } as React.CSSProperties : {}),

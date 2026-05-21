@@ -9,41 +9,48 @@ import { SprintProvider } from "@/contexts/SprintContext";
 import { SessionTimeoutAlert } from "@/shared/components/common/SessionTimeoutAlert";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { useOnboarding } from "@/hooks/useOnboarding";
+import React, { Suspense, lazy } from "react";
 
-// Pages
-import Index            from "./pages/Index.tsx";
+// Pages — Static imports for critical auth flow
 import Auth             from "./pages/Auth.tsx";
 import AuthCallback     from "./pages/AuthCallback.tsx";
 import NotFound         from "./pages/NotFound.tsx";
 import ResetPassword    from "./pages/ResetPassword.tsx";
 import ForcePasswordChange from "./pages/ForcePasswordChange.tsx";
-import SustentacaoPage  from "./features/sustentacao/SustentacaoPage";
-import RdmPage          from "./features/rdm/RdmPage";
-import { ModuleSelector } from "./features/sustentacao/components/ModuleSelector";
-import AdminDashboard   from "./pages/AdminDashboard";
-import PlanningPokerPage   from "./pages/PlanningPokerPage";
-import RetrospactivaPage   from "./pages/RetrospactivaPage";
+
+// Lazy loaded modules
+const Index            = lazy(() => import("./pages/Index.tsx"));
+const SustentacaoPage  = lazy(() => import("./features/sustentacao/SustentacaoPage"));
+const RdmPage          = lazy(() => import("./features/rdm/RdmPage"));
+const ModuleSelector   = lazy(() => import("./features/sustentacao/components/ModuleSelector").then(m => ({ default: m.ModuleSelector })));
+const AdminDashboard   = lazy(() => import("./pages/AdminDashboard"));
+const PlanningPokerPage = lazy(() => import("./pages/PlanningPokerPage"));
+const RetrospactivaPage = lazy(() => import("./pages/RetrospactivaPage"));
+
+function PageLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="text-center space-y-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
+        <p className="text-muted-foreground text-sm font-medium">Carregando...</p>
+      </div>
+    </div>
+  );
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading, profile, refreshProfile } = useAuth();
   const { showWizard, completeOnboarding } = useOnboarding();
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
-          <p className="text-muted-foreground">Carregando...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <PageLoading />;
   if (!session) return <Navigate to="/auth" replace />;
   if (profile?.must_change_password) {
     return <ForcePasswordChange onDone={refreshProfile} />;
   }
   return (
     <>
-      {children}
+      <Suspense fallback={<PageLoading />}>
+        {children}
+      </Suspense>
       <SessionTimeoutAlert />
       <OnboardingWizard open={showWizard} onComplete={completeOnboarding} />
     </>
@@ -101,9 +108,6 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// ✅ AppRoutes fica DENTRO do AuthProvider para que todos os hooks
-//    que dependem de useAuth() (incluindo SprintProvider) já tenham
-//    o contexto disponível na árvore.
 function AppRoutes() {
   return (
     <SprintProvider>
@@ -154,7 +158,6 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <BrowserRouter>
-        {/* AuthProvider envolve tudo — SprintProvider fica dentro via AppRoutes */}
         <AuthProvider>
           <AppRoutes />
         </AuthProvider>

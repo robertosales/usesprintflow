@@ -22,6 +22,7 @@ export const KEYS = {
     all:    (teamId: string) => ['kanban', teamId]               as const,
     board:  (teamId: string, sprintId?: string | null) =>
               ['kanban', teamId, 'board', sprintId ?? 'all']     as const,
+    stories: (teamId: string) => ['kanban', teamId, 'stories']   as const,
   },
 
   // ── Sprints ─────────────────────────────────────────────────
@@ -29,6 +30,24 @@ export const KEYS = {
     all:    (teamId: string) => ['sprints', teamId]              as const,
     active: (teamId: string) => ['sprints', teamId, 'active']    as const,
   },
+
+  // ── Developers ──────────────────────────────────────────────
+  developers: (teamId: string) => ['developers', teamId]         as const,
+
+  // ── Epics ───────────────────────────────────────────────────
+  epics:      (teamId: string) => ['epics', teamId]              as const,
+
+  // ── Activities ──────────────────────────────────────────────
+  activities: (teamId: string) => ['activities', teamId]         as const,
+
+  // ── Impediments ─────────────────────────────────────────────
+  impediments: (teamId: string) => ['impediments', teamId]       as const,
+
+  // ── Custom Fields ───────────────────────────────────────────
+  customFields: (teamId: string) => ['customFields', teamId]     as const,
+
+  // ── Automation Rules ────────────────────────────────────────
+  automations: (teamId: string) => ['automations', teamId]       as const,
 
   // ── Referência ──────────────────────────────────────────────
   projetos:   (teamId: string) => ['projetos', teamId]           as const,
