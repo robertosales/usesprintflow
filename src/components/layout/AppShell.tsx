@@ -51,6 +51,9 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { AxionLogo } from "@/components/AxionLogo";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Menu } from "lucide-react";
 
 type ActiveModule = "sala_agil" | "sustentacao" | "rdm";
 
@@ -545,7 +548,14 @@ function DarkModeToggle() {
 }
 
 // ─── Topbar ───────────────────────────────────────────────────────────────────
-function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: string }) {
+interface TopbarProps {
+  module: ActiveModule;
+  activeKey?: string;
+  isMobile?: boolean;
+  onOpenMobileNav?: () => void;
+}
+
+function Topbar({ module, activeKey, isMobile, onOpenMobileNav }: TopbarProps) {
   const { activeSprint } = useSprint();
   const location = useLocation();
   const accent = ACCENT[module];
@@ -567,6 +577,14 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
   return (
     <header className="h-12 shrink-0 flex items-center justify-between px-4 bg-sidebar border-b border-border overflow-hidden">
       <div className="flex items-center gap-2 min-w-0 flex-1">
+        {isMobile && (
+          <button
+            onClick={onOpenMobileNav}
+            className="p-1.5 -ml-1 mr-1 rounded-md hover:bg-sidebar-accent text-muted-foreground"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        )}
         <span className="text-[11px] text-muted-foreground font-medium hidden sm:block shrink-0">
           {accent.label}
         </span>
@@ -601,157 +619,196 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
 export function AppShell({ module, children, activeKey, onNavigate }: AppShellProps) {
   const { profile, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    if (isMobile) setCollapsed(false);
+  }, [isMobile]);
   const moduleAccess = profile?.module_access ?? "sala_agil";
   const canSwitch = isAdmin || moduleAccess === "admin";
   const accent = ACCENT[module];
   const userInitials = getInitials(profile?.full_name ?? profile?.display_name ?? "U");
   const sidebarWidth = collapsed ? "w-[56px]" : "w-[220px]";
 
+  const SidebarContent = (
+    <div className="flex flex-col h-full bg-sidebar">
+      {/* Logo + collapse button */}
+      <div
+        className={cn(
+          "flex items-center h-12 shrink-0 px-3 border-b border-border",
+          collapsed ? "justify-center" : "justify-between",
+        )}
+      >
+        {collapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setCollapsed(false)}
+                aria-label="Expandir sidebar"
+                className="flex items-center justify-center rounded-md text-muted-foreground/40
+                  hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="text-xs">
+              Expandir
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <AxionLogo size={22} />
+              <div className="min-w-0">
+                <p className="text-[14px] font-bold text-foreground tracking-tight leading-none">Axion</p>
+                <p className="text-[9px] text-muted-foreground uppercase tracking-widest leading-none mt-0.5">
+                  {accent.label}
+                </p>
+              </div>
+            </div>
+            {!isMobile && (
+              <button
+                onClick={() => setCollapsed(true)}
+                aria-label="Recolher sidebar"
+                className="flex h-6 w-6 items-center justify-center rounded-md shrink-0
+                  text-muted-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+              >
+                <PanelLeftClose className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Module Switcher — tabs com borda ativa */}
+      {canSwitch && (
+        <div className="shrink-0">
+          <ModuleSwitcher module={module} collapsed={collapsed} />
+        </div>
+      )}
+
+      {!canSwitch && !collapsed && (
+        <div
+          className={cn(
+            "mx-2 mt-2 flex items-center rounded-xl px-3 py-2 text-[12px] font-semibold gap-2",
+            accent.bgCls,
+            accent.textCls,
+          )}
+        >
+          <accent.icon className="h-3.5 w-3.5 shrink-0" />
+          {accent.label}
+        </div>
+      )}
+
+      {/* Team Switcher — espaço sempre reservado */}
+      <div className="px-2 mt-1 shrink-0">
+        <TeamSwitcher module={module} collapsed={collapsed} />
+      </div>
+
+      <div className="h-px bg-border mx-2 mb-1 shrink-0" />
+
+      <SidebarNav
+        module={module}
+        activeKey={activeKey}
+        collapsed={collapsed}
+        onNavigate={(k) => {
+          onNavigate?.(k);
+          if (isMobile) setMobileOpen(false);
+        }}
+      />
+
+      {/* Rodapé */}
+      <div className="shrink-0 px-2 pb-3 pt-1">
+        <div className="h-px bg-border mb-2" />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={cn(
+                "w-full flex items-center gap-2.5 rounded-xl p-2 hover:bg-sidebar-accent transition-colors",
+                collapsed && "justify-center",
+              )}
+            >
+              <Avatar className="h-7 w-7 shrink-0">
+                <AvatarFallback
+                  className="text-[11px] font-bold text-white"
+                  style={{ backgroundColor: accent.avatarBg }}
+                >
+                  {userInitials}
+                </AvatarFallback>
+              </Avatar>
+              {!collapsed && (
+                <div className="flex-1 text-left min-w-0">
+                  <p className="text-[12px] font-semibold text-foreground truncate leading-none">
+                    {profile?.full_name ?? profile?.display_name ?? profile?.email?.split("@")[0] ?? "Usuário"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground truncate leading-none mt-0.5">
+                    {profile?.role ?? profile?.module_access ?? "Membro"}
+                  </p>
+                </div>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side={isMobile ? "bottom" : "top"} align={collapsed ? "center" : "end"} className="w-52">
+            <DropdownMenuLabel className="font-normal">
+              <p className="font-semibold text-sm">{profile?.full_name ?? profile?.display_name ?? "Usuário"}</p>
+              <p className="text-xs text-muted-foreground truncate">{profile?.email}</p>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => signOut()}
+              className="text-red-500 focus:text-red-500 gap-2 cursor-pointer"
+            >
+              <LogOut className="h-4 w-4" /> Sair
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <VersionBadge collapsed={collapsed} />
+      </div>
+    </div>
+  );
+
   return (
     <TooltipProvider delayDuration={80}>
       <div className="flex h-screen w-screen overflow-hidden bg-background" data-module={module}>
-        {/* Sidebar */}
-        <aside
-          className={cn(
-            "flex flex-col h-full shrink-0 bg-sidebar transition-[width] duration-200 ease-in-out overflow-hidden",
-            sidebarWidth,
-          )}
-          style={{ boxShadow: "1px 0 0 hsl(var(--border)), 4px 0 24px rgba(0,0,0,0.15)" }}
-        >
-          {/* Logo + collapse button */}
-          <div
+        {/* Sidebar Desktop */}
+        {!isMobile && (
+          <aside
             className={cn(
-              "flex items-center h-12 shrink-0 px-3 border-b border-border",
-              collapsed ? "justify-center" : "justify-between",
+              "flex flex-col h-full shrink-0 bg-sidebar transition-[width] duration-200 ease-in-out overflow-hidden",
+              sidebarWidth,
             )}
+            style={{ boxShadow: "1px 0 0 hsl(var(--border)), 4px 0 24px rgba(0,0,0,0.15)" }}
           >
-            {collapsed ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setCollapsed(false)}
-                    aria-label="Expandir sidebar"
-                    className="flex items-center justify-center rounded-md text-muted-foreground/40
-                      hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
-                  >
-                    <PanelLeftOpen className="h-4 w-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="text-xs">Expandir</TooltipContent>
-              </Tooltip>
-            ) : (
-              <>
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <AxionLogo size={22} />
-                  <div className="min-w-0">
-                    <p className="text-[14px] font-bold text-foreground tracking-tight leading-none">Axion</p>
-                    <p className="text-[9px] text-muted-foreground uppercase tracking-widest leading-none mt-0.5">
-                      {accent.label}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setCollapsed(true)}
-                  aria-label="Recolher sidebar"
-                  className="flex h-6 w-6 items-center justify-center rounded-md shrink-0
-                    text-muted-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
-                >
-                  <PanelLeftClose className="h-3.5 w-3.5" />
-                </button>
-              </>
-            )}
-          </div>
+            {SidebarContent}
+          </aside>
+        )}
 
-          {/* Module Switcher — tabs com borda ativa */}
-          {canSwitch && (
-            <div className="shrink-0">
-              <ModuleSwitcher module={module} collapsed={collapsed} />
-            </div>
-          )}
-
-          {!canSwitch && !collapsed && (
-            <div
-              className={cn(
-                "mx-2 mt-2 flex items-center rounded-xl px-3 py-2 text-[12px] font-semibold gap-2",
-                accent.bgCls,
-                accent.textCls,
-              )}
-            >
-              <accent.icon className="h-3.5 w-3.5 shrink-0" />
-              {accent.label}
-            </div>
-          )}
-
-          {/* Team Switcher — espaço sempre reservado */}
-          <div className="px-2 mt-1 shrink-0">
-            <TeamSwitcher module={module} collapsed={collapsed} />
-          </div>
-
-          <div className="h-px bg-border mx-2 mb-1 shrink-0" />
-
-          <SidebarNav module={module} activeKey={activeKey} collapsed={collapsed} onNavigate={onNavigate} />
-
-          {/* Rodapé */}
-          <div className="shrink-0 px-2 pb-3 pt-1">
-            <div className="h-px bg-border mb-2" />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className={cn(
-                    "w-full flex items-center gap-2.5 rounded-xl p-2 hover:bg-sidebar-accent transition-colors",
-                    collapsed && "justify-center",
-                  )}
-                >
-                  <Avatar className="h-7 w-7 shrink-0">
-                    <AvatarFallback
-                      className="text-[11px] font-bold text-white"
-                      style={{ backgroundColor: accent.avatarBg }}
-                    >
-                      {userInitials}
-                    </AvatarFallback>
-                  </Avatar>
-                  {!collapsed && (
-                    <div className="flex-1 text-left min-w-0">
-                      <p className="text-[12px] font-semibold text-foreground truncate leading-none">
-                        {profile?.full_name ?? profile?.display_name ?? profile?.email?.split("@")[0] ?? "Usuário"}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground truncate leading-none mt-0.5">
-                        {profile?.role ?? profile?.module_access ?? "Membro"}
-                      </p>
-                    </div>
-                  )}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="top" align={collapsed ? "center" : "end"} className="w-52">
-                <DropdownMenuLabel className="font-normal">
-                  <p className="font-semibold text-sm">{profile?.full_name ?? profile?.display_name ?? "Usuário"}</p>
-                  <p className="text-xs text-muted-foreground truncate">{profile?.email}</p>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => signOut()}
-                  className="text-red-500 focus:text-red-500 gap-2 cursor-pointer"
-                >
-                  <LogOut className="h-4 w-4" /> Sair
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <VersionBadge collapsed={collapsed} />
-          </div>
-        </aside>
+        {/* Sidebar Mobile (Drawer) */}
+        {isMobile && (
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetContent side="left" className="p-0 w-[260px] border-r-0">
+              {SidebarContent}
+            </SheetContent>
+          </Sheet>
+        )}
 
         {/* Conteúdo principal */}
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <Topbar module={module} activeKey={activeKey} />
+          <Topbar
+            module={module}
+            activeKey={activeKey}
+            isMobile={isMobile}
+            onOpenMobileNav={() => setMobileOpen(true)}
+          />
           <main className="flex-1 overflow-y-auto overflow-x-hidden bg-background">{children}</main>
         </div>
       </div>
     </TooltipProvider>
   );
 }
-
 /* ─── Versão do sistema ───────────────────────────────────────────────────── */
 function VersionBadge({ collapsed }: { collapsed: boolean }) {
   if (collapsed) {
