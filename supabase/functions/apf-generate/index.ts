@@ -191,11 +191,15 @@ async function parseDocxToText(base64: string): Promise<string> {
 }
 
 async function extractFileContent(file: FileInput): Promise<{ name: string; content: string; isBaseline: boolean }> {
+  const MAX_CONTENT_SIZE = 30000; // 30KB limit for AI context
   const nameLower = file.name.toLowerCase();
   const isXlsx = nameLower.endsWith(".xlsx") || nameLower.endsWith(".xls");
   const isDocx = nameLower.endsWith(".docx") || nameLower.endsWith(".doc");
   const isBaseline = isXlsx && (nameLower.includes("baseline") || nameLower.includes("apf"));
   const isBase64 = file.encoding === "base64" || isXlsx || isDocx;
+
+  let result: { name: string; content: string; isBaseline: boolean };
+
   if (isXlsx && isBase64) {
     try {
       const data = parseBaselineXlsx(file.content);
@@ -210,16 +214,25 @@ async function extractFileContent(file: FileInput): Promise<{ name: string; cont
         `Sigla | Nome | Contribuição FS`,
         ...data.fatoresImpacto.map(f => `${f.sigla} | ${f.nome} | ${f.contribuicaoFs}`),
       ].join("\n");
-      return { name: file.name, content: summary, isBaseline: true };
-    } catch (_e) {
-      return { name: file.name, content: `[Erro ao processar baseline xlsx: ${_e}]`, isBaseline: false };
+      result = { name: file.name, content: summary, isBaseline: true };
+    } catch (e: any) {
+      result = { name: file.name, content: `[Erro ao processar baseline xlsx: ${e.message}]`, isBaseline: false };
     }
+  } else if (isDocx && isBase64) {
+    try {
+      const text = await parseDocxToText(file.content);
+      result = { name: file.name, content: `=== MODELO DE DOCUMENTO — ${file.name} ===\n${text}`, isBaseline: false };
+    } catch (e: any) {
+      result = { name: file.name, content: `[Erro ao extrair texto do docx: ${e.message}]`, isBaseline: false };
+    }
+  } else {
+    result = { name: file.name, content: file.content, isBaseline: false };
   }
-  if (isDocx && isBase64) {
-    const text = await parseDocxToText(file.content);
-    return { name: file.name, content: `=== MODELO DE DOCUMENTO — ${file.name} ===\n${text}`, isBaseline: false };
+
+  if (result.content.length > MAX_CONTENT_SIZE) {
+    result.content = result.content.slice(0, MAX_CONTENT_SIZE) + "\n\n[... conteúdo truncado devido ao tamanho ...]";
   }
-  return { name: file.name, content: file.content, isBaseline: false };
+  return result;
 }
 
 function extractPfBreakdown(markdown: string): Record<string, number> {
@@ -284,67 +297,121 @@ function buildFullPrompt(prompt: string, processedFiles: { name: string; content
   const ctx = processedFiles.length > 0
     ? `\n\n=== ARQUIVOS DE CONTEXTO ===\n${processedFiles.map(f => `--- ${f.name} ---\n${f.content}`).join("\n\n")}\n=== FIM DOS ARQUIVOS ===\n`
     : "";
-  return `Você é um especialista em Análise de Pontos de Função (APF) seguindo a metodologia IFPUG e o Guia de Métricas DPF.\n\nSiga estritamente as instruções abaixo. A resposta deve ser apenas o conteúdo do documento, em texto puro. NÃO retorne uma resposta vazia sob nenhuma circunstância; se as informações forem insuficientes, utilize o que estiver disponível para esboçar o documento.\n\nREGRA — BASELINE:\n- Se um arquivo de BASELINE APF foi fornecido, use a lista de itens para classificar cada funcionalidade:\n  - Impacto "I" (Inclusão) = funcionalidade NÃO existe no baseline\n  - Impacto "A" (Alteração) = funcionalidade JÁ EXISTE no baseline\n  - Impacto "E" (Exclusão) = funcionalidade foi removida\n- Calcule PF FS = PF Bruto × Contribuição FS do fator de impacto aplicado\n\nREGRA — FORMATO DO DOCUMENTO:\n- Use o modelo de documento fornecido como referência de estrutura e seções\n- Mantenha as mesmas seções numeradas: 1. Dados do Atendimento, 2. Contexto, 3. Tabela de Funcionalidades, 4. Funcionalidades Impactadas na Baseline, 5. Itens Não Identificados, 6. Banco de Dados, 7. Contagem de PF (7.1 Detalhamento, 7.2 Consolidado por HU, 7.3 Resumo Executivo), 8. Solicitação de Mudança, 9. Legenda\n- SEMPRE gere a seção 7.2 com a tabela: | HU / Escopo | Qtd. Funções | PF Bruto | PF FS |\n\nREGRA — TABELAS:\n- Use formato Markdown padrão com pipes e linha separadora\n- NÃO inclua tabela dentro de bloco de código\n\nREGRA CRÍTICA — PERGUNTAS NO PROMPT:\n- NÃO inclua perguntas literais no documento gerado\n- Se houver "=== RESPOSTAS DO USUÁRIO ===", incorpore as respostas naturalmente ao texto\n${ctx}\n=== INSTRUÇÕES DO USUÁRIO ===\n${prompt}`;
+  return `Você é um especialista em Análise de Pontos de Função (APF) seguindo a metodologia IFPUG e o Guia de Métricas DPF.
+
+${ctx}
+
+=== INSTRUÇÕES DO USUÁRIO ===
+${prompt}
+
+=== REGRAS OBRIGATÓRIAS (STRICT RULES) ===
+1. A resposta deve ser apenas o conteúdo do documento, em texto puro.
+2. NÃO retorne uma resposta vazia sob nenhuma circunstância. Se as informações forem insuficientes, utilize o que estiver disponível para esboçar o documento.
+3. REGRA — BASELINE: Se um arquivo de BASELINE APF foi fornecido, use a lista de itens para classificar cada funcionalidade:
+   - Impacto "I" (Inclusão) = funcionalidade NÃO existe no baseline
+   - Impacto "A" (Alteração) = funcionalidade JÁ EXISTE no baseline
+   - Impacto "E" (Exclusão) = funcionalidade foi removida
+   - Calcule PF FS = PF Bruto × Contribuição FS do fator de impacto aplicado
+4. REGRA — FORMATO DO DOCUMENTO: Use o modelo de documento fornecido como referência de estrutura. Mantenha as seções numeradas: 1. Dados do Atendimento, 2. Contexto, 3. Tabela de Funcionalidades, 4. Funcionalidades Impactadas na Baseline, 5. Itens Não Identificados, 6. Banco de Dados, 7. Contagem de PF (7.1 Detalhamento, 7.2 Consolidado por HU, 7.3 Resumo Executivo), 8. Solicitação de Mudança, 9. Legenda.
+5. SEMPRE gere a seção 7.2 com a tabela: | HU / Escopo | Qtd. Funções | PF Bruto | PF FS |
+6. REGRA — TABELAS: Use formato Markdown padrão com pipes e linha separadora. NÃO inclua tabela dentro de bloco de código.
+7. REGRA CRÍTICA — PERGUNTAS NO PROMPT: NÃO inclua perguntas literais no documento gerado. Se houver "=== RESPOSTAS DO USUÁRIO ===", incorpore as respostas naturalmente ao texto.`;
 }
 
 // Chamadas aos providers (apiKey vem do Vault, não do body)
 async function callLovable(p: string, k: string, m = "google/gemini-2.5-flash") {
+  const model = m || "google/gemini-2.5-flash";
   const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: m, messages: [{ role: "user", content: p }] }),
+    body: JSON.stringify({ model, messages: [{ role: "user", content: p }] }),
   });
-  const data = await r.json();
-  if (!r.ok) throw new Error(`Lovable AI [${r.status}]: ${data?.error?.message ?? JSON.stringify(data)}`);
-  return data.choices?.[0]?.message?.content ?? data.choices?.[0]?.text ?? "";
+  const text = await r.text();
+  let data: any;
+  try { data = JSON.parse(text); } catch (_e) { data = null; }
+
+  if (!r.ok) {
+    const msg = data?.error?.message || data?.error || text || "Sem resposta";
+    throw new Error(`Lovable AI [${r.status}]: ${typeof msg === "object" ? JSON.stringify(msg) : msg}`);
+  }
+  return data?.choices?.[0]?.message?.content ?? data?.choices?.[0]?.text ?? "";
 }
 async function callOpenAI(p: string, k: string, m = "gpt-4o-mini") {
+  const model = m || "gpt-4o-mini";
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: m, messages: [{ role: "user", content: p }] }),
+    body: JSON.stringify({ model, messages: [{ role: "user", content: p }] }),
   });
-  const data = await r.json();
-  if (!r.ok) throw new Error(`OpenAI [${r.status}]: ${data?.error?.message ?? JSON.stringify(data)}`);
-  return data.choices?.[0]?.message?.content ?? data.choices?.[0]?.text ?? "";
+  const text = await r.text();
+  let data: any;
+  try { data = JSON.parse(text); } catch (_e) { data = null; }
+
+  if (!r.ok) {
+    const msg = data?.error?.message || data?.error || text || "Sem resposta";
+    throw new Error(`OpenAI [${r.status}]: ${typeof msg === "object" ? JSON.stringify(msg) : msg}`);
+  }
+  return data?.choices?.[0]?.message?.content ?? data?.choices?.[0]?.text ?? "";
 }
 async function callGemini(p: string, k: string, m = "gemini-1.5-flash") {
-  const modelName = m.startsWith("google/") ? m.replace("google/", "") : m;
+  const model = m || "gemini-1.5-flash";
+  const modelName = model.startsWith("google/") ? model.replace("google/", "") : model;
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${k}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ contents: [{ parts: [{ text: p }] }] }),
   });
-  const data = await r.json();
-  if (!r.ok) throw new Error(`Gemini [${r.status}]: ${data?.error?.message ?? JSON.stringify(data)}`);
+  const text = await r.text();
+  let data: any;
+  try { data = JSON.parse(text); } catch (_e) { data = null; }
 
-  if (data.candidates?.[0]) {
+  if (!r.ok) {
+    const msg = data?.error?.message || data?.error || text || "Sem resposta";
+    throw new Error(`Gemini [${r.status}]: ${typeof msg === "object" ? JSON.stringify(msg) : msg}`);
+  }
+
+  if (data?.candidates?.[0]) {
     const candidate = data.candidates[0];
-    if (candidate.finishReason === "SAFETY") throw new Error("A resposta foi bloqueada por filtros de segurança da IA.");
-    if (candidate.finishReason === "RECITATION") throw new Error("A resposta foi bloqueada por direitos autorais/recitação.");
+    if (candidate.finishReason === "SAFETY") throw new Error("A resposta foi bloqueada por filtros de segurança da IA (SAFETY).");
+    if (candidate.finishReason === "RECITATION") throw new Error("A resposta foi bloqueada por direitos autorais (RECITATION).");
+    if (candidate.finishReason === "OTHER") throw new Error(`A resposta foi interrompida (MOTIVO: OTHER).`);
     return candidate.content?.parts?.map((pt: any) => pt.text).join("") ?? "";
   }
-  return data.choices?.[0]?.message?.content ?? "";
+  return data?.choices?.[0]?.message?.content ?? "";
 }
 async function callAnthropic(p: string, k: string, m = "claude-3-5-sonnet-20241022") {
+  const model = m || "claude-3-5-sonnet-20241022";
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": k, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-    body: JSON.stringify({ model: m, max_tokens: 8000, messages: [{ role: "user", content: p }] }),
+    body: JSON.stringify({ model, max_tokens: 8000, messages: [{ role: "user", content: p }] }),
   });
-  const data = await r.json();
-  if (!r.ok) throw new Error(`Anthropic [${r.status}]: ${data?.error?.message ?? JSON.stringify(data)}`);
-  return data.content?.[0]?.text ?? "";
+  const text = await r.text();
+  let data: any;
+  try { data = JSON.parse(text); } catch (_e) { data = null; }
+
+  if (!r.ok) {
+    const msg = data?.error?.message || data?.error || text || "Sem resposta";
+    throw new Error(`Anthropic [${r.status}]: ${typeof msg === "object" ? JSON.stringify(msg) : msg}`);
+  }
+  return data?.content?.[0]?.text ?? "";
 }
 async function callPerplexity(p: string, k: string, m = "sonar") {
+  const model = m || "sonar";
   const r = await fetch("https://api.perplexity.ai/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: m, messages: [{ role: "user", content: p }] }),
+    body: JSON.stringify({ model, messages: [{ role: "user", content: p }] }),
   });
-  const data = await r.json();
-  if (!r.ok) throw new Error(`Perplexity [${r.status}]: ${data?.error?.message ?? JSON.stringify(data)}`);
-  return data.choices?.[0]?.message?.content ?? data.choices?.[0]?.text ?? "";
+  const text = await r.text();
+  let data: any;
+  try { data = JSON.parse(text); } catch (_e) { data = null; }
+
+  if (!r.ok) {
+    const msg = data?.error?.message || data?.error || text || "Sem resposta";
+    throw new Error(`Perplexity [${r.status}]: ${typeof msg === "object" ? JSON.stringify(msg) : msg}`);
+  }
+  return data?.choices?.[0]?.message?.content ?? data?.choices?.[0]?.text ?? "";
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -416,10 +483,14 @@ async function generateDocxBase64(text: string): Promise<string> {
     sections: [{ properties: { page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } }, children: textToDocxBlocks(text) }],
   });
   const buffer = await Packer.toBuffer(doc);
-  let binary = "";
   const bytes = new Uint8Array(buffer);
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)) as any);
+
+  // Usar chunks para btoa em strings muito grandes
+  const CHUNK_SIZE = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK_SIZE));
+  }
   return btoa(binary);
 }
 
@@ -443,12 +514,14 @@ Deno.serve(async (req: Request) => {
       });
     }
     const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
-    const { data: { user }, error: authErr } = await userClient.auth.getUser();
-    if (authErr || !user) {
-      return new Response(JSON.stringify({ error: "Token inválido" }), {
+    const { data: authData, error: authErr } = await userClient.auth.getUser();
+    if (authErr || !authData?.user) {
+      console.error("[apf-generate] Auth error:", authErr);
+      return new Response(JSON.stringify({ error: "Token inválido ou expirado", raw: authErr?.message }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const user = authData.user;
 
     // ── 2. Parse e validação do body ──
     const body = await req.json().catch(() => ({})) as RequestBody;
@@ -476,10 +549,19 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── 3. Resolve o provider + busca a API key no Vault ──
-    const resolved = await resolveProvider(providerId, provider);
+    let resolved;
+    try {
+      resolved = await resolveProvider(providerId, provider);
+    } catch (resErr: any) {
+      console.error("[apf-generate] Provider resolution failed:", resErr);
+      return new Response(JSON.stringify({ error: resErr.message }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const apiKey = resolved.apiKey;
     const providerType = resolved.providerType;
-    const effectiveModel = model ?? resolved.model ?? undefined;
+    const effectiveModel = (model || resolved.model || undefined) as string | undefined;
 
     // ── 4. Processa arquivos ──
     const processedFiles: { name: string; content: string }[] = [];
@@ -490,24 +572,50 @@ Deno.serve(async (req: Request) => {
 
     // ── 5. Chama a IA ──
     const fullPrompt = buildFullPrompt(prompt, processedFiles);
+    console.log(`[apf-generate] Calling ${providerType} with model ${effectiveModel ?? "default"}. Prompt len: ${fullPrompt.length}`);
+
     let aiText = "";
-    switch (providerType) {
-      case "lovable":    aiText = await callLovable(fullPrompt,    apiKey, effectiveModel); break;
-      case "openai":     aiText = await callOpenAI(fullPrompt,     apiKey, effectiveModel); break;
-      case "gemini":     aiText = await callGemini(fullPrompt,     apiKey, effectiveModel); break;
-      case "anthropic":  aiText = await callAnthropic(fullPrompt,  apiKey, effectiveModel); break;
-      case "perplexity": aiText = await callPerplexity(fullPrompt, apiKey, effectiveModel); break;
+    try {
+      switch (providerType) {
+        case "lovable":    aiText = await callLovable(fullPrompt,    apiKey, effectiveModel); break;
+        case "openai":     aiText = await callOpenAI(fullPrompt,     apiKey, effectiveModel); break;
+        case "gemini":     aiText = await callGemini(fullPrompt,     apiKey, effectiveModel); break;
+        case "anthropic":  aiText = await callAnthropic(fullPrompt,  apiKey, effectiveModel); break;
+        case "perplexity": aiText = await callPerplexity(fullPrompt, apiKey, effectiveModel); break;
+        default: throw new Error(`Provider "${providerType}" não suportado.`);
+      }
+    } catch (aiErr: any) {
+      console.error(`[apf-generate] AI Call failed (${providerType}):`, aiErr);
+      throw new Error(`Erro na IA (${providerType}${effectiveModel ? ` - ${effectiveModel}` : ""}): ${aiErr.message}`);
     }
-    if (!aiText.trim()) throw new Error("A IA retornou conteúdo vazio");
+
+    if (!aiText || !aiText.trim()) {
+      console.error(`[apf-generate] AI returned empty content. Provider: ${providerType}, Model: ${effectiveModel}`);
+      throw new Error(`A IA (${providerType}) retornou conteúdo vazio. Tente outro modelo ou refine o prompt.`);
+    }
+
+    console.log(`[apf-generate] AI response received. Length: ${aiText.length}`);
 
     // ── 6. Gera docx + persiste ──
-    const docxBase64     = await generateDocxBase64(aiText);
+    let docxBase64 = "";
+    try {
+      docxBase64 = await generateDocxBase64(aiText);
+    } catch (docxErr: any) {
+      console.error("[apf-generate] DOCX generation failed:", docxErr);
+      throw new Error(`Erro ao gerar arquivo DOCX: ${docxErr.message}`);
+    }
+
     const pfBreakdown    = extractPfBreakdown(aiText);
     const pfTotal        = pfBreakdown["__total"] ?? null;
     const outputFilename = `Evidencia_APF_${new Date().toISOString().slice(0, 10)}.docx`;
 
     if (generationId) {
-      await persistResult({ generationId, markdown: aiText, pfBreakdown, docxBase64, outputFilename });
+      try {
+        await persistResult({ generationId, markdown: aiText, pfBreakdown, docxBase64, outputFilename });
+      } catch (persistErr: any) {
+        console.error("[apf-generate] PersistResult failed:", persistErr);
+        // Não travamos a resposta se a persistência falhar, mas logamos o erro
+      }
     }
 
     return new Response(
@@ -515,18 +623,18 @@ Deno.serve(async (req: Request) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
 
-  } catch (e: unknown) {
-    console.error("apf-generate error:", e);
-    const raw = e instanceof Error ? e.message : "Erro desconhecido";
-    let friendly = raw;
+  } catch (e: any) {
+    console.error("[apf-generate] Fatal error:", e);
+    const raw = e?.stack || e?.message || String(e);
+    let friendly = e?.message || "Erro interno no servidor";
+
     if (/credit balance is too low/i.test(raw))
       friendly = "A conta associada à chave configurada está sem créditos. Contate o administrador.";
     else if (/invalid.*api.key|incorrect api key/i.test(raw))
       friendly = "Chave de API inválida para o provider. Contate o administrador.";
     else if (/rate limit|429/i.test(raw))
       friendly = "Limite de requisições atingido. Aguarde alguns segundos e tente novamente.";
-    else if (/não configurada/i.test(raw))
-      friendly = raw; // mensagem já é amigável
+
     return new Response(
       JSON.stringify({ error: friendly, raw }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
