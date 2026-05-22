@@ -33,6 +33,13 @@ const corsHeaders = {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+class AiError extends Error {
+  constructor(public status: number, message: string, public raw: any = null) {
+    super(message);
+    this.name = "AiError";
+  }
+}
+
 type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
 
 interface FileInput {
@@ -269,7 +276,10 @@ async function persistResult(opts: {
   // 1. Salvar docx no Storage
   let storagePath: string | null = null;
   try {
-    const docxBytes = Uint8Array.from(atob(docxBase64), c => c.charCodeAt(0));
+    const binary = atob(docxBase64);
+    const docxBytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) docxBytes[i] = binary.charCodeAt(i);
+
     const { error: storageErr } = await adminClient.storage
       .from("apf-documents")
       .upload(`${generationId}/${outputFilename}`, docxBytes, {
@@ -318,9 +328,22 @@ ${prompt}
 7. REGRA CRÍTICA — PERGUNTAS NO PROMPT: NÃO inclua perguntas literais no documento gerado. Se houver "=== RESPOSTAS DO USUÁRIO ===", incorpore as respostas naturalmente ao texto.`;
 }
 
+function sanitizeAiErrorMessage(data: any, text: string): string {
+  if (data?.error?.message) return data.error.message;
+  if (data?.error && typeof data.error === "string") return data.error;
+  if (data?.message) return data.message;
+  if (text && text.length < 500 && !text.trim().startsWith("<")) return text.trim();
+  return "Ocorreu um erro no provedor de IA.";
+}
+
+function extractAiContent(data: any): string {
+  const choice = data?.choices?.[0];
+  return choice?.message?.content ?? choice?.text ?? choice?.message?.reasoning_content ?? "";
+}
+
 // Chamadas aos providers (apiKey vem do Vault, não do body)
-async function callLovable(p: string, k: string, m = "google/gemini-2.5-flash") {
-  const model = m || "google/gemini-2.5-flash";
+async function callLovable(p: string, k: string, m = "google/gemini-2.0-flash") {
+  const model = m || "google/gemini-2.0-flash";
   const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
@@ -330,11 +353,8 @@ async function callLovable(p: string, k: string, m = "google/gemini-2.5-flash") 
   let data: any;
   try { data = JSON.parse(text); } catch (_e) { data = null; }
 
-  if (!r.ok) {
-    const msg = data?.error?.message || data?.error || text || "Sem resposta";
-    throw new Error(`Lovable AI [${r.status}]: ${typeof msg === "object" ? JSON.stringify(msg) : msg}`);
-  }
-  return data?.choices?.[0]?.message?.content ?? data?.choices?.[0]?.text ?? "";
+  if (!r.ok) throw new AiError(r.status, sanitizeAiErrorMessage(data, text), data);
+  return extractAiContent(data);
 }
 async function callOpenAI(p: string, k: string, m = "gpt-4o-mini") {
   const model = m || "gpt-4o-mini";
@@ -347,11 +367,8 @@ async function callOpenAI(p: string, k: string, m = "gpt-4o-mini") {
   let data: any;
   try { data = JSON.parse(text); } catch (_e) { data = null; }
 
-  if (!r.ok) {
-    const msg = data?.error?.message || data?.error || text || "Sem resposta";
-    throw new Error(`OpenAI [${r.status}]: ${typeof msg === "object" ? JSON.stringify(msg) : msg}`);
-  }
-  return data?.choices?.[0]?.message?.content ?? data?.choices?.[0]?.text ?? "";
+  if (!r.ok) throw new AiError(r.status, sanitizeAiErrorMessage(data, text), data);
+  return extractAiContent(data);
 }
 async function callGemini(p: string, k: string, m = "gemini-1.5-flash") {
   const model = m || "gemini-1.5-flash";
@@ -365,19 +382,16 @@ async function callGemini(p: string, k: string, m = "gemini-1.5-flash") {
   let data: any;
   try { data = JSON.parse(text); } catch (_e) { data = null; }
 
-  if (!r.ok) {
-    const msg = data?.error?.message || data?.error || text || "Sem resposta";
-    throw new Error(`Gemini [${r.status}]: ${typeof msg === "object" ? JSON.stringify(msg) : msg}`);
-  }
+  if (!r.ok) throw new AiError(r.status, sanitizeAiErrorMessage(data, text), data);
 
   if (data?.candidates?.[0]) {
     const candidate = data.candidates[0];
-    if (candidate.finishReason === "SAFETY") throw new Error("A resposta foi bloqueada por filtros de segurança da IA (SAFETY).");
-    if (candidate.finishReason === "RECITATION") throw new Error("A resposta foi bloqueada por direitos autorais (RECITATION).");
-    if (candidate.finishReason === "OTHER") throw new Error(`A resposta foi interrompida (MOTIVO: OTHER).`);
+    if (candidate.finishReason === "SAFETY") throw new AiError(200, "A resposta foi bloqueada por filtros de segurança da IA (SAFETY).");
+    if (candidate.finishReason === "RECITATION") throw new AiError(200, "A resposta foi bloqueada por direitos autorais (RECITATION).");
+    if (candidate.finishReason === "OTHER") throw new AiError(200, `A resposta foi interrompida (MOTIVO: OTHER).`);
     return candidate.content?.parts?.map((pt: any) => pt.text).join("") ?? "";
   }
-  return data?.choices?.[0]?.message?.content ?? "";
+  return extractAiContent(data);
 }
 async function callAnthropic(p: string, k: string, m = "claude-3-5-sonnet-20241022") {
   const model = m || "claude-3-5-sonnet-20241022";
@@ -390,10 +404,7 @@ async function callAnthropic(p: string, k: string, m = "claude-3-5-sonnet-202410
   let data: any;
   try { data = JSON.parse(text); } catch (_e) { data = null; }
 
-  if (!r.ok) {
-    const msg = data?.error?.message || data?.error || text || "Sem resposta";
-    throw new Error(`Anthropic [${r.status}]: ${typeof msg === "object" ? JSON.stringify(msg) : msg}`);
-  }
+  if (!r.ok) throw new AiError(r.status, sanitizeAiErrorMessage(data, text), data);
   return data?.content?.[0]?.text ?? "";
 }
 async function callPerplexity(p: string, k: string, m = "sonar") {
@@ -407,11 +418,8 @@ async function callPerplexity(p: string, k: string, m = "sonar") {
   let data: any;
   try { data = JSON.parse(text); } catch (_e) { data = null; }
 
-  if (!r.ok) {
-    const msg = data?.error?.message || data?.error || text || "Sem resposta";
-    throw new Error(`Perplexity [${r.status}]: ${typeof msg === "object" ? JSON.stringify(msg) : msg}`);
-  }
-  return data?.choices?.[0]?.message?.content ?? data?.choices?.[0]?.text ?? "";
+  if (!r.ok) throw new AiError(r.status, sanitizeAiErrorMessage(data, text), data);
+  return extractAiContent(data);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -586,6 +594,7 @@ Deno.serve(async (req: Request) => {
       }
     } catch (aiErr: any) {
       console.error(`[apf-generate] AI Call failed (${providerType}):`, aiErr);
+      if (aiErr instanceof AiError) throw aiErr;
       throw new Error(`Erro na IA (${providerType}${effectiveModel ? ` - ${effectiveModel}` : ""}): ${aiErr.message}`);
     }
 
@@ -625,19 +634,22 @@ Deno.serve(async (req: Request) => {
 
   } catch (e: any) {
     console.error("[apf-generate] Fatal error:", e);
-    const raw = e?.stack || e?.message || String(e);
-    let friendly = e?.message || "Erro interno no servidor";
 
-    if (/credit balance is too low|payment_required|not enough credits/i.test(raw))
-      friendly = "A conta associada à chave configurada está sem créditos ou o pagamento é necessário. Contate o administrador.";
-    else if (/invalid.*api.key|incorrect api key/i.test(raw))
-      friendly = "Chave de API inválida para o provider. Contate o administrador.";
-    else if (/rate limit|429/i.test(raw))
-      friendly = "Limite de requisições atingido. Aguarde alguns segundos e tente novamente.";
+    const statusCode = e instanceof AiError ? e.status : 500;
+    const rawContent = e.raw ? (typeof e.raw === "string" ? e.raw : JSON.stringify(e.raw)) : (e.stack || e.message);
+    let friendly     = e.message || "Erro interno no servidor";
+
+    if (statusCode === 402 || /credit balance is too low|payment_required|not enough credits/i.test(rawContent)) {
+      friendly = "A conta do provedor de IA está sem créditos ou o pagamento é necessário. Contate o administrador.";
+    } else if (statusCode === 401 || /invalid.*api.key|incorrect api key/i.test(rawContent)) {
+      friendly = "Configuração de chave de API inválida no provedor. Contate o administrador.";
+    } else if (statusCode === 429 || /rate limit/i.test(rawContent)) {
+      friendly = "Limite de requisições atingido no provedor de IA. Aguarde um momento.";
+    }
 
     return new Response(
-      JSON.stringify({ error: friendly, raw }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({ error: friendly, raw: rawContent }),
+      { status: statusCode >= 400 && statusCode < 600 ? statusCode : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
