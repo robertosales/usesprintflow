@@ -628,8 +628,8 @@ Deno.serve(async (req: Request) => {
     const raw = e?.stack || e?.message || String(e);
     let friendly = e?.message || "Erro interno no servidor";
 
-    if (/credit balance is too low/i.test(raw))
-      friendly = "A conta associada à chave configurada está sem créditos. Contate o administrador.";
+    if (/credit balance is too low|payment_required|not enough credits/i.test(raw))
+      friendly = "A conta associada à chave configurada está sem créditos ou o pagamento é necessário. Contate o administrador.";
     else if (/invalid.*api.key|incorrect api key/i.test(raw))
       friendly = "Chave de API inválida para o provider. Contate o administrador.";
     else if (/rate limit|429/i.test(raw))
