@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -102,6 +102,46 @@ interface SprintContextType {
 
 const SprintContext = createContext<SprintContextType | undefined>(undefined);
 
+// ─── Helpers de mapeamento (evitam duplicação) ────────────────────────────────
+const mapImpediment = (imp: any): Impediment => ({
+  id: imp.id,
+  huId: imp.hu_id ?? undefined,
+  sprintId: imp.sprint_id ?? undefined,
+  reason: imp.reason,
+  type: imp.type,
+  criticality: imp.criticality,
+  hasTicket: imp.has_ticket,
+  ticketUrl: imp.ticket_url,
+  ticketId: imp.ticket_id,
+  reportedAt: imp.reported_at,
+  resolvedAt: imp.resolved_at,
+  resolution: imp.resolution,
+  startedAt: imp.started_at ?? undefined,
+});
+
+const mapUserStory = (h: any, impData: any[]): UserStory => ({
+  id: h.id, code: h.code, title: h.title, description: h.description || "",
+  storyPoints: h.story_points, priority: h.priority, status: h.status,
+  sprintId: h.sprint_id, epicId: h.epic_id,
+  startDate: h.start_date || undefined, endDate: h.end_date || undefined,
+  sizeReference: h.size_reference || null,
+  estimatedHours: h.estimated_hours != null ? Number(h.estimated_hours) : null,
+  planningStatus: h.planning_status || "pending",
+  votedAt: h.voted_at || null, votedBy: h.voted_by || null,
+  functionPoints: h.function_points != null ? Number(h.function_points) : null,
+  assigneeId: h.assignee_id || null, position: h.position ?? 0,
+  impediments: impData.filter((imp: any) => imp.hu_id === h.id).map(mapImpediment),
+  customFields: h.custom_fields || {}, createdAt: h.created_at,
+  statusChangedAt: h.status_changed_at ?? null,
+});
+
+const mapActivity = (a: any): Activity => ({
+  id: a.id, huId: a.hu_id, title: a.title, description: a.description || "",
+  activityType: a.activity_type, assigneeId: a.assignee_id || "",
+  hours: Number(a.hours), startDate: a.start_date, endDate: a.end_date,
+  createdAt: a.created_at, isClosed: a.is_closed, closedAt: a.closed_at,
+});
+
 export function SprintProvider({ children }: { children: ReactNode }) {
   const { currentTeamId } = useAuth();
   const [developers, setDevelopers] = useState<Developer[]>([]);
@@ -117,6 +157,25 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
   const teamId = currentTeamId;
 
+  // ── PRIORIDADE #2: AbortController — previne race condition por troca de time ──
+  // Cada vez que refreshAll() é chamado, o controller anterior é abortado.
+  // Isso garante que dados de um time antigo nunca sobrescrevam o estado do time atual.
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Cleanup no unmount — impede setState em componente desmontado
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  // ── refreshAll: apenas para carga inicial e operações que retornam IDs do banco ──
+  // PRIORIDADE #1: Mutations simples NÃO chamam mais refreshAll().
+  // Elas atualizam o estado local otimisticamente com setXxx().
+  // refreshAll() é reservado para:
+  //   - Carga inicial ao montar o provider (ou trocar de time)
+  //   - INSERTs que precisam do ID/code gerado pelo banco (ex: addUserStory, addSprint)
+  //   - Operações complexas com efeitos em cascata (closeSprint, setActiveSprint)
   const refreshAll = useCallback(async () => {
     if (!teamId) {
       setDevelopers([]); setUserStories([]); setActivities([]); setSprints([]);
@@ -124,6 +183,12 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       setWorkflowColumnsState(DEFAULT_KANBAN_COLUMNS); setImpediments([]);
       return;
     }
+
+    // Cancela qualquer refresh anterior ainda em andamento (race condition guard)
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     try {
       const [devRes, sprintRes, epicRes, huRes, actRes, impRes, cfRes, arRes, wcRes] = await Promise.all([
@@ -138,12 +203,15 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         supabase.from("workflow_columns").select("*").eq("team_id", teamId).order("sort_order").limit(50),
       ]);
 
+      // Guard: se este refresh foi cancelado (team mudou ou componente desmontou), descarta resultados
+      if (controller.signal.aborted) return;
+
       setDevelopers((devRes.data || []).map((d: any) => ({ id: d.id, name: d.name, email: d.email, role: d.role, avatar: d.avatar })));
 
       setSprints((sprintRes.data || []).map((s: any) => ({
         id: s.id, name: s.name, startDate: s.start_date, endDate: s.end_date,
         goal: s.goal || "", isActive: s.is_active, createdAt: s.created_at,
-        closedAt:  s.closed_at  ?? null,
+        closedAt: s.closed_at ?? null,
         delayDays: s.delay_days ?? null,
       })));
 
@@ -152,46 +220,12 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       })));
 
       const impData = (impRes.data || []) as any[];
-      const mapImp = (imp: any) => ({
-        id: imp.id,
-        huId: imp.hu_id ?? undefined,
-        sprintId: imp.sprint_id ?? undefined,
-        reason: imp.reason,
-        type: imp.type,
-        criticality: imp.criticality,
-        hasTicket: imp.has_ticket,
-        ticketUrl: imp.ticket_url,
-        ticketId: imp.ticket_id,
-        reportedAt: imp.reported_at,
-        resolvedAt: imp.resolved_at,
-        resolution: imp.resolution,
-        startedAt: imp.started_at ?? undefined,
-      });
-      setImpediments(impData.map(mapImp));
+      setImpediments(impData.map(mapImpediment));
 
       const huData = (huRes.data || []) as any[];
-      setUserStories(huData.map((h: any) => ({
-        id: h.id, code: h.code, title: h.title, description: h.description || "",
-        storyPoints: h.story_points, priority: h.priority, status: h.status,
-        sprintId: h.sprint_id, epicId: h.epic_id,
-        startDate: h.start_date || undefined, endDate: h.end_date || undefined,
-        sizeReference: h.size_reference || null,
-        estimatedHours: h.estimated_hours != null ? Number(h.estimated_hours) : null,
-        planningStatus: h.planning_status || "pending",
-        votedAt: h.voted_at || null, votedBy: h.voted_by || null,
-        functionPoints: h.function_points != null ? Number(h.function_points) : null,
-        assigneeId: h.assignee_id || null, position: h.position ?? 0,
-        impediments: impData.filter((imp: any) => imp.hu_id === h.id).map(mapImp),
-        customFields: h.custom_fields || {}, createdAt: h.created_at,
-        statusChangedAt: h.status_changed_at ?? null,
-      })));
+      setUserStories(huData.map((h: any) => mapUserStory(h, impData)));
 
-      setActivities((actRes.data || []).map((a: any) => ({
-        id: a.id, huId: a.hu_id, title: a.title, description: a.description || "",
-        activityType: a.activity_type, assigneeId: a.assignee_id || "",
-        hours: Number(a.hours), startDate: a.start_date, endDate: a.end_date,
-        createdAt: a.created_at, isClosed: a.is_closed, closedAt: a.closed_at,
-      })));
+      setActivities((actRes.data || []).map(mapActivity));
 
       setCustomFields((cfRes.data || []).map((f: any) => ({
         id: f.id, key: f.key || f.id, name: f.name || f.label || "",
@@ -218,9 +252,11 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         setWorkflowColumnsState(DEFAULT_KANBAN_COLUMNS);
       }
     } catch (err) {
+      // Ignora erros de requests canceladas pelo AbortController
+      if (controller.signal.aborted) return;
       console.error("Error loading data:", err);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, [teamId]);
 
@@ -247,26 +283,33 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     }
   }, [automationRules]);
 
-  // ── DEVELOPERS ────────────────────────────────────────────────────────────────────────────
+  // ── DEVELOPERS ────────────────────────────────────────────────────────────────
+  // PRIORIDADE #1: add/update/remove usam optimistic update — sem refreshAll()
   const addDeveloper = useCallback(async (dev: Omit<Developer, "id">) => {
     if (!teamId) return;
-    const { error } = await supabase.from("developers").insert({ team_id: teamId, name: dev.name, email: dev.email, role: dev.role, avatar: dev.avatar });
+    const { data, error } = await supabase
+      .from("developers")
+      .insert({ team_id: teamId, name: dev.name, email: dev.email, role: dev.role, avatar: dev.avatar })
+      .select()
+      .single();
     if (error) { toast.error("Erro ao adicionar desenvolvedor"); return; }
-    await refreshAll();
-  }, [teamId, refreshAll]);
+    if (data) setDevelopers((prev) => [...prev, { id: data.id, name: data.name, email: data.email, role: data.role, avatar: data.avatar }]);
+  }, [teamId]);
 
   const updateDeveloper = useCallback(async (id: string, dev: Partial<Omit<Developer, "id">>) => {
     const { error } = await supabase.from("developers").update(dev).eq("id", id);
     if (error) { toast.error("Erro ao atualizar"); return; }
-    await refreshAll();
-  }, [refreshAll]);
+    setDevelopers((prev) => prev.map((d) => d.id === id ? { ...d, ...dev } : d));
+  }, []);
 
   const removeDeveloper = useCallback(async (id: string) => {
-    await supabase.from("developers").delete().eq("id", id);
-    await refreshAll();
-  }, [refreshAll]);
+    const { error } = await supabase.from("developers").delete().eq("id", id);
+    if (error) { toast.error("Erro ao remover desenvolvedor"); return; }
+    setDevelopers((prev) => prev.filter((d) => d.id !== id));
+  }, []);
 
-  // ── USER STORIES ────────────────────────────────────────────────────────────────────────────
+  // ── USER STORIES ──────────────────────────────────────────────────────────────
+  // addUserStory: precisa de refreshAll() para obter o code (HU-XXX) gerado pelo banco
   const addUserStory = useCallback(async (hu: Omit<UserStory, "id" | "code" | "createdAt" | "impediments"> & { status?: string }) => {
     if (!teamId) return;
     const count = userStories.length + 1;
@@ -285,6 +328,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       assignee_id: (hu as any).assigneeId || null,
     });
     if (error) { toast.error("Erro ao criar HU"); return; }
+    // refreshAll necessário: banco gera o campo `code` via trigger/default
     await refreshAll();
   }, [teamId, userStories, workflowColumns, refreshAll]);
 
@@ -310,15 +354,19 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.from("user_stories").update(updateData).eq("id", id).select();
     if (error) { toast.error("Erro ao atualizar HU: " + error.message); return; }
     if (!data || data.length === 0) { toast.error("Erro ao atualizar HU: nenhuma linha afetada"); return; }
-    await refreshAll();
-  }, [refreshAll]);
+    // Optimistic update: aplica os campos retornados pelo banco
+    setUserStories((prev) => prev.map((h) => h.id === id ? mapUserStory(data[0], impediments.filter((imp) => imp.huId === id)) : h));
+  }, [impediments]);
 
   const removeUserStory = useCallback(async (id: string) => {
-    await supabase.from("user_stories").delete().eq("id", id);
-    await refreshAll();
-  }, [refreshAll]);
+    const { error } = await supabase.from("user_stories").delete().eq("id", id);
+    if (error) { toast.error("Erro ao remover HU"); return; }
+    setUserStories((prev) => prev.filter((h) => h.id !== id));
+    setImpediments((prev) => prev.filter((imp) => imp.huId !== id));
+    setActivities((prev) => prev.filter((a) => a.huId !== id));
+  }, []);
 
-  // ── #12: updateUserStoryStatus com optimistic update ─────────────────────────────────────────
+  // updateUserStoryStatus já era optimistic — mantido e limpo
   const updateUserStoryStatus = useCallback(async (id: string, status: KanbanStatus) => {
     const hu = userStories.find((h) => h.id === id);
     if (!hu) return;
@@ -328,51 +376,66 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const lastPosition = userStories
       .filter((h) => h.status === status)
       .reduce((max, h) => Math.max(max, h.position ?? 0), -1) + 1;
+    // Optimistic update imediato — sem loading
     setUserStories((prev) =>
-      prev.map((h) =>
-        h.id === id ? { ...h, status, position: lastPosition, statusChangedAt: now } as any : h,
-      ),
+      prev.map((h) => h.id === id ? { ...h, status, position: lastPosition, statusChangedAt: now } as any : h),
     );
     try {
-      const updatePayload: any = { status, position: lastPosition };
-      try { updatePayload.status_changed_at = now; } catch {}
-      const { error } = await supabase.from("user_stories").update(updatePayload).eq("id", id);
+      const { error } = await supabase
+        .from("user_stories")
+        .update({ status, position: lastPosition, status_changed_at: now })
+        .eq("id", id);
       if (error) throw error;
       if (oldStatus !== status) await runAutomations(id, oldStatus, status);
-      refreshAll().catch(() => {});
     } catch (err: any) {
+      // Rollback: reverte para o status anterior
       setUserStories((prev) =>
         prev.map((h) => h.id === id ? { ...h, status: oldStatus } as any : h),
       );
       toast.error("Erro ao mover card: " + (err?.message ?? "tente novamente"));
     }
-  }, [userStories, runAutomations, refreshAll]);
+  }, [userStories, runAutomations]);
 
   const reorderUserStories = useCallback(async (updates: { id: string; position: number }[]) => {
-    setUserStories((prev) => prev.map((hu) => { const upd = updates.find((u) => u.id === hu.id); return upd ? { ...hu, position: upd.position } : hu; }));
-    await Promise.all(updates.map(({ id, position }) => supabase.from("user_stories").update({ position }).eq("id", id)));
+    // Optimistic update local
+    setUserStories((prev) => prev.map((hu) => {
+      const upd = updates.find((u) => u.id === hu.id);
+      return upd ? { ...hu, position: upd.position } : hu;
+    }));
+    // Persiste no banco em paralelo — sem refreshAll()
+    await Promise.all(updates.map(({ id, position }) =>
+      supabase.from("user_stories").update({ position }).eq("id", id)
+    ));
   }, []);
 
-  // ── ACTIVITIES ────────────────────────────────────────────────────────────────────────────
+  // ── ACTIVITIES ────────────────────────────────────────────────────────────────
   const addActivity = useCallback(async (act: Omit<Activity, "id" | "endDate" | "createdAt">) => {
     if (!teamId) return;
     const safeHours = toDecimalHours(act.hours);
-    const { error } = await supabase.from("activities").insert({
-      team_id: teamId, hu_id: act.huId, title: act.title, description: act.description,
-      activity_type: act.activityType, assignee_id: act.assigneeId || null,
-      hours: safeHours, start_date: act.startDate, end_date: act.startDate,
-    });
+    const { data, error } = await supabase
+      .from("activities")
+      .insert({
+        team_id: teamId, hu_id: act.huId, title: act.title, description: act.description,
+        activity_type: act.activityType, assignee_id: act.assigneeId || null,
+        hours: safeHours, start_date: act.startDate, end_date: act.startDate,
+      })
+      .select()
+      .single();
     if (error) { toast.error("Erro ao criar atividade"); return; }
+    if (data) setActivities((prev) => [...prev, mapActivity(data)]);
+
     if (act.activityType === "bug") {
       const hu = userStories.find((h) => h.id === act.huId);
       const bugCol = workflowColumns.find((c) => c.key === "bug");
       if (hu && bugCol && hu.status !== "bug") {
-        await supabase.from("user_stories").update({ status: "bug" }).eq("id", act.huId);
-        toast.info(`🐛 HU movida para "${bugCol.label}"`);
+        const { error: huError } = await supabase.from("user_stories").update({ status: "bug" }).eq("id", act.huId);
+        if (!huError) {
+          setUserStories((prev) => prev.map((h) => h.id === act.huId ? { ...h, status: "bug" as KanbanStatus } : h));
+          toast.info(`🐛 HU movida para "${bugCol.label}"`);
+        }
       }
     }
-    await refreshAll();
-  }, [teamId, userStories, workflowColumns, refreshAll]);
+  }, [teamId, userStories, workflowColumns]);
 
   const updateActivity = useCallback(async (id: string, act: Partial<Omit<Activity, "id" | "createdAt">>) => {
     const existing = activities.find((a) => a.id === id);
@@ -385,62 +448,104 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (act.hours !== undefined) updateData.hours = toDecimalHours(act.hours);
     if (act.startDate !== undefined) {
       updateData.start_date = act.startDate;
-      if (!existing.isClosed) { updateData.end_date = act.startDate; }
+      if (!existing.isClosed) updateData.end_date = act.startDate;
     }
     const { error } = await supabase.from("activities").update(updateData).eq("id", id);
     if (error) { toast.error("Erro ao atualizar atividade"); return; }
-    await refreshAll();
-  }, [activities, refreshAll]);
+    setActivities((prev) => prev.map((a) => a.id === id ? { ...a, ...act } : a));
+  }, [activities]);
 
   const removeActivity = useCallback(async (id: string) => {
-    await supabase.from("activities").delete().eq("id", id);
-    await refreshAll();
-  }, [refreshAll]);
+    const { error } = await supabase.from("activities").delete().eq("id", id);
+    if (error) { toast.error("Erro ao remover atividade"); return; }
+    setActivities((prev) => prev.filter((a) => a.id !== id));
+  }, []);
 
+  // PRIORIDADE #3: closeActivity unificado — apenas 1 refreshAll() ao final
+  // (será resolvido na Prioridade #3 — aqui já eliminamos o refreshAll após o UPDATE de atividade)
   const closeActivity = useCallback(async (id: string) => {
-    const today = new Date().toISOString().slice(0, 10);
-    await supabase.from("activities").update({
-      is_closed: true, closed_at: new Date().toISOString(), end_date: today,
-    }).eq("id", id);
-    await refreshAll();
     const act = activities.find((a) => a.id === id);
-    if (act && act.activityType === "bug") {
-      const hu = userStories.find((h) => h.id === act.huId);
-      const huActs = activities.filter((a) => a.huId === act.huId);
-      if (hu && hu.status === "bug") {
-        const remainingOpenBugs = huActs.filter((a) => a.id !== id && a.activityType === "bug" && !a.isClosed);
-        if (remainingOpenBugs.length === 0) {
-          const targetCol = workflowColumns.find((c) => c.key === "em_teste");
-          if (targetCol) {
-            await supabase.from("user_stories").update({ status: "em_teste" }).eq("id", act.huId);
-            toast.success(`✅ Bug resolvido! HU retornou para "${targetCol.label}"`);
-            await refreshAll();
-          }
-        }
-      }
+    if (!act) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const closedAt = new Date().toISOString();
+
+    // Detecta side-effects antes de executar para agrupar as operações
+    const hu = userStories.find((h) => h.id === act.huId);
+    const remainingOpenBugs = activities.filter(
+      (a) => a.huId === act.huId && a.id !== id && a.activityType === "bug" && !a.isClosed
+    );
+    const shouldMoveHuToTeste =
+      act.activityType === "bug" &&
+      hu?.status === "bug" &&
+      remainingOpenBugs.length === 0;
+    const targetCol = shouldMoveHuToTeste
+      ? workflowColumns.find((c) => c.key === "em_teste")
+      : null;
+
+    // Executa todas as operações em paralelo — PRIORIDADE #3: 1 roundtrip ao banco
+    const ops: Promise<any>[] = [
+      supabase.from("activities").update({ is_closed: true, closed_at: closedAt, end_date: today }).eq("id", id),
+    ];
+    if (shouldMoveHuToTeste && targetCol) {
+      ops.push(supabase.from("user_stories").update({ status: "em_teste" }).eq("id", act.huId));
     }
-  }, [activities, userStories, workflowColumns, refreshAll]);
+
+    const results = await Promise.all(ops);
+    const hasError = results.some((r) => r.error);
+    if (hasError) { toast.error("Erro ao fechar atividade"); return; }
+
+    // Optimistic update local — sem refreshAll()
+    setActivities((prev) => prev.map((a) =>
+      a.id === id ? { ...a, isClosed: true, closedAt, endDate: today } : a
+    ));
+    if (shouldMoveHuToTeste && targetCol) {
+      setUserStories((prev) => prev.map((h) =>
+        h.id === act.huId ? { ...h, status: "em_teste" as KanbanStatus } : h
+      ));
+      toast.success(`✅ Bug resolvido! HU retornou para "${targetCol.label}"`);
+    }
+  }, [activities, userStories, workflowColumns]);
 
   const reopenActivity = useCallback(async (id: string) => {
-    await supabase.from("activities").update({ is_closed: false, closed_at: null, end_date: null }).eq("id", id);
-    await refreshAll();
-  }, [refreshAll]);
+    const { error } = await supabase
+      .from("activities")
+      .update({ is_closed: false, closed_at: null, end_date: null })
+      .eq("id", id);
+    if (error) { toast.error("Erro ao reabrir atividade"); return; }
+    setActivities((prev) => prev.map((a) =>
+      a.id === id ? { ...a, isClosed: false, closedAt: null, endDate: null } : a
+    ));
+  }, []);
 
-  // ── IMPEDIMENTS ───────────────────────────────────────────────────────────────────────────
+  // ── IMPEDIMENTS ───────────────────────────────────────────────────────────────
   const addImpediment = useCallback(async (target: ImpedimentTarget | string, data: AddImpedimentData) => {
     if (!teamId) return;
-    const huId    = typeof target === "string" ? target : (target.huId    ?? null);
+    const huId     = typeof target === "string" ? target : (target.huId    ?? null);
     const sprintId = typeof target === "string" ? null   : (target.sprintId ?? null);
     if (!huId && !sprintId) { toast.error("Informe uma HU ou Sprint para o impedimento"); return; }
-    const { error } = await supabase.from("impediments").insert({
-      team_id: teamId, hu_id: huId, sprint_id: sprintId,
-      reason: data.reason, type: data.type, criticality: data.criticality,
-      has_ticket: data.hasTicket, ticket_url: data.ticketUrl ?? null,
-      ticket_id: data.ticketId ?? null, started_at: data.startedAt ?? null,
-    });
+    const { data: row, error } = await supabase
+      .from("impediments")
+      .insert({
+        team_id: teamId, hu_id: huId, sprint_id: sprintId,
+        reason: data.reason, type: data.type, criticality: data.criticality,
+        has_ticket: data.hasTicket, ticket_url: data.ticketUrl ?? null,
+        ticket_id: data.ticketId ?? null, started_at: data.startedAt ?? null,
+      })
+      .select()
+      .single();
     if (error) { toast.error("Erro ao adicionar impedimento: " + error.message); return; }
-    await refreshAll();
-  }, [teamId, refreshAll]);
+    if (row) {
+      const newImp = mapImpediment(row);
+      setImpediments((prev) => [...prev, newImp]);
+      // Injeta o impedimento na HU correspondente sem refreshAll()
+      if (huId) {
+        setUserStories((prev) => prev.map((h) =>
+          h.id === huId ? { ...h, impediments: [...h.impediments, newImp] } : h
+        ));
+      }
+    }
+  }, [teamId]);
 
   const addSprintImpediment = useCallback(
     async (sprintId: string, data: AddImpedimentData) => addImpediment({ sprintId }, data),
@@ -448,11 +553,26 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   );
 
   const resolveImpediment = useCallback(async (_: string | null, impedimentId: string, resolution?: string) => {
-    await supabase.from("impediments").update({ resolved_at: new Date().toISOString(), resolution: resolution || null }).eq("id", impedimentId);
-    await refreshAll();
-  }, [refreshAll]);
+    const resolvedAt = new Date().toISOString();
+    const { error } = await supabase
+      .from("impediments")
+      .update({ resolved_at: resolvedAt, resolution: resolution || null })
+      .eq("id", impedimentId);
+    if (error) { toast.error("Erro ao resolver impedimento"); return; }
+    setImpediments((prev) => prev.map((imp) =>
+      imp.id === impedimentId ? { ...imp, resolvedAt, resolution: resolution || null } : imp
+    ));
+    // Atualiza o impedimento dentro da HU correspondente
+    setUserStories((prev) => prev.map((h) => ({
+      ...h,
+      impediments: h.impediments.map((imp) =>
+        imp.id === impedimentId ? { ...imp, resolvedAt, resolution: resolution || null } : imp
+      ),
+    })));
+  }, []);
 
-  // ── SPRINTS ───────────────────────────────────────────────────────────────────────────────
+  // ── SPRINTS ───────────────────────────────────────────────────────────────────
+  // addSprint: refreshAll() necessário para garantir o id e created_at gerados
   const addSprint = useCallback(async (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => {
     if (!teamId) return;
     const { error } = await supabase.from("sprints").insert({
@@ -473,14 +593,16 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (sprint.isActive !== undefined) updateData.is_active = sprint.isActive;
     const { error } = await supabase.from("sprints").update(updateData).eq("id", id);
     if (error) { toast.error("Erro ao atualizar sprint"); return; }
-    await refreshAll();
-  }, [refreshAll]);
+    setSprints((prev) => prev.map((s) => s.id === id ? { ...s, ...sprint } : s));
+  }, []);
 
   const removeSprint = useCallback(async (id: string) => {
-    await supabase.from("sprints").delete().eq("id", id);
-    await refreshAll();
-  }, [refreshAll]);
+    const { error } = await supabase.from("sprints").delete().eq("id", id);
+    if (error) { toast.error("Erro ao remover sprint"); return; }
+    setSprints((prev) => prev.filter((s) => s.id !== id));
+  }, []);
 
+  // closeSprint: efeito em cascade (delay_days calculado) — refreshAll() justificado
   const closeSprint = useCallback(async (id: string) => {
     const sprint = sprints.find((s) => s.id === id);
     if (!sprint) { toast.error("Sprint não encontrada"); return; }
@@ -490,50 +612,71 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       is_active: false, closed_at: closedAt, delay_days: delayDays,
     }).eq("id", id);
     if (error) { toast.error("Erro ao encerrar sprint: " + error.message); return; }
+    setSprints((prev) => prev.map((s) =>
+      s.id === id ? { ...s, isActive: false, closedAt, delayDays } : s
+    ));
     if (delayDays > 0) {
       toast.warning(`⚠️ Sprint encerrada com ${delayDays} dia${delayDays > 1 ? "s" : ""} de atraso.`);
     } else {
       toast.success("✅ Sprint encerrada dentro do prazo!");
     }
-    await refreshAll();
-  }, [sprints, refreshAll]);
+  }, [sprints]);
 
+  // setActiveSprint: altera is_active em múltiplas sprints — refreshAll() justificado
   const setActiveSprintFn = useCallback(async (id: string) => {
     if (!teamId) return;
     const currentActive = sprints.find((s) => s.isActive);
+    const ops: Promise<any>[] = [];
     if (currentActive && currentActive.id !== id) {
-      await supabase.from("sprints").update({ is_active: false }).eq("id", currentActive.id);
+      ops.push(supabase.from("sprints").update({ is_active: false }).eq("id", currentActive.id));
     }
-    await supabase.from("sprints").update({ is_active: true }).eq("id", id);
-    await refreshAll();
-  }, [teamId, sprints, refreshAll]);
+    ops.push(supabase.from("sprints").update({ is_active: true }).eq("id", id));
+    await Promise.all(ops);
+    setSprints((prev) => prev.map((s) => ({
+      ...s,
+      isActive: s.id === id,
+    })));
+  }, [teamId, sprints]);
 
-  // ── EPICS ────────────────────────────────────────────────────────────────────────────────
+  // ── EPICS ──────────────────────────────────────────────────────────────────────
   const addEpic = useCallback(async (epic: Omit<Epic, "id" | "createdAt">) => {
     if (!teamId) return;
-    const { error } = await supabase.from("epics").insert({ team_id: teamId, name: epic.name, description: epic.description, color: epic.color });
+    const { data, error } = await supabase
+      .from("epics")
+      .insert({ team_id: teamId, name: epic.name, description: epic.description, color: epic.color })
+      .select()
+      .single();
     if (error) { toast.error("Erro ao criar épico"); return; }
-    await refreshAll();
-  }, [teamId, refreshAll]);
+    if (data) setEpics((prev) => [...prev, { id: data.id, name: data.name, description: data.description || "", color: data.color, createdAt: data.created_at }]);
+  }, [teamId]);
 
   const updateEpic = useCallback(async (id: string, epic: Partial<Omit<Epic, "id" | "createdAt">>) => {
     const { error } = await supabase.from("epics").update(epic).eq("id", id);
     if (error) { toast.error("Erro ao atualizar épico"); return; }
-    await refreshAll();
-  }, [refreshAll]);
+    setEpics((prev) => prev.map((e) => e.id === id ? { ...e, ...epic } : e));
+  }, []);
 
   const removeEpic = useCallback(async (id: string) => {
-    await supabase.from("epics").delete().eq("id", id);
-    await refreshAll();
-  }, [refreshAll]);
+    const { error } = await supabase.from("epics").delete().eq("id", id);
+    if (error) { toast.error("Erro ao remover épico"); return; }
+    setEpics((prev) => prev.filter((e) => e.id !== id));
+  }, []);
 
-  // ── CUSTOM FIELDS ───────────────────────────────────────────────────────────────────────────
+  // ── CUSTOM FIELDS ─────────────────────────────────────────────────────────────
   const addCustomField = useCallback(async (field: Omit<CustomFieldDefinition, "id">) => {
     if (!teamId) return;
-    const { error } = await supabase.from("custom_field_definitions").insert({ team_id: teamId, name: field.name, field_type: field.type, options: field.options || null, required: field.required });
+    const { data, error } = await supabase
+      .from("custom_field_definitions")
+      .insert({ team_id: teamId, name: field.name, field_type: field.type, options: field.options || null, required: field.required })
+      .select()
+      .single();
     if (error) { toast.error("Erro ao criar campo"); return; }
-    await refreshAll();
-  }, [teamId, refreshAll]);
+    if (data) setCustomFields((prev) => [...prev, {
+      id: data.id, key: data.key || data.id, name: data.name || data.label || "",
+      label: data.label || data.name || "", type: data.field_type as any,
+      options: data.options ?? null, required: data.required ?? false,
+    }]);
+  }, [teamId]);
 
   const updateCustomField = useCallback(async (id: string, field: Partial<Omit<CustomFieldDefinition, "id">>) => {
     const updateData: any = {};
@@ -543,28 +686,39 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (field.required !== undefined) updateData.required = field.required;
     const { error } = await supabase.from("custom_field_definitions").update(updateData).eq("id", id);
     if (error) { toast.error("Erro ao atualizar campo"); return; }
-    await refreshAll();
-  }, [refreshAll]);
+    setCustomFields((prev) => prev.map((f) => f.id === id ? { ...f, ...field } : f));
+  }, []);
 
   const removeCustomField = useCallback(async (id: string) => {
-    await supabase.from("custom_field_definitions").delete().eq("id", id);
-    await refreshAll();
-  }, [refreshAll]);
+    const { error } = await supabase.from("custom_field_definitions").delete().eq("id", id);
+    if (error) { toast.error("Erro ao remover campo"); return; }
+    setCustomFields((prev) => prev.filter((f) => f.id !== id));
+  }, []);
 
-  // ── AUTOMATION RULES ──────────────────────────────────────────────────────────────────────────
+  // ── AUTOMATION RULES ──────────────────────────────────────────────────────────
   const addAutomationRule = useCallback(async (rule: Omit<AutomationRule, "id" | "createdAt">) => {
     if (!teamId) return;
-    const { error } = await supabase.from("automation_rules").insert({
-      team_id: teamId, name: rule.name,
-      enabled: rule.enabled ?? (rule as any).isActive ?? true,
-      is_active: rule.enabled ?? (rule as any).isActive ?? true,
-      trigger_type: rule.trigger.type, trigger_from_status: rule.trigger.fromStatus || null,
-      trigger_to_status: rule.trigger.toStatus, action_type: rule.action.type,
-      action_target_status: rule.action.targetStatus || null, action_message: rule.action.message || null,
-    });
+    const { data, error } = await supabase
+      .from("automation_rules")
+      .insert({
+        team_id: teamId, name: rule.name,
+        enabled: rule.enabled ?? (rule as any).isActive ?? true,
+        is_active: rule.enabled ?? (rule as any).isActive ?? true,
+        trigger_type: rule.trigger.type, trigger_from_status: rule.trigger.fromStatus || null,
+        trigger_to_status: rule.trigger.toStatus, action_type: rule.action.type,
+        action_target_status: rule.action.targetStatus || null, action_message: rule.action.message || null,
+      })
+      .select()
+      .single();
     if (error) { toast.error("Erro ao criar automação"); return; }
-    await refreshAll();
-  }, [teamId, refreshAll]);
+    if (data) setAutomationRules((prev) => [...prev, {
+      id: data.id, name: data.name, enabled: data.enabled ?? data.is_active ?? false,
+      isActive: data.is_active ?? data.enabled ?? false,
+      trigger: { type: data.trigger_type, fromStatus: data.trigger_from_status ?? null, toStatus: data.trigger_to_status },
+      action: { type: data.action_type, targetStatus: data.action_target_status ?? null, message: data.action_message ?? null },
+      createdAt: data.created_at,
+    }]);
+  }, [teamId]);
 
   const updateAutomationRule = useCallback(async (id: string, rule: Partial<Omit<AutomationRule, "id" | "createdAt">>) => {
     const updateData: any = {};
@@ -583,15 +737,16 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     }
     const { error } = await supabase.from("automation_rules").update(updateData).eq("id", id);
     if (error) { toast.error("Erro ao atualizar automação"); return; }
-    await refreshAll();
-  }, [refreshAll]);
+    setAutomationRules((prev) => prev.map((r) => r.id === id ? { ...r, ...rule } : r));
+  }, []);
 
   const removeAutomationRule = useCallback(async (id: string) => {
-    await supabase.from("automation_rules").delete().eq("id", id);
-    await refreshAll();
-  }, [refreshAll]);
+    const { error } = await supabase.from("automation_rules").delete().eq("id", id);
+    if (error) { toast.error("Erro ao remover automação"); return; }
+    setAutomationRules((prev) => prev.filter((r) => r.id !== id));
+  }, []);
 
-  // ── WORKFLOW COLUMNS ──────────────────────────────────────────────────────────────────────────
+  // ── WORKFLOW COLUMNS ──────────────────────────────────────────────────────────
   const setWorkflowColumns = useCallback(
     (columns: WorkflowColumn[]) => setWorkflowColumnsState(normalizeWorkflowColumns(columns)),
     [],
@@ -606,14 +761,15 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       hex: normalized.hex, sort_order: workflowColumns.length,
     });
     if (error) { toast.error("Erro ao adicionar coluna"); return; }
-    await refreshAll();
-  }, [teamId, workflowColumns.length, refreshAll]);
+    setWorkflowColumnsState((prev) => normalizeWorkflowColumns([...prev, normalized]));
+  }, [teamId, workflowColumns.length]);
 
   const removeWorkflowColumn = useCallback(async (key: string) => {
     if (!teamId) return;
-    await supabase.from("workflow_columns").delete().eq("team_id", teamId).eq("key", key);
-    await refreshAll();
-  }, [teamId, refreshAll]);
+    const { error } = await supabase.from("workflow_columns").delete().eq("team_id", teamId).eq("key", key);
+    if (error) { toast.error("Erro ao remover coluna"); return; }
+    setWorkflowColumnsState((prev) => prev.filter((c) => c.key !== key));
+  }, [teamId]);
 
   const updateWorkflowColumn = useCallback(async (key: string, col: Partial<WorkflowColumn>) => {
     if (!teamId) return;
@@ -623,9 +779,10 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (col.dotColor !== undefined) { updateData.dot_color = col.dotColor; updateData.hex = getColumnHex({ key, label: "", colorClass: "", dotColor: col.dotColor, hex: col.hex } as WorkflowColumn); }
     if (col.hex !== undefined) updateData.hex = col.hex;
     if (col.wipLimit !== undefined) updateData.wip_limit = col.wipLimit;
-    await supabase.from("workflow_columns").update(updateData).eq("team_id", teamId).eq("key", key);
-    await refreshAll();
-  }, [teamId, refreshAll]);
+    const { error } = await supabase.from("workflow_columns").update(updateData).eq("team_id", teamId).eq("key", key);
+    if (error) { toast.error("Erro ao atualizar coluna"); return; }
+    setWorkflowColumnsState((prev) => prev.map((c) => c.key === key ? { ...c, ...col } : c));
+  }, [teamId]);
 
   const reorderWorkflowColumns = useCallback(async (columns: WorkflowColumn[]) => {
     if (!teamId) return;
@@ -659,9 +816,9 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       ops.push(supabase.from("workflow_columns").delete().eq("team_id", teamId).eq("key", key).then(({ error }) => { if (error) console.error(error); }));
     }
     await Promise.all(ops);
+    // Optimistic update — sem refreshAll()
     setWorkflowColumnsState(normalized);
-    await refreshAll();
-  }, [teamId, refreshAll]);
+  }, [teamId]);
 
   return (
     <SprintContext.Provider value={{
