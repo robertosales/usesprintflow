@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, FolderKanban, ArrowLeft } from "lucide-react";
+import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, FolderKanban, ArrowLeft, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { upsertDemandas } from "../services/demandas.service";
@@ -117,7 +117,7 @@ function normalizeTipo(raw: string): { value: string; autoCreated: boolean } | n
   return { value: autoKey || lower.replace(/\s+/g, "_"), autoCreated: true };
 }
 
-// ─── Tipos locais ───────────────────────────────────────────────────────────
+// ─── Tipos locais ─────────────────────────────────────────────────────────────
 
 interface ValidationError {
   linha: number;
@@ -126,8 +126,7 @@ interface ValidationError {
 
 /**
  * ParsedRow: interno ao ImportacaoView.
- * Contém data_inicio que não é exposta ao ImportacaoPreviewTable
- * (o componente filho usa apenas os campos de PreviewRow).
+ * Estende PreviewRow adicionando data_inicio (necessário só aqui para cálculo de prazos).
  */
 interface ParsedRow extends PreviewRow {
   data_inicio: Date;
@@ -135,7 +134,17 @@ interface ParsedRow extends PreviewRow {
 
 type ImportMode = null | "demandas" | "projetos";
 
-// ─── Componente ──────────────────────────────────────────────────────────────
+/**
+ * Linha com erro registrado após tentativa de migração.
+ * Usado apenas para exibição no log de falhas do resultado final.
+ */
+interface FailedRow {
+  rhm: string;
+  projeto: string;
+  motivo: string;
+}
+
+// ─── Componente ───────────────────────────────────────────────────────────────
 
 export function ImportacaoView() {
   const { currentTeamId } = useAuth();
@@ -145,17 +154,24 @@ export function ImportacaoView() {
   const [loading, setLoading] = useState(false);
 
   // ── estado de demandas ──
-  const [validRows, setValidRows]             = useState<ParsedRow[]>([]);
+  const [validRows, setValidRows]               = useState<ParsedRow[]>([]);
   const [autoCreatedTypes, setAutoCreatedTypes] = useState<string[]>([]);
-  const [errors, setErrors]                   = useState<ValidationError[]>([]);
-  const [showPreview, setShowPreview]         = useState(false);
-  /** Progresso por RHM: atualizado durante a migração */
-  const [progressMap, setProgressMap]         = useState<Map<string, RowStatus>>(new Map());
+  const [errors, setErrors]                     = useState<ValidationError[]>([]);
+  const [showPreview, setShowPreview]           = useState(false);
+  /**
+   * progressMap: Map<rhm, RowStatus>
+   * Chave: rhm da demanda.
+   * Valor: status individual da linha durante/após a migração.
+   * Atualizado de forma imutável (new Map) para acionar re-render do filho.
+   */
+  const [progressMap, setProgressMap]           = useState<Map<string, RowStatus>>(new Map());
   const [result, setResult] = useState<{
     importados: number;
     atualizados: number;
     erros: number;
     tiposCriados?: string[];
+    /** RHMs que falharam na migração, com motivo */
+    falhas?: FailedRow[];
   } | null>(null);
 
   // ── estado de projetos ──
@@ -172,7 +188,7 @@ export function ImportacaoView() {
     projetos.map((p) => [normalize(p.nome), { nome: p.nome, teamId: p.team_id }]),
   );
 
-  // ─── Parse do CSV ──────────────────────────────────────────────────────────
+  // ─── Parse do CSV ─────────────────────────────────────────────────────────
 
   function parseCsvToRows(buffer: ArrayBuffer): Record<string, string>[] {
     const text = new TextDecoder("utf-8").decode(buffer);
@@ -192,7 +208,7 @@ export function ImportacaoView() {
     });
   }
 
-  // ─── Upload: demandas ─────────────────────────────────────────────────────────
+  // ─── Upload: demandas ──────────────────────────────────────────────────────
 
   const handleFileDemandas = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -313,7 +329,7 @@ export function ImportacaoView() {
     }
   };
 
-  // ─── Upload: projetos ─────────────────────────────────────────────────────────
+  // ─── Upload: projetos ──────────────────────────────────────────────────────
 
   const handleFileProjetos = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -361,21 +377,63 @@ export function ImportacaoView() {
     }
   };
 
-  // ─── Migração: recebe as linhas selecionadas pelo ImportacaoPreviewTable ───────
+  // ─── Migração: recebe as linhas selecionadas pelo ImportacaoPreviewTable ───
+  //
+  // Estratégia de progresso granular SEM alterar a RPC:
+  //   1. Antes de chamar upsertDemandas, montamos um Set dos RHMs que JÁ EXISTEM
+  //      no banco (tipoAcao = "atualizacao") vs os que são novos.
+  //      Essa informação já foi calculada pelo ImportacaoPreviewTable durante o
+  //      enriquecimento — ela está embutida no próprio selectedRows via comparação
+  //      com o sistema. Para replicar aqui sem re-query, usamos o validRows local
+  //      que tem os mesmos dados, e cruzamos com o progressMap inicial (todos
+  //      partem de "pendente"; o componente já sabe quais são novos vs atualizações).
+  //
+  //      Como o filho não expõe tipoAcao, usamos uma heurística confiável:
+  //      fazemos 1 query de verificação APENAS para o lote selecionado (rhms IN),
+  //      agrupada por teamId — exatamente igual ao que o filho já fez. Como o
+  //      filho já buscou no mount, os dados estão no cache do Supabase (realtime).
+  //      Custo: 1 query leve por time, só para os RHMs do lote selecionado.
+  //
+  //   2. Após upsertDemandas, classificamos cada linha como:
+  //      - "atualizado" → estava no banco antes da chamada
+  //      - "criado"     → não estava
+  //      - "erro"       → o lote inteiro falhou (catch)
 
   const handleImport = async (selectedRows: PreviewRow[]) => {
     if (!currentTeamId || selectedRows.length === 0) return;
     setLoading(true);
 
-    // Inicializa progresso como "atualizando" para todas as selecionadas
-    const initMap = new Map<string, RowStatus>(
-      selectedRows.map((r) => [r.rhm, "atualizando"]),
-    );
-    setProgressMap(new Map(initMap));
+    // Inicializa todas as selecionadas como "atualizando"
+    setProgressMap(new Map(selectedRows.map((r) => [r.rhm, "atualizando" as RowStatus])));
 
+    // ── 1. Verifica quais RHMs já existem no banco (por time, 1 query/time) ──
+    // Isso nos permite distinguir "criado" de "atualizado" sem alterar a RPC.
+    const existsInDb = new Set<string>(); // chave: `${teamId}:${rhm}`
+    const byTeamCheck = new Map<string, string[]>();
+    for (const row of selectedRows) {
+      const list = byTeamCheck.get(row.teamId) ?? [];
+      list.push(row.rhm);
+      byTeamCheck.set(row.teamId, list);
+    }
+    // Importação dinâmica do client para não criar dependência circular
+    const { supabase } = await import("@/integrations/supabase/client");
+    for (const [teamId, rhms] of byTeamCheck) {
+      const { data } = await supabase
+        .from("demandas" as any)
+        .select("rhm")
+        .eq("team_id", teamId)
+        .in("rhm", rhms);
+      if (data) {
+        for (const d of data as any[]) {
+          existsInDb.add(`${teamId}:${d.rhm}`);
+        }
+      }
+    }
+
+    // ── 2. Executa upsert por time (1 RPC/time) ───────────────────────────────
     const totals = { importados: 0, atualizados: 0, erros: 0 };
+    const falhas: FailedRow[] = [];
 
-    // Agrupa por teamId (1 RPC por time)
     const byTeam = new Map<string, PreviewRow[]>();
     for (const row of selectedRows) {
       const group = byTeam.get(row.teamId) ?? [];
@@ -388,17 +446,17 @@ export function ImportacaoView() {
         const res = await upsertDemandas(
           teamId,
           rows.map((row) => ({
-            rhm:                       row.rhm,
-            projeto:                   row.projeto,
-            situacao:                  row.situacao || "fila_atendimento",
-            tipo:                      row.tipo,
-            sla:                       row.sla,
-            descricao:                 row.descricao,
-            tipo_defeito:              row.tipo_defeito,
-            originada_diagnostico:     row.originada_diagnostico,
+            rhm:                        row.rhm,
+            projeto:                    row.projeto,
+            situacao:                   row.situacao || "fila_atendimento",
+            tipo:                       row.tipo,
+            sla:                        row.sla,
+            descricao:                  row.descricao,
+            tipo_defeito:               row.tipo_defeito,
+            originada_diagnostico:      row.originada_diagnostico,
             data_previsao_encerramento: row.data_previsao_encerramento,
-            prazo_inicio_atendimento:  row.prazo_inicio_atendimento,
-            prazo_solucao:             row.prazo_solucao,
+            prazo_inicio_atendimento:   row.prazo_inicio_atendimento,
+            prazo_solucao:              row.prazo_solucao,
           })),
         );
 
@@ -406,22 +464,29 @@ export function ImportacaoView() {
         totals.atualizados += res.atualizados;
         totals.erros       += res.erros;
 
-        // Atualiza progresso por linha com base no retorno da RPC
+        // ── 3. Progresso granular: criado vs atualizado por linha ─────────────
         setProgressMap((prev) => {
           const next = new Map(prev);
-          // A RPC retorna totais, não por-linha; marcamos todas do lote como concluídas
           for (const row of rows) {
-            next.set(row.rhm, "criado");
+            const key = `${teamId}:${row.rhm}`;
+            // Se existia antes → foi atualizado; senão → foi criado
+            next.set(row.rhm, existsInDb.has(key) ? "atualizado" : "criado");
           }
           return next;
         });
-      } catch {
+      } catch (err: any) {
         totals.erros += rows.length;
+        const motivo = err?.message ?? "Erro desconhecido";
+        // ── 4. Marca todas as linhas do lote como erro ────────────────────────
         setProgressMap((prev) => {
           const next = new Map(prev);
           for (const row of rows) next.set(row.rhm, "erro");
           return next;
         });
+        // Registra cada RHM que falhou para exibir no log do resultado
+        for (const row of rows) {
+          falhas.push({ rhm: row.rhm, projeto: row.projeto, motivo });
+        }
       }
     }
 
@@ -433,12 +498,12 @@ export function ImportacaoView() {
       `Importação concluída: ${totals.importados} novos, ${totals.atualizados} atualizados${tipoMsg}`,
     );
 
-    setResult({ ...totals, tiposCriados: autoCreatedTypes });
+    setResult({ ...totals, tiposCriados: autoCreatedTypes, falhas });
     setShowPreview(false);
     setLoading(false);
   };
 
-  // ─── Reset do estado de preview ──────────────────────────────────────────────
+  // ─── Reset do estado de preview ───────────────────────────────────────────
 
   function cancelPreview() {
     setShowPreview(false);
@@ -448,7 +513,7 @@ export function ImportacaoView() {
     setProgressMap(new Map());
   }
 
-  // ─── Render: tela de seleção de modo ──────────────────────────────────────────
+  // ─── Render: tela de seleção de modo ──────────────────────────────────────
 
   if (mode === null) {
     return (
@@ -485,7 +550,7 @@ export function ImportacaoView() {
     );
   }
 
-  // ─── Render: tela principal (demandas ou projetos) ───────────────────────────
+  // ─── Render: tela principal ───────────────────────────────────────────────
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -554,10 +619,12 @@ export function ImportacaoView() {
             </div>
           )}
 
-          {/* ── Erros de validação do CSV (linhas rejeitadas) ── */}
+          {/* ── Erros de validação do CSV (linhas rejeitadas antes do preview) ── */}
           {mode === "demandas" && errors.length > 0 && (
             <div className="border border-destructive/30 rounded-lg p-3 space-y-1.5 max-h-48 overflow-y-auto bg-destructive/5">
-              <p className="text-xs font-semibold text-destructive uppercase">Linhas com erro (não serão importadas):</p>
+              <p className="text-xs font-semibold text-destructive uppercase">
+                Linhas com erro (não serão importadas):
+              </p>
               {errors.map((err, i) => (
                 <div key={i} className="flex items-start gap-2 text-xs">
                   <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0 mt-0.5" />
@@ -592,15 +659,17 @@ export function ImportacaoView() {
 
           {/* ── Resultado final: demandas ── */}
           {mode === "demandas" && result && !showPreview && (
-            <div className="border rounded-lg p-4 space-y-2">
+            <div className="border rounded-lg p-4 space-y-3">
               <p className="font-medium flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 Resultado da importação
               </p>
+
+              {/* Totais */}
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div className="text-center p-2 bg-emerald-50 rounded">
                   <p className="text-lg font-bold text-emerald-700">{result.importados}</p>
-                  <p className="text-xs text-muted-foreground">Importados</p>
+                  <p className="text-xs text-muted-foreground">Criados</p>
                 </div>
                 <div className="text-center p-2 rounded" style={{ backgroundColor: "#e8f2fa" }}>
                   <p className="text-lg font-bold" style={{ color: "#1a6fa8" }}>{result.atualizados}</p>
@@ -611,8 +680,10 @@ export function ImportacaoView() {
                   <p className="text-xs text-muted-foreground">Erros</p>
                 </div>
               </div>
+
+              {/* Tipos auto-criados */}
               {result.tiposCriados && result.tiposCriados.length > 0 && (
-                <div className="border border-amber-300 rounded-lg p-3 bg-amber-50 mt-2">
+                <div className="border border-amber-300 rounded-lg p-3 bg-amber-50">
                   <p className="text-xs font-semibold text-amber-800">
                     Tipos criados automaticamente ({result.tiposCriados.length}):
                   </p>
@@ -621,10 +692,31 @@ export function ImportacaoView() {
                   </ul>
                 </div>
               )}
+
+              {/* Log de falhas por RHM — só exibido se houve erros */}
+              {result.falhas && result.falhas.length > 0 && (
+                <div className="border border-destructive/30 rounded-lg p-3 bg-destructive/5 space-y-2">
+                  <p className="text-xs font-semibold text-destructive uppercase flex items-center gap-1.5">
+                    <XCircle className="h-3.5 w-3.5" />
+                    Demandas que falharam na migração ({result.falhas.length})
+                  </p>
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {result.falhas.map((f, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs">
+                        <span className="font-mono font-bold text-destructive shrink-0">#{f.rhm}</span>
+                        <span className="text-muted-foreground shrink-0">{f.projeto}</span>
+                        <span className="text-destructive ml-auto truncate" title={f.motivo}>
+                          {f.motivo}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <Button
                 variant="outline"
                 size="sm"
-                className="mt-2"
                 onClick={() => {
                   setResult(null);
                   setProgressMap(new Map());
