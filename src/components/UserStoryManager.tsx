@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { FileUploader } from "@/components/FileUploader";
@@ -89,20 +89,37 @@ export function UserStoryManager() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [epicFilter, setEpicFilter] = useState("all");
   const [sprintFilter, setSprintFilter] = useState("all");
+  const [initialized, setInitialized] = useState(false);
+
+  // Initialize filter with active sprint or backlog
+  useEffect(() => {
+    if (!loading && !initialized) {
+      if (activeSprint) {
+        setSprintFilter(activeSprint.id);
+      } else {
+        setSprintFilter("backlog");
+      }
+      setInitialized(true);
+    }
+  }, [loading, activeSprint, initialized]);
 
   const hasFilters =
     searchFilter !== "" ||
     priorityFilter !== "all" ||
     statusFilter !== "all" ||
     epicFilter !== "all" ||
-    sprintFilter !== "all";
+    (initialized && sprintFilter !== (activeSprint?.id || "backlog"));
 
   const clearFilters = () => {
     setSearchFilter("");
     setPriorityFilter("all");
     setStatusFilter("all");
     setEpicFilter("all");
-    setSprintFilter("all");
+    if (activeSprint) {
+      setSprintFilter(activeSprint.id);
+    } else {
+      setSprintFilter("backlog");
+    }
   };
 
   const filteredStories = useMemo(() => {
@@ -112,8 +129,6 @@ export function UserStoryManager() {
       stories = stories.filter((hu) => !hu.sprintId);
     } else if (sprintFilter !== "all") {
       stories = stories.filter((hu) => hu.sprintId === sprintFilter);
-    } else if (activeSprint) {
-      stories = stories.filter((hu) => hu.sprintId === activeSprint.id || !hu.sprintId);
     }
 
     if (debouncedSearch) {

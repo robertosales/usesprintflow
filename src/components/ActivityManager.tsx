@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -96,19 +96,36 @@ export function ActivityManager() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [sprintFilter, setSprintFilter] = useState("all");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [initialized, setInitialized] = useState(false);
+
+  // Initialize filter with active sprint or all
+  useEffect(() => {
+    if (!loading && !initialized) {
+      if (activeSprint) {
+        setSprintFilter("active");
+      } else {
+        setSprintFilter("all");
+      }
+      setInitialized(true);
+    }
+  }, [loading, activeSprint, initialized]);
 
   const hasFilters =
     searchFilter !== "" ||
     typeFilter !== "all" ||
     statusFilter !== "all" ||
-    sprintFilter !== "all" ||
+    (initialized && sprintFilter !== (activeSprint ? "active" : "all")) ||
     assigneeFilter !== "all";
 
   const clearFilters = () => {
     setSearchFilter("");
     setTypeFilter("all");
     setStatusFilter("all");
-    setSprintFilter("all");
+    if (activeSprint) {
+      setSprintFilter("active");
+    } else {
+      setSprintFilter("all");
+    }
     setAssigneeFilter("all");
   };
 
