@@ -333,14 +333,27 @@ function PlanningSessionCard({
 
 export function AgileHistory() {
   const { currentTeamId } = useAuth();
-  const { sprints } = useSprint();
-
   const [tab, setTab] = useState("planning");
   const [planningSessions, setPlanningSessions] = useState<PlanningSessionHistory[]>([]);
   const [retroSessions, setRetroSessions] = useState<RetroSessionHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [sprintFilter, setSprintFilter] = useState("all");
+  const [initialized, setInitialized] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const { activeSprint, sprints, loading: loadingSprints } = useSprint();
+
+  // Initialize filter with active sprint or all
+  useEffect(() => {
+    if (!loadingSprints && !initialized) {
+      if (activeSprint) {
+        setSprintFilter(activeSprint.id);
+      } else {
+        setSprintFilter("all");
+      }
+      setInitialized(true);
+    }
+  }, [loadingSprints, activeSprint, initialized]);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [sprintScores, setSprintScores] = useState<Record<string, SprintScoreBreakdown>>({});
 
