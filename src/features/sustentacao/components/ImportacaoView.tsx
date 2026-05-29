@@ -1,548 +1,89 @@
-import { useState, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, FolderKanban, ArrowLeft, XCircle } from "lucide-react";
-import { toast } from "sonner";
-import { useAuth } from "@/contexts/AuthContext";
-import { upsertDemandas } from "../services/demandas.service";
-import { upsertProjetos } from "../services/projetos.service";
-import { TIPOS_DEMANDA_IMR, calcPrazoInicio, calcPrazoSolucao } from "../types/imr";
-import { useProjetos } from "../hooks/useProjetos";
-import { parse, isValid, format } from "date-fns";
+import React, { useState, useRef } from "react";
 import {
-  ImportacaoPreviewTable,
-  type PreviewRow,
-  type RowStatus,
-} from "./ImportacaoPreviewTable";
-
-// ─── Mapas de normalização ───────────────────────────────────────────────────
-
-const SITUACAO_MAP: Record<string, string> = {
-  fila_atendimento: "fila_atendimento",
-  planejamento_elaboracao: "planejamento_elaboracao",
-  planejamento_ag_aprovacao: "planejamento_ag_aprovacao",
-  planejamento_aprovada: "planejamento_aprovada",
-  em_execucao: "em_execucao",
-  bloqueada: "bloqueada",
-  hom_ag_homologacao: "hom_ag_homologacao",
-  hom_homologada: "hom_homologada",
-  rejeitada: "rejeitada",
-  fila_producao: "fila_producao",
-  ag_aceite_final: "ag_aceite_final",
-  cancelada: "cancelada",
-  "fila de atendimento": "fila_atendimento",
-  nova: "fila_atendimento",
-  "planejamento: em elaboracao": "planejamento_elaboracao",
-  "planejamento: em elaboração": "planejamento_elaboracao",
-  "planejamento: ag. aprovacao": "planejamento_ag_aprovacao",
-  "planejamento: ag. aprovação": "planejamento_ag_aprovacao",
-  "planejamento: aprovada p/ exec": "planejamento_aprovada",
-  "em execucao": "em_execucao",
-  "em execução": "em_execucao",
-  "hom: ag. homologacao": "hom_ag_homologacao",
-  "hom: ag. homologação": "hom_ag_homologacao",
-  "hom: homologada": "hom_homologada",
-  homologada: "hom_homologada",
-  "fila para producao (infra)": "fila_producao",
-  "fila para produção (infra)": "fila_producao",
-  "ag. aceite final": "ag_aceite_final",
-  "aguardando aceite final": "ag_aceite_final",
-};
-
-function normalizeSituacao(raw: string): string {
-  const cleaned = raw
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-  return SITUACAO_MAP[cleaned] || SITUACAO_MAP[raw.trim().toLowerCase()] || "fila_atendimento";
-}
-
-const VALID_TIPOS_MAP: Record<string, string> = {};
-TIPOS_DEMANDA_IMR.forEach((t) => {
-  VALID_TIPOS_MAP[t.label.toLowerCase()] = t.value;
-  VALID_TIPOS_MAP[t.value] = t.value;
-});
-
-function normalize(str: string): string {
-  return str
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function removeEmojis(str: string): string {
-  return str
-    .replace(
-      /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{200D}\u{20E3}]/gu,
-      "",
-    )
-    .trim();
-}
-
-function normalizeSLA(raw: string): string | null {
-  if (!raw || raw === "-") return null;
-  if (/\d+\s*x\s*7/i.test(raw)) return "continuo";
-  if (normalize(raw) === "padrao" || normalize(raw) === "padrão") return "padrao";
-  return raw.trim();
-}
-
-function parseDataInicio(raw: any): Date | null {
-  if (!raw) return null;
-  if (raw instanceof Date) return isValid(raw) ? raw : null;
-  const str = String(raw).trim();
-  let d = parse(str, "dd/MM/yyyy HH:mm", new Date());
-  if (isValid(d)) return d;
-  d = parse(str, "dd/MM/yyyy", new Date());
-  if (isValid(d)) return d;
-  d = new Date(str);
-  return isValid(d) ? d : null;
-}
-
-function normalizeTipo(raw: string): { value: string; autoCreated: boolean } | null {
-  const lower = raw.toLowerCase().trim();
-  if (!lower) return null;
-  if (VALID_TIPOS_MAP[lower]) return { value: VALID_TIPOS_MAP[lower], autoCreated: false };
-  for (const [key, val] of Object.entries(VALID_TIPOS_MAP)) {
-    if (key.includes(lower) || lower.includes(key)) return { value: val, autoCreated: false };
-  }
-  if (lower === "corretiva") return { value: "manutencao_corretiva", autoCreated: false };
-  if (lower === "evolutiva") return { value: "evolutiva_pequeno_porte", autoCreated: false };
-  const autoKey = lower
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "_")
-    .replace(/[^a-z0-9_]/g, "");
-  return { value: autoKey || lower.replace(/\s+/g, "_"), autoCreated: true };
-}
-
-// ─── Tipos locais ─────────────────────────────────────────────────────────────
-
-interface ValidationError {
-  linha: number;
-  mensagem: string;
-}
-
-/**
- * ParsedRow: interno ao ImportacaoView.
- * Estende PreviewRow adicionando data_inicio (necessário só aqui para cálculo de prazos).
- */
-interface ParsedRow extends PreviewRow {
-  data_inicio: Date;
-}
-
-type ImportMode = null | "demandas" | "projetos";
-
-/**
- * Linha com erro registrado após tentativa de migração.
- * Usado apenas para exibição no log de falhas do resultado final.
- */
-interface FailedRow {
-  rhm: string;
-  projeto: string;
-  motivo: string;
-}
-
-// ─── Componente ───────────────────────────────────────────────────────────────
+  FileSpreadsheet,
+  FolderKanban,
+  Upload,
+  ArrowLeft,
+  CheckCircle2,
+  AlertCircle,
+  XCircle,
+  Clock
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useImportacaoDemandas } from "../hooks/useImportacaoDemandas";
+import { useImportacaoProjetos } from "../hooks/useImportacaoProjetos";
+import { ImportacaoPreviewTable } from "./ImportacaoPreviewTable";
+import { cn } from "@/lib/utils";
 
 export function ImportacaoView() {
-  const { currentTeamId } = useAuth();
-  const { projetos, reload: reloadProjetos } = useProjetos({ allTeams: true });
-
-  const [mode, setMode] = useState<ImportMode>(null);
-  const [loading, setLoading] = useState(false);
-
-  // ── estado de demandas ──
-  const [validRows, setValidRows]               = useState<ParsedRow[]>([]);
-  const [autoCreatedTypes, setAutoCreatedTypes] = useState<string[]>([]);
-  const [errors, setErrors]                     = useState<ValidationError[]>([]);
-  const [showPreview, setShowPreview]           = useState(false);
-  /**
-   * progressMap: Map<rhm, RowStatus>
-   * Chave: rhm da demanda.
-   * Valor: status individual da linha durante/após a migração.
-   * Atualizado de forma imutável (new Map) para acionar re-render do filho.
-   */
-  const [progressMap, setProgressMap]           = useState<Map<string, RowStatus>>(new Map());
-  const [result, setResult] = useState<{
-    importados: number;
-    atualizados: number;
-    erros: number;
-    tiposCriados?: string[];
-    /** RHMs que falharam na migração, com motivo */
-    falhas?: FailedRow[];
-  } | null>(null);
-
-  // ── estado de projetos ──
-  const [projetoResult, setProjetoResult] = useState<{
-    importados: number;
-    existentes: number;
-    erros: number;
-  } | null>(null);
-
+  const [mode, setMode] = useState<"demandas" | "projetos" | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // mapa nome-normalizado → { nome original, team_id }
-  const projetoMap = new Map(
-    projetos.map((p) => [normalize(p.nome), { nome: p.nome, teamId: p.team_id }]),
-  );
+  const {
+    loading,
+    showPreview,
+    validRows,
+    errors,
+    autoCreatedTypes,
+    result,
+    progressMap,
+    handleFile: handleFileDemandas,
+    handleImport,
+    cancelPreview,
+    setResult,
+    setProgressMap,
+  } = useImportacaoDemandas();
 
-  // ─── Parse do CSV ─────────────────────────────────────────────────────────
+  const {
+    loading: loadingProjetos,
+    result: projetoResult,
+    handleFile: handleFileProjetos,
+    setResult: setProjetoResult,
+  } = useImportacaoProjetos();
 
-  function parseCsvToRows(buffer: ArrayBuffer): Record<string, string>[] {
-    const text = new TextDecoder("utf-8").decode(buffer);
-    const lines = text
-      .replace(/\r\n/g, "\n")
-      .replace(/\r/g, "\n")
-      .split("\n")
-      .filter((l) => l.trim());
-    if (lines.length < 2) return [];
-    lines[0] = lines[0].replace(/^\uFEFF/, "");
-    const headers = lines[0].split(";").map((h) => h.trim());
-    return lines.slice(1).map((line) => {
-      const values = line.split(";");
-      const obj: Record<string, string> = {};
-      headers.forEach((h, i) => { obj[h] = (values[i] || "").trim(); });
-      return obj;
-    });
-  }
+  // ─── Render: seleção inicial ─────────────────────────────────────────────
 
-  // ─── Upload: demandas ──────────────────────────────────────────────────────
-
-  const handleFileDemandas = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentTeamId) return;
-
-    setResult(null);
-    setShowPreview(false);
-    setErrors([]);
-    setValidRows([]);
-    setProgressMap(new Map());
-
-    try {
-      const buffer = await file.arrayBuffer();
-      const rows = parseCsvToRows(buffer);
-
-      const parsed: ParsedRow[] = [];
-      const errs: ValidationError[] = [];
-      const newTypes: string[] = [];
-
-      rows.forEach((r, idx) => {
-        const linha = idx + 2;
-
-        const rhm     = String(r["#"] || r["RHM"] || r["rhm"] || "").trim();
-        const projeto  = String(r["Projeto"] || r["projeto"] || "").trim();
-        const tipoRaw  = String(r["Tipo"] || r["tipo"] || "").trim();
-        const dataInicioRaw =
-          r["Criado em"] || r["Criado Em"] || r["Data de Início"] || r["Data de Inicio"] || r["data_inicio"] || null;
-        const descricao =
-          String(r["Título"] || r["Titulo"] || r["Subject"] || r["Descrição"] || r["descricao"] || "").trim() ||
-          undefined;
-
-        if (!rhm)     { errs.push({ linha, mensagem: "# não informado." }); return; }
-        if (!projeto)  { errs.push({ linha, mensagem: "Projeto não informado." }); return; }
-
-        const projetoInfo = projetoMap.get(normalize(projeto));
-        if (!projetoInfo) {
-          errs.push({ linha, mensagem: `Projeto '${projeto}' não encontrado. Verifique o cadastro.` });
-          return;
-        }
-
-        if (!tipoRaw) { errs.push({ linha, mensagem: "Tipo não informado." }); return; }
-        const tipoResult = normalizeTipo(tipoRaw);
-        if (!tipoResult) { errs.push({ linha, mensagem: `Tipo '${tipoRaw}' não reconhecido.` }); return; }
-        if (tipoResult.autoCreated && !newTypes.includes(tipoRaw)) newTypes.push(tipoRaw);
-        const tipoNorm = tipoResult.value;
-
-        if (!dataInicioRaw) { errs.push({ linha, mensagem: "Criado em inválido ou ausente." }); return; }
-        const dataInicio = parseDataInicio(dataInicioRaw);
-        if (!dataInicio)    { errs.push({ linha, mensagem: "Criado em inválido ou ausente." }); return; }
-
-        const situacaoRaw = String(r["Situação"] || r["Situacao"] || r["situacao"] || "Nova").trim();
-        const situacao = normalizeSituacao(removeEmojis(situacaoRaw));
-
-        const isCorretiva = tipoNorm === "manutencao_corretiva";
-        let sla = "padrao";
-        const regimeRaw = String(r["Regime de Atendimento"] || r["Regime"] || r["regime"] || "").trim();
-        if (isCorretiva && /\d+\s*x\s*7/i.test(regimeRaw)) sla = "continuo";
-        else if (isCorretiva && (normalize(regimeRaw) === "continuo" || normalize(regimeRaw) === "contínuo"))
-          sla = "continuo";
-
-        let tipo_defeito: string | undefined;
-        const defeitoRaw = String(r["Defeito Impeditivo"] || r["Tipo de Defeito"] || r["tipo_defeito"] || "")
-          .trim().toLowerCase();
-        if (isCorretiva && defeitoRaw) {
-          tipo_defeito = defeitoRaw === "sim" || defeitoRaw === "impeditivo" ? "impeditivo" : "nao_impeditivo";
-        } else if (isCorretiva) {
-          tipo_defeito = "impeditivo";
-        }
-
-        let originada_diagnostico = false;
-        const diagRaw = String(r["Originada de Diagnóstico"] || r["Originada de Diagnostico"] || "")
-          .trim().toLowerCase();
-        if (isCorretiva && (diagRaw === "sim" || diagRaw === "true" || diagRaw === "1"))
-          originada_diagnostico = true;
-
-        const regime = isCorretiva ? sla : undefined;
-        const defeito = isCorretiva ? tipo_defeito : undefined;
-        const prazoInicio  = calcPrazoInicio(dataInicio, tipoNorm, regime, defeito);
-        const prazoSolucao = calcPrazoSolucao(dataInicio, tipoNorm, regime, defeito);
-
-        const prevEncRaw = r["Data de Previsão de Encerramento"] || r["Data Previsão Encerramento"] || null;
-        let prevEnc: string | undefined;
-        if (prevEncRaw) {
-          const d = parseDataInicio(prevEncRaw);
-          if (d) prevEnc = format(d, "yyyy-MM-dd");
-        }
-
-        parsed.push({
-          rhm,
-          projeto: projetoInfo.nome,
-          teamId: projetoInfo.teamId,
-          tipo: tipoNorm,
-          data_inicio: dataInicio,
-          situacao,
-          sla,
-          tipo_defeito,
-          originada_diagnostico,
-          descricao,
-          data_previsao_encerramento:
-            prevEnc || (prazoSolucao ? format(prazoSolucao, "yyyy-MM-dd") : undefined),
-          prazo_inicio_atendimento: prazoInicio?.toISOString(),
-          prazo_solucao: prazoSolucao?.toISOString(),
-        });
-      });
-
-      setValidRows(parsed);
-      setErrors(errs);
-      setAutoCreatedTypes(newTypes);
-      if (parsed.length === 0 && errs.length === 0) {
-        toast.error("Nenhuma linha encontrada no arquivo.");
-      } else {
-        setShowPreview(true);
-      }
-    } catch {
-      toast.error("Erro ao processar arquivo.");
-    } finally {
-      if (inputRef.current) inputRef.current.value = "";
-    }
-  };
-
-  // ─── Upload: projetos ──────────────────────────────────────────────────────
-
-  const handleFileProjetos = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentTeamId) return;
-
-    setProjetoResult(null);
-    setLoading(true);
-
-    try {
-      const buffer = await file.arrayBuffer();
-      const rows = parseCsvToRows(buffer);
-
-      const results = { importados: 0, existentes: 0, erros: 0 };
-      const existingNorms = new Set(projetos.map((p) => normalize(p.nome)));
-
-      for (const r of rows) {
-        const nome = String(r["Nome"] || r["nome"] || "").trim();
-        if (!nome) { results.erros++; continue; }
-        if (existingNorms.has(normalize(nome))) { results.existentes++; continue; }
-
-        const descricao = String(r["Descrição"] || r["Descricao"] || r["descricao"] || "").trim();
-        const equipe    = String(r["Equipe"] || r["equipe"] || "").trim();
-        const slaRaw    = String(r["SLA"] || r["sla"] || "").trim();
-        const sla       = normalizeSLA(slaRaw) || "padrao";
-
-        try {
-          await upsertProjetos(currentTeamId, [{ nome, descricao, equipe, sla }]);
-          results.importados++;
-          existingNorms.add(normalize(nome));
-        } catch {
-          results.erros++;
-        }
-      }
-
-      setProjetoResult(results);
-      toast.success(
-        `Importação de projetos concluída: ${results.importados} novos, ${results.existentes} já existentes`,
-      );
-      await reloadProjetos();
-    } catch {
-      toast.error("Erro ao processar arquivo.");
-    } finally {
-      setLoading(false);
-      if (inputRef.current) inputRef.current.value = "";
-    }
-  };
-
-  // ─── Migração: recebe as linhas selecionadas pelo ImportacaoPreviewTable ───
-  //
-  // Estratégia de progresso granular SEM alterar a RPC:
-  //   1. Antes de chamar upsertDemandas, montamos um Set dos RHMs que JÁ EXISTEM
-  //      no banco (tipoAcao = "atualizacao") vs os que são novos.
-  //      Essa informação já foi calculada pelo ImportacaoPreviewTable durante o
-  //      enriquecimento — ela está embutida no próprio selectedRows via comparação
-  //      com o sistema. Para replicar aqui sem re-query, usamos o validRows local
-  //      que tem os mesmos dados, e cruzamos com o progressMap inicial (todos
-  //      partem de "pendente"; o componente já sabe quais são novos vs atualizações).
-  //
-  //      Como o filho não expõe tipoAcao, usamos uma heurística confiável:
-  //      fazemos 1 query de verificação APENAS para o lote selecionado (rhms IN),
-  //      agrupada por teamId — exatamente igual ao que o filho já fez. Como o
-  //      filho já buscou no mount, os dados estão no cache do Supabase (realtime).
-  //      Custo: 1 query leve por time, só para os RHMs do lote selecionado.
-  //
-  //   2. Após upsertDemandas, classificamos cada linha como:
-  //      - "atualizado" → estava no banco antes da chamada
-  //      - "criado"     → não estava
-  //      - "erro"       → o lote inteiro falhou (catch)
-
-  const handleImport = async (selectedRows: PreviewRow[]) => {
-    if (!currentTeamId || selectedRows.length === 0) return;
-    setLoading(true);
-
-    // Inicializa todas as selecionadas como "atualizando"
-    setProgressMap(new Map(selectedRows.map((r) => [r.rhm, "atualizando" as RowStatus])));
-
-    // ── 1. Verifica quais RHMs já existem no banco (por time, 1 query/time) ──
-    // Isso nos permite distinguir "criado" de "atualizado" sem alterar a RPC.
-    const existsInDb = new Set<string>(); // chave: `${teamId}:${rhm}`
-    const byTeamCheck = new Map<string, string[]>();
-    for (const row of selectedRows) {
-      const list = byTeamCheck.get(row.teamId) ?? [];
-      list.push(row.rhm);
-      byTeamCheck.set(row.teamId, list);
-    }
-    // Importação dinâmica do client para não criar dependência circular
-    const { supabase } = await import("@/integrations/supabase/client");
-    for (const [teamId, rhms] of byTeamCheck) {
-      const { data } = await supabase
-        .from("demandas" as any)
-        .select("rhm")
-        .eq("team_id", teamId)
-        .in("rhm", rhms);
-      if (data) {
-        for (const d of data as any[]) {
-          existsInDb.add(`${teamId}:${d.rhm}`);
-        }
-      }
-    }
-
-    // ── 2. Executa upsert por time (1 RPC/time) ───────────────────────────────
-    const totals = { importados: 0, atualizados: 0, erros: 0 };
-    const falhas: FailedRow[] = [];
-
-    const byTeam = new Map<string, PreviewRow[]>();
-    for (const row of selectedRows) {
-      const group = byTeam.get(row.teamId) ?? [];
-      group.push(row);
-      byTeam.set(row.teamId, group);
-    }
-
-    for (const [teamId, rows] of byTeam) {
-      try {
-        const res = await upsertDemandas(
-          teamId,
-          rows.map((row) => ({
-            rhm:                        row.rhm,
-            projeto:                    row.projeto,
-            situacao:                   row.situacao || "fila_atendimento",
-            tipo:                       row.tipo,
-            sla:                        row.sla,
-            descricao:                  row.descricao,
-            tipo_defeito:               row.tipo_defeito,
-            originada_diagnostico:      row.originada_diagnostico,
-            data_previsao_encerramento: row.data_previsao_encerramento,
-            prazo_inicio_atendimento:   row.prazo_inicio_atendimento,
-            prazo_solucao:              row.prazo_solucao,
-          })),
-        );
-
-        totals.importados  += res.importados;
-        totals.atualizados += res.atualizados;
-        totals.erros       += res.erros;
-
-        // ── 3. Progresso granular: criado vs atualizado por linha ─────────────
-        setProgressMap((prev) => {
-          const next = new Map(prev);
-          for (const row of rows) {
-            const key = `${teamId}:${row.rhm}`;
-            // Se existia antes → foi atualizado; senão → foi criado
-            next.set(row.rhm, existsInDb.has(key) ? "atualizado" : "criado");
-          }
-          return next;
-        });
-      } catch (err: any) {
-        totals.erros += rows.length;
-        const motivo = err?.message ?? "Erro desconhecido";
-        // ── 4. Marca todas as linhas do lote como erro ────────────────────────
-        setProgressMap((prev) => {
-          const next = new Map(prev);
-          for (const row of rows) next.set(row.rhm, "erro");
-          return next;
-        });
-        // Registra cada RHM que falhou para exibir no log do resultado
-        for (const row of rows) {
-          falhas.push({ rhm: row.rhm, projeto: row.projeto, motivo });
-        }
-      }
-    }
-
-    const tipoMsg =
-      autoCreatedTypes.length > 0
-        ? ` | ${autoCreatedTypes.length} tipo(s) criado(s) automaticamente`
-        : "";
-    toast.success(
-      `Importação concluída: ${totals.importados} novos, ${totals.atualizados} atualizados${tipoMsg}`,
-    );
-
-    setResult({ ...totals, tiposCriados: autoCreatedTypes, falhas });
-    setShowPreview(false);
-    setLoading(false);
-  };
-
-  // ─── Reset do estado de preview ───────────────────────────────────────────
-
-  function cancelPreview() {
-    setShowPreview(false);
-    setValidRows([]);
-    setErrors([]);
-    setAutoCreatedTypes([]);
-    setProgressMap(new Map());
-  }
-
-  // ─── Render: tela de seleção de modo ──────────────────────────────────────
-
-  if (mode === null) {
+  if (!mode) {
     return (
-      <div className="space-y-6 max-w-2xl">
-        <h2 className="text-lg font-semibold">Importação</h2>
-        <p className="text-sm text-muted-foreground">Selecione o tipo de importação que deseja realizar.</p>
-        <div className="grid grid-cols-2 gap-4">
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-8 max-w-4xl mx-auto py-12">
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-bold text-gray-900">O que você deseja importar?</h2>
+          <p className="text-muted-foreground">Selecione o tipo de dado para iniciar o processo</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full px-4">
           <Card
-            className="cursor-pointer hover:shadow-md transition-shadow border-2 hover:border-info/40"
+            className="cursor-pointer hover:shadow-lg transition-all border-gray-100 hover:border-blue-200 group"
             onClick={() => setMode("demandas")}
           >
-            <CardContent className="p-6 text-center space-y-3">
-              <FileSpreadsheet className="h-10 w-10 mx-auto text-info" />
-              <h3 className="font-semibold">📋 Demandas</h3>
-              <p className="text-xs text-muted-foreground">
-                Importar do Redmine<br />(.csv / .xlsx)
-              </p>
+            <CardContent className="p-8 text-center space-y-4">
+              <div className="w-16 h-16 mx-auto bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                <FileSpreadsheet className="h-8 w-8" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-gray-900">Demandas</h3>
+                <p className="text-sm text-muted-foreground">
+                  Importar do Redmine via arquivo .csv ou .xlsx
+                </p>
+              </div>
             </CardContent>
           </Card>
+
           <Card
-            className="cursor-pointer hover:shadow-md transition-shadow border-2 hover:border-info/40"
+            className="cursor-pointer hover:shadow-lg transition-all border-gray-100 hover:border-blue-200 group"
             onClick={() => setMode("projetos")}
           >
-            <CardContent className="p-6 text-center space-y-3">
-              <FolderKanban className="h-10 w-10 mx-auto text-info" />
-              <h3 className="font-semibold">📁 Projetos</h3>
-              <p className="text-xs text-muted-foreground">
-                Importar sistemas<br />de sustentação (.csv / .xlsx)
-              </p>
+            <CardContent className="p-8 text-center space-y-4">
+              <div className="w-16 h-16 mx-auto bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                <FolderKanban className="h-8 w-8" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-gray-900">Projetos</h3>
+                <p className="text-sm text-muted-foreground">
+                  Importar sistemas de sustentação e suas configurações
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -552,13 +93,18 @@ export function ImportacaoView() {
 
   // ─── Render: tela principal ───────────────────────────────────────────────
 
+  const isDemandas = mode === "demandas";
+  const headerIconBg = isDemandas ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600";
+  const HeaderIcon = isDemandas ? FileSpreadsheet : FolderKanban;
+
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="max-w-4xl mx-auto py-6 space-y-6">
       {/* Voltar */}
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"
           size="sm"
+          className="text-muted-foreground hover:text-gray-900 transition-colors"
           onClick={() => {
             setMode(null);
             setResult(null);
@@ -566,88 +112,110 @@ export function ImportacaoView() {
             cancelPreview();
           }}
         >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Voltar
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Voltar para seleção
         </Button>
-        <h2 className="text-lg font-semibold">
-          {mode === "demandas" ? "Importar Demandas" : "Importar Projetos"}
-        </h2>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5" />
-            {mode === "demandas" ? "Importar do Redmine" : "Importar Projetos"}
-          </CardTitle>
-          <CardDescription>
-            {mode === "demandas" ? (
-              <>
-                Faça upload do arquivo .csv exportado do Redmine.<br />
-                Colunas obrigatórias: <strong>#, Projeto, Tipo, Criado em</strong>.<br />
-                Colunas opcionais: <strong>Título, Situação, Regime de Atendimento, Defeito Impeditivo</strong>.
-              </>
-            ) : (
-              <>
-                Faça upload do arquivo .csv com as colunas: <strong>Nome, Descrição, Equipe, SLA</strong>.<br />
-                <span className="text-xs text-muted-foreground">Projetos já cadastrados serão ignorados.</span>
-              </>
-            )}
-          </CardDescription>
+      <Card className="rounded-xl border-gray-100 shadow-sm overflow-hidden">
+        <CardHeader className="p-8 pb-4">
+          <div className="flex items-start gap-5">
+            <div className={cn("w-14 h-14 rounded-xl flex items-center justify-center shrink-0", headerIconBg)}>
+              <HeaderIcon className="h-7 w-7" />
+            </div>
+            <div className="space-y-1">
+              <CardTitle className="text-xl font-bold text-gray-900">
+                {isDemandas ? "Importar do Redmine" : "Importar Projetos"}
+              </CardTitle>
+              <CardDescription className="text-gray-500 leading-relaxed">
+                {isDemandas ? (
+                  <>
+                    Faça upload do arquivo .csv exportado do Redmine.<br />
+                    Colunas obrigatórias: <code className="bg-gray-100 px-1 rounded text-gray-900 font-mono text-xs">#</code>, <code className="bg-gray-100 px-1 rounded text-gray-900 font-mono text-xs">Projeto</code>, <code className="bg-gray-100 px-1 rounded text-gray-900 font-mono text-xs">Tipo</code>, <code className="bg-gray-100 px-1 rounded text-gray-900 font-mono text-xs">Criado em</code>.<br />
+                    Colunas opcionais: <code className="bg-gray-100 px-1 rounded text-gray-900 font-mono text-xs">Título</code>, <code className="bg-gray-100 px-1 rounded text-gray-900 font-mono text-xs">Situação</code>, <code className="bg-gray-100 px-1 rounded text-gray-900 font-mono text-xs">Regime de Atendimento</code>, <code className="bg-gray-100 px-1 rounded text-gray-900 font-mono text-xs">Defeito Impeditivo</code>.
+                  </>
+                ) : (
+                  <>
+                    Faça upload do arquivo .csv com as colunas: <code className="bg-gray-100 px-1 rounded text-gray-900 font-mono text-xs">Nome</code>, <code className="bg-gray-100 px-1 rounded text-gray-900 font-mono text-xs">Descrição</code>, <code className="bg-gray-100 px-1 rounded text-gray-900 font-mono text-xs">Equipe</code>, <code className="bg-gray-100 px-1 rounded text-gray-900 font-mono text-xs">SLA</code>.<br />
+                    <span className="inline-flex items-center px-2 py-0.5 mt-2 rounded bg-amber-50 text-amber-700 text-xs font-medium border border-amber-100">
+                      Projetos já cadastrados serão ignorados
+                    </span>
+                  </>
+                )}
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="p-8 pt-4 space-y-6">
           {/* ── Área de upload ── */}
-          {!showPreview && (
-            <div className="border-2 border-dashed rounded-lg p-8 text-center space-y-3">
-              <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Arraste ou clique para selecionar</p>
+          {!showPreview && !result && !projetoResult && (
+            <div
+              className="border-2 border-dashed border-gray-200 rounded-xl p-12 text-center space-y-4 bg-gray-50/50 hover:border-blue-400 hover:bg-blue-50/10 transition-all cursor-pointer group"
+              onClick={() => inputRef.current?.click()}
+            >
+              <div className="w-12 h-12 mx-auto bg-white rounded-full shadow-sm flex items-center justify-center text-gray-400 group-hover:text-blue-500 transition-colors">
+                <Upload className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-gray-700">Clique para selecionar ou arraste o arquivo</p>
+                <p className="text-xs text-gray-500">Suporta arquivos .csv e .xlsx</p>
+              </div>
               <input
                 ref={inputRef}
                 type="file"
-                accept=".csv"
-                onChange={mode === "demandas" ? handleFileDemandas : handleFileProjetos}
+                accept=".csv,.xlsx"
+                onChange={isDemandas ? handleFileDemandas : handleFileProjetos}
                 className="hidden"
               />
               <Button
                 variant="outline"
-                onClick={() => inputRef.current?.click()}
-                disabled={loading}
+                className="bg-white border-gray-200 text-gray-600 hover:bg-gray-50 mt-2"
+                disabled={loading || loadingProjetos}
               >
-                {loading ? "Processando..." : "Selecionar Arquivo"}
+                {(loading || loadingProjetos) ? "Processando..." : "Selecionar Arquivo"}
               </Button>
             </div>
           )}
 
-          {/* ── Erros de validação do CSV (linhas rejeitadas antes do preview) ── */}
-          {mode === "demandas" && errors.length > 0 && (
-            <div className="border border-destructive/30 rounded-lg p-3 space-y-1.5 max-h-48 overflow-y-auto bg-destructive/5">
-              <p className="text-xs font-semibold text-destructive uppercase">
-                Linhas com erro (não serão importadas):
+          {/* ── Erros de validação do CSV ── */}
+          {isDemandas && errors.length > 0 && (
+            <div className="border border-red-100 rounded-xl p-4 space-y-3 bg-red-50/30">
+              <p className="text-xs font-bold text-red-600 uppercase tracking-wider flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                Linhas com erro (não serão importadas)
               </p>
-              {errors.map((err, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs">
-                  <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0 mt-0.5" />
-                  <span>Linha {err.linha}: {err.mensagem}</span>
-                </div>
-              ))}
+              <div className="max-h-48 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                {errors.map((err, i) => (
+                  <div key={i} className="flex items-start gap-3 text-sm bg-white p-2 rounded-lg border border-red-50 shadow-sm">
+                    <span className="font-mono font-bold text-red-400 bg-red-50 px-1.5 py-0.5 rounded text-xs">#{err.linha}</span>
+                    <span className="text-gray-700">{err.mensagem}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
           {/* ── Aviso de tipos auto-criados ── */}
-          {mode === "demandas" && autoCreatedTypes.length > 0 && (
-            <div className="border border-amber-300 rounded-lg p-3 space-y-1.5 bg-amber-50">
-              <p className="text-xs font-semibold text-amber-800 uppercase">
-                Tipos não encontrados (serão criados automaticamente):
+          {isDemandas && autoCreatedTypes.length > 0 && !result && (
+            <div className="border border-amber-100 rounded-xl p-4 space-y-2 bg-amber-50/30">
+              <p className="text-xs font-bold text-amber-700 uppercase tracking-wider flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                Novos Tipos Detectados
               </p>
-              <ul className="list-disc pl-5 text-xs text-amber-700">
-                {autoCreatedTypes.map((t, i) => <li key={i}>{t}</li>)}
-              </ul>
+              <div className="flex flex-wrap gap-2">
+                {autoCreatedTypes.map((t, i) => (
+                  <span key={i} className="px-2 py-1 bg-white border border-amber-100 rounded-md text-xs font-medium text-amber-800">
+                    {t}
+                  </span>
+                ))}
+              </div>
+              <p className="text-[11px] text-amber-600 italic">Estes tipos serão criados automaticamente durante a importação.</p>
             </div>
           )}
 
           {/* ── Tabela comparativa de preview ── */}
-          {mode === "demandas" && showPreview && (
+          {isDemandas && showPreview && (
             <ImportacaoPreviewTable
               rows={validRows}
               onConfirm={handleImport}
@@ -658,54 +226,55 @@ export function ImportacaoView() {
           )}
 
           {/* ── Resultado final: demandas ── */}
-          {mode === "demandas" && result && !showPreview && (
-            <div className="border rounded-lg p-4 space-y-3">
-              <p className="font-medium flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                Resultado da importação
-              </p>
+          {isDemandas && result && !showPreview && (
+            <div className="space-y-6 pt-2">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+                <p className="font-bold text-gray-900 flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                  Resumo da Importação
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-medium"
+                  onClick={() => {
+                    setResult(null);
+                    setProgressMap(new Map());
+                  }}
+                >
+                  Importar outro arquivo
+                </Button>
+              </div>
 
-              {/* Totais */}
-              <div className="grid grid-cols-3 gap-3 text-sm">
-                <div className="text-center p-2 bg-emerald-50 rounded">
-                  <p className="text-lg font-bold text-emerald-700">{result.importados}</p>
-                  <p className="text-xs text-muted-foreground">Criados</p>
+              {/* Grid de Indicadores */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="text-center p-6 bg-emerald-50 rounded-xl border border-emerald-100">
+                  <p className="text-3xl font-bold text-emerald-700">{result.importados}</p>
+                  <p className="text-xs font-medium text-emerald-600 mt-1 uppercase tracking-wider">Criados</p>
                 </div>
-                <div className="text-center p-2 rounded" style={{ backgroundColor: "#e8f2fa" }}>
-                  <p className="text-lg font-bold" style={{ color: "#1a6fa8" }}>{result.atualizados}</p>
-                  <p className="text-xs text-muted-foreground">Atualizados</p>
+                <div className="text-center p-6 bg-blue-50 rounded-xl border border-blue-100">
+                  <p className="text-3xl font-bold text-blue-700">{result.atualizados}</p>
+                  <p className="text-xs font-medium text-blue-600 mt-1 uppercase tracking-wider">Atualizados</p>
                 </div>
-                <div className="text-center p-2 bg-red-50 rounded">
-                  <p className="text-lg font-bold text-destructive">{result.erros}</p>
-                  <p className="text-xs text-muted-foreground">Erros</p>
+                <div className="text-center p-6 bg-red-50 rounded-xl border border-red-100">
+                  <p className="text-3xl font-bold text-red-700">{result.erros}</p>
+                  <p className="text-xs font-medium text-red-600 mt-1 uppercase tracking-wider">Erros</p>
                 </div>
               </div>
 
-              {/* Tipos auto-criados */}
-              {result.tiposCriados && result.tiposCriados.length > 0 && (
-                <div className="border border-amber-300 rounded-lg p-3 bg-amber-50">
-                  <p className="text-xs font-semibold text-amber-800">
-                    Tipos criados automaticamente ({result.tiposCriados.length}):
-                  </p>
-                  <ul className="list-disc pl-5 text-xs text-amber-700 mt-1">
-                    {result.tiposCriados.map((t, i) => <li key={i}>{t}</li>)}
-                  </ul>
-                </div>
-              )}
-
-              {/* Log de falhas por RHM — só exibido se houve erros */}
+              {/* Log de falhas */}
               {result.falhas && result.falhas.length > 0 && (
-                <div className="border border-destructive/30 rounded-lg p-3 bg-destructive/5 space-y-2">
-                  <p className="text-xs font-semibold text-destructive uppercase flex items-center gap-1.5">
-                    <XCircle className="h-3.5 w-3.5" />
+                <div className="border border-red-100 rounded-xl p-4 bg-red-50/30 space-y-3">
+                  <p className="text-xs font-bold text-red-600 uppercase tracking-wider flex items-center gap-2">
+                    <XCircle className="h-4 w-4" />
                     Demandas que falharam na migração ({result.falhas.length})
                   </p>
-                  <div className="max-h-40 overflow-y-auto space-y-1">
+                  <div className="max-h-40 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                     {result.falhas.map((f, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs">
-                        <span className="font-mono font-bold text-destructive shrink-0">#{f.rhm}</span>
-                        <span className="text-muted-foreground shrink-0">{f.projeto}</span>
-                        <span className="text-destructive ml-auto truncate" title={f.motivo}>
+                      <div key={i} className="flex items-center gap-3 text-sm bg-white p-2 rounded-lg border border-red-50 shadow-sm">
+                        <span className="font-mono font-bold text-red-400 bg-red-50 px-1.5 py-0.5 rounded text-xs">#{f.rhm}</span>
+                        <span className="text-gray-500 text-xs shrink-0">{f.projeto}</span>
+                        <span className="text-red-700 font-medium ml-auto truncate" title={f.motivo}>
                           {f.motivo}
                         </span>
                       </div>
@@ -713,39 +282,38 @@ export function ImportacaoView() {
                   </div>
                 </div>
               )}
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setResult(null);
-                  setProgressMap(new Map());
-                }}
-              >
-                Importar outro arquivo
-              </Button>
             </div>
           )}
 
           {/* ── Resultado final: projetos ── */}
           {mode === "projetos" && projetoResult && (
-            <div className="border rounded-lg p-4 space-y-2">
-              <p className="font-medium flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                Resultado da importação
-              </p>
-              <div className="grid grid-cols-3 gap-3 text-sm">
-                <div className="text-center p-2 bg-emerald-50 rounded">
-                  <p className="text-lg font-bold text-emerald-700">{projetoResult.importados}</p>
-                  <p className="text-xs text-muted-foreground">Importados</p>
+            <div className="space-y-6 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-gray-900 flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                  Resultado da Importação de Projetos
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setProjetoResult(null)}
+                >
+                  Novo Upload
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center p-6 bg-emerald-50 rounded-xl border border-emerald-100">
+                  <p className="text-3xl font-bold text-emerald-700">{projetoResult.importados}</p>
+                  <p className="text-xs font-medium text-emerald-600 mt-1 uppercase tracking-wider">Importados</p>
                 </div>
-                <div className="text-center p-2 rounded" style={{ backgroundColor: "#e8f2fa" }}>
-                  <p className="text-lg font-bold" style={{ color: "#1a6fa8" }}>{projetoResult.existentes}</p>
-                  <p className="text-xs text-muted-foreground">Já existentes</p>
+                <div className="text-center p-6 bg-gray-50 rounded-xl border border-gray-200">
+                  <p className="text-3xl font-bold text-gray-700">{projetoResult.existentes}</p>
+                  <p className="text-xs font-medium text-gray-500 mt-1 uppercase tracking-wider">Existentes</p>
                 </div>
-                <div className="text-center p-2 bg-red-50 rounded">
-                  <p className="text-lg font-bold text-destructive">{projetoResult.erros}</p>
-                  <p className="text-xs text-muted-foreground">Erros</p>
+                <div className="text-center p-6 bg-red-50 rounded-xl border border-red-100">
+                  <p className="text-3xl font-bold text-red-700">{projetoResult.erros}</p>
+                  <p className="text-xs font-medium text-red-600 mt-1 uppercase tracking-wider">Erros</p>
                 </div>
               </div>
             </div>
