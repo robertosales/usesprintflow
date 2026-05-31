@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth }  from "@/contexts/AuthContext";
 import { toast }    from "sonner";
@@ -61,6 +62,10 @@ export function useKanbanBoard() {
   const [filters, setFilters] = useState<KanbanFilters>({
     assigneeId: "all", priority: "all", epicId: "all", sprintId: "active", swimlane: false,
   });
+
+  // Refs para evitar refetches desnecessários sob carga (150 usuários)
+  const draggingRef     = useRef(false);
+  const lastLocalWrite  = useRef<number>(0); // timestamp do último write próprio
 
   const load = useCallback(async () => {
     if (!teamId) return;
@@ -128,6 +133,13 @@ export function useKanbanBoard() {
     let timeoutId: ReturnType<typeof setTimeout>;
 
     const debouncedLoad = () => {
+      // 1. Não recarrega enquanto o usuário arrasta um card
+      if (draggingRef.current) return;
+      // 2. Não recarrega se o evento veio do nosso próprio write recente (<3s)
+      if (Date.now() - lastLocalWrite.current < 3000) return;
+      // 3. Não recarrega se a aba está escondida (economiza CPU do banco)
+      if (typeof document !== "undefined" && document.hidden) return;
+
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
         console.log("[Kanban] Realtime: Executando refetch debounced...");
@@ -164,6 +176,7 @@ export function useKanbanBoard() {
 
     setCards(prev => prev.map(c => c.id === cardId ? { ...c, status: newStatus, is_blocked: BLOCKED_STATUSES.includes(newStatus) } : c));
 
+    lastLocalWrite.current = Date.now();
     const { error } = await supabase.from("user_stories").update({ status: newStatus }).eq("id", cardId);
     if (error) { toast.error("Erro ao mover card"); await load(); }
   }, [cards, columns, load]);
@@ -206,7 +219,8 @@ export function useKanbanBoard() {
   return {
     columns, cards, filteredCards, devs, epics, sprints,
     loading, filters, setFilters,
-    dragging, setDragging,
+    dragging,
+    setDragging: (id: string | null) => { draggingRef.current = !!id; setDragging(id); },
     moveCard, updateWipLimit,
     wipCounts, swimlaneDevs,
     reload: load,
