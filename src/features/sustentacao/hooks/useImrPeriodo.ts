@@ -11,7 +11,12 @@
  *   e8Glosa   : number — dias de atraso para glosa  E8 (default 60)
  *
  * Cache: staleTime: 60s (STALE.KPI) — pesado, não precisa de refresh
- * contínuo. Invalida com debounce 2s quando demandas do time mudam via Realtime.
+ * contínuo. Invalida com debounce 2s quando:
+ *   - demandas do time mudam (UPDATE/DELETE de situação, prazo, etc.)
+ *   - demanda_transitions recebe INSERT (mudança de fase registrada)
+ *
+ * Ambos os listeners usam o mesmo channel e o mesmo timer de debounce,
+ * sem custo extra de conexão RT.
  *
  * API pública compatível com imrCalculations.ts:
  *   { iap, iqs, ict, iss, glosas, e8Alerts, loading, error, refetch }
@@ -122,24 +127,37 @@ export function useImrPeriodo({
     staleTime: STALE.KPI,   // 60s — agregação pesada
   });
 
-  // Debounce 2s: evita recálculo em cascata com muitos usuários simultâneos
+  // Debounce 2s compartilhado entre os dois listeners do channel.
+  // Evita recálculo em cascata quando múltiplas transições chegam juntas.
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!currentTeamId) return;
 
+    const invalidate = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        qc.invalidateQueries({ queryKey: imrKey(currentTeamId, inicioISO, fimISO) });
+      }, 2000);
+    };
+
     const channel = supabase
       .channel(`imr-rt-${currentTeamId}-${inicioISO}`)
+      // Listener 1: mudanças diretas nas demandas do time (situacao, prazo, etc.)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'demandas', filter: `team_id=eq.${currentTeamId}` },
-        () => {
-          if (typeof document !== 'undefined' && document.hidden) return;
-          if (timerRef.current) clearTimeout(timerRef.current);
-          timerRef.current = setTimeout(() => {
-            qc.invalidateQueries({ queryKey: imrKey(currentTeamId, inicioISO, fimISO) });
-          }, 2000);
-        },
+        invalidate,
+      )
+      // Listener 2: inserção de transições — gatilho principal do IMR.
+      // Não há filtro por team_id em demanda_transitions, mas o debounce
+      // de 2s + staleTime de 60s absorvem o custo de invalidações espúrias
+      // de outros times (evento descartado antes de re-fetch se já recente).
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'demanda_transitions' },
+        invalidate,
       )
       .subscribe();
 
