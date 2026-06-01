@@ -8,9 +8,9 @@
 -- --------------------------------------------------------
 -- demandas: lookup por responsável (filtros de fila pessoal)
 -- --------------------------------------------------------
-CREATE INDEX IF NOT EXISTS idx_demandas_responsavel_id
-  ON demandas (responsavel_id)
-  WHERE responsavel_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_demandas_responsavel_dev
+  ON demandas (responsavel_dev)
+  WHERE responsavel_dev IS NOT NULL;
 
 -- demandas: filtro por data de abertura para o período do IMR
 CREATE INDEX IF NOT EXISTS idx_demandas_team_opened_at
