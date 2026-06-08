@@ -17,7 +17,7 @@ import {
   ReportLegendBlock,
 } from "@/shared/components/reports";
 import type { KPIItem, TableColumn } from "@/shared/components/reports";
-import { Shield, AlertTriangle, CheckCircle2, Eye, FileDown } from "lucide-react";
+import { Shield, AlertTriangle, CheckCircle2, Eye } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -188,7 +188,6 @@ export function RelatorioSLA({ onBack }: Props) {
   }, [isAdmin, profile?.user_id]);
 
   const [previewUrl,    setPreviewUrl]    = useState<string | null>(null);
-  const [previewBlob,   setPreviewBlob]   = useState<Blob | null>(null);
   const [generatingPDF, setGeneratingPDF] = useState(false);
 
   const filtered = useMemo(() => {
@@ -272,7 +271,6 @@ export function RelatorioSLA({ onBack }: Props) {
       });
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       const url = URL.createObjectURL(blob);
-      setPreviewBlob(blob);
       setPreviewUrl(url);
     } catch (err) {
       console.error(err);
@@ -282,20 +280,9 @@ export function RelatorioSLA({ onBack }: Props) {
     }
   };
 
-  const handleDownload = () => {
-    if (!previewBlob) return;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(previewBlob);
-    const analistaLabel = analista === "all" ? "Todos" : (profiles.find(p => p.user_id === analista)?.display_name ?? analista);
-    a.download = `SLA_Compliance_${analistaLabel.replace(/\s+/g, "_")}_${dataInicio}_${dataFim}.pdf`;
-    a.click();
-    toast.success("Relatório exportado!");
-  };
-
   const handleClosePreview = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
-    setPreviewBlob(null);
   };
 
   return (
@@ -311,11 +298,8 @@ export function RelatorioSLA({ onBack }: Props) {
           <div className="flex-1 overflow-hidden">
             {previewUrl && <iframe src={previewUrl} className="w-full h-full border-0" title="Preview do relatório PDF" />}
           </div>
-          <DialogFooter className="px-6 py-3 border-t flex justify-end gap-2">
+          <DialogFooter className="px-6 py-3 border-t flex justify-end">
             <Button variant="outline" size="sm" onClick={handleClosePreview}>Fechar</Button>
-            <Button size="sm" className="gap-1.5" onClick={handleDownload}>
-              <FileDown className="h-3.5 w-3.5" /> Baixar PDF
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
