@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useDemandas } from "../../hooks/useDemandas";
 import { useAllTransitions, useAllHours, useProfiles } from "../../hooks/useAllTransitions";
 import { useFases } from "../../hooks/useFases";
@@ -313,12 +312,9 @@ export function RelatorioProdutividade({ onBack }: Props) {
   const [dataInicio,    setDataInicio]    = useState(daysAgo(30));
   const [dataFim,       setDataFim]       = useState(today());
   const [openGroups,    setOpenGroups]    = useState<Set<string>>(new Set());
-  const [exportingPDF,  setExportingPDF]  = useState(false);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
   const [periodo,       setPeriodo]       = useState("30");
   const [previewUrl,    setPreviewUrl]    = useState<string | null>(null);
-  const [previewNome,   setPreviewNome]   = useState<string>("");
-  const [previewDates,  setPreviewDates]  = useState<{ ini: string; fim: string }>({ ini: "", fim: "" });
-  const [previewBlob,   setPreviewBlob]   = useState<Blob | null>(null);
 
   // Garante sincronização caso o perfil do usuário carregue após a montagem
   useEffect(() => {
@@ -472,37 +468,23 @@ export function RelatorioProdutividade({ onBack }: Props) {
 
   const handleVisualizarPDF = async () => {
     if (analista === "all" || grupos.length === 0) return;
-    setExportingPDF(true);
+    setGeneratingPDF(true);
     try {
       const grupo = grupos[0];
       const blob = await buildPDFBlob(grupo, dataInicio, dataFim);
       const url = URL.createObjectURL(blob);
-      setPreviewBlob(blob);
       setPreviewUrl(url);
-      setPreviewNome(grupo.nome);
-      setPreviewDates({ ini: dataInicio, fim: dataFim });
     } catch (err) {
       console.error(err);
       toast.error("Erro ao gerar pré-visualização do relatório");
     } finally {
-      setExportingPDF(false);
+      setGeneratingPDF(false);
     }
-  };
-
-  const handleDownloadFromPreview = () => {
-    if (!previewBlob || !previewNome) return;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(previewBlob);
-    a.download = `Produtividade_${previewNome.replace(/\s+/g, "_")}_${previewDates.ini}_${previewDates.fim}.pdf`;
-    a.click();
-    toast.success("Relatório individual exportado!");
   };
 
   const handleClosePreview = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
-    setPreviewBlob(null);
-    setPreviewNome("");
   };
 
   return (
@@ -544,12 +526,12 @@ export function RelatorioProdutividade({ onBack }: Props) {
               <div className="flex justify-end print:hidden">
                 <Button
                   onClick={handleVisualizarPDF}
-                  disabled={exportingPDF || grupos.length === 0}
+                  disabled={generatingPDF || grupos.length === 0}
                   size="sm"
                   className="gap-2"
                 >
                   <Eye className="h-4 w-4" />
-                  {exportingPDF ? "Gerando..." : "Visualizar Relatório (PDF)"}
+                  {generatingPDF ? "Gerando..." : "Visualizar Relatório (PDF)"}
                 </Button>
               </div>
             )}
@@ -644,7 +626,7 @@ export function RelatorioProdutividade({ onBack }: Props) {
           <DialogHeader className="px-6 pt-4 pb-2 border-b">
             <DialogTitle className="flex items-center gap-2 text-base">
               <FileText className="h-4 w-4" />
-              Relatório de Produtividade — {previewNome}
+              Relatório de Produtividade
             </DialogTitle>
           </DialogHeader>
           {previewUrl && (
@@ -654,12 +636,8 @@ export function RelatorioProdutividade({ onBack }: Props) {
               title="Preview do Relatório"
             />
           )}
-          <DialogFooter className="px-6 py-3 border-t gap-2">
+          <DialogFooter className="px-6 py-3 border-t">
             <Button variant="outline" onClick={handleClosePreview}>Fechar</Button>
-            <Button onClick={handleDownloadFromPreview} className="gap-2">
-              <Eye className="h-4 w-4" />
-              Baixar PDF
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
