@@ -5,7 +5,7 @@ import { useAllTransitions, useProfiles } from "../../hooks/useAllTransitions";
 import { calcTempos, formatHours } from "../../utils/kpiCalculations";
 import { getReportConfig } from "../../utils/reportConfig";
 import { buildAnalistasDedup, analistaMatches } from "../../utils/analistasDedup";
-import { ExportButton } from "@/components/dashboard/ExportButton";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   ReportLayout,
   ReportPageHeader,
@@ -38,10 +38,12 @@ export function RelatorioTempoMedio({ onBack }: Props) {
   const { demandas }      = useDemandas();
   const { transitions }   = useAllTransitions();
   const profiles          = useProfiles();
+  const { user, isAdmin } = useAuth();
+
   const [periodo, setPeriodo]         = useState("30");
   const [dataInicio, setDataInicio]   = useState(daysAgo(30));
   const [dataFim,    setDataFim]      = useState(today());
-  const [analista,   setAnalista]     = useState("all");
+  const [analista,   setAnalista]     = useState(() => isAdmin ? "all" : (user?.id ?? "all"));
 
   const filtered = useMemo(() => {
     let items = demandas;
@@ -113,12 +115,6 @@ export function RelatorioTempoMedio({ onBack }: Props) {
     { key: "acimaMeta", label: "Acima Meta",  align: "right", sortable: true, render: (v, row) => v > 0 ? <Badge variant="destructive" className="text-[10px]">{v} ({row.pctAcima}%)</Badge> : <span className="text-muted-foreground">0</span> },
   ];
 
-  const getExportData = () => ({
-    title: reportCfg.tituloExportacao,
-    headers: ["Analista", "Total", "TMR", "MTTR", "TMA", "MTTA", "Acima Meta", "% Acima"],
-    rows: analistaStats.map(a => [a.nome, a.total, formatHours(a.tmr), formatHours(a.mttr), formatHours(a.tma), formatHours(a.mtta), a.acimaMeta, `${a.pctAcima}%`]),
-  });
-
   return (
     <ReportLayout
       header={
@@ -135,37 +131,37 @@ export function RelatorioTempoMedio({ onBack }: Props) {
           periodo={periodo}    setPeriodo={setPeriodo}
           dataInicio={dataInicio} setDataInicio={setDataInicio}
           dataFim={dataFim}    setDataFim={setDataFim}
-          analista={analista}  setAnalista={setAnalista}
+          analista={analista}  setAnalista={isAdmin ? setAnalista : undefined}
           analistas={analistas}
           modulo="sustentacao"
           totalFiltrado={filtered.length}
-          onClear={() => { setPeriodo("30"); setDataInicio(daysAgo(30)); setDataFim(today()); setAnalista("all"); }}
+          onClear={() => {
+            setPeriodo("30");
+            setDataInicio(daysAgo(30));
+            setDataFim(today());
+            setAnalista(isAdmin ? "all" : (user?.id ?? "all"));
+          }}
         />
       }
       kpis={<ReportKPISummary items={kpiItems} />}
       table={
-        <>
-          <div className="flex justify-end mb-2 print:hidden">
-            <ExportButton getData={getExportData} />
-          </div>
-          <ReportDataTable
-            titulo="Detalhamento por Analista"
-            columns={columns}
-            data={analistaStats}
-            rowKey={(r) => r.uid}
-            totals={totals ? {
-              label: "Total / Média",
-              values: {
-                total: totals.total,
-                tmr:   <span className={colorCls(tempos.tmr,  META_TMR)} >{formatHours(tempos.tmr)}</span>,
-                mttr:  <span className={colorCls(tempos.mttr, META_MTTR)}>{formatHours(tempos.mttr)}</span>,
-                tma:   <span className={colorCls(tempos.tma,  META_MTTR)}>{formatHours(tempos.tma)}</span>,
-                mtta:  <span className={colorCls(tempos.mtta, META_TMR)} >{formatHours(tempos.mtta)}</span>,
-                acimaMeta: totals.acima > 0 ? <Badge variant="destructive" className="text-[10px]">{totals.acima} ({totals.pct}%)</Badge> : <span className="text-muted-foreground">0</span>,
-              },
-            } : undefined}
-          />
-        </>
+        <ReportDataTable
+          titulo="Detalhamento por Analista"
+          columns={columns}
+          data={analistaStats}
+          rowKey={(r) => r.uid}
+          totals={totals ? {
+            label: "Total / Média",
+            values: {
+              total: totals.total,
+              tmr:   <span className={colorCls(tempos.tmr,  META_TMR)} >{formatHours(tempos.tmr)}</span>,
+              mttr:  <span className={colorCls(tempos.mttr, META_MTTR)}>{formatHours(tempos.mttr)}</span>,
+              tma:   <span className={colorCls(tempos.tma,  META_MTTR)}>{formatHours(tempos.tma)}</span>,
+              mtta:  <span className={colorCls(tempos.mtta, META_TMR)} >{formatHours(tempos.mtta)}</span>,
+              acimaMeta: totals.acima > 0 ? <Badge variant="destructive" className="text-[10px]">{totals.acima} ({totals.pct}%)</Badge> : <span className="text-muted-foreground">0</span>,
+            },
+          } : undefined}
+        />
       }
       footer={
         <ReportLegendBlock items={[

@@ -5,7 +5,7 @@ import { useAllTransitions, useProfiles } from "../../hooks/useAllTransitions";
 import { calcSLA, formatHours } from "../../utils/kpiCalculations";
 import { getReportConfig } from "../../utils/reportConfig";
 import { buildAnalistasDedup, analistaMatches } from "../../utils/analistasDedup";
-import { ExportButton } from "@/components/dashboard/ExportButton";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   ReportLayout,
   ReportPageHeader,
@@ -30,10 +30,12 @@ export function RelatorioSLA({ onBack }: Props) {
   const { demandas }    = useDemandas();
   const { transitions } = useAllTransitions();
   const profiles        = useProfiles();
+  const { user, isAdmin } = useAuth();
+
   const [periodo, setPeriodo]         = useState("30");
   const [dataInicio, setDataInicio]   = useState(daysAgo(30));
   const [dataFim,    setDataFim]      = useState(today());
-  const [analista,   setAnalista]     = useState("all");
+  const [analista,   setAnalista]     = useState(() => isAdmin ? "all" : (user?.id ?? "all"));
 
   const filtered = useMemo(() => {
     let items = demandas;
@@ -98,12 +100,6 @@ export function RelatorioSLA({ onBack }: Props) {
 
   const tableData = sla.results.map(r => ({ ...r }));
 
-  const getExportData = () => ({
-    title: reportCfg.tituloExportacao,
-    headers: ["RHM", "Projeto", "Prioridade", "Abertura", "Prazo SLA", "Resolução", "Status SLA", "Atraso"],
-    rows: sla.results.map(r => [r.rhm, r.projeto, r.prioridade, new Date(r.abertura).toLocaleDateString("pt-BR"), `${new Date(r.prazoSLA).toLocaleDateString("pt-BR")} ${new Date(r.prazoSLA).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`, r.resolucao ? new Date(r.resolucao).toLocaleDateString("pt-BR") : "Em aberto", r.statusSLA === "dentro" ? "Dentro do prazo" : r.statusSLA === "em_risco" ? "Em risco" : "Violado", r.atraso > 0 ? formatHours(r.atraso) : "-"]),
-  });
-
   return (
     <ReportLayout
       header={
@@ -120,11 +116,16 @@ export function RelatorioSLA({ onBack }: Props) {
           periodo={periodo}    setPeriodo={setPeriodo}
           dataInicio={dataInicio} setDataInicio={setDataInicio}
           dataFim={dataFim}    setDataFim={setDataFim}
-          analista={analista}  setAnalista={setAnalista}
+          analista={analista}  setAnalista={isAdmin ? setAnalista : undefined}
           analistas={analistas}
           modulo="sustentacao"
           totalFiltrado={filtered.length}
-          onClear={() => { setPeriodo("30"); setDataInicio(daysAgo(30)); setDataFim(today()); setAnalista("all"); }}
+          onClear={() => {
+            setPeriodo("30");
+            setDataInicio(daysAgo(30));
+            setDataFim(today());
+            setAnalista(isAdmin ? "all" : (user?.id ?? "all"));
+          }}
         />
       }
       kpis={<ReportKPISummary items={kpiItems} />}
@@ -147,17 +148,12 @@ export function RelatorioSLA({ onBack }: Props) {
         </ReportChart>
       }
       table={
-        <>
-          <div className="flex justify-end mb-2 print:hidden">
-            <ExportButton getData={getExportData} />
-          </div>
-          <ReportDataTable
-            titulo="Detalhamento por Demanda"
-            columns={columns}
-            data={tableData}
-            rowKey={(r) => r.rhm}
-          />
-        </>
+        <ReportDataTable
+          titulo="Detalhamento por Demanda"
+          columns={columns}
+          data={tableData}
+          rowKey={(r) => r.rhm}
+        />
       }
       footer={
         <ReportLegendBlock items={[
