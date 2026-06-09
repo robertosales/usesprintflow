@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { User, CheckCircle, Clock, Zap, Bug, FileDown, Eye, CalendarDays } from "lucide-react";
+import { User, CheckCircle, Clock, Zap, Bug, FileDown, Eye } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LabelList, LineChart, Line, Legend,
@@ -16,8 +16,6 @@ import {
 } from "@/shared/components/reports";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -102,45 +100,6 @@ function lancamentoDate(act: any): string {
   return (act.start_date || act.end_date || act.created_at || "").slice(0, 10);
 }
 
-interface DayGroup {
-  date:     string;
-  rows:     any[];
-  totalMin: number;
-}
-interface HuGroup {
-  huCode:   string;
-  huTitle:  string;
-  days:     DayGroup[];
-  totalMin: number;
-}
-
-function groupByHuDate(acts: any[]): HuGroup[] {
-  const huMap = new Map<string, { huCode: string; huTitle: string; dateMap: Map<string, any[]> }>();
-  for (const row of acts) {
-    const huKey = row.hu !== "---" ? row.hu : "SEM-HU";
-    const date  = lancamentoDate(row);
-    if (!huMap.has(huKey)) huMap.set(huKey, { huCode: row.hu, huTitle: row._huTitle || "", dateMap: new Map() });
-    const huEntry = huMap.get(huKey)!;
-    if (!huEntry.dateMap.has(date)) huEntry.dateMap.set(date, []);
-    huEntry.dateMap.get(date)!.push(row);
-  }
-  const result: HuGroup[] = [];
-  for (const [, hu] of huMap) {
-    const days: DayGroup[] = [...hu.dateMap.keys()].sort().map((date) => {
-      const rows     = hu.dateMap.get(date)!;
-      const totalMin = rows.reduce((s: number, r: any) => s + toMin(r.horas), 0);
-      return { date, rows, totalMin };
-    });
-    result.push({
-      huCode: hu.huCode,
-      huTitle: hu.huTitle,
-      days,
-      totalMin: days.reduce((s, d) => s + d.totalMin, 0),
-    });
-  }
-  return result;
-}
-
 interface DateGroup {
   date:     string;
   rows:     any[];
@@ -175,9 +134,6 @@ const PDF = {
   OPEN_BG:      [254, 243, 199] as [number,number,number],
 };
 
-// 4 colunas: DATA INICIO | DESCRICAO ATIVIDADE | STATUS | HORAS
-// Na linha-cabecalho do grupo: DATA na col1 (verde, bold) | "" col2 | "" col3 | TOTAL col4
-// Nas linhas de atividade: "" col1 | titulo col2 | status col3 | horas col4
 const COL = { DATE: 30, ACTIVITY: 147, STATUS: 38, HOURS: 38 };
 
 async function buildPDFBlob(
@@ -215,7 +171,6 @@ async function buildPDFBlob(
   targets.forEach((member, idx) => {
     if (idx > 0) doc.addPage();
 
-    // Cabecalho verde
     doc.setFillColor(...AGIL_PRIMARY);
     doc.rect(0, 0, W, 26, "F");
     doc.setTextColor(255, 255, 255);
@@ -230,7 +185,6 @@ async function buildPDFBlob(
 
     let y = 31;
 
-    // Card do membro
     const cardH = periodoLabel ? 24 : 18;
     doc.setFillColor(...PDF.LIGHT_BG);
     doc.roundedRect(ML, y, CW, cardH, 2, 2, "F");
@@ -255,7 +209,6 @@ async function buildPDFBlob(
     );
     y += cardH + 5;
 
-    // KPIs
     doc.setTextColor(...PDF.DARK); doc.setFontSize(8); doc.setFont("helvetica", "bold");
     doc.text("RESUMO DO MEMBRO", ML, y);
     y += 3;
@@ -279,23 +232,12 @@ async function buildPDFBlob(
     });
     y += 20;
 
-    // ── Tabela 4 colunas ────────────────────────────────────────────────────
-    //
-    //  | DATA INICIO  | DESCRICAO ATIVIDADE         | STATUS    | HORAS    |
-    //  | 21/05/2026   |                             |           | 4h 30min |  <- linha grupo (verde)
-    //  |              | Daily - Time Agil           | Concluida | 0h 30min |
-    //  |              | Projeto SonarQube x IA      | Concluida | 1h 30min |
-    //  |              | Sprint Planning             | Concluida | 1h 00min |
-    //  | 22/05/2026   |                             |           | 3h 00min |  <- linha grupo (verde)
-    //  |              | Daily NEXO                  | Concluida | 0h 30min |
-
     const dateGroups = groupByDataInicio(acts);
     const body: any[][] = [];
 
     for (const group of dateGroups) {
       const dateFmt = group.date ? fmtDatePDF(group.date) : "Sem data";
 
-      // Linha-cabecalho do grupo: data em verde na col1, cols 2-3 vazias, total na col4
       body.push([
         {
           content: dateFmt,
@@ -337,7 +279,6 @@ async function buildPDFBlob(
         },
       ]);
 
-      // Linhas de atividade: col1 vazia, col2 titulo, col3 status, col4 horas
       group.rows.forEach((r: any, ri: number) => {
         const isDone    = !!r.status;
         const statusTxt = isDone ? "Concluida" : "Em aberto";
@@ -423,7 +364,6 @@ async function buildPDFBlob(
       rowPageBreak: "avoid",
     });
 
-    // Rodape resumo
     const finalY = (doc as any).lastAutoTable.finalY + 8;
     const pageH  = doc.internal.pageSize.getHeight();
     const summaryY = Math.min(finalY, pageH - 22);
@@ -444,7 +384,6 @@ async function buildPDFBlob(
       ML + CW - 4, summaryY + 9, { align: "right" },
     );
 
-    // Paginacao
     const totalPages = (doc as any).internal.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
@@ -492,8 +431,6 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
   const [filters, setFilters] = useState<Record<string, string>>({
     sprintId: "all",
     memberId: "all",
-    type:     "all",
-    status:   "all",
     dateFrom: "",
     dateTo:   "",
   });
@@ -514,18 +451,6 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     { value: "all", label: "Todos" },
     ...developers.map((d) => ({ value: d.id, label: d.name })),
   ];
-  const typeOptions = [
-    { value: "all",         label: "Todos"    },
-    { value: "task",        label: "Tarefa"   },
-    { value: "bug",         label: "Bug"      },
-    { value: "improvement", label: "Melhoria" },
-    { value: "feature",     label: "Feature"  },
-  ];
-  const statusOptions = [
-    { value: "all",  label: "Todos"     },
-    { value: "done", label: "Concluída" },
-    { value: "open", label: "Em aberto" },
-  ];
 
   const filteredActivities = useMemo(() => {
     let acts = rawData.activities;
@@ -534,9 +459,6 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
       acts = acts.filter((a: any) => huIds.has(a.hu_id));
     }
     if (filters.memberId !== "all") acts = acts.filter((a: any) => a.assignee_id === filters.memberId);
-    if (filters.type     !== "all") acts = acts.filter((a: any) => a.activity_type === filters.type);
-    if (filters.status === "done")  acts = acts.filter((a: any) =>  a.is_closed);
-    if (filters.status === "open")  acts = acts.filter((a: any) => !a.is_closed);
     if (filters.dateFrom) {
       acts = acts.filter((a: any) => {
         const d = (a.start_date || a.end_date || a.created_at || "").slice(0, 10);
@@ -694,7 +616,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
   }
 
   function handleReset() {
-    setFilters({ sprintId: "all", memberId: "all", type: "all", status: "all", dateFrom: "", dateTo: "" });
+    setFilters({ sprintId: "all", memberId: "all", dateFrom: "", dateTo: "" });
   }
 
   const pdfDisabledReason = !periodReady
@@ -768,69 +690,22 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
           extraActions={exportActions}
         />
 
+        {/* ── Filtros unificados: Sprint | Analista | Período Início | Período Fim ── */}
         <ReportFilterBar
           fields={[
-            { key: "sprintId", label: "Sprint",  type: "select", options: sprintOptions },
-            { key: "memberId", label: "Membro",  type: "select", options: memberOptions },
-            { key: "type",     label: "Tipo",    type: "select", options: typeOptions   },
-            { key: "status",   label: "Status",  type: "select", options: statusOptions },
+            { key: "sprintId", label: "Sprint",        type: "select", options: sprintOptions },
+            { key: "memberId", label: "Analista",      type: "select", options: memberOptions },
+            { key: "dateFrom", label: "Período início", type: "date" },
+            { key: "dateTo",   label: "Período fim",    type: "date" },
           ]}
           values={filters}
           onChange={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
           onReset={handleReset}
+          periodValidation={periodReady && !periodValid
+            ? "A data inicial não pode ser maior que a data final."
+            : undefined
+          }
         />
-
-        <div className="flex flex-wrap items-end gap-4 rounded-lg border border-border bg-muted/40 px-4 py-3">
-          <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-            <CalendarDays className="h-4 w-4 text-primary" />
-            Período do relatório
-            <span className="text-xs text-destructive font-semibold ml-0.5">*</span>
-          </div>
-          <div className="flex items-end gap-3 flex-wrap">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="dateFrom" className="text-xs text-muted-foreground">Data inicial</Label>
-              <Input
-                id="dateFrom"
-                type="date"
-                value={filters.dateFrom}
-                onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))}
-                className={cn(
-                  "h-8 text-sm w-40",
-                  !periodValid && "border-destructive focus-visible:ring-destructive",
-                )}
-              />
-            </div>
-            <span className="text-muted-foreground pb-1.5">até</span>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="dateTo" className="text-xs text-muted-foreground">Data final</Label>
-              <Input
-                id="dateTo"
-                type="date"
-                value={filters.dateTo}
-                onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))}
-                className={cn(
-                  "h-8 text-sm w-40",
-                  !periodValid && "border-destructive focus-visible:ring-destructive",
-                )}
-              />
-            </div>
-          </div>
-          {!periodReady && (
-            <p className="text-xs text-muted-foreground italic self-end pb-1">
-              Informe o período do relatório para continuar.
-            </p>
-          )}
-          {periodReady && !periodValid && (
-            <p className="text-xs text-destructive font-medium self-end pb-1">
-              A data inicial não pode ser maior que a data final.
-            </p>
-          )}
-          {periodReady && periodValid && (
-            <p className="text-xs text-emerald-600 font-medium self-end pb-1">
-              Período válido — você já pode gerar o PDF.
-            </p>
-          )}
-        </div>
 
         <ReportKPISummary items={kpis} cols={4} />
 
@@ -929,8 +804,9 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
           ]}
         />
 
+        {/* ── Detalhamento (era "Detalhamento por Data de Início") ── */}
         <ReportDataTable
-          title="Detalhamento por Data de Início"
+          title="Detalhamento"
           badge={tableData.length}
           data={tableData}
           rowKey={(_, i) => i}
