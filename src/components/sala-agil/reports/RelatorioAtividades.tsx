@@ -210,7 +210,7 @@ async function buildPDFBlob(
     y += cardH + 5;
 
     doc.setTextColor(...PDF.DARK); doc.setFontSize(8); doc.setFont("helvetica", "bold");
-    doc.text("RESUMO DO MEMBRO", ML, y);
+    doc.text("RESUMO DO ANALISTA", ML, y);
     y += 3;
     const kpiW = CW / 5;
     const acts = memberMap.get(member.id) ?? [];
@@ -399,9 +399,11 @@ async function buildPDFBlob(
   return doc.output("blob");
 }
 
-function buildMemberMetrics(developers: Props["developers"], filteredActivities: any[]) {
+// Recebe TODAS as atividades filtradas por sprint/data, SEM filtro de analista,
+// para garantir que todos os membros apareçam na tabela de Produtividade.
+function buildMemberMetrics(developers: Props["developers"], allActivities: any[]) {
   return developers.map((dev) => {
-    const acts       = filteredActivities.filter((a: any) => a.assignee_id === dev.id);
+    const acts       = allActivities.filter((a: any) => a.assignee_id === dev.id);
     const closed     = acts.filter((a: any) => a.is_closed);
     const hoursP     = acts.reduce((s: number, a: any) => s + Number(a.hours), 0);
     const hoursC     = closed.reduce((s: number, a: any) => s + Number(a.hours), 0);
@@ -452,13 +454,14 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     ...developers.map((d) => ({ value: d.id, label: d.name })),
   ];
 
-  const filteredActivities = useMemo(() => {
+  // Atividades filtradas por sprint e período — SEM filtro de analista.
+  // Usadas para construir a tabela de Produtividade por Analista (todos os membros).
+  const activitiesBySprintAndDate = useMemo(() => {
     let acts = rawData.activities;
     if (filters.sprintId !== "all") {
       const huIds = new Set(rawData.hus.filter((h: any) => h.sprint_id === filters.sprintId).map((h: any) => h.id));
       acts = acts.filter((a: any) => huIds.has(a.hu_id));
     }
-    if (filters.memberId !== "all") acts = acts.filter((a: any) => a.assignee_id === filters.memberId);
     if (filters.dateFrom) {
       acts = acts.filter((a: any) => {
         const d = (a.start_date || a.end_date || a.created_at || "").slice(0, 10);
@@ -472,11 +475,19 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
       });
     }
     return acts;
-  }, [rawData, filters]);
+  }, [rawData, filters.sprintId, filters.dateFrom, filters.dateTo]);
 
+  // Atividades filtradas incluindo o analista — usadas nos KPIs e no Detalhamento.
+  const filteredActivities = useMemo(() => {
+    let acts = activitiesBySprintAndDate;
+    if (filters.memberId !== "all") acts = acts.filter((a: any) => a.assignee_id === filters.memberId);
+    return acts;
+  }, [activitiesBySprintAndDate, filters.memberId]);
+
+  // Produtividade usa sempre TODOS os membros (sem filtro de analista)
   const memberMetrics = useMemo(
-    () => buildMemberMetrics(developers, filteredActivities),
-    [filteredActivities, developers],
+    () => buildMemberMetrics(developers, activitiesBySprintAndDate),
+    [activitiesBySprintAndDate, developers],
   );
 
   const totalActs   = filteredActivities.length;
@@ -491,7 +502,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     { label: "Atividades",       value: totalActs,               sub: `${totalClosed} concluídas`,              icon: <CheckCircle className="h-4 w-4" />, status: totalClosed > 0 ? "good" : "neutral" as any },
     { label: "Horas Concluídas", value: formatMinutes(totalMinC), sub: `de ${formatMinutes(totalMinP)} planejadas`, icon: <Clock className="h-4 w-4" />,       status: (totalMinP > 0 && totalMinC / totalMinP >= 0.7) ? "good" : "warning" as any },
     { label: "Eficiência Média", value: `${avgEff}%`,            sub: "meta >= 80%",                             icon: <Zap className="h-4 w-4" />,         status: effStatus(avgEff) },
-    { label: "Membros Ativos",   value: memberMetrics.length,    sub: `de ${developers.length} no time`,         icon: <User className="h-4 w-4" />,         status: "neutral" as any },
+    { label: "Analistas Ativos", value: memberMetrics.length,    sub: `de ${developers.length} no time`,         icon: <User className="h-4 w-4" />,         status: "neutral" as any },
   ];
 
   const hoursBarData = memberMetrics.map((m) => ({
@@ -519,12 +530,13 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
   }, [rawData, developers]);
 
   const radarData = memberMetrics.slice(0, 6).map((m) => ({
-    membro:            m.name.split(" ")[0],
+    analista:          m.name.split(" ")[0],
     Eficiência:        m.eff,
     "Concluídas":      Math.min(100, Math.round((m.closed / Math.max(m.total, 1)) * 100)),
     "Bugs Resolvidos": m.bugs > 0 ? Math.round((m.bugsClosed / m.bugs) * 100) : 100,
   }));
 
+  // tableData respeita o filtro de analista — só aparece quando analista selecionado
   const tableData = useMemo(() => {
     return filteredActivities.map((a: any) => {
       const dev    = developers.find((d) => d.id === a.assignee_id);
@@ -550,7 +562,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
   function handleExportCSV() {
     exportToCSV(
       tableData.map((r) => ({
-        Membro:                r.membro,
+        Analista:              r.membro,
         Código:                r._code,
         "Título da Atividade": r.titulo,
         Sprint:                r.sprint,
@@ -693,8 +705,8 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         {/* ── Filtros unificados: Sprint | Analista | Período Início | Período Fim ── */}
         <ReportFilterBar
           fields={[
-            { key: "sprintId", label: "Sprint",        type: "select", options: sprintOptions },
-            { key: "memberId", label: "Analista",      type: "select", options: memberOptions },
+            { key: "sprintId", label: "Sprint",         type: "select", options: sprintOptions },
+            { key: "memberId", label: "Analista",       type: "select", options: memberOptions },
             { key: "dateFrom", label: "Período início", type: "date" },
             { key: "dateTo",   label: "Período fim",    type: "date" },
           ]}
@@ -710,7 +722,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         <ReportKPISummary items={kpis} cols={4} />
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <ReportChart title="Horas por Membro" subtitle="Concluídas vs. pendentes" height="h-72">
+          <ReportChart title="Horas por Analista" subtitle="Concluídas vs. pendentes" height="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={hoursBarData} margin={{ top: 12, right: 8, left: -8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
@@ -726,7 +738,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
             </ResponsiveContainer>
           </ReportChart>
 
-          <ReportChart title="Throughput por Sprint" subtitle="Atividades concluídas por membro" height="h-72">
+          <ReportChart title="Throughput por Sprint" subtitle="Atividades concluídas por analista" height="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={throughputData} margin={{ top: 12, right: 16, left: -8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
@@ -750,7 +762,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={radarData} margin={{ top: 8, right: 24, left: 24, bottom: 8 }}>
                 <PolarGrid stroke="hsl(var(--border))" />
-                <PolarAngleAxis dataKey="membro" tick={{ fontSize: 11 }} />
+                <PolarAngleAxis dataKey="analista" tick={{ fontSize: 11 }} />
                 <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 9 }} tickCount={4} />
                 <Radar name="Eficiência"      dataKey="Eficiência"      stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} />
                 <Radar name="Concluídas"      dataKey="Concluídas"      stroke="#22c55e" fill="#22c55e" fillOpacity={0.15} />
@@ -762,13 +774,14 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
           </ReportChart>
         )}
 
+        {/* ── Produtividade: sempre mostra todos os analistas ── */}
         <ReportDataTable
-          title="Produtividade por Membro"
+          title="Produtividade por Analista"
           badge={memberMetrics.length}
           data={memberMetrics}
           rowKey={(r) => r.id}
           columns={[
-            { key: "name", header: "Membro",
+            { key: "name", header: "Analista",
               render: (v, row) => (
                 <div className="flex items-center gap-2">
                   <div
@@ -804,29 +817,31 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
           ]}
         />
 
-        {/* ── Detalhamento (era "Detalhamento por Data de Início") ── */}
-        <ReportDataTable
-          title="Detalhamento"
-          badge={tableData.length}
-          data={tableData}
-          rowKey={(_, i) => i}
-          columns={[
-            { key: "_code",      header: "Código",
-              render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || "---"}</span> },
-            { key: "membro",     header: "Membro",              sortable: true },
-            { key: "hu",         header: "HU", align: "center",
-              render: (v) => v !== "---" ? <span className="font-mono text-xs">{v}</span> : "---" },
-            { key: "lancamento", header: "Data Início", align: "center",
-              render: (v) => v ? fmtDate(v) : "---" },
-            { key: "titulo",     header: "Descrição Atividade", sortable: true },
-            { key: "horas",      header: "Duração", align: "center", sortable: true,
-              render: (v) => <span className="font-semibold text-primary">{fmtH(v)}</span> },
-            { key: "status",     header: "Status", align: "center",
-              render: (v) => v
-                ? <Badge className="text-[10px] bg-emerald-500/15 text-emerald-600">Concluída</Badge>
-                : <Badge className="text-[10px] bg-amber-400/15 text-amber-600">Em aberto</Badge> },
-          ]}
-        />
+        {/* ── Detalhamento: só exibe quando um analista específico estiver selecionado ── */}
+        {filters.memberId !== "all" && (
+          <ReportDataTable
+            title="Detalhamento"
+            badge={tableData.length}
+            data={tableData}
+            rowKey={(_, i) => i}
+            columns={[
+              { key: "_code",      header: "Código",
+                render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || "---"}</span> },
+              { key: "membro",     header: "Analista",             sortable: true },
+              { key: "hu",         header: "HU", align: "center",
+                render: (v) => v !== "---" ? <span className="font-mono text-xs">{v}</span> : "---" },
+              { key: "lancamento", header: "Data Início", align: "center",
+                render: (v) => v ? fmtDate(v) : "---" },
+              { key: "titulo",     header: "Descrição Atividade", sortable: true },
+              { key: "horas",      header: "Duração", align: "center", sortable: true,
+                render: (v) => <span className="font-semibold text-primary">{fmtH(v)}</span> },
+              { key: "status",     header: "Status", align: "center",
+                render: (v) => v
+                  ? <Badge className="text-[10px] bg-emerald-500/15 text-emerald-600">Concluída</Badge>
+                  : <Badge className="text-[10px] bg-amber-400/15 text-amber-600">Em aberto</Badge> },
+            ]}
+          />
+        )}
       </ReportLayout>
     </>
   );
