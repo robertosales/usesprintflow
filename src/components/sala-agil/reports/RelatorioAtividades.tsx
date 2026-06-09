@@ -27,10 +27,11 @@ import { cn } from "@/lib/utils";
 import { getInitials } from "@/lib/personName";
 import { formatMinutes } from "@/lib/duration";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Props {
   sprints:     { id: string; name: string; isActive?: boolean; start_date?: string; end_date?: string }[];
-  developers:  { id: string; name: string; role: string }[];
+  developers:  { id: string; name: string; role: string; user_id?: string | null }[];
   rawData: {
     sprints:      any[];
     hus:          any[];
@@ -430,12 +431,30 @@ function buildMemberMetrics(developers: Props["developers"], allActivities: any[
 }
 
 export function RelatorioAtividades({ sprints, developers, rawData, teamName, currentUserName, onBack }: Props) {
-  const [filters, setFilters] = useState<Record<string, string>>({
+  const { user, isAdmin } = useAuth();
+
+  // Não-admin: trava o filtro de analista no próprio usuário.
+  const ownDeveloperId = useMemo(() => {
+    if (!user) return null;
+    const own = (rawData.developers as any[]).find(
+      (d: any) => d.user_id === user.id,
+    );
+    return own?.id ?? null;
+  }, [rawData.developers, user]);
+
+  const [filters, setFilters] = useState<Record<string, string>>(() => ({
     sprintId: "all",
-    memberId: "all",
+    memberId: !isAdmin && ownDeveloperId ? ownDeveloperId : "all",
     dateFrom: "",
     dateTo:   "",
-  });
+  }));
+
+  // Mantém o filtro travado mesmo se developers carregarem depois.
+  useEffect(() => {
+    if (!isAdmin && ownDeveloperId && filters.memberId !== ownDeveloperId) {
+      setFilters((f) => ({ ...f, memberId: ownDeveloperId }));
+    }
+  }, [isAdmin, ownDeveloperId]); // eslint-disable-line
 
   const [exportingPDF, setExportingPDF] = useState(false);
   const [previewUrl,   setPreviewUrl]   = useState<string | null>(null);
