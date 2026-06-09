@@ -433,28 +433,32 @@ function buildMemberMetrics(developers: Props["developers"], allActivities: any[
 export function RelatorioAtividades({ sprints, developers, rawData, teamName, currentUserName, onBack }: Props) {
   const { user, isAdmin } = useAuth();
 
-  // Não-admin: trava o filtro de analista no próprio usuário.
+  // FIX 1: Resolve o developer do usuário logado a partir de rawData.developers
+  // (que inclui user_id), usado apenas para travar o filtro de não-admins.
   const ownDeveloperId = useMemo(() => {
-    if (!user) return null;
-    const own = (rawData.developers as any[]).find(
-      (d: any) => d.user_id === user.id,
-    );
+    if (!user || isAdmin) return null;
+    const own = (rawData.developers as any[]).find((d: any) => d.user_id === user.id);
     return own?.id ?? null;
-  }, [rawData.developers, user]);
+  }, [rawData.developers, user, isAdmin]);
 
-  const [filters, setFilters] = useState<Record<string, string>>(() => ({
+  // FIX 2: Estado inicial sempre começa em "all"; o useEffect abaixo aplica
+  // a restrição de não-admin DEPOIS que rawData.developers for resolvido,
+  // evitando a race condition do lazy initializer.
+  const [filters, setFilters] = useState<Record<string, string>>({
     sprintId: "all",
-    memberId: !isAdmin && ownDeveloperId ? ownDeveloperId : "all",
+    memberId: "all",
     dateFrom: "",
     dateTo:   "",
-  }));
+  });
 
-  // Mantém o filtro travado mesmo se developers carregarem depois.
+  // FIX 2 (cont): Aplica/mantém o travamento do filtro para não-admins.
+  // Só dispara quando ownDeveloperId muda (i.e., quando rawData.developers carrega).
+  // Não interfere com a seleção livre do admin.
   useEffect(() => {
-    if (!isAdmin && ownDeveloperId && filters.memberId !== ownDeveloperId) {
+    if (!isAdmin && ownDeveloperId) {
       setFilters((f) => ({ ...f, memberId: ownDeveloperId }));
     }
-  }, [isAdmin, ownDeveloperId]); // eslint-disable-line
+  }, [isAdmin, ownDeveloperId]);
 
   const [exportingPDF, setExportingPDF] = useState(false);
   const [previewUrl,   setPreviewUrl]   = useState<string | null>(null);
@@ -646,8 +650,15 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     setPreviewBlob(null);
   }
 
+  // FIX 3: handleReset respeita a restrição de não-admin —
+  // não-admins voltam ao próprio developer, não a "all".
   function handleReset() {
-    setFilters({ sprintId: "all", memberId: "all", dateFrom: "", dateTo: "" });
+    setFilters({
+      sprintId: "all",
+      memberId: !isAdmin && ownDeveloperId ? ownDeveloperId : "all",
+      dateFrom: "",
+      dateTo:   "",
+    });
   }
 
   const pdfDisabledReason = !periodReady
