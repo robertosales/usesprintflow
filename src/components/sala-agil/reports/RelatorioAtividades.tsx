@@ -725,12 +725,15 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         <ReportFilterBar
           fields={[
             { key: "sprintId", label: "Sprint",         type: "select", options: sprintOptions },
-            { key: "memberId", label: "Analista",       type: "select", options: memberOptions },
+            { key: "memberId", label: "Analista",       type: "select", options: memberOptions, disabled: !isAdmin },
             { key: "dateFrom", label: "Período início", type: "date" },
             { key: "dateTo",   label: "Período fim",    type: "date" },
           ]}
           values={filters}
-          onChange={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
+          onChange={(k, v) => {
+            if (k === "memberId" && !isAdmin) return;
+            setFilters((f) => ({ ...f, [k]: v }));
+          }}
           onReset={handleReset}
           periodValidation={periodReady && !periodValid
             ? "A data inicial não pode ser maior que a data final."
