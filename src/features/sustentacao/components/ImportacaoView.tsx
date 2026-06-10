@@ -23,12 +23,9 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
-// ─── SheetJS CDN loader (sem npm install) ──────────────────────────────────
+// ─── SheetJS CDN loader ────────────────────────────────────────────────────
 declare global {
-  interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    XLSX: any;
-  }
+  interface Window { XLSX: any; }
 }
 const XLSX_CDN = "https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js";
 function loadXLSX(): Promise<any> {
@@ -62,7 +59,6 @@ async function parseXlsxToRows(buffer: ArrayBuffer): Promise<Record<string, stri
 // ─── Mapas de normalização ─────────────────────────────────────────────────
 
 const SITUACAO_MAP: Record<string, string> = {
-  // ── valores canônicos (já normalizados) ─────────────────────────────────
   fila_atendimento:          "fila_atendimento",
   planejamento_elaboracao:   "planejamento_elaboracao",
   planejamento_ag_aprovacao: "planejamento_ag_aprovacao",
@@ -76,7 +72,6 @@ const SITUACAO_MAP: Record<string, string> = {
   ag_aceite_final:           "ag_aceite_final",
   cancelada:                 "cancelada",
   fila_concluida:            "fila_concluida",
-  // ── variantes do Redmine / planilha ─────────────────────────────────────
   "fila de atendimento":             "fila_atendimento",
   nova:                              "fila_atendimento",
   aberta:                            "fila_atendimento",
@@ -103,7 +98,6 @@ const SITUACAO_MAP: Record<string, string> = {
   cancelado:                         "cancelada",
   bloqueado:                         "bloqueada",
   rejeitado:                         "rejeitada",
-  // ── situações extras que chegam em planilhas reais ───────────────────────
   suspensa:                          "bloqueada",
   suspensa_cliente:                  "bloqueada",
   suspensa_cliente_aguardando:       "bloqueada",
@@ -184,21 +178,17 @@ interface ParsedRow extends PreviewRow { data_inicio: Date; }
 type ImportMode = null | "demandas" | "projetos";
 interface FailedRow { rhm: string; projeto: string; motivo: string; }
 
-// ─── Componente principal ───────────────────────────────────────────────────
+// ─── Componente principal ──────────────────────────────────────────────────
 
 export function ImportacaoView() {
   const { currentTeamId } = useAuth();
 
-  // Projetos lidos de public.projects (todos, sem filtro de time)
   const [allProjetos, setAllProjetos] = useState<ProjetoImport[]>([]);
   const { contracts } = useContracts();
 
-  // Pré-carrega projetos e SheetJS em background
   useEffect(() => {
     loadXLSX().catch(() => {});
-    fetchProjetosForImport()
-      .then(setAllProjetos)
-      .catch(() => {});
+    fetchProjetosForImport().then(setAllProjetos).catch(() => {});
   }, []);
 
   const [mode, setMode]                         = useState<ImportMode>(null);
@@ -215,12 +205,10 @@ export function ImportacaoView() {
   const [projetoResult, setProjetoResult] = useState<{
     importados: number; existentes: number; erros: number;
   } | null>(null);
-  // Contrato selecionado para importação de projetos (obrigatório)
   const [projetoContractId, setProjetoContractId] = useState<string>("");
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // projetoMap: normalizedName → { id (UUID), nome, teamId } de public.projects
   const projetoMap = new Map(
     allProjetos.map((p) => [
       normalize(p.name),
@@ -228,15 +216,11 @@ export function ImportacaoView() {
     ]),
   );
 
-  // ─── Helpers ───────────────────────────────────────────────────────────────
+  // ─── Helpers ──────────────────────────────────────────────────────────────
 
   function parseCsvToRows(buffer: ArrayBuffer): Record<string, string>[] {
     const text  = new TextDecoder("utf-8").decode(buffer);
-    const lines = text
-      .replace(/\r\n/g, "\n")
-      .replace(/\r/g, "\n")
-      .split("\n")
-      .filter((l) => l.trim());
+    const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").filter((l) => l.trim());
     if (lines.length < 2) return [];
     lines[0] = lines[0].replace(/^\uFEFF/, "");
     const headers = lines[0].split(";").map((h) => h.trim());
@@ -249,14 +233,11 @@ export function ImportacaoView() {
   }
 
   function cancelPreview() {
-    setShowPreview(false);
-    setValidRows([]);
-    setErrors([]);
-    setAutoCreatedTypes([]);
-    setProgressMap(new Map());
+    setShowPreview(false); setValidRows([]); setErrors([]);
+    setAutoCreatedTypes([]); setProgressMap(new Map());
   }
 
-  // ─── Upload demandas ─────────────────────────────────────────────────────
+  // ─── Upload demandas ──────────────────────────────────────────────────────
 
   const handleFileDemandas = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -270,27 +251,19 @@ export function ImportacaoView() {
       const newTypes: string[]        = [];
 
       rows.forEach((r, idx) => {
-        const linha         = idx + 2;
-        const rhm           = String(r["#"] || r["RHM"] || r["rhm"] || "").trim();
-        const projetoNome   = String(r["Projeto"] || r["projeto"] || "").trim();
-        const tipoRaw       = String(r["Tipo"] || r["tipo"] || "").trim();
-        const dataInicioRaw =
-          r["Criado em"] || r["Criado Em"] || r["Data de Início"] ||
-          r["Data de Inicio"] || r["data_inicio"] || null;
-        const descricao =
-          String(r["Título"] || r["Titulo"] || r["Subject"] || r["Descrição"] || r["descricao"] || "").trim() ||
-          undefined;
+        const linha       = idx + 2;
+        const rhm         = String(r["#"] || r["RHM"] || r["rhm"] || "").trim();
+        const projetoNome = String(r["Projeto"] || r["projeto"] || "").trim();
+        const tipoRaw     = String(r["Tipo"] || r["tipo"] || "").trim();
+        const dataInicioRaw = r["Criado em"] || r["Criado Em"] || r["Data de Início"] || r["Data de Inicio"] || r["data_inicio"] || null;
+        const descricao = String(r["Título"] || r["Titulo"] || r["Subject"] || r["Descrição"] || r["descricao"] || "").trim() || undefined;
 
         if (!rhm)         { errs.push({ linha, mensagem: "# não informado." }); return; }
         if (!projetoNome) { errs.push({ linha, mensagem: "Projeto não informado." }); return; }
 
-        // P1c: resolve projeto em public.projects com mensagem descritiva
         const projetoInfo = projetoMap.get(normalize(projetoNome));
         if (!projetoInfo) {
-          errs.push({
-            linha,
-            mensagem: `Projeto "${projetoNome}" não encontrado em public.projects. Cadastre-o no Admin antes de importar.`,
-          });
+          errs.push({ linha, mensagem: `Projeto "${projetoNome}" não encontrado em public.projects. Cadastre-o no Admin antes de importar.` });
           return;
         }
 
@@ -313,8 +286,8 @@ export function ImportacaoView() {
         }
 
         const isCorretiva = tipoNorm === "manutencao_corretiva";
-        let sla           = "padrao";
-        const regimeRaw   = String(r["Regime de Atendimento"] || r["Regime"] || r["regime"] || "").trim();
+        let sla = "padrao";
+        const regimeRaw = String(r["Regime de Atendimento"] || r["Regime"] || r["regime"] || "").trim();
         if (isCorretiva && /\d+\s*x\s*7/i.test(regimeRaw)) sla = "continuo";
         else if (isCorretiva && normalize(regimeRaw) === "continuo") sla = "continuo";
 
@@ -328,8 +301,8 @@ export function ImportacaoView() {
         const diagRaw = String(r["Originada de Diagnóstico"] || r["Originada de Diagnostico"] || "").trim().toLowerCase();
         if (isCorretiva && (diagRaw === "sim" || diagRaw === "true" || diagRaw === "1")) originada_diagnostico = true;
 
-        const regime      = isCorretiva ? sla : undefined;
-        const defeito     = isCorretiva ? tipo_defeito : undefined;
+        const regime       = isCorretiva ? sla : undefined;
+        const defeito      = isCorretiva ? tipo_defeito : undefined;
         const prazoInicio  = calcPrazoInicio(dataInicio, tipoNorm, regime, defeito);
         const prazoSolucao = calcPrazoSolucao(dataInicio, tipoNorm, regime, defeito);
         const prevEncRaw   = r["Data de Previsão de Encerramento"] || r["Data Previsão Encerramento"] || null;
@@ -339,7 +312,7 @@ export function ImportacaoView() {
         parsed.push({
           rhm,
           projeto:   projetoInfo.nome,
-          projectId: projetoInfo.id,          // UUID de public.projects (tipado em PreviewRow)
+          projectId: projetoInfo.id,
           teamId:    projetoInfo.teamId,
           tipo:      tipoNorm,
           data_inicio: dataInicio,
@@ -357,27 +330,20 @@ export function ImportacaoView() {
     finally  { if (inputRef.current) inputRef.current.value = ""; }
   };
 
-  // ─── Upload projetos ─────────────────────────────────────────────────────
-  // Grava em public.projects (nova tabela), não mais na legada "projetos".
-  // contract_id é obrigatório — o usuário seleciona o contrato antes do upload.
+  // ─── Upload projetos ──────────────────────────────────────────────────────
 
   const handleFileProjetos = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!projetoContractId) {
-      toast.error("Selecione o contrato antes de fazer o upload.");
-      return;
-    }
+    if (!projetoContractId) { toast.error("Selecione o contrato antes de fazer o upload."); return; }
     setProjetoResult(null); setLoading(true);
     try {
       const buffer  = await file.arrayBuffer();
       const rows    = isXlsxFile(file) ? await parseXlsxToRows(buffer) : parseCsvToRows(buffer);
       const results = { importados: 0, existentes: 0, erros: 0 };
 
-      // Recarrega mapa de nomes já cadastrados em public.projects (P2a: sem race condition)
       const fresh = await fetchProjetosForImport();
       const existingNorms = new Set(fresh.map((p) => normalize(p.name)));
-
       const { supabase: sb } = await import("@/integrations/supabase/client");
 
       for (const r of rows) {
@@ -390,29 +356,13 @@ export function ImportacaoView() {
         const redmine_raw = String(r["Redmine ID"] || r["redmine_id"] || "").trim();
         const redmine_id  = redmine_raw ? Number(redmine_raw) || null : null;
         const modRaw      = String(r["Módulo"] || r["Modulo"] || r["module_type"] || "").trim().toLowerCase();
-        const module_type = modRaw === "agile" || modRaw === "agil" || modRaw === "agil"
-          ? "agile"
-          : modRaw === "mixed" || modRaw === "misto"
-          ? "mixed"
-          : "sustenance";
+        const module_type = modRaw === "agile" || modRaw === "agil" ? "agile" : modRaw === "mixed" || modRaw === "misto" ? "mixed" : "sustenance";
 
         try {
-          // upsert com onConflict para evitar erros em imports paralelos (P2a)
-          const { error } = await (sb as any)
-            .from("projects")
-            .upsert(
-              {
-                contract_id:  projetoContractId,
-                team_id:      currentTeamId || null,
-                name,
-                description,
-                code,
-                redmine_id,
-                module_type,
-                status: "active",
-              },
-              { onConflict: "name,contract_id", ignoreDuplicates: true },
-            );
+          const { error } = await (sb as any).from("projects").upsert(
+            { contract_id: projetoContractId, team_id: currentTeamId || null, name, description, code, redmine_id, module_type, status: "active" },
+            { onConflict: "name,contract_id", ignoreDuplicates: true },
+          );
           if (error) throw error;
           results.importados++;
           existingNorms.add(normalize(name));
@@ -421,13 +371,12 @@ export function ImportacaoView() {
 
       setProjetoResult(results);
       toast.success(`Concluída: ${results.importados} novos, ${results.existentes} já existentes`);
-      // Atualiza cache em memória para que próxima importação de demandas já veja os novos projetos
       fetchProjetosForImport().then(setAllProjetos).catch(() => {});
     } catch { toast.error("Erro ao processar arquivo."); }
     finally  { setLoading(false); if (inputRef.current) inputRef.current.value = ""; }
   };
 
-  // ─── Migração ─────────────────────────────────────────────────────────────
+  // ─── Migração demandas ────────────────────────────────────────────────────
 
   const handleImport = async (selectedRows: PreviewRow[]) => {
     if (!currentTeamId || selectedRows.length === 0) return;
@@ -437,14 +386,11 @@ export function ImportacaoView() {
     const existsInDb  = new Set<string>();
     const byTeamCheck = new Map<string, string[]>();
     for (const row of selectedRows) {
-      const list = byTeamCheck.get(row.teamId) ?? [];
-      list.push(row.rhm); byTeamCheck.set(row.teamId, list);
+      const list = byTeamCheck.get(row.teamId) ?? []; list.push(row.rhm); byTeamCheck.set(row.teamId, list);
     }
     const { supabase: sb } = await import("@/integrations/supabase/client");
     for (const [teamId, rhms] of byTeamCheck) {
-      const { data } = await (sb as any)
-        .from("demandas").select("rhm")
-        .eq("team_id", teamId).in("rhm", rhms);
+      const { data } = await (sb as any).from("demandas").select("rhm").eq("team_id", teamId).in("rhm", rhms);
       if (data) for (const d of data as any[]) existsInDb.add(`${teamId}:${d.rhm}`);
     }
 
@@ -452,8 +398,7 @@ export function ImportacaoView() {
     const falhas: FailedRow[] = [];
     const byTeam = new Map<string, PreviewRow[]>();
     for (const row of selectedRows) {
-      const group = byTeam.get(row.teamId) ?? [];
-      group.push(row); byTeam.set(row.teamId, group);
+      const group = byTeam.get(row.teamId) ?? []; group.push(row); byTeam.set(row.teamId, group);
     }
 
     for (const [teamId, rows] of byTeam) {
@@ -461,7 +406,7 @@ export function ImportacaoView() {
         const res = await upsertDemandas(teamId, rows.map((row) => ({
           rhm:                        row.rhm,
           projeto:                    row.projeto,
-          project_id:                 row.projectId ?? null,  // UUID tipado (sem cast)
+          project_id:                 row.projectId ?? null,
           situacao:                   row.situacao || "fila_atendimento",
           tipo:                       row.tipo,
           sla:                        row.sla,
@@ -475,21 +420,15 @@ export function ImportacaoView() {
         totals.importados  += res.importados;
         totals.atualizados += res.atualizados;
         totals.erros       += res.erros;
-        if (res.falhas && res.falhas.length > 0) {
-          for (const f of res.falhas)
-            falhas.push({ rhm: f.rhm, projeto: f.projeto, motivo: f.motivo });
-          setProgressMap((prev) => {
-            const next = new Map(prev);
-            for (const f of res.falhas!) next.set(f.rhm, "erro");
-            return next;
-          });
+        if (res.falhas?.length) {
+          for (const f of res.falhas) falhas.push({ rhm: f.rhm, projeto: f.projeto, motivo: f.motivo });
+          setProgressMap((prev) => { const next = new Map(prev); for (const f of res.falhas!) next.set(f.rhm, "erro"); return next; });
         }
         setProgressMap((prev) => {
           const next = new Map(prev);
           for (const row of rows) {
-            const key = `${teamId}:${row.rhm}`;
             if (next.get(row.rhm) !== "erro")
-              next.set(row.rhm, existsInDb.has(key) ? "atualizado" : "criado");
+              next.set(row.rhm, existsInDb.has(`${teamId}:${row.rhm}`) ? "atualizado" : "criado");
           }
           return next;
         });
@@ -500,8 +439,7 @@ export function ImportacaoView() {
         for (const row of rows) falhas.push({ rhm: row.rhm, projeto: row.projeto, motivo });
       }
     }
-    const tipoMsg = autoCreatedTypes.length > 0
-      ? ` | ${autoCreatedTypes.length} tipo(s) criado(s) automaticamente` : "";
+    const tipoMsg = autoCreatedTypes.length > 0 ? ` | ${autoCreatedTypes.length} tipo(s) criado(s) automaticamente` : "";
     toast.success(`Importação concluída: ${totals.importados} novos, ${totals.atualizados} atualizados${tipoMsg}`);
     setResult({ ...totals, tiposCriados: autoCreatedTypes, falhas });
     setShowPreview(false); setLoading(false);
@@ -548,4 +486,202 @@ export function ImportacaoView() {
     );
   }
 
-  // ─── Render: tela principa
+  // ─── Render: preview de demandas ───────────────────────────────────────────
+
+  if (showPreview) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-border shrink-0">
+          <button onClick={cancelPreview} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+            <ArrowLeft className="h-4 w-4 text-muted-foreground" />
+          </button>
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Prévia da Importação</h2>
+            <p className="text-xs text-muted-foreground">{validRows.length} registro(s) processado(s)</p>
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto">
+          <ImportacaoPreviewTable
+            rows={validRows}
+            onConfirm={handleImport}
+            onCancel={cancelPreview}
+            loading={loading}
+            progressMap={progressMap}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Render: tela demandas ─────────────────────────────────────────────────
+
+  if (mode === "demandas") {
+    return (
+      <div className="w-full max-w-2xl mx-auto pt-6 space-y-6">
+        <div className="flex items-center gap-3">
+          <button onClick={() => { setMode(null); setResult(null); setErrors([]); }} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+            <ArrowLeft className="h-4 w-4 text-muted-foreground" />
+          </button>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">Importar Demandas</h2>
+            <p className="text-sm text-muted-foreground">Planilha .csv ou .xlsx exportada do Redmine</p>
+          </div>
+        </div>
+
+        {/* Dropzone */}
+        <label className="flex flex-col items-center justify-center w-full h-48 rounded-2xl border-2 border-dashed border-border hover:border-blue-400 dark:hover:border-blue-500 bg-muted/30 hover:bg-blue-500/5 transition-all cursor-pointer group">
+          <input ref={inputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileDemandas} />
+          <Upload className="h-10 w-10 text-muted-foreground/50 group-hover:text-blue-500 transition-colors mb-3" />
+          <p className="text-sm font-medium text-foreground">Clique ou arraste o arquivo aqui</p>
+          <p className="text-xs text-muted-foreground mt-1">.csv ou .xlsx — exportação padrão do Redmine</p>
+        </label>
+
+        {/* Erros de validação */}
+        {errors.length > 0 && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-2">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <p className="text-sm font-semibold">{errors.length} erro(s) encontrado(s)</p>
+            </div>
+            <ul className="space-y-1 max-h-48 overflow-y-auto">
+              {errors.map((e, i) => (
+                <li key={i} className="text-xs text-destructive/80">Linha {e.linha}: {e.mensagem}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Avisos de tipos auto-criados */}
+        {autoCreatedTypes.length > 0 && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 mb-1">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <p className="text-sm font-semibold">Tipos criados automaticamente</p>
+            </div>
+            <p className="text-xs text-amber-700/70 dark:text-amber-400/70">
+              Os seguintes tipos não foram reconhecidos e serão criados: {autoCreatedTypes.join(", ")}
+            </p>
+          </div>
+        )}
+
+        {/* Resultado */}
+        {result && (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <p className="text-sm font-semibold">Importação concluída</p>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3 text-center">
+                <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{result.importados}</p>
+                <p className="text-[11px] text-emerald-700/70 dark:text-emerald-400/70 mt-0.5">Novos</p>
+              </div>
+              <div className="rounded-lg bg-sky-500/10 border border-sky-500/20 p-3 text-center">
+                <p className="text-2xl font-bold text-sky-700 dark:text-sky-400 tabular-nums">{result.atualizados}</p>
+                <p className="text-[11px] text-sky-700/70 dark:text-sky-400/70 mt-0.5">Atualizados</p>
+              </div>
+              <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-center">
+                <p className="text-2xl font-bold text-destructive tabular-nums">{result.erros}</p>
+                <p className="text-[11px] text-destructive/70 mt-0.5">Erros</p>
+              </div>
+            </div>
+            {result.falhas && result.falhas.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-destructive">Falhas detalhadas:</p>
+                <ul className="space-y-0.5 max-h-32 overflow-y-auto">
+                  {result.falhas.map((f, i) => (
+                    <li key={i} className="text-xs text-destructive/80">
+                      #{f.rhm} ({f.projeto}): {f.motivo}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ─── Render: tela projetos ─────────────────────────────────────────────────
+
+  return (
+    <div className="w-full max-w-2xl mx-auto pt-6 space-y-6">
+      <div className="flex items-center gap-3">
+        <button onClick={() => { setMode(null); setProjetoResult(null); setProjetoContractId(""); }} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+          <ArrowLeft className="h-4 w-4 text-muted-foreground" />
+        </button>
+        <div>
+          <h2 className="text-xl font-bold text-foreground">Importar Projetos</h2>
+          <p className="text-sm text-muted-foreground">Grava em <code className="text-xs bg-muted px-1 rounded">public.projects</code> — contrato obrigatório</p>
+        </div>
+      </div>
+
+      {/* Seleção de contrato */}
+      <div className="space-y-2">
+        <Label htmlFor="contract-select" className="text-sm font-medium">
+          Contrato <span className="text-destructive">*</span>
+        </Label>
+        <Select value={projetoContractId} onValueChange={setProjetoContractId}>
+          <SelectTrigger id="contract-select" className="w-full">
+            <SelectValue placeholder="Selecione o contrato dos projetos..." />
+          </SelectTrigger>
+          <SelectContent>
+            {contracts.map((c) => (
+              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {!projetoContractId && (
+          <p className="text-xs text-muted-foreground">Selecione o contrato antes de fazer o upload do arquivo.</p>
+        )}
+      </div>
+
+      {/* Dropzone — desabilitada sem contrato */}
+      <label
+        className={cn(
+          "flex flex-col items-center justify-center w-full h-48 rounded-2xl border-2 border-dashed transition-all",
+          projetoContractId
+            ? "border-border hover:border-violet-400 dark:hover:border-violet-500 bg-muted/30 hover:bg-violet-500/5 cursor-pointer group"
+            : "border-border/40 bg-muted/10 opacity-50 cursor-not-allowed",
+        )}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".csv,.xlsx,.xls"
+          className="hidden"
+          onChange={handleFileProjetos}
+          disabled={!projetoContractId || loading}
+        />
+        <Upload className={cn("h-10 w-10 mb-3 transition-colors", projetoContractId ? "text-muted-foreground/50 group-hover:text-violet-500" : "text-muted-foreground/30")} />
+        <p className="text-sm font-medium text-foreground">Clique ou arraste o arquivo aqui</p>
+        <p className="text-xs text-muted-foreground mt-1">.csv ou .xlsx com colunas: Nome, Descrição, Código, Redmine ID, Módulo</p>
+      </label>
+
+      {/* Resultado */}
+      {projetoResult && (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+          <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <p className="text-sm font-semibold">Importação concluída</p>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3 text-center">
+              <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{projetoResult.importados}</p>
+              <p className="text-[11px] text-emerald-700/70 dark:text-emerald-400/70 mt-0.5">Importados</p>
+            </div>
+            <div className="rounded-lg bg-muted border border-border p-3 text-center">
+              <p className="text-2xl font-bold text-muted-foreground tabular-nums">{projetoResult.existentes}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Já existentes</p>
+            </div>
+            <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-center">
+              <p className="text-2xl font-bold text-destructive tabular-nums">{projetoResult.erros}</p>
+              <p className="text-[11px] text-destructive/70 mt-0.5">Erros</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
