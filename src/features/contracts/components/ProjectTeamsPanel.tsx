@@ -4,10 +4,16 @@
  * Arquitetura:
  *   - Lê vínculos de contract_room_teams (contrato + time + projeto + sala)
  *   - Botão "+ Vincular Time / Projeto" abre modal com seleção em cascata:
- *       1. Dropdown: todos os times globais
+ *       1. Dropdown: todos os times globais (dedup por id)
  *       2. Dropdown: projetos do time selecionado (habilitado após step 1)
  *   - Desvincular remove a linha de contract_room_teams
  *   - Projetos são agrupados por Time Pai na renderização
+ *
+ * fix(bind-modal-dedup): AuthContext armazena uma entrada por (time × módulo)
+ *   intencionalmente (para t.module filtros internos do board). O dropdown de
+ *   times no BindModal precisa deduplicar por id antes de renderizar para
+ *   evitar que o mesmo time apareça duas vezes quando ele pertence a mais
+ *   de um módulo (ex: sustentacao + sala_agil).
  */
 import { useState, useEffect } from 'react';
 import { Button }  from '@/components/ui/button';
@@ -71,6 +77,13 @@ function BindModal({ contractId, roomType, existingBindings, onClose, onSuccess 
   const [projects,  setProjects]  = useState<Project[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // fix(bind-modal-dedup): AuthContext armazena (id × módulo), então um time
+  // que pertence a sustentacao + sala_agil aparece duas vezes em `teams`.
+  // Deduplicamos por id antes de renderizar o dropdown.
+  const uniqueTeams = (teams as any[]).filter(
+    (t, idx, arr) => arr.findIndex((x: any) => x.id === t.id) === idx
+  );
 
   // Quando muda o time, carrega projetos dele
   useEffect(() => {
@@ -150,7 +163,7 @@ function BindModal({ contractId, roomType, existingBindings, onClose, onSuccess 
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none" disabled>Selecionar time...</SelectItem>
-                {(teams as any[]).map(t => (
+                {uniqueTeams.map(t => (
                   <SelectItem key={t.id} value={t.id}>
                     <div className="flex items-center gap-2">
                       <Users className="h-3.5 w-3.5 text-muted-foreground" />
@@ -261,7 +274,6 @@ export function ProjectTeamsPanel({ contractId, roomMode = 'hibrido' }: Props) {
   // Agrupa vínculos por sala e depois por time (para renderização)
   function bindingsForRoom(room: 'agil' | 'sustentacao') {
     const roomBindings = bindings.filter(b => b.room_type === room);
-    // Agrupa por team_id
     const grouped = new Map<string, { teamName: string; items: ContractRoomBinding[] }>();
     for (const b of roomBindings) {
       if (!grouped.has(b.team_id)) {
