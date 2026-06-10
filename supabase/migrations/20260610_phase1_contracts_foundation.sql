@@ -21,44 +21,27 @@
 -- ============================================================
 -- BLOCO 1: LIMPEZA — Remove RPCs nunca usadas pelo frontend
 -- ============================================================
-
--- fn_check_sla_status: criada em 20260603_contracts_sla_module.sql
--- Status: nunca chamada. fn_sla_dashboard_batch usa calc_sla_demanda diretamente.
--- Será reimplementada corretamente na Fase 3 com lógica dinâmica real.
 DROP FUNCTION IF EXISTS public.fn_check_sla_status(UUID, UUID, VARCHAR, TIMESTAMPTZ, TIMESTAMPTZ);
-
--- fn_get_team_contract: criada em 20260603_contracts_sla_module.sql
--- Status: nunca chamada. Lógica incorreta (time→contrato direto, sem room_type).
--- Será reimplementada na Fase 2 com a hierarquia correta.
 DROP FUNCTION IF EXISTS public.fn_get_team_contract(UUID);
 
 -- ============================================================
 -- BLOCO 2: RECRIAR contract_room_teams (estrutura limpa)
---
--- NOTA SOBRE O CASCADE:
---   O banco possui policies em outras tabelas (projects, contracts,
---   contract_slas) que referenciam contract_room_teams em suas
---   expressões USING/WITH CHECK. O DROP CASCADE remove essas
---   dependências automaticamente — todas são recriadas logo abaixo
---   com a implementação correta.
+-- CASCADE remove policies dependentes em projects, contracts
+-- e contract_slas que referenciam esta tabela — todas são
+-- recriadas logo abaixo com implementação correta.
 -- ============================================================
 DO $$
 BEGIN
   IF (SELECT COUNT(*) FROM public.contract_room_teams) = 0 THEN
 
-    -- Remove policies dependentes explicitamente antes do DROP CASCADE
-    -- (para deixar audit trail claro no log do Postgres)
     DROP POLICY IF EXISTS "projects_insert"                   ON public.projects;
     DROP POLICY IF EXISTS "contracts_select"                  ON public.contracts;
     DROP POLICY IF EXISTS "contract_slas_select_team_members" ON public.contract_slas;
-    -- Políticas antigas da hu001 (podem existir com nomes diferentes)
     DROP POLICY IF EXISTS "Admins manage contract_room_teams" ON public.contract_room_teams;
     DROP POLICY IF EXISTS "Members view contract_room_teams"  ON public.contract_room_teams;
 
-    -- DROP com CASCADE remove quaisquer outras dependências restantes
     DROP TABLE public.contract_room_teams CASCADE;
 
-    -- Recria a tabela com estrutura limpa + coluna is_active
     CREATE TABLE public.contract_room_teams (
       id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
       contract_id UUID        NOT NULL REFERENCES public.contracts(id) ON DELETE CASCADE,
@@ -93,23 +76,17 @@ BEGIN
       'Vínculo N:N entre contratos, times e tipos de sala (agil/sustentacao). '
       'Permite que o mesmo time opere em múltiplas modalidades de um contrato (híbrido).';
 
-    -- --------------------------------------------------------
-    -- Recriar policies que foram removidas pelo CASCADE
-    -- --------------------------------------------------------
-
-    -- projects: qualquer autenticado pode inserir (admin controla via projects_admin_all)
+    -- Recriar policies removidas pelo CASCADE
     DROP POLICY IF EXISTS "projects_insert" ON public.projects;
     CREATE POLICY "projects_insert"
       ON public.projects FOR INSERT
       WITH CHECK (auth.role() = 'authenticated');
 
-    -- contracts: qualquer autenticado pode selecionar
     DROP POLICY IF EXISTS "contracts_select" ON public.contracts;
     CREATE POLICY "contracts_select"
       ON public.contracts FOR SELECT
       USING (auth.role() = 'authenticated');
 
-    -- contract_slas: membros do time vinculado ao contrato podem ver os SLAs
     DROP POLICY IF EXISTS "contract_slas_select_team_members" ON public.contract_slas;
     CREATE POLICY "contract_slas_select_team_members"
       ON public.contract_slas FOR SELECT
@@ -133,6 +110,7 @@ $$;
 
 -- ============================================================
 -- BLOCO 3: CRIAR CONTRATOS a partir dos times existentes
+-- 1 contrato por time ainda sem contract_id
 -- ============================================================
 DROP TABLE IF EXISTS _phase1_team_contract_map;
 
@@ -144,15 +122,14 @@ CREATE TEMP TABLE _phase1_team_contract_map (
 
 WITH teams_sem_contrato AS (
   SELECT
-    t.id                                              AS team_id,
-    t.name                                            AS team_name,
+    t.id   AS team_id,
+    t.name AS team_name,
     CASE
       WHEN COALESCE(t.module::TEXT, '') = 'agil' THEN 'agil'
       ELSE 'sustentacao'
-    END                                               AS room_type
+    END    AS room_type
   FROM public.teams t
-  WHERE t.deleted_at IS NULL
-    AND t.contract_id IS NULL
+  WHERE t.contract_id IS NULL        -- só times ainda sem contrato
 ),
 contratos_inseridos AS (
   INSERT INTO public.contracts (name, description, status, room_mode)
@@ -190,7 +167,7 @@ WHERE t.id = m.team_id
 
 -- ============================================================
 -- BLOCO 5: POPULAR contract_slas
--- SLAs hardcoded extraídos do frontend:
+-- Valores hardcoded extraídos do frontend:
 --   urgent : 60 min resposta  | 240 min resolução
 --   high   : 120 min          | 480 min
 --   medium : 240 min          | 1440 min (1 dia útil)
@@ -233,7 +210,6 @@ SELECT
   END
 FROM public.teams t
 WHERE t.contract_id IS NOT NULL
-  AND t.deleted_at  IS NULL
 ON CONFLICT (contract_id, team_id, room_type) DO NOTHING;
 
 -- ============================================================
@@ -242,7 +218,7 @@ ON CONFLICT (contract_id, team_id, room_type) DO NOTHING;
 DROP TABLE IF EXISTS _phase1_team_contract_map;
 
 -- ============================================================
--- VERIFICAÇÃO (rode manualmente no SQL Editor para conferir)
+-- VERIFICAÇÃO (rode manualmente no SQL Editor para confirmar)
 -- ============================================================
 -- SELECT c.name, c.room_mode, c.status,
 --        COUNT(DISTINCT cs.id) AS sla_rules,
