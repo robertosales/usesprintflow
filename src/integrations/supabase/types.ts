@@ -1614,6 +1614,129 @@ export type Database = {
           },
         ]
       }
+      okr_check_ins: {
+        Row: {
+          author_id: string | null
+          created_at: string
+          id: string
+          key_result_id: string
+          note: string | null
+          value: number
+        }
+        Insert: {
+          author_id?: string | null
+          created_at?: string
+          id?: string
+          key_result_id: string
+          note?: string | null
+          value: number
+        }
+        Update: {
+          author_id?: string | null
+          created_at?: string
+          id?: string
+          key_result_id?: string
+          note?: string | null
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_check_ins_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_key_results: {
+        Row: {
+          created_at: string
+          current: number
+          id: string
+          objective_id: string
+          target: number
+          title: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current?: number
+          id?: string
+          objective_id: string
+          target?: number
+          title: string
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current?: number
+          id?: string
+          objective_id?: string
+          target?: number
+          title?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_key_results_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_objectives: {
+        Row: {
+          created_at: string
+          cycle: string
+          description: string | null
+          id: string
+          owner_id: string | null
+          progress: number
+          status: string
+          team_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          cycle: string
+          description?: string | null
+          id?: string
+          owner_id?: string | null
+          progress?: number
+          status?: string
+          team_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          cycle?: string
+          description?: string | null
+          id?: string
+          owner_id?: string | null
+          progress?: number
+          status?: string
+          team_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_objectives_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planning_participants: {
         Row: {
           id: string
