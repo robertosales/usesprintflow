@@ -38,8 +38,8 @@ import {
 import { toast } from 'sonner';
 
 // Hooks do admin para popular selects de contrato e time
-import { useContracts } from '@/features/contracts/hooks/useContracts';
-import { useTeams }     from '@/hooks/useTeams';
+import { useContracts }   from '@/features/admin/hooks/useContracts';
+import { useTeamsAdmin }  from '@/features/admin/hooks/useTeamsAdmin';
 
 const MODULE_OPTIONS = [
   { value: 'sustenance', label: '🛠 Sustentação' },
@@ -69,7 +69,7 @@ const EMPTY_FORM: FormState = {
 export function ProjetosAdminPanel() {
   const { projetos, loading, error, create, update, archive, reload } = useProjetosAdmin();
   const { contracts } = useContracts();
-  const { teams }     = useTeams();
+  const { teams }     = useTeamsAdmin();
 
   const [showForm,     setShowForm]     = useState(false);
   const [editing,      setEditing]      = useState<ProjetoAdmin | null>(null);
@@ -78,13 +78,6 @@ export function ProjetosAdminPanel() {
   const [filterModule, setFilterModule] = useState('all');
   const [form,         setForm]         = useState<FormState>(EMPTY_FORM);
   const debouncedSearch = useDebounce(search, 300);
-
-  // Filtra times pelo contrato selecionado no form
-  const teamsForContract = useMemo(() =>
-    form.contract_id
-      ? teams.filter((t: any) => t.contract_id === form.contract_id)
-      : teams,
-  [teams, form.contract_id]);
 
   const filtered = useMemo(() => projetos.filter(p => {
     if (debouncedSearch && !p.name.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
@@ -322,7 +315,7 @@ export function ProjetosAdminPanel() {
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Selecione a sala..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Sem sala específica</SelectItem>
-                  {teamsForContract.map((t: any) => (
+                  {teams.map((t: any) => (
                     <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                   ))}
                 </SelectContent>
