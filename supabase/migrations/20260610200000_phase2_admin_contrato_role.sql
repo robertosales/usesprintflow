@@ -8,9 +8,10 @@
 --   1. app_role enum  → adiciona 'admin_contrato'
 --   2. user_contracts → tabela usuário ↔ contrato ↔ papel
 --   3. Funções helper → is_admin_master(), is_admin_of_contract(),
---                        get_my_contract_id()
+--                        has_contract_access(), get_my_contract_id(),
+--                        get_my_contracts()
 --   4. Backfill       → usuários existentes vinculados ao contrato
---   5. Trigger        → novos usuários já entram com vínculo
+--   5. handle_new_user → novos usuários já entram com vínculo
 -- ============================================================
 
 
@@ -43,7 +44,7 @@ $$;
 
 CREATE TABLE IF NOT EXISTS public.user_contracts (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     UUID NOT NULL REFERENCES auth.users(id)      ON DELETE CASCADE,
+  user_id     UUID NOT NULL REFERENCES auth.users(id)       ON DELETE CASCADE,
   contract_id UUID NOT NULL REFERENCES public.contracts(id) ON DELETE CASCADE,
   role        public.app_role NOT NULL DEFAULT 'member',
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -59,9 +60,9 @@ COMMENT ON COLUMN public.user_contracts.role IS
   'Papel do usuário DENTRO deste contrato: admin_contrato | member. '
   'admin global (admin_master) não precisa de registro aqui — bypass total.';
 
-CREATE INDEX IF NOT EXISTS idx_user_contracts_user    ON public.user_contracts (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_contracts_user     ON public.user_contracts (user_id);
 CREATE INDEX IF NOT EXISTS idx_user_contracts_contract ON public.user_contracts (contract_id);
-CREATE INDEX IF NOT EXISTS idx_user_contracts_role    ON public.user_contracts (contract_id, role);
+CREATE INDEX IF NOT EXISTS idx_user_contracts_role     ON public.user_contracts (contract_id, role);
 
 CREATE TRIGGER trg_user_contracts_updated_at
   BEFORE UPDATE ON public.user_contracts
@@ -76,7 +77,6 @@ ALTER TABLE public.user_contracts ENABLE ROW LEVEL SECURITY;
 -- ============================================================
 
 -- 3a. is_admin_master() — usuário tem role 'admin' global?
---     Renomeia semanticamente o has_role existente
 CREATE OR REPLACE FUNCTION public.is_admin_master(_user_id UUID DEFAULT auth.uid())
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -149,8 +149,6 @@ COMMENT ON FUNCTION public.has_contract_access IS
 
 
 -- 3d. get_my_contract_id() — retorna o contract_id do usuário logado
---     Para usuários com 1 contrato (caso mais comum)
---     admin_master retorna NULL (acessa todos)
 CREATE OR REPLACE FUNCTION public.get_my_contract_id(
   _user_id UUID DEFAULT auth.uid()
 )
@@ -172,7 +170,6 @@ COMMENT ON FUNCTION public.get_my_contract_id IS
 
 
 -- 3e. get_my_contracts() — retorna TODOS os contratos do usuário
---     Útil quando um usuário puder estar em múltiplos contratos no futuro
 CREATE OR REPLACE FUNCTION public.get_my_contracts(
   _user_id UUID DEFAULT auth.uid()
 )
@@ -252,9 +249,8 @@ CREATE POLICY "contracts_member_select"
 -- 6. BACKFILL — vincular usuários existentes ao contrato
 --
 --    Regra:
---    • user_roles.role = 'admin' → mantém como admin_master (user_roles)
---      e também entra como admin_contrato no único contrato existente
---    • user_roles.role = 'member' → entra como member no único contrato
+--    • user_roles.role = 'admin'  → admin_contrato no contrato FABRICA PF
+--    • user_roles.role = 'member' → member no contrato FABRICA PF
 --
 --    Idempotente: ON CONFLICT DO NOTHING
 -- ============================================================
@@ -262,16 +258,16 @@ CREATE POLICY "contracts_member_select"
 INSERT INTO public.user_contracts (user_id, contract_id, role)
 SELECT
   ur.user_id,
-  'c' || 'd59ab6dc-421f-41b4-b415-ae0bc072ebd4' AS contract_id,
+  'd59ab6dc-421f-41b4-b415-ae0bc072ebd4'::uuid AS contract_id,
   CASE
     WHEN ur.role = 'admin' THEN 'admin_contrato'::public.app_role
-    ELSE 'member'::public.app_role
+    ELSE                        'member'::public.app_role
   END AS role
 FROM public.user_roles ur
 WHERE NOT EXISTS (
   SELECT 1 FROM public.user_contracts uc
-   WHERE uc.user_id = ur.user_id
-     AND uc.contract_id = 'd59ab6dc-421f-41b4-b415-ae0bc072ebd4'
+   WHERE uc.user_id     = ur.user_id
+     AND uc.contract_id = 'd59ab6dc-421f-41b4-b415-ae0bc072ebd4'::uuid
 )
 ON CONFLICT (user_id, contract_id) DO NOTHING;
 
@@ -288,7 +284,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_role       public.app_role;
+  v_role        public.app_role;
   v_contract_id UUID := 'd59ab6dc-421f-41b4-b415-ae0bc072ebd4';
 BEGIN
   -- 1. Cria perfil
@@ -318,7 +314,7 @@ BEGIN
     NEW.id,
     v_contract_id,
     CASE WHEN v_role = 'admin' THEN 'admin_contrato'::public.app_role
-         ELSE 'member'::public.app_role
+         ELSE                       'member'::public.app_role
     END
   )
   ON CONFLICT (user_id, contract_id) DO NOTHING;
@@ -332,7 +328,7 @@ $$;
 -- 8. GRANTS — expor funções ao frontend (authenticated)
 -- ============================================================
 
-GRANT EXECUTE ON FUNCTION public.is_admin_master(UUID)          TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_admin_master(UUID)           TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_admin_of_contract(UUID,UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.has_contract_access(UUID,UUID)  TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_my_contract_id(UUID)        TO authenticated;
@@ -351,10 +347,10 @@ SELECT
   uc.contract_id,
   c.name           AS contract_name,
   uc.role          AS role_contrato
-FROM      public.profiles      p
-JOIN      public.user_roles    ur ON ur.user_id    = p.user_id
-LEFT JOIN public.user_contracts uc ON uc.user_id   = p.user_id
-LEFT JOIN public.contracts      c  ON c.id         = uc.contract_id
+FROM      public.profiles       p
+JOIN      public.user_roles     ur ON ur.user_id    = p.user_id
+LEFT JOIN public.user_contracts uc ON uc.user_id    = p.user_id
+LEFT JOIN public.contracts       c ON  c.id         = uc.contract_id
 ORDER BY  p.display_name;
 
 COMMENT ON VIEW public.vw_user_contract_roles IS
