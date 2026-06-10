@@ -34,17 +34,31 @@ DROP FUNCTION IF EXISTS public.fn_get_team_contract(UUID);
 
 -- ============================================================
 -- BLOCO 2: RECRIAR contract_room_teams (estrutura limpa)
--- A tabela original (20260603170000_hu001) estava correta no
--- design mas nunca foi populada. Recriamos mantendo a estrutura
--- e adicionando a coluna is_active para controle futuro.
+--
+-- NOTA SOBRE O CASCADE:
+--   O banco possui policies em outras tabelas (projects, contracts,
+--   contract_slas) que referenciam contract_room_teams em suas
+--   expressões USING/WITH CHECK. O DROP CASCADE remove essas
+--   dependências automaticamente — todas são recriadas logo abaixo
+--   com a implementação correta.
 -- ============================================================
-
--- Drop e recriação apenas se a tabela estiver vazia (seguro)
 DO $$
 BEGIN
   IF (SELECT COUNT(*) FROM public.contract_room_teams) = 0 THEN
-    DROP TABLE public.contract_room_teams;
 
+    -- Remove policies dependentes explicitamente antes do DROP CASCADE
+    -- (para deixar audit trail claro no log do Postgres)
+    DROP POLICY IF EXISTS "projects_insert"                   ON public.projects;
+    DROP POLICY IF EXISTS "contracts_select"                  ON public.contracts;
+    DROP POLICY IF EXISTS "contract_slas_select_team_members" ON public.contract_slas;
+    -- Políticas antigas da hu001 (podem existir com nomes diferentes)
+    DROP POLICY IF EXISTS "Admins manage contract_room_teams" ON public.contract_room_teams;
+    DROP POLICY IF EXISTS "Members view contract_room_teams"  ON public.contract_room_teams;
+
+    -- DROP com CASCADE remove quaisquer outras dependências restantes
+    DROP TABLE public.contract_room_teams CASCADE;
+
+    -- Recria a tabela com estrutura limpa + coluna is_active
     CREATE TABLE public.contract_room_teams (
       id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
       contract_id UUID        NOT NULL REFERENCES public.contracts(id) ON DELETE CASCADE,
@@ -62,15 +76,14 @@ BEGIN
 
     ALTER TABLE public.contract_room_teams ENABLE ROW LEVEL SECURITY;
 
-    CREATE POLICY "Admins manage contract_room_teams"
+    CREATE POLICY "crt_admin_all"
       ON public.contract_room_teams FOR ALL
       USING (public.is_admin());
 
-    CREATE POLICY "Members view contract_room_teams"
+    CREATE POLICY "crt_members_select"
       ON public.contract_room_teams FOR SELECT
-      USING (true);
+      USING (auth.uid() IS NOT NULL);
 
-    -- Trigger updated_at
     DROP TRIGGER IF EXISTS trg_crt_updated_at ON public.contract_room_teams;
     CREATE TRIGGER trg_crt_updated_at
       BEFORE UPDATE ON public.contract_room_teams
@@ -79,41 +92,60 @@ BEGIN
     COMMENT ON TABLE public.contract_room_teams IS
       'Vínculo N:N entre contratos, times e tipos de sala (agil/sustentacao). '
       'Permite que o mesmo time opere em múltiplas modalidades de um contrato (híbrido).';
+
+    -- --------------------------------------------------------
+    -- Recriar policies que foram removidas pelo CASCADE
+    -- --------------------------------------------------------
+
+    -- projects: qualquer autenticado pode inserir (admin controla via projects_admin_all)
+    DROP POLICY IF EXISTS "projects_insert" ON public.projects;
+    CREATE POLICY "projects_insert"
+      ON public.projects FOR INSERT
+      WITH CHECK (auth.role() = 'authenticated');
+
+    -- contracts: qualquer autenticado pode selecionar
+    DROP POLICY IF EXISTS "contracts_select" ON public.contracts;
+    CREATE POLICY "contracts_select"
+      ON public.contracts FOR SELECT
+      USING (auth.role() = 'authenticated');
+
+    -- contract_slas: membros do time vinculado ao contrato podem ver os SLAs
+    DROP POLICY IF EXISTS "contract_slas_select_team_members" ON public.contract_slas;
+    CREATE POLICY "contract_slas_select_team_members"
+      ON public.contract_slas FOR SELECT
+      USING (
+        auth.role() = 'authenticated'
+        AND (
+          public.is_admin()
+          OR EXISTS (
+            SELECT 1
+            FROM   public.contract_room_teams crt
+            JOIN   public.team_members tm ON tm.team_id = crt.team_id
+            WHERE  crt.contract_id = contract_slas.contract_id
+              AND  tm.user_id      = auth.uid()
+          )
+        )
+      );
+
   END IF;
 END;
 $$;
 
 -- ============================================================
 -- BLOCO 3: CRIAR CONTRATOS a partir dos times existentes
---
--- Lógica:
---   • Cada time do tipo 'sustentacao' (module = 'sustentacao') vira
---     um contrato de sustentação, usando o nome do time como nome base.
---   • Cada time do tipo 'agil' vira um contrato ágil.
---   • Times sem module definido recebem contrato 'sustentacao' como default.
---   • ON CONFLICT DO NOTHING — idempotente.
---
--- NOTA: Esta lógica cria 1 contrato por time. Na Fase 2, o admin
--- poderá consolidar times diferentes no mesmo contrato real via UI.
 -- ============================================================
-
--- Garante que a tabela temporária não existe de runs anteriores
 DROP TABLE IF EXISTS _phase1_team_contract_map;
 
--- Tabela temporária de trabalho para mapear team_id → contract_id
 CREATE TEMP TABLE _phase1_team_contract_map (
   team_id     UUID,
   contract_id UUID,
   room_type   TEXT
 );
 
--- Insere contratos para times que ainda não têm contract_id
--- Usa CTE para capturar o contract_id gerado e salvar no mapa
 WITH teams_sem_contrato AS (
   SELECT
     t.id                                              AS team_id,
     t.name                                            AS team_name,
-    COALESCE(t.module::TEXT, 'sustentacao')           AS module,
     CASE
       WHEN COALESCE(t.module::TEXT, '') = 'agil' THEN 'agil'
       ELSE 'sustentacao'
@@ -125,10 +157,10 @@ WITH teams_sem_contrato AS (
 contratos_inseridos AS (
   INSERT INTO public.contracts (name, description, status, room_mode)
   SELECT
-    t.team_name                                                   AS name,
-    'Contrato gerado automaticamente pela migração Fase 1 a partir do time: ' || t.team_name AS description,
-    'active'                                                      AS status,
-    t.room_type                                                   AS room_mode
+    t.team_name,
+    'Contrato gerado automaticamente pela migração Fase 1 a partir do time: ' || t.team_name,
+    'active',
+    t.room_type
   FROM teams_sem_contrato t
   ON CONFLICT DO NOTHING
   RETURNING id, name
@@ -136,14 +168,13 @@ contratos_inseridos AS (
 INSERT INTO _phase1_team_contract_map (team_id, contract_id, room_type)
 SELECT
   ts.team_id,
-  ci.id AS contract_id,
+  ci.id,
   ts.room_type
 FROM teams_sem_contrato ts
 JOIN contratos_inseridos ci ON ci.name = ts.team_name;
 
 -- ============================================================
 -- BLOCO 4: ATUALIZAR teams.contract_id e teams.team_type
--- Usa o mapa criado no bloco anterior.
 -- ============================================================
 UPDATE public.teams t
 SET
@@ -155,28 +186,24 @@ SET
                 END
 FROM _phase1_team_contract_map m
 WHERE t.id = m.team_id
-  AND t.contract_id IS NULL;   -- seguro: só atualiza quem não tem contrato
+  AND t.contract_id IS NULL;
 
 -- ============================================================
 -- BLOCO 5: POPULAR contract_slas
---
--- SLAs hardcoded extraídos do frontend (sustentação):
---   urgent : resposta 60 min   | resolução 240 min
---   high   : resposta 120 min  | resolução 480 min
---   medium : resposta 240 min  | resolução 1440 min (1 dia útil)
---   low    : resposta 480 min  | resolução 2880 min (2 dias úteis)
---
--- Aplica a matriz para todos os contratos que não têm SLA configurado.
--- ON CONFLICT DO NOTHING — idempotente.
+-- SLAs hardcoded extraídos do frontend:
+--   urgent : 60 min resposta  | 240 min resolução
+--   high   : 120 min          | 480 min
+--   medium : 240 min          | 1440 min (1 dia útil)
+--   low    : 480 min          | 2880 min (2 dias úteis)
 -- ============================================================
 INSERT INTO public.contract_slas
   (contract_id, priority, response_time_minutes, resolution_time_minutes, business_hours_only)
 SELECT
-  c.id    AS contract_id,
+  c.id,
   sla.priority,
   sla.response_time_minutes,
   sla.resolution_time_minutes,
-  true    AS business_hours_only
+  true
 FROM public.contracts c
 CROSS JOIN (
   VALUES
@@ -194,18 +221,16 @@ ON CONFLICT ON CONSTRAINT unique_contract_priority DO NOTHING;
 
 -- ============================================================
 -- BLOCO 6: POPULAR contract_room_teams
--- Usa teams.contract_id (agora preenchido) para criar os vínculos N:N.
--- ON CONFLICT DO NOTHING — idempotente.
 -- ============================================================
 INSERT INTO public.contract_room_teams (contract_id, team_id, room_type)
 SELECT
   t.contract_id,
-  t.id AS team_id,
+  t.id,
   CASE t.team_type
     WHEN 'agile'      THEN 'agil'
     WHEN 'sustenance' THEN 'sustentacao'
     ELSE 'sustentacao'
-  END AS room_type
+  END
 FROM public.teams t
 WHERE t.contract_id IS NOT NULL
   AND t.deleted_at  IS NULL
@@ -217,7 +242,7 @@ ON CONFLICT (contract_id, team_id, room_type) DO NOTHING;
 DROP TABLE IF EXISTS _phase1_team_contract_map;
 
 -- ============================================================
--- VERIFICAÇÃO (comentada — rode manualmente no SQL Editor para conferir)
+-- VERIFICAÇÃO (rode manualmente no SQL Editor para conferir)
 -- ============================================================
 -- SELECT c.name, c.room_mode, c.status,
 --        COUNT(DISTINCT cs.id) AS sla_rules,
@@ -231,8 +256,4 @@ DROP TABLE IF EXISTS _phase1_team_contract_map;
 -- ============================================================
 -- FIM DA MIGRATION — Fase 1 concluída
 -- Próximo: 20260610_phase2_projects_contract_link.sql
---   • UPDATE projects.contract_id herdando do time
---   • UPDATE projects.room_type baseado em module_type
---   • ADD fn_get_team_contract (versão correta)
---   • FIX RPC get_demandas expondo contract_id e room_type
 -- ============================================================
