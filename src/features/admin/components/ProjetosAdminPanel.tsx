@@ -79,12 +79,7 @@ export function ProjetosAdminPanel() {
   const [form,          setForm]          = useState<FormState>(EMPTY_FORM);
   const debouncedSearch = useDebounce(search, 300);
 
-  // Apenas times que aparecem em pelo menos um projeto carregado
-  const teamsWithProjects = useMemo(() => {
-    const ids = new Set(projetos.map(p => p.team_id).filter(Boolean));
-    return teams.filter((t: any) => ids.has(t.id));
-  }, [teams, projetos]);
-
+  // Todos os times disponíveis no select de filtro (não apenas os que aparecem nos projetos)
   const hasFilters = debouncedSearch || filterModule !== 'all' || filterTeam !== 'all';
   const clearFilters = () => { setSearch(''); setFilterModule('all'); setFilterTeam('all'); };
 
@@ -162,7 +157,6 @@ export function ProjetosAdminPanel() {
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-2 items-center">
-        {/* Busca por nome */}
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -173,7 +167,7 @@ export function ProjetosAdminPanel() {
           />
         </div>
 
-        {/* Filtro por time */}
+        {/* Filtro por time — todos os times cadastrados */}
         <Select value={filterTeam} onValueChange={v => { setFilterTeam(v); setCurrentPage(1); }}>
           <SelectTrigger className="w-[170px] h-9">
             <Users className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
@@ -181,7 +175,7 @@ export function ProjetosAdminPanel() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as salas</SelectItem>
-            {teamsWithProjects.map((t: any) => (
+            {teams.map((t: any) => (
               <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
             ))}
           </SelectContent>
@@ -200,7 +194,6 @@ export function ProjetosAdminPanel() {
           </SelectContent>
         </Select>
 
-        {/* Limpar filtros */}
         {hasFilters && (
           <Button variant="ghost" size="sm" className="h-9 gap-1.5 text-muted-foreground" onClick={clearFilters}>
             <X className="h-3.5 w-3.5" /> Limpar
@@ -231,6 +224,11 @@ export function ProjetosAdminPanel() {
                           {p.legacy_projetos_id && (
                             <Badge variant="outline" className="text-[9px] border-yellow-700 text-yellow-400 bg-yellow-950">
                               migrado
+                            </Badge>
+                          )}
+                          {p.status === 'paused' && (
+                            <Badge variant="outline" className="text-[9px] border-orange-700 text-orange-400 bg-orange-950">
+                              pausado
                             </Badge>
                           )}
                         </div>
@@ -265,7 +263,10 @@ export function ProjetosAdminPanel() {
                       {p.team_name && (
                         <button
                           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left"
-                          onClick={() => setFilterTeam(p.team_id ?? 'all')}
+                          onClick={() => {
+                            const t = teams.find((x: any) => x.id === p.team_id);
+                            if (t) setFilterTeam(t.id);
+                          }}
                           title={`Filtrar por ${p.team_name}`}
                         >
                           <Users className="h-3 w-3 shrink-0" />

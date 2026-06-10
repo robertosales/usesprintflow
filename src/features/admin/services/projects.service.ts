@@ -27,7 +27,7 @@ export interface ProjetoAdmin {
 }
 
 export async function fetchProjetosAdmin(): Promise<ProjetoAdmin[]> {
-  // Busca base sem join de teams para evitar ambiguidade de FK
+  // Busca todos os projetos exceto arquivados
   const { data, error } = await (supabase as any)
     .from('projects')
     .select(`
@@ -36,7 +36,7 @@ export async function fetchProjetosAdmin(): Promise<ProjetoAdmin[]> {
       created_at, updated_at,
       contracts ( name )
     `)
-    .eq('status', 'active')
+    .neq('status', 'archived')
     .order('name');
   if (error) throw error;
 
