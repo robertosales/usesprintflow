@@ -1,12 +1,13 @@
 -- ============================================================
 -- FASE 3: RLS multi-contrato — teams, sprints, user_stories
--- Data: 2026-06-10
+-- Data: 2026-06-10 (v2 — fix admin check via has_role)
 -- Premissa: teams.contract_id (FK nullable) é o elo central.
 --           profiles.team_id (FK) vincula usuário ao time.
---           admin (role = 'admin') bypassa tudo.
+--           admin check via public.has_role(auth.uid(), 'admin').
 -- ============================================================
 
--- 1. Helper SECURITY DEFINER — evita recursão e reutiliza em todas as políticas
+-- 1. Helper SECURITY DEFINER — retorna contract_id do usuário atual
+--    Usa profiles.team_id (adicionado em 20260514165900)
 CREATE OR REPLACE FUNCTION public.get_user_contract_id()
 RETURNS uuid
 LANGUAGE sql
@@ -17,7 +18,7 @@ AS $$
   SELECT t.contract_id
   FROM profiles p
   JOIN teams t ON t.id = p.team_id
-  WHERE p.id = auth.uid()
+  WHERE p.user_id = auth.uid()
   LIMIT 1;
 $$;
 
@@ -31,12 +32,12 @@ CREATE POLICY "teams_select_multicontract"
   ON public.teams FOR SELECT
   USING (
     -- admin vê tudo
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    public.has_role(auth.uid(), 'admin')
     OR
-    -- membro vê times do mesmo contrato (incluindo o seu próprio time)
+    -- membro vê times do mesmo contrato
     contract_id = get_user_contract_id()
     OR
-    -- times sem contrato ainda (legados) ficam visíveis para todos autenticados
+    -- times legados (sem contrato) visíveis para todos autenticados
     contract_id IS NULL
   );
 
@@ -49,7 +50,7 @@ DROP POLICY IF EXISTS "sprints_select_multicontract" ON public.sprints;
 CREATE POLICY "sprints_select_multicontract"
   ON public.sprints FOR SELECT
   USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    public.has_role(auth.uid(), 'admin')
     OR
     team_id IN (
       SELECT id FROM teams
@@ -67,7 +68,7 @@ DROP POLICY IF EXISTS "user_stories_select_multicontract" ON public.user_stories
 CREATE POLICY "user_stories_select_multicontract"
   ON public.user_stories FOR SELECT
   USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    public.has_role(auth.uid(), 'admin')
     OR
     sprint_id IN (
       SELECT s.id FROM sprints s
@@ -78,7 +79,7 @@ CREATE POLICY "user_stories_select_multicontract"
   );
 
 -- ============================================================
--- ÍNDICES de suporte (se ainda não existirem)
+-- ÍNDICES de suporte
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_teams_contract_id
   ON public.teams (contract_id)
