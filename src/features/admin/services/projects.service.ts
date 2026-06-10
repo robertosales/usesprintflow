@@ -1,7 +1,8 @@
 /**
  * projects.service.ts
  * Fase 5c: CRUD em public.projects (tabela nova).
- * Interface ProjetoAdmin é compatível com Projeto (sustentacao) via mapeamento.
+ * Usa FK-hint "!team_id" e "!contract_id" para desambiguar joins no Supabase
+ * quando a tabela projects tem mais de uma FK para teams ou contracts.
  */
 import { supabase } from '@/integrations/supabase/client';
 
@@ -26,24 +27,37 @@ export interface ProjetoAdmin {
 }
 
 export async function fetchProjetosAdmin(): Promise<ProjetoAdmin[]> {
+  // Busca base sem join de teams para evitar ambiguidade de FK
   const { data, error } = await (supabase as any)
     .from('projects')
     .select(`
       id, contract_id, team_id, name, description, code,
       module_type, status, redmine_id, sla_id, legacy_projetos_id,
       created_at, updated_at,
-      contracts ( name ),
-      teams     ( name )
+      contracts ( name )
     `)
     .eq('status', 'active')
     .order('name');
   if (error) throw error;
-  return ((data ?? []) as any[]).map((p: any) => ({
+
+  const rows = ((data ?? []) as any[]);
+
+  // Busca nomes dos times em lote para evitar o join ambíguo
+  const teamIds = [...new Set(rows.map((p: any) => p.team_id).filter(Boolean))] as string[];
+  let teamMap: Record<string, string> = {};
+  if (teamIds.length > 0) {
+    const { data: teamsData } = await (supabase as any)
+      .from('teams')
+      .select('id, name')
+      .in('id', teamIds);
+    (teamsData ?? []).forEach((t: any) => { teamMap[t.id] = t.name; });
+  }
+
+  return rows.map((p: any) => ({
     ...p,
     contract_name: p.contracts?.name ?? null,
-    team_name:     p.teams?.name     ?? null,
+    team_name:     teamMap[p.team_id] ?? null,
     contracts:     undefined,
-    teams:         undefined,
   })) as ProjetoAdmin[];
 }
 
