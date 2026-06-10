@@ -4,9 +4,10 @@
 -- Dependência: Fase 5a (team_id, sla_id, legacy_projetos_id já existem)
 -- PRINCÍPIO:
 --   • public.projetos intocada — continua sendo a fonte do frontend.
---   • Backfill idempotente: ON CONFLICT (legacy_projetos_id) DO NOTHING.
+--   • Backfill idempotente: WHERE NOT EXISTS garante re-run seguro.
 --   • Mapeamento campo a campo documentado.
 --   • Sem perda de dados: todos os campos preservados ou mapeados.
+--   • Slug gerado sem UNACCENT (extensão não disponível).
 -- ============================================================
 
 BEGIN;
@@ -25,15 +26,14 @@ BEGIN;
 --   projetos.updated_at  → projects.updated_at          (histórico)
 --
 -- Campos sem equivalente direto:
---   projetos.equipe      → sem coluna em projects (campo texto livre,
---                           semanticamente coberto por team_id)
---   projetos.sla         → sem coluna em projects (valor texto 'padrao'|etc,
---                           substituído por sla_id + contract_slas)
+--   projetos.equipe → coberto semanticamente por team_id
+--   projetos.sla    → substituído por sla_id + contract_slas
 --
 -- Campos calculados:
---   projects.code        → slug do nome (lower, sem acento, espaço vira _)
---   projects.module_type → 'sustenance' (todos os projetos de projetos são
---                           de sustentação por definição)
+--   projects.code        → slug do nome sem UNACCENT
+--                          mantém acentos como letras válidas no slug
+--                          remove apenas caracteres não-alfanuméricos
+--   projects.module_type → 'sustenance' (todos são sustentação)
 --   projects.status      → 'active'
 -- ============================================================
 INSERT INTO public.projects (
@@ -50,75 +50,93 @@ INSERT INTO public.projects (
   updated_at
 )
 SELECT
-  p.id                                          AS legacy_projetos_id,
+  p.id                                              AS legacy_projetos_id,
   p.team_id,
-  p.nome                                        AS name,
-  NULLIF(TRIM(p.descricao), '')                 AS description,
+  p.nome                                            AS name,
+  NULLIF(TRIM(p.descricao), '')                     AS description,
   p.contract_id,
   p.sla_id,
-  -- code: slug do nome (max 50 chars, lowercase, sem caracteres especiais)
-  LOWER(
-    REGEXP_REPLACE(
+  -- slug: lowercase, espaços/hifens/colchetes viram _, trunca em 50 chars
+  -- ex: "[SUST] GPOL" → "sust_gpol"
+  LEFT(
+    LOWER(
       REGEXP_REPLACE(
-        UNACCENT(TRIM(p.nome)),
-        '[^a-zA-Z0-9\s_-]', '', 'g'
-      ),
-      '[\s]+', '_', 'g'
-    )
-  )::VARCHAR(50)                                AS code,
-  'sustenance'                                  AS module_type,
-  'active'                                      AS status,
+        REGEXP_REPLACE(
+          TRIM(p.nome),
+          '[\[\]\(\)]+', '', 'g'     -- remove colchetes e parênteses
+        ),
+        '[^a-zà-ü0-9]+', '_', 'g'  -- tudo que não é letra/número vira _
+      )
+    ),
+    50
+  )                                                 AS code,
+  'sustenance'                                      AS module_type,
+  'active'                                          AS status,
   p.created_at,
   p.updated_at
 FROM public.projetos p
 WHERE NOT EXISTS (
-  -- idempotente: pula se já foi migrado
   SELECT 1 FROM public.projects pr
   WHERE pr.legacy_projetos_id = p.id
 );
 
 -- ============================================================
 -- 2. BACKFILL demandas.project_id
---    Agora que public.projects tem os projetos migrados,
---    preenche demandas.project_id usando a correspondência
---    demandas.team_id → projects.team_id (via legacy).
---    Só atualiza demandas que ainda estão com project_id NULL.
+--    Preenche demandas.project_id usando correspondência
+--    demandas.team_id → projects.team_id (via migrados).
+--    Só atualiza demandas com project_id ainda NULL.
+--
+--    ATENÇÃO: um time pode ter vários projetos em public.projetos.
+--    O UPDATE usa DISTINCT ON (d.id) para pegar apenas o projeto
+--    mais recente por time, evitando duplicação.
 -- ============================================================
 UPDATE public.demandas d
 SET
-  project_id = pr.id,
+  project_id = sub.project_id,
   updated_at = NOW()
-FROM public.projects pr
-WHERE pr.team_id     = d.team_id
-  AND pr.status      = 'active'
-  AND d.project_id   IS NULL
-  AND pr.legacy_projetos_id IS NOT NULL;  -- só via projetos migrados
+FROM (
+  SELECT DISTINCT ON (d2.id)
+    d2.id          AS demanda_id,
+    pr.id          AS project_id
+  FROM public.demandas d2
+  JOIN public.projects pr
+    ON pr.team_id  = d2.team_id
+   AND pr.status   = 'active'
+   AND pr.legacy_projetos_id IS NOT NULL
+  WHERE d2.project_id IS NULL
+  ORDER BY d2.id, pr.created_at DESC
+) sub
+WHERE d.id = sub.demanda_id;
 
 -- ============================================================
 -- 3. LOG de cobertura pós-backfill
 -- ============================================================
 SELECT
-  'projetos → projects' AS operacao,
-  (SELECT COUNT(*) FROM public.projetos)                              AS total_projetos_legados,
-  (SELECT COUNT(*) FROM public.projects WHERE legacy_projetos_id IS NOT NULL) AS migrados,
+  'projetos → projects'       AS operacao,
+  (SELECT COUNT(*) FROM public.projetos)
+                                AS total_legados,
+  (SELECT COUNT(*) FROM public.projects
+   WHERE  legacy_projetos_id IS NOT NULL)
+                                AS migrados,
   (SELECT COUNT(*) FROM public.projetos p
-   WHERE NOT EXISTS (
-     SELECT 1 FROM public.projects pr WHERE pr.legacy_projetos_id = p.id
-   ))                                                                 AS nao_migrados
+   WHERE  NOT EXISTS (
+     SELECT 1 FROM public.projects pr
+     WHERE  pr.legacy_projetos_id = p.id
+   ))                           AS nao_migrados
 
 UNION ALL
 
 SELECT
-  'demandas.project_id' AS operacao,
-  COUNT(*)                                                            AS total_projetos_legados,
-  COUNT(*) FILTER (WHERE project_id IS NOT NULL)                     AS migrados,
-  COUNT(*) FILTER (WHERE project_id IS NULL)                         AS nao_migrados
+  'demandas.project_id'        AS operacao,
+  COUNT(*)                      AS total_legados,
+  COUNT(*) FILTER (WHERE project_id IS NOT NULL) AS migrados,
+  COUNT(*) FILTER (WHERE project_id IS NULL)     AS nao_migrados
 FROM public.demandas;
 
 COMMIT;
 
 -- ============================================================
 -- FIM
--- Próximo passo: Fase 5c — ProjetosManager no Admin
+-- Próximo passo: Fase 5c — ProjetosManager no Admin (frontend)
 -- Migration: 20260610_phase5b_backfill_projetos_to_projects.sql
 -- ============================================================
