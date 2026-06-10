@@ -5,11 +5,10 @@ export interface Project {
   name: string;
   code?: string | null;
   description?: string | null;
-  module_type: 'sustenance' | 'agile' | 'mixed';
-  status: 'active' | 'paused' | 'archived';
+  module_type?: string | null;
   redmine_id?: number | null;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // Vínculo retornado pela tela de gestão do contrato
@@ -28,36 +27,42 @@ export interface ContractRoomBinding {
 
 export interface ProjectInput {
   name: string;
-  code?: string;
-  description?: string;
-  module_type: 'sustenance' | 'agile' | 'mixed';
+  code?: string | null;
+  description?: string | null;
+  module_type?: string | null;
   redmine_id?: number | null;
 }
 
-// ── Projetos globais (catálogo — sem filtro de contrato) ──────────────────────
+// ── Catálogo global de projetos ──────────────────────────────────────────────────
+// NOTA: `projects` não tem `team_id` nem `status` — é um catálogo global.
+// O vínculo projeto ↔ time ↔ contrato é armazenado em contract_room_teams.
 export async function fetchAllProjects(): Promise<Project[]> {
   const { data, error } = await (supabase as any)
     .from('projects')
-    .select('id, name, code, description, module_type, status, redmine_id, created_at, updated_at')
-    .eq('status', 'active')
+    .select('id, name, code, description, module_type, redmine_id, created_at, updated_at')
     .order('name');
   if (error) throw error;
   return (data ?? []) as Project[];
 }
 
-// Projetos de um time específico (para seleção em cascata)
-export async function fetchProjectsByTeam(teamId: string): Promise<Project[]> {
+/**
+ * Projetos disponíveis para vincular a um time no BindModal (Step 2).
+ *
+ * Como `projects` é catálogo global sem team_id, retornamos todos os projetos
+ * ordenados por nome. O usuário escolhe qual vincular ao time + contrato.
+ * O parâmetro `teamId` é mantido na assinatura para compatibilidade futura
+ * (ex: filtrar projetos já vinculados a outros contratos do time).
+ */
+export async function fetchProjectsByTeam(_teamId: string): Promise<Project[]> {
   const { data, error } = await (supabase as any)
     .from('projects')
-    .select('id, name, code, description, module_type, status, redmine_id, created_at, updated_at')
-    .eq('team_id', teamId)
-    .eq('status', 'active')
+    .select('id, name, code, description, module_type, redmine_id')
     .order('name');
   if (error) throw error;
   return (data ?? []) as Project[];
 }
 
-// ── Vínculos do contrato via contract_room_teams ──────────────────────────────
+// ── Vínculos do contrato via contract_room_teams ────────────────────────────
 export async function fetchBindingsByContract(contractId: string): Promise<ContractRoomBinding[]> {
   const { data, error } = await (supabase as any)
     .from('contract_room_teams')
@@ -85,7 +90,7 @@ export async function fetchBindingsByContract(contractId: string): Promise<Contr
   }));
 }
 
-// ── Criar vínculo contrato ↔ time ↔ projeto ───────────────────────────────────
+// ── Criar vínculo contrato ↔ time ↔ projeto ─────────────────────────────────
 export async function createBinding(
   contractId: string,
   teamId: string,
@@ -98,7 +103,7 @@ export async function createBinding(
   if (error) throw error;
 }
 
-// ── Remover vínculo ────────────────────────────────────────────────────────────
+// ── Remover vínculo ───────────────────────────────────────────────────────────
 export async function removeBinding(bindingId: string): Promise<void> {
   const { error } = await (supabase as any)
     .from('contract_room_teams')
@@ -107,7 +112,7 @@ export async function removeBinding(bindingId: string): Promise<void> {
   if (error) throw error;
 }
 
-// ── CRUD projetos ─────────────────────────────────────────────────────────────
+// ── CRUD projetos (catálogo) ────────────────────────────────────────────────
 export async function createProject(input: ProjectInput): Promise<Project> {
   const { data, error } = await (supabase as any)
     .from('projects')
@@ -134,6 +139,6 @@ export async function archiveProject(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// Legado mantido para compatibilidade — substituir gradualmente
+// Legado mantido para compatibilidade
 export { createProject as linkTeamToProject, archiveProject as unlinkTeamFromProject };
 export type { ProjectInput as ProjectFormInput };
