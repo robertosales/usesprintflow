@@ -33,11 +33,10 @@ import { useProjetosAdmin }   from '../hooks/useProjetosAdmin';
 import type { ProjetoAdmin }  from '../services/projects.service';
 import {
   Plus, Search, FolderKanban,
-  MoreHorizontal, Layers, Building2, Users,
+  MoreHorizontal, Layers, Building2, Users, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Hooks do admin para popular selects de contrato e time
 import { useContracts }   from '@/features/admin/hooks/useContracts';
 import { useTeamsAdmin }  from '@/features/admin/hooks/useTeamsAdmin';
 
@@ -71,19 +70,30 @@ export function ProjetosAdminPanel() {
   const { contracts } = useContracts();
   const { teams }     = useTeamsAdmin();
 
-  const [showForm,     setShowForm]     = useState(false);
-  const [editing,      setEditing]      = useState<ProjetoAdmin | null>(null);
+  const [showForm,      setShowForm]      = useState(false);
+  const [editing,       setEditing]       = useState<ProjetoAdmin | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<ProjetoAdmin | null>(null);
-  const [search,       setSearch]       = useState('');
-  const [filterModule, setFilterModule] = useState('all');
-  const [form,         setForm]         = useState<FormState>(EMPTY_FORM);
+  const [search,        setSearch]        = useState('');
+  const [filterModule,  setFilterModule]  = useState('all');
+  const [filterTeam,    setFilterTeam]    = useState('all');
+  const [form,          setForm]          = useState<FormState>(EMPTY_FORM);
   const debouncedSearch = useDebounce(search, 300);
+
+  // Apenas times que aparecem em pelo menos um projeto carregado
+  const teamsWithProjects = useMemo(() => {
+    const ids = new Set(projetos.map(p => p.team_id).filter(Boolean));
+    return teams.filter((t: any) => ids.has(t.id));
+  }, [teams, projetos]);
+
+  const hasFilters = debouncedSearch || filterModule !== 'all' || filterTeam !== 'all';
+  const clearFilters = () => { setSearch(''); setFilterModule('all'); setFilterTeam('all'); };
 
   const filtered = useMemo(() => projetos.filter(p => {
     if (debouncedSearch && !p.name.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     if (filterModule !== 'all' && p.module_type !== filterModule) return false;
+    if (filterTeam  !== 'all' && p.team_id !== filterTeam)        return false;
     return true;
-  }), [projetos, debouncedSearch, filterModule]);
+  }), [projetos, debouncedSearch, filterModule, filterTeam]);
 
   const { paginatedItems, currentPage, setCurrentPage, totalItems } =
     usePagination(filtered, { pageSize: 20 });
@@ -104,8 +114,8 @@ export function ProjetosAdminPanel() {
   };
 
   const handleSubmit = async () => {
-    if (!form.name.trim())        { toast.error('Preencha o nome do projeto'); return; }
-    if (!form.contract_id)        { toast.error('Selecione o contrato');        return; }
+    if (!form.name.trim())  { toast.error('Preencha o nome do projeto'); return; }
+    if (!form.contract_id)  { toast.error('Selecione o contrato');        return; }
     const payload = {
       contract_id:  form.contract_id,
       team_id:      form.team_id     || null,
@@ -141,7 +151,7 @@ export function ProjetosAdminPanel() {
           <div>
             <h2 className="text-base font-semibold">Projetos</h2>
             <p className="text-xs text-muted-foreground">
-              Cadastro global — vincule cada projeto a um contrato e uma sala
+              {filtered.length} de {projetos.length} projeto{projetos.length !== 1 ? 's' : ''}
             </p>
           </div>
         </div>
@@ -151,8 +161,9 @@ export function ProjetosAdminPanel() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="flex flex-wrap gap-2 items-center">
+        {/* Busca por nome */}
+        <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar projeto..."
@@ -161,8 +172,24 @@ export function ProjetosAdminPanel() {
             className="pl-9 h-9"
           />
         </div>
-        <Select value={filterModule} onValueChange={setFilterModule}>
-          <SelectTrigger className="w-[160px] h-9">
+
+        {/* Filtro por time */}
+        <Select value={filterTeam} onValueChange={v => { setFilterTeam(v); setCurrentPage(1); }}>
+          <SelectTrigger className="w-[170px] h-9">
+            <Users className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+            <SelectValue placeholder="Todas as salas" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as salas</SelectItem>
+            {teamsWithProjects.map((t: any) => (
+              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Filtro por módulo */}
+        <Select value={filterModule} onValueChange={v => { setFilterModule(v); setCurrentPage(1); }}>
+          <SelectTrigger className="w-[155px] h-9">
             <SelectValue placeholder="Tipo" />
           </SelectTrigger>
           <SelectContent>
@@ -172,6 +199,13 @@ export function ProjetosAdminPanel() {
             ))}
           </SelectContent>
         </Select>
+
+        {/* Limpar filtros */}
+        {hasFilters && (
+          <Button variant="ghost" size="sm" className="h-9 gap-1.5 text-muted-foreground" onClick={clearFilters}>
+            <X className="h-3.5 w-3.5" /> Limpar
+          </Button>
+        )}
       </div>
 
       {/* Grid */}
@@ -229,10 +263,14 @@ export function ProjetosAdminPanel() {
                         </div>
                       )}
                       {p.team_name && (
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <Users className="h-3 w-3" />
+                        <button
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+                          onClick={() => setFilterTeam(p.team_id ?? 'all')}
+                          title={`Filtrar por ${p.team_name}`}
+                        >
+                          <Users className="h-3 w-3 shrink-0" />
                           <span className="truncate">{p.team_name}</span>
-                        </div>
+                        </button>
                       )}
                     </div>
 
@@ -273,7 +311,6 @@ export function ProjetosAdminPanel() {
 
           <div className="space-y-3 py-1">
 
-            {/* Nome */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">
                 Nome <span className="text-destructive">*</span>
@@ -287,7 +324,6 @@ export function ProjetosAdminPanel() {
               />
             </div>
 
-            {/* Contrato */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">
                 Contrato <span className="text-destructive">*</span>
@@ -305,7 +341,6 @@ export function ProjetosAdminPanel() {
               </Select>
             </div>
 
-            {/* Sala (team) */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Sala (opcional)</Label>
               <Select
@@ -322,7 +357,6 @@ export function ProjetosAdminPanel() {
               </Select>
             </div>
 
-            {/* Tipo de módulo */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Tipo de Módulo</Label>
               <Select
@@ -338,7 +372,6 @@ export function ProjetosAdminPanel() {
               </Select>
             </div>
 
-            {/* Código + Redmine ID */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">Código</Label>
@@ -361,7 +394,6 @@ export function ProjetosAdminPanel() {
               </div>
             </div>
 
-            {/* Descrição */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Descrição</Label>
               <Textarea
