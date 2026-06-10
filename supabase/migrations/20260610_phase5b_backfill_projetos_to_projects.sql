@@ -5,36 +5,17 @@
 -- PRINCÍPIO:
 --   • public.projetos intocada — continua sendo a fonte do frontend.
 --   • Backfill idempotente: WHERE NOT EXISTS garante re-run seguro.
---   • Mapeamento campo a campo documentado.
---   • Sem perda de dados: todos os campos preservados ou mapeados.
---   • Slug gerado sem UNACCENT (extensão não disponível).
+--   • sla_id só migrado se existir em contract_slas (LEFT JOIN seguro).
+--   • Slug gerado sem UNACCENT.
 -- ============================================================
 
 BEGIN;
 
 -- ============================================================
 -- 1. BACKFILL: public.projetos → public.projects
---
--- Mapeamento de campos:
---   projetos.id          → projects.legacy_projetos_id  (rastreabilidade)
---   projetos.team_id     → projects.team_id             (sala direta)
---   projetos.nome        → projects.name                (nome principal)
---   projetos.descricao   → projects.description         (descrição)
---   projetos.contract_id → projects.contract_id         (contrato)
---   projetos.sla_id      → projects.sla_id              (SLA customizado)
---   projetos.created_at  → projects.created_at          (histórico)
---   projetos.updated_at  → projects.updated_at          (histórico)
---
--- Campos sem equivalente direto:
---   projetos.equipe → coberto semanticamente por team_id
---   projetos.sla    → substituído por sla_id + contract_slas
---
--- Campos calculados:
---   projects.code        → slug do nome sem UNACCENT
---                          mantém acentos como letras válidas no slug
---                          remove apenas caracteres não-alfanuméricos
---   projects.module_type → 'sustenance' (todos são sustentação)
---   projects.status      → 'active'
+--    sla_id: validado via LEFT JOIN em contract_slas.
+--    Se o sla_id de projetos não existir em contract_slas,
+--    migra como NULL (sem perda crítica — SLA herdado do contrato).
 -- ============================================================
 INSERT INTO public.projects (
   legacy_projetos_id,
@@ -55,17 +36,20 @@ SELECT
   p.nome                                            AS name,
   NULLIF(TRIM(p.descricao), '')                     AS description,
   p.contract_id,
-  p.sla_id,
-  -- slug: lowercase, espaços/hifens/colchetes viram _, trunca em 50 chars
-  -- ex: "[SUST] GPOL" → "sust_gpol"
+  -- sla_id: NULL se o registro não existir em contract_slas
+  CASE
+    WHEN cs.id IS NOT NULL THEN p.sla_id
+    ELSE NULL
+  END                                               AS sla_id,
+  -- slug: lowercase, remove colchetes, não-alfanumérico vira _
   LEFT(
     LOWER(
       REGEXP_REPLACE(
         REGEXP_REPLACE(
           TRIM(p.nome),
-          '[\[\]\(\)]+', '', 'g'     -- remove colchetes e parênteses
+          '[\[\]\(\)]+', '', 'g'
         ),
-        '[^a-zà-ü0-9]+', '_', 'g'  -- tudo que não é letra/número vira _
+        '[^a-zà-ü0-9]+', '_', 'g'
       )
     ),
     50
@@ -75,6 +59,7 @@ SELECT
   p.created_at,
   p.updated_at
 FROM public.projetos p
+LEFT JOIN public.contract_slas cs ON cs.id = p.sla_id
 WHERE NOT EXISTS (
   SELECT 1 FROM public.projects pr
   WHERE pr.legacy_projetos_id = p.id
@@ -82,13 +67,7 @@ WHERE NOT EXISTS (
 
 -- ============================================================
 -- 2. BACKFILL demandas.project_id
---    Preenche demandas.project_id usando correspondência
---    demandas.team_id → projects.team_id (via migrados).
---    Só atualiza demandas com project_id ainda NULL.
---
---    ATENÇÃO: um time pode ter vários projetos em public.projetos.
---    O UPDATE usa DISTINCT ON (d.id) para pegar apenas o projeto
---    mais recente por time, evitando duplicação.
+--    DISTINCT ON (d.id) garante um único project_id por demanda.
 -- ============================================================
 UPDATE public.demandas d
 SET
@@ -132,6 +111,20 @@ SELECT
   COUNT(*) FILTER (WHERE project_id IS NOT NULL) AS migrados,
   COUNT(*) FILTER (WHERE project_id IS NULL)     AS nao_migrados
 FROM public.demandas;
+
+-- ============================================================
+-- 4. DIAGNÓSTICO: sla_ids órfãos (migrados como NULL)
+--    Mostra quais projetos tinham sla_id inválido para auditoria.
+-- ============================================================
+SELECT
+  p.id           AS projetos_id,
+  p.nome,
+  p.sla_id       AS sla_id_original,
+  'migrado como NULL' AS acao
+FROM public.projetos p
+LEFT JOIN public.contract_slas cs ON cs.id = p.sla_id
+WHERE p.sla_id IS NOT NULL
+  AND cs.id IS NULL;
 
 COMMIT;
 
