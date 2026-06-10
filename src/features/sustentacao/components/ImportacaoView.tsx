@@ -7,9 +7,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { upsertDemandas } from "../services/demandas.service";
-import { upsertProjetos } from "../services/projetos.service";
 import { TIPOS_DEMANDA_IMR, calcPrazoInicio, calcPrazoSolucao } from "../types/imr";
-import { useProjetos } from "../hooks/useProjetos";
 import { parse, isValid, format } from "date-fns";
 import {
   ImportacaoPreviewTable,
@@ -17,6 +15,13 @@ import {
   type RowStatus,
 } from "./ImportacaoPreviewTable";
 import { cn } from "@/lib/utils";
+import { fetchProjetosForImport, type ProjetoImport } from "@/features/admin/services/projects.service";
+import { useContracts } from "@/features/admin/hooks/useContracts";
+import {
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 // ─── SheetJS CDN loader (sem npm install) ──────────────────────────────────
 declare global {
@@ -70,32 +75,37 @@ const SITUACAO_MAP: Record<string, string> = {
   ag_aceite_final: "ag_aceite_final",
   cancelada: "cancelada",
   fila_concluida: "fila_concluida",
+  // ── variantes do Redmine / planilha ───────────────────────────────────────
   "fila de atendimento": "fila_atendimento",
   nova: "fila_atendimento",
   "planejamento: em elaboracao": "planejamento_elaboracao",
-  "planejamento: em elaboração": "planejamento_elaboracao",
+  "planejamento: em elaboracao": "planejamento_elaboracao",
   "planejamento: ag. aprovacao": "planejamento_ag_aprovacao",
-  "planejamento: ag. aprovação": "planejamento_ag_aprovacao",
+  "planejamento: ag. aprovacao": "planejamento_ag_aprovacao",
   "planejamento: aprovada p/ exec": "planejamento_aprovada",
   "em execucao": "em_execucao",
-  "em execução": "em_execucao",
   "hom: ag. homologacao": "hom_ag_homologacao",
-  "hom: ag. homologação": "hom_ag_homologacao",
+  "hom: ag. homologacao": "hom_ag_homologacao",
   "hom: homologada": "hom_homologada",
   homologada: "hom_homologada",
   "fila para producao (infra)": "fila_producao",
-  "fila para produção (infra)": "fila_producao",
+  "fila para producao (infra)": "fila_producao",
   "ag. aceite final": "ag_aceite_final",
   "aguardando aceite final": "ag_aceite_final",
   concluida: "fila_concluida",
-  "concluída": "fila_concluida",
   "fila concluida": "fila_concluida",
-  "fila concluída": "fila_concluida",
   "fila de concluidas": "fila_concluida",
-  "fila de concluídas": "fila_concluida",
   cancelado: "cancelada",
   bloqueado: "bloqueada",
   rejeitado: "rejeitada",
+  // ── situações extras que chegam em planilhas reais ─────────────────────────
+  suspensa: "bloqueada",
+  suspensa_cliente: "bloqueada",
+  suspensa_cliente_aguardando: "bloqueada",
+  "aguardando cliente": "bloqueada",
+  "aguardando retorno": "bloqueada",
+  aguardando: "bloqueada",
+  suspensa_interna: "bloqueada",
 };
 
 function normalizeSituacao(raw: string): string | null {
@@ -123,7 +133,7 @@ function removeEmojis(str: string): string {
 function normalizeSLA(raw: string): string | null {
   if (!raw || raw === "-") return null;
   if (/\d+\s*x\s*7/i.test(raw)) return "continuo";
-  if (normalize(raw) === "padrao" || normalize(raw) === "padrão") return "padrao";
+  if (normalize(raw) === "padrao" || normalize(raw) === "padrao") return "padrao";
   return raw.trim();
 }
 
@@ -165,10 +175,18 @@ interface FailedRow { rhm: string; projeto: string; motivo: string; }
 
 export function ImportacaoView() {
   const { currentTeamId } = useAuth();
-  const { projetos, reload: reloadProjetos } = useProjetos({ allTeams: true });
 
-  // Pré-carrega o SheetJS em background para uploads .xlsx mais rápidos
-  useEffect(() => { loadXLSX().catch(() => {}); }, []);
+  // Projetos lidos de public.projects (todos, sem filtro de time)
+  const [allProjetos, setAllProjetos] = useState<ProjetoImport[]>([]);
+  const { contracts } = useContracts();
+
+  // Pré-carrega projetos e SheetJS em background
+  useEffect(() => {
+    loadXLSX().catch(() => {});
+    fetchProjetosForImport()
+      .then(setAllProjetos)
+      .catch(() => {});
+  }, []);
 
   const [mode, setMode]                         = useState<ImportMode>(null);
   const [loading, setLoading]                   = useState(false);
@@ -184,10 +202,17 @@ export function ImportacaoView() {
   const [projetoResult, setProjetoResult] = useState<{
     importados: number; existentes: number; erros: number;
   } | null>(null);
+  // Contrato selecionado para importação de projetos (obrigatório)
+  const [projetoContractId, setProjetoContractId] = useState<string>("");
 
-  const inputRef   = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // projetoMap: normalizedName → { id, name, team_id } a partir de public.projects
   const projetoMap = new Map(
-    projetos.map((p) => [normalize(p.nome), { nome: p.nome, teamId: p.team_id }]),
+    allProjetos.map((p) => [
+      normalize(p.name),
+      { id: p.id, nome: p.name, teamId: p.team_id ?? "" },
+    ]),
   );
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -227,47 +252,55 @@ export function ImportacaoView() {
     try {
       const buffer = await file.arrayBuffer();
       const rows   = isXlsxFile(file) ? await parseXlsxToRows(buffer) : parseCsvToRows(buffer);
-      const parsed: ParsedRow[]          = [];
-      const errs:   ValidationError[]    = [];
-      const newTypes: string[]           = [];
+      const parsed: ParsedRow[]       = [];
+      const errs:   ValidationError[] = [];
+      const newTypes: string[]        = [];
 
       rows.forEach((r, idx) => {
-        const linha       = idx + 2;
-        const rhm         = String(r["#"] || r["RHM"] || r["rhm"] || "").trim();
-        const projeto      = String(r["Projeto"] || r["projeto"] || "").trim();
-        const tipoRaw      = String(r["Tipo"] || r["tipo"] || "").trim();
-        const dataInicioRaw =
+        const linha          = idx + 2;
+        const rhm            = String(r["#"] || r["RHM"] || r["rhm"] || "").trim();
+        const projetoNome    = String(r["Projeto"] || r["projeto"] || "").trim();
+        const tipoRaw        = String(r["Tipo"] || r["tipo"] || "").trim();
+        const dataInicioRaw  =
           r["Criado em"] || r["Criado Em"] || r["Data de Início"] ||
           r["Data de Inicio"] || r["data_inicio"] || null;
         const descricao =
           String(r["Título"] || r["Titulo"] || r["Subject"] || r["Descrição"] || r["descricao"] || "").trim() ||
           undefined;
 
-        if (!rhm)    { errs.push({ linha, mensagem: "# não informado." }); return; }
-        if (!projeto) { errs.push({ linha, mensagem: "Projeto não informado." }); return; }
-        const projetoInfo = projetoMap.get(normalize(projeto));
-        if (!projetoInfo) { errs.push({ linha, mensagem: `Projeto '${projeto}' não encontrado.` }); return; }
+        if (!rhm)        { errs.push({ linha, mensagem: "# não informado." }); return; }
+        if (!projetoNome) { errs.push({ linha, mensagem: "Projeto não informado." }); return; }
+
+        // Resolve projeto em public.projects pelo nome (normalizado)
+        const projetoInfo = projetoMap.get(normalize(projetoNome));
+        if (!projetoInfo) {
+          errs.push({ linha, mensagem: `Projeto '${projetoNome}' não encontrado em public.projects.` });
+          return;
+        }
+
         if (!tipoRaw) { errs.push({ linha, mensagem: "Tipo não informado." }); return; }
         const tipoResult = normalizeTipo(tipoRaw);
         if (!tipoResult) { errs.push({ linha, mensagem: `Tipo '${tipoRaw}' não reconhecido.` }); return; }
         if (tipoResult.autoCreated && !newTypes.includes(tipoRaw)) newTypes.push(tipoRaw);
         const tipoNorm = tipoResult.value;
+
         if (!dataInicioRaw) { errs.push({ linha, mensagem: "Criado em inválido ou ausente." }); return; }
         const dataInicio = parseDataInicio(dataInicioRaw);
         if (!dataInicio)    { errs.push({ linha, mensagem: "Criado em inválido ou ausente." }); return; }
 
-        const situacaoRaw  = String(r["Situação"] || r["Situacao"] || r["situacao"] || "Nova").trim();
+        const situacaoRaw   = String(r["Situação"] || r["Situacao"] || r["situacao"] || "Nova").trim();
         const situacaoLimpa = removeEmojis(situacaoRaw);
         const situacao = normalizeSituacao(situacaoLimpa);
         if (!situacao) {
           errs.push({ linha, mensagem: `Situação '${situacaoRaw}' não reconhecida. Use uma situação válida do cadastro.` });
           return;
         }
-        const isCorretiva  = tipoNorm === "manutencao_corretiva";
-        let sla            = "padrao";
-        const regimeRaw    = String(r["Regime de Atendimento"] || r["Regime"] || r["regime"] || "").trim();
+
+        const isCorretiva = tipoNorm === "manutencao_corretiva";
+        let sla           = "padrao";
+        const regimeRaw   = String(r["Regime de Atendimento"] || r["Regime"] || r["regime"] || "").trim();
         if (isCorretiva && /\d+\s*x\s*7/i.test(regimeRaw)) sla = "continuo";
-        else if (isCorretiva && (normalize(regimeRaw) === "continuo" || normalize(regimeRaw) === "contínuo")) sla = "continuo";
+        else if (isCorretiva && (normalize(regimeRaw) === "continuo")) sla = "continuo";
 
         let tipo_defeito: string | undefined;
         const defeitoRaw = String(r["Defeito Impeditivo"] || r["Tipo de Defeito"] || r["tipo_defeito"] || "").trim().toLowerCase();
@@ -279,8 +312,8 @@ export function ImportacaoView() {
         const diagRaw = String(r["Originada de Diagnóstico"] || r["Originada de Diagnostico"] || "").trim().toLowerCase();
         if (isCorretiva && (diagRaw === "sim" || diagRaw === "true" || diagRaw === "1")) originada_diagnostico = true;
 
-        const regime       = isCorretiva ? sla : undefined;
-        const defeito      = isCorretiva ? tipo_defeito : undefined;
+        const regime      = isCorretiva ? sla : undefined;
+        const defeito     = isCorretiva ? tipo_defeito : undefined;
         const prazoInicio  = calcPrazoInicio(dataInicio, tipoNorm, regime, defeito);
         const prazoSolucao = calcPrazoSolucao(dataInicio, tipoNorm, regime, defeito);
         const prevEncRaw   = r["Data de Previsão de Encerramento"] || r["Data Previsão Encerramento"] || null;
@@ -288,8 +321,13 @@ export function ImportacaoView() {
         if (prevEncRaw) { const d = parseDataInicio(prevEncRaw); if (d) prevEnc = format(d, "yyyy-MM-dd"); }
 
         parsed.push({
-          rhm, projeto: projetoInfo.nome, teamId: projetoInfo.teamId, tipo: tipoNorm,
-          data_inicio: dataInicio, situacao, sla, tipo_defeito, originada_diagnostico, descricao,
+          rhm,
+          projeto:    projetoInfo.nome,
+          projectId:  projetoInfo.id,          // ← UUID de public.projects
+          teamId:     projetoInfo.teamId,
+          tipo:       tipoNorm,
+          data_inicio: dataInicio,
+          situacao, sla, tipo_defeito, originada_diagnostico, descricao,
           data_previsao_encerramento: prevEnc || (prazoSolucao ? format(prazoSolucao, "yyyy-MM-dd") : undefined),
           prazo_inicio_atendimento:   prazoInicio?.toISOString(),
           prazo_solucao:              prazoSolucao?.toISOString(),
@@ -304,38 +342,73 @@ export function ImportacaoView() {
   };
 
   // ─── Upload projetos ─────────────────────────────────────────────────────
+  // Grava em public.projects (nova tabela), não mais na legada "projetos".
+  // contract_id é obrigatório — o usuário seleciona o contrato antes do upload.
 
   const handleFileProjetos = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !currentTeamId) return;
+    if (!file) return;
+    if (!projetoContractId) {
+      toast.error("Selecione o contrato antes de fazer o upload.");
+      return;
+    }
     setProjetoResult(null); setLoading(true);
     try {
       const buffer  = await file.arrayBuffer();
       const rows    = isXlsxFile(file) ? await parseXlsxToRows(buffer) : parseCsvToRows(buffer);
       const results = { importados: 0, existentes: 0, erros: 0 };
-      const existingNorms = new Set(projetos.map((p) => normalize(p.nome)));
+
+      // Recarrega mapa de nomes já cadastrados em public.projects
+      const fresh = await fetchProjetosForImport();
+      const existingNorms = new Set(fresh.map((p) => normalize(p.name)));
+
+      const { supabase: sb } = await import("@/integrations/supabase/client");
+
       for (const r of rows) {
-        const nome = String(r["Nome"] || r["nome"] || "").trim();
-        if (!nome) { results.erros++; continue; }
-        if (existingNorms.has(normalize(nome))) { results.existentes++; continue; }
-        const descricao = String(r["Descrição"] || r["Descricao"] || r["descricao"] || "").trim();
-        const equipe    = String(r["Equipe"]   || r["equipe"]   || "").trim();
-        const slaRaw    = String(r["SLA"]      || r["sla"]      || "").trim();
-        const sla       = normalizeSLA(slaRaw) || "padrao";
+        const name = String(r["Nome"] || r["nome"] || "").trim();
+        if (!name) { results.erros++; continue; }
+        if (existingNorms.has(normalize(name))) { results.existentes++; continue; }
+
+        const description  = String(r["Descrição"] || r["Descricao"] || r["descricao"] || "").trim() || null;
+        const code         = String(r["Código"]    || r["Codigo"]    || r["code"]       || "").trim() || null;
+        const redmine_raw  = String(r["Redmine ID"] || r["redmine_id"] || "").trim();
+        const redmine_id   = redmine_raw ? Number(redmine_raw) || null : null;
+        // module_type: inferido da coluna "Módulo" ou padrão 'sustenance'
+        const modRaw       = String(r["Módulo"] || r["Modulo"] || r["module_type"] || "").trim().toLowerCase();
+        const module_type  = modRaw === "agile" || modRaw === "agil" || modRaw === "ágil"
+          ? "agile"
+          : modRaw === "mixed" || modRaw === "misto"
+          ? "mixed"
+          : "sustenance";
+
         try {
-          await upsertProjetos(currentTeamId, [{ nome, descricao, equipe, sla }]);
+          const { error } = await (sb as any)
+            .from("projects")
+            .insert({
+              contract_id:  projetoContractId,
+              team_id:      currentTeamId || null,
+              name,
+              description,
+              code,
+              redmine_id,
+              module_type,
+              status: "active",
+            });
+          if (error) throw error;
           results.importados++;
-          existingNorms.add(normalize(nome));
+          existingNorms.add(normalize(name));
         } catch { results.erros++; }
       }
+
       setProjetoResult(results);
       toast.success(`Concluída: ${results.importados} novos, ${results.existentes} já existentes`);
-      await reloadProjetos();
+      // Atualiza lista em memória para que próxima importação de demandas já veja os novos projetos
+      fetchProjetosForImport().then(setAllProjetos).catch(() => {});
     } catch { toast.error("Erro ao processar arquivo."); }
     finally  { setLoading(false); if (inputRef.current) inputRef.current.value = ""; }
   };
 
-  // ─── Migração ─────────────────────────────────────────────────────────────
+  // ─── Migração de demandas ──────────────────────────────────────────────────
 
   const handleImport = async (selectedRows: PreviewRow[]) => {
     if (!currentTeamId || selectedRows.length === 0) return;
@@ -348,10 +421,10 @@ export function ImportacaoView() {
       const list = byTeamCheck.get(row.teamId) ?? [];
       list.push(row.rhm); byTeamCheck.set(row.teamId, list);
     }
-    const { supabase } = await import("@/integrations/supabase/client");
+    const { supabase: sb } = await import("@/integrations/supabase/client");
     for (const [teamId, rhms] of byTeamCheck) {
-      const { data } = await supabase
-        .from("demandas" as any).select("rhm")
+      const { data } = await (sb as any)
+        .from("demandas").select("rhm")
         .eq("team_id", teamId).in("rhm", rhms);
       if (data) for (const d of data as any[]) existsInDb.add(`${teamId}:${d.rhm}`);
     }
@@ -363,11 +436,13 @@ export function ImportacaoView() {
       const group = byTeam.get(row.teamId) ?? [];
       group.push(row); byTeam.set(row.teamId, group);
     }
+
     for (const [teamId, rows] of byTeam) {
       try {
         const res = await upsertDemandas(teamId, rows.map((row) => ({
           rhm:                        row.rhm,
           projeto:                    row.projeto,
+          project_id:                 (row as any).projectId ?? null,  // UUID de public.projects
           situacao:                   row.situacao || "fila_atendimento",
           tipo:                       row.tipo,
           sla:                        row.sla,
@@ -466,7 +541,7 @@ export function ImportacaoView() {
       {/* Breadcrumb */}
       <div className="flex items-center gap-2">
         <button
-          onClick={() => { setMode(null); setResult(null); setProjetoResult(null); cancelPreview(); }}
+          onClick={() => { setMode(null); setResult(null); setProjetoResult(null); cancelPreview(); setProjetoContractId(""); }}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -526,12 +601,16 @@ export function ImportacaoView() {
                     <code key={col} className="text-[11px] bg-muted border border-border text-muted-foreground px-2 py-0.5 rounded font-mono">{col}</code>
                   ))}
                 </div>
+                <div className="flex items-center gap-1.5 text-xs text-sky-700 dark:text-sky-400 bg-sky-500/10 border border-sky-500/20 rounded-lg px-3 py-1.5 w-fit">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  Os projetos devem estar cadastrados no Admin antes da importação
+                </div>
               </>
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
                   <span className="text-xs font-semibold text-foreground/70 shrink-0">Colunas:</span>
-                  {["Nome", "Descrição", "Equipe", "SLA"].map((col) => (
+                  {["Nome", "Descrição", "Código", "Redmine ID", "Módulo"].map((col) => (
                     <code key={col} className="text-[11px] bg-background border border-border text-foreground/80 px-2 py-0.5 rounded font-mono shadow-sm">{col}</code>
                   ))}
                 </div>
@@ -547,11 +626,35 @@ export function ImportacaoView() {
         {/* ── CORPO: dropzone / erros / resultados ── */}
         {!showPreview && (
           <div className="p-8 space-y-5">
+
+            {/* Seletor de contrato — apenas para importação de projetos */}
+            {!isDemandas && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">
+                  Contrato <span className="text-destructive">*</span>
+                </Label>
+                <Select value={projetoContractId} onValueChange={setProjetoContractId}>
+                  <SelectTrigger className="h-9 text-sm w-full max-w-sm">
+                    <SelectValue placeholder="Selecione o contrato..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contracts.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Todos os projetos da planilha serão vinculados a este contrato.
+                </p>
+              </div>
+            )}
+
             <label className={cn(
               "relative flex flex-col items-center justify-center gap-4",
               "min-h-[180px] rounded-xl cursor-pointer",
               "border-2 border-dashed border-border bg-muted/30",
               "hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-500/5 transition-all duration-200 group",
+              !isDemandas && !projetoContractId && "opacity-50 pointer-events-none",
             )}>
               <input
                 ref={inputRef}
@@ -559,7 +662,7 @@ export function ImportacaoView() {
                 accept=".csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                 onChange={isDemandas ? handleFileDemandas : handleFileProjetos}
                 className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                disabled={loading}
+                disabled={loading || (!isDemandas && !projetoContractId)}
               />
               <div className={cn(
                 "w-12 h-12 rounded-xl flex items-center justify-center shadow-sm transition-colors",

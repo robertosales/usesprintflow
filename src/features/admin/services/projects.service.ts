@@ -26,6 +26,15 @@ export interface ProjetoAdmin {
   demandas_count?:     number;
 }
 
+/** Shape mínimo usado pela ImportacaoView para montar o projetoMap */
+export interface ProjetoImport {
+  id:          string;
+  name:        string;
+  team_id:     string | null;
+  contract_id: string | null;
+  status:      string;
+}
+
 export async function fetchProjetosAdmin(): Promise<ProjetoAdmin[]> {
   // Busca todos os projetos exceto arquivados
   const { data, error } = await (supabase as any)
@@ -59,6 +68,21 @@ export async function fetchProjetosAdmin(): Promise<ProjetoAdmin[]> {
     team_name:     teamMap[p.team_id] ?? null,
     contracts:     undefined,
   })) as ProjetoAdmin[];
+}
+
+/**
+ * fetchProjetosForImport — versão leve para a tela de importação de demandas.
+ * Retorna TODOS os projetos ativos/pausados (sem filtro de time),
+ * para que o projetoMap cubra qualquer projeto que apareça na planilha.
+ */
+export async function fetchProjetosForImport(): Promise<ProjetoImport[]> {
+  const { data, error } = await (supabase as any)
+    .from('projects')
+    .select('id, name, team_id, contract_id, status')
+    .neq('status', 'archived')
+    .order('name');
+  if (error) throw error;
+  return (data ?? []) as ProjetoImport[];
 }
 
 export async function createProjetoAdmin(payload: {
