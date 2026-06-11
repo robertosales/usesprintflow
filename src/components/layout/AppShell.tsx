@@ -2,7 +2,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { getInitials } from "@/lib/personName";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprint } from "@/contexts/SprintContext";
-import { APP_VERSION, APP_BUILD_DATE } from "@/lib/constants";
+import { APP_VERSION, APP_BUILD_DATE } from "@/config/app";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
