@@ -15,7 +15,7 @@ import {
   AlertTriangle, FileText, Upload, Repeat, Activity, ShieldCheck,
   ChevronRight, Building2, ChevronsUpDown, Check, PanelLeftClose,
   PanelLeftOpen, Sun, Moon, ClipboardList, CheckSquare, ArrowLeftRight,
-  Target,
+  Target, LayoutGrid,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { AxionLogo } from "@/components/AxionLogo";
@@ -122,6 +122,39 @@ const ACCENT = {
   sustentacao: { hex: "#d97706", hexAlpha: (a: number) => `rgba(217,119,6,${a})`,   avatarBg: "#b45309",  label: "Sustentação",  icon: Wrench,       textCls: "text-amber-500", bgCls: "bg-amber-500/10" },
   rdm:         { hex: "#7c3aed", hexAlpha: (a: number) => `rgba(124,58,237,${a})`,  avatarBg: "#6d28d9",  label: "RDM",          icon: ClipboardList, textCls: "text-violet-500", bgCls: "bg-violet-500/10" },
 } as const;
+
+/** Botão 'Painel Admin' — visível apenas para isAdmin */
+function AdminPanelButton({ collapsed }: { collapsed: boolean }) {
+  const navigate = useNavigate();
+
+  if (collapsed) return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={() => navigate("/admin")}
+          className="w-full flex items-center justify-center h-9 w-9 mx-auto rounded-md transition-colors"
+          style={{ color: SB.teal }}
+          onMouseEnter={e => (e.currentTarget.style.background = SB.acc)}
+          onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+          <LayoutGrid className="h-4 w-4" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="text-xs">Painel Admin</TooltipContent>
+    </Tooltip>
+  );
+
+  return (
+    <button
+      onClick={() => navigate("/admin")}
+      className="w-full flex items-center gap-2.5 px-3 py-[7px] rounded-md transition-colors"
+      style={{ color: SB.teal }}
+      onMouseEnter={e => (e.currentTarget.style.background = SB.acc)}
+      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+      <LayoutGrid className="h-[14px] w-[14px] shrink-0" />
+      <span className="text-[13px] font-semibold truncate flex-1 text-left leading-none">Painel Admin</span>
+    </button>
+  );
+}
 
 function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
   const { teams, currentTeamId, setCurrentTeamId } = useAuth();
@@ -464,6 +497,13 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             <div className="mx-2 mt-2 flex items-center rounded-lg px-3 py-2 text-[12px] font-semibold gap-2" style={{ background: SB.active, color: SB.teal }}>
               <accent.icon className="h-3.5 w-3.5 shrink-0" />
               {accent.label}
+            </div>
+          )}
+
+          {/* Botão Painel Admin — apenas para administradores */}
+          {isAdmin && (
+            <div className={cn("px-2 pt-1 pb-1 shrink-0", collapsed && "flex flex-col items-center")}>
+              <AdminPanelButton collapsed={collapsed} />
             </div>
           )}
 
