@@ -7,16 +7,15 @@
 //       npm run release:major   → 1.2.0 → 2.0.0
 //     Ou crie uma tag git: git tag v1.3.0 && git push origin v1.3.0
 
-export const APP_NAME      = "Axion";
-export const APP_TAGLINE   = "Operações & Fluxo Ágil";
+export const APP_NAME = "Axion";
+export const APP_TAGLINE = "Operações & Fluxo Ágil";
 export const APP_FULL_NAME = "Axion – Operações e Fluxo Ágil";
 
-/**
+/*****
  * Versão injetada pelo Vite em build-time (package.json → define).
  * Em dev (vite dev) o fallback garante que não aparece "undefined".
  */
-export const APP_VERSION: string =
-  (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "dev";
+export const APP_VERSION: string = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "dev";
 
 export const APP_BUILD_DATE: string =
   (import.meta.env.VITE_APP_BUILD_DATE as string | undefined) ??
