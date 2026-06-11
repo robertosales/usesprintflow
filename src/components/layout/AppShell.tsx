@@ -91,7 +91,6 @@ const NAV_SALA_AGIL: NavItem[] = [
   { key: "automacoes",     label: "Automações",    icon: Repeat,          path: "/sala-agil/automacoes",     group: "config" },
 ];
 
-// 5d: item "projetos" removido — gestão centralizada no Admin
 const NAV_SUSTENTACAO: NavItem[] = [
   { key: "dashboard",  label: "Dashboard",        icon: LayoutDashboard, path: "/sustentacao",            group: "sprints" },
   { key: "board",      label: "Board Kanban",     icon: Kanban,          path: "/sustentacao/board",      group: "sprints" },
@@ -122,39 +121,6 @@ const ACCENT = {
   sustentacao: { hex: "#d97706", hexAlpha: (a: number) => `rgba(217,119,6,${a})`,   avatarBg: "#b45309",  label: "Sustentação",  icon: Wrench,       textCls: "text-amber-500", bgCls: "bg-amber-500/10" },
   rdm:         { hex: "#7c3aed", hexAlpha: (a: number) => `rgba(124,58,237,${a})`,  avatarBg: "#6d28d9",  label: "RDM",          icon: ClipboardList, textCls: "text-violet-500", bgCls: "bg-violet-500/10" },
 } as const;
-
-/** Botão 'Painel Admin' — visível apenas para isAdmin */
-function AdminPanelButton({ collapsed }: { collapsed: boolean }) {
-  const navigate = useNavigate();
-
-  if (collapsed) return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          onClick={() => navigate("/admin")}
-          className="w-full flex items-center justify-center h-9 w-9 mx-auto rounded-md transition-colors"
-          style={{ color: SB.teal }}
-          onMouseEnter={e => (e.currentTarget.style.background = SB.acc)}
-          onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-          <LayoutGrid className="h-4 w-4" />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="right" className="text-xs">Painel Admin</TooltipContent>
-    </Tooltip>
-  );
-
-  return (
-    <button
-      onClick={() => navigate("/admin")}
-      className="w-full flex items-center gap-2.5 px-3 py-[7px] rounded-md transition-colors"
-      style={{ color: SB.teal }}
-      onMouseEnter={e => (e.currentTarget.style.background = SB.acc)}
-      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-      <LayoutGrid className="h-[14px] w-[14px] shrink-0" />
-      <span className="text-[13px] font-semibold truncate flex-1 text-left leading-none">Painel Admin</span>
-    </button>
-  );
-}
 
 function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
   const { teams, currentTeamId, setCurrentTeamId } = useAuth();
@@ -317,38 +283,50 @@ function SidebarNav({ module, activeKey, collapsed, onNavigate }: {
   );
 }
 
-function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
+function ModuleSwitcher({ module, collapsed, isAdmin }: { module: ActiveModule; collapsed: boolean; isAdmin: boolean }) {
   const navigate = useNavigate();
+  const location = useLocation();
+
   const modules = [
-    { key: "sala_agil"   as ActiveModule, path: "/sala-agil",  label: "Ágil",  Icon: Zap },
-    { key: "sustentacao" as ActiveModule, path: "/sustentacao", label: "Sust.", Icon: Wrench },
-    { key: "rdm"         as ActiveModule, path: "/rdm",         label: "RDM",   Icon: ClipboardList },
+    { key: "sala_agil"   as ActiveModule | "admin", path: "/sala-agil",        label: "Ágil",  Icon: Zap },
+    { key: "sustentacao" as ActiveModule | "admin", path: "/sustentacao",       label: "Sust.", Icon: Wrench },
+    { key: "rdm"         as ActiveModule | "admin", path: "/rdm",               label: "RDM",   Icon: ClipboardList },
   ];
+
+  // Tab Admin visível apenas para admins
+  const adminTab = { key: "admin" as const, path: "/dashboard-admin", label: "Admin", Icon: LayoutGrid };
+  const allTabs = isAdmin ? [...modules, adminTab] : modules;
+
+  const isAdminActive = location.pathname.startsWith("/dashboard-admin");
 
   if (collapsed) return (
     <div className="flex flex-col items-center gap-1 w-full px-2 py-1">
-      {modules.map(({ key, path, label, Icon }) => (
-        <Tooltip key={key}>
-          <TooltipTrigger asChild>
-            <button onClick={() => navigate(path)} className="flex w-full items-center justify-center rounded-md p-2 transition-all"
-              style={{ color: module === key ? SB.teal : SB.muted, background: module === key ? SB.active : "transparent" }}
-              onMouseEnter={e => { if (module !== key) e.currentTarget.style.background = SB.acc; }}
-              onMouseLeave={e => { if (module !== key) e.currentTarget.style.background = "transparent"; }}>
-              <Icon className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">{label}</TooltipContent>
-        </Tooltip>
-      ))}
+      {allTabs.map(({ key, path, label, Icon }) => {
+        const isActive = key === "admin" ? isAdminActive : module === key;
+        return (
+          <Tooltip key={key}>
+            <TooltipTrigger asChild>
+              <button onClick={() => navigate(path)} className="flex w-full items-center justify-center rounded-md p-2 transition-all"
+                style={{ color: isActive ? SB.teal : SB.muted, background: isActive ? SB.active : "transparent" }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = SB.acc; }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
+                <Icon className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="text-xs">{label}</TooltipContent>
+          </Tooltip>
+        );
+      })}
     </div>
   );
 
   return (
     <div className="flex items-stretch" style={{ borderBottom: `1px solid ${SB.border}` }}>
-      {modules.map(({ key, path, label, Icon }) => {
-        const isActive = module === key;
+      {allTabs.map(({ key, path, label, Icon }) => {
+        const isActive = key === "admin" ? isAdminActive : module === key;
         return (
-          <button key={key} onClick={() => navigate(path)} className="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold transition-all relative"
+          <button key={key} onClick={() => navigate(path)}
+            className="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold transition-all relative"
             style={{ color: isActive ? SB.teal : SB.muted, background: isActive ? SB.active : "transparent" }}
             onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = SB.acc; }}
             onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
@@ -492,18 +470,15 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             )}
           </div>
 
-          {canSwitch && <div className="shrink-0"><ModuleSwitcher module={module} collapsed={collapsed} /></div>}
+          {canSwitch && (
+            <div className="shrink-0">
+              <ModuleSwitcher module={module} collapsed={collapsed} isAdmin={isAdmin} />
+            </div>
+          )}
           {!canSwitch && !collapsed && (
             <div className="mx-2 mt-2 flex items-center rounded-lg px-3 py-2 text-[12px] font-semibold gap-2" style={{ background: SB.active, color: SB.teal }}>
               <accent.icon className="h-3.5 w-3.5 shrink-0" />
               {accent.label}
-            </div>
-          )}
-
-          {/* Botão Painel Admin — apenas para administradores */}
-          {isAdmin && (
-            <div className={cn("px-2 pt-1 pb-1 shrink-0", collapsed && "flex flex-col items-center")}>
-              <AdminPanelButton collapsed={collapsed} />
             </div>
           )}
 
