@@ -1,16 +1,16 @@
 /**
- * ImportacaoPreviewTable
+ * ImportacaoPreviewTable — redesign UX/UI sênior
  *
- * - Dark mode: todas as classes hardcoded substituídas por tokens do design system
- * - Paginação client-side: 20 itens por página (opções 10 / 20 / 50)
- * - Seleção de checkboxes mantém estado global independente da página visível
- * - P1b: projectId? adicionado a PreviewRow (UUID de public.projects) — elimina cast (row as any)
+ * Layout refatorado: topbar, summary cards com accent bar, toolbar de filtros/busca,
+ * tabela com ID chip + dot badges, paginação no rodapé.
+ * Lógica de negócio (enriquecimento, seleção, migração) mantida intacta.
  */
 
 import { useState, useMemo, useEffect } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow,
@@ -18,6 +18,7 @@ import {
 import {
   CheckCircle2, XCircle, RefreshCw, PlusCircle,
   MinusCircle, Clock, Loader2, ChevronLeft, ChevronRight,
+  Search, ArrowLeft,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -83,19 +84,19 @@ function labelSituacao(s: string | null | undefined): string {
 
 const TIPO_ACAO_CONFIG: Record<
   TipoAcao,
-  { label: string; icon: React.ElementType; pill: string }
+  { label: string; icon: React.ElementType; dot: string; pill: string }
 > = {
-  novo:           { label: "Novo",              icon: PlusCircle,  pill: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" },
-  atualizacao:    { label: "Atualizar situação", icon: RefreshCw,   pill: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20" },
-  sem_alteracao:  { label: "Sem alteração",      icon: MinusCircle, pill: "bg-muted text-muted-foreground border-border" },
-  erro_validacao: { label: "Erro",               icon: XCircle,     pill: "bg-destructive/10 text-destructive border-destructive/20" },
+  novo:           { label: "Novo",              icon: PlusCircle,  dot: "bg-emerald-500", pill: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" },
+  atualizacao:    { label: "Atualizar situação", icon: RefreshCw,   dot: "bg-sky-500",     pill: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20" },
+  sem_alteracao:  { label: "Sem alteração",      icon: MinusCircle, dot: "bg-muted-foreground/40", pill: "bg-muted text-muted-foreground border-border" },
+  erro_validacao: { label: "Erro",               icon: XCircle,     dot: "bg-destructive", pill: "bg-destructive/10 text-destructive border-destructive/20" },
 };
 
 const ROW_STATUS_CONFIG: Record<
   RowStatus,
   { label: string; icon: React.ElementType; cls: string }
 > = {
-  pendente:    { label: "Pendente",   icon: Clock,        cls: "text-muted-foreground" },
+  pendente:    { label: "Pendente",   icon: Clock,        cls: "text-amber-600 dark:text-amber-400" },
   validando:   { label: "Validando…", icon: Loader2,      cls: "text-amber-500 dark:text-amber-400" },
   atualizando: { label: "Migrando…",  icon: Loader2,      cls: "text-sky-500 dark:text-sky-400" },
   criado:      { label: "Criado",     icon: CheckCircle2, cls: "text-emerald-600 dark:text-emerald-400" },
@@ -106,6 +107,18 @@ const ROW_STATUS_CONFIG: Record<
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 type PageSize = typeof PAGE_SIZE_OPTIONS[number];
+
+// ─── Filtros ──────────────────────────────────────────────────────────────
+
+type FilterAcao = "todos" | TipoAcao;
+
+const FILTER_OPTIONS: { key: FilterAcao; label: string }[] = [
+  { key: "todos",         label: "Todos" },
+  { key: "novo",          label: "Novos" },
+  { key: "atualizacao",   label: "Atualizações" },
+  { key: "sem_alteracao", label: "Sem alteração" },
+  { key: "erro_validacao",label: "Erros" },
+];
 
 // ─── Props ────────────────────────────────────────────────────────────────
 
@@ -125,6 +138,10 @@ export function ImportacaoPreviewTable({
   const [enriched,      setEnriched]      = useState<EnrichedRow[]>([]);
   const [loadingEnrich, setLoadingEnrich] = useState(true);
   const [selectedRhms,  setSelectedRhms]  = useState<Set<string>>(new Set());
+
+  // ─── Filtros / busca ────────────────────────────────────────────────────
+  const [searchQuery,  setSearchQuery]  = useState("");
+  const [activeFilter, setActiveFilter] = useState<FilterAcao>("todos");
 
   // ─── Paginação ──────────────────────────────────────────────────────────
   const [currentPage, setCurrentPage] = useState(1);
@@ -185,12 +202,25 @@ export function ImportacaoPreviewTable({
     [enriched, progressMap],
   );
 
+  // ─── Filtragem + busca ──────────────────────────────────────────────────
+  const filteredRows = useMemo(() => {
+    let result = displayRows;
+    if (activeFilter !== "todos") result = result.filter((r) => r.tipoAcao === activeFilter);
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase().replace(/^#/, "");
+      result = result.filter(
+        (r) => r.rhm.toLowerCase().includes(q) || r.projeto.toLowerCase().includes(q),
+      );
+    }
+    return result;
+  }, [displayRows, activeFilter, searchQuery]);
+
   // ─── Paginação derivada ──────────────────────────────────────────────────
-  const totalPages = Math.max(1, Math.ceil(displayRows.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const safePage   = Math.min(currentPage, totalPages);
   const pagedRows  = useMemo(
-    () => displayRows.slice((safePage - 1) * pageSize, safePage * pageSize),
-    [displayRows, safePage, pageSize],
+    () => filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filteredRows, safePage, pageSize],
   );
 
   const counts = useMemo(() => ({
@@ -231,14 +261,18 @@ export function ImportacaoPreviewTable({
     setPageSize(size);
     setCurrentPage(1);
   }
+  function handleFilterChange(f: FilterAcao) {
+    setActiveFilter(f);
+    setCurrentPage(1);
+  }
 
-  // ─── Loading state ──────────────────────────────────────────────────
+  // ─── Loading state ──────────────────────────────────────────────────────
 
   if (loadingEnrich) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <Loader2 className="h-7 w-7 animate-spin text-blue-500" />
-        <p className="text-sm text-muted-foreground">Comparando com o sistema…</p>
+      <div className="flex flex-col items-center justify-center py-24 gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
+        <p className="text-sm text-muted-foreground font-medium">Comparando com o sistema…</p>
       </div>
     );
   }
@@ -246,22 +280,149 @@ export function ImportacaoPreviewTable({
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col min-h-0 bg-background">
 
-      {/* ── Contadores ── */}
-      <div className="grid grid-cols-4 gap-3 px-6 py-5 border-b border-border">
-        <Counter label="Novos"         count={counts.novos}        cls="bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400" />
-        <Counter label="Atualizações"  count={counts.atualizacoes} cls="bg-sky-500/10 border-sky-500/20 text-sky-700 dark:text-sky-400" />
-        <Counter label="Sem alteração" count={counts.semAlteracao} cls="bg-muted border-border text-muted-foreground" />
-        <Counter label="Erros"         count={counts.erros}        cls="bg-destructive/10 border-destructive/20 text-destructive" />
+      {/* ════════════════════════════════════════
+          TOPBAR
+      ════════════════════════════════════════ */}
+      <div className="flex items-center justify-between gap-4 px-6 py-3 border-b border-border bg-card sticky top-0 z-20">
+        {/* Breadcrumb + meta */}
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <div className="flex items-center gap-1.5 text-sm">
+            <button
+              onClick={onCancel}
+              className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+              disabled={loading}
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Sustentação</span>
+            </button>
+            <span className="text-muted-foreground/50">/</span>
+            <span className="font-semibold text-foreground">Prévia da Importação</span>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {displayRows.length} registros detectados · processado agora
+          </p>
+        </div>
+
+        {/* CTAs */}
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-4 text-sm rounded-lg"
+            onClick={onCancel}
+            disabled={loading}
+          >
+            Cancelar
+          </Button>
+          <Button
+            size="sm"
+            className="h-8 px-4 text-sm rounded-lg bg-teal-600 hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600 text-white font-semibold"
+            onClick={handleMigrarSelecionados}
+            disabled={loading || counts.selecionados === 0}
+          >
+            {loading ? (
+              <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Migrando…</>
+            ) : (
+              `✓  Confirmar (${counts.selecionados})`
+            )}
+          </Button>
+        </div>
       </div>
 
-      {/* ── Tabela ── */}
-      <div className="overflow-x-auto">
+      {/* ════════════════════════════════════════
+          SUMMARY CARDS
+      ════════════════════════════════════════ */}
+      <div className="grid grid-cols-4 gap-3 px-6 pt-5 pb-4">
+        <SummaryCard
+          count={counts.novos}
+          label="Novos"
+          sub="registros a criar"
+          accentColor="bg-emerald-500"
+          cardCls="bg-emerald-500/5 border-emerald-500/20"
+          valueCls="text-emerald-600 dark:text-emerald-400"
+          subCls="text-emerald-600/60 dark:text-emerald-400/60"
+        />
+        <SummaryCard
+          count={counts.atualizacoes}
+          label="Atualizações"
+          sub="situação a alterar"
+          accentColor="bg-sky-500"
+          cardCls="bg-sky-500/5 border-sky-500/20"
+          valueCls="text-sky-600 dark:text-sky-400"
+          subCls="text-sky-600/60 dark:text-sky-400/60"
+        />
+        <SummaryCard
+          count={counts.semAlteracao}
+          label="Sem alteração"
+          sub="situação já idêntica"
+          accentColor="bg-muted-foreground/30"
+          cardCls="bg-muted/50 border-border"
+          valueCls="text-muted-foreground"
+          subCls="text-muted-foreground/60"
+        />
+        <SummaryCard
+          count={counts.erros}
+          label="Erros"
+          sub="nenhum erro crítico"
+          accentColor="bg-destructive"
+          cardCls="bg-destructive/5 border-destructive/20"
+          valueCls="text-destructive"
+          subCls="text-destructive/60"
+        />
+      </div>
+
+      {/* ════════════════════════════════════════
+          TOOLBAR (busca + filtros + contador)
+      ════════════════════════════════════════ */}
+      <div className="flex items-center gap-3 px-6 pb-3 flex-wrap">
+        {/* Busca */}
+        <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+            placeholder="Buscar #ID, projeto…"
+            className="pl-8 h-8 text-sm rounded-lg bg-muted/40 border-border focus-visible:ring-teal-500"
+          />
+        </div>
+
+        {/* Pills de filtro */}
+        <div className="flex items-center gap-1.5">
+          {FILTER_OPTIONS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => handleFilterChange(key)}
+              className={cn(
+                "text-xs px-3 py-1.5 rounded-full border font-medium transition-colors",
+                activeFilter === key
+                  ? "bg-teal-600 text-white border-teal-600 dark:bg-teal-500 dark:border-teal-500"
+                  : "bg-background text-muted-foreground border-border hover:border-foreground/30 hover:text-foreground",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Contador à direita */}
+        <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
+          Exibindo <strong>{filteredRows.length}</strong> de <strong>{displayRows.length}</strong> registros
+          {counts.selecionados > 0 && (
+            <> · <strong className="text-teal-600 dark:text-teal-400">{counts.selecionados} selecionado(s)</strong></>
+          )}
+        </span>
+      </div>
+
+      {/* ════════════════════════════════════════
+          TABELA
+      ════════════════════════════════════════ */}
+      <div className="flex-1 overflow-x-auto border-t border-border">
         <Table className="w-full table-fixed">
           <TableHeader>
-            <TableRow className="bg-muted/50 border-b border-border hover:bg-muted/50">
-              <TableHead className="w-10 pl-4 py-3">
+            <TableRow className="bg-muted/60 border-b border-border hover:bg-muted/60">
+              <TableHead className="w-10 pl-5 py-3">
                 <Checkbox
                   checked={allSelected}
                   data-state={someSelected ? "indeterminate" : allSelected ? "checked" : "unchecked"}
@@ -269,17 +430,24 @@ export function ImportacaoPreviewTable({
                   aria-label={`Selecionar todos (${selectableRhms.length})`}
                 />
               </TableHead>
-              <TableHead className="w-[90px]  text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-3">#</TableHead>
-              <TableHead className="w-[160px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Projeto</TableHead>
-              <TableHead className="w-[140px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status Planilha</TableHead>
-              <TableHead className="w-[140px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status Sistema</TableHead>
-              <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Resultado da Migração</TableHead>
-              <TableHead className="w-[130px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Ação</TableHead>
-              <TableHead className="w-[110px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pr-4">Progresso</TableHead>
+              <TableHead className="w-[100px] text-[10px] font-semibold text-muted-foreground uppercase tracking-wider py-3">#ID</TableHead>
+              <TableHead className="w-[200px] text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Projeto</TableHead>
+              <TableHead className="w-[150px] text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Status Planilha</TableHead>
+              <TableHead className="w-[150px] text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Status Sistema</TableHead>
+              <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Resultado da Migração</TableHead>
+              <TableHead className="w-[140px] text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Ação</TableHead>
+              <TableHead className="w-[120px] text-[10px] font-semibold text-muted-foreground uppercase tracking-wider pr-5">Progresso</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {pagedRows.map((row) => {
+            {pagedRows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-16 text-sm text-muted-foreground">
+                  Nenhum registro encontrado para os filtros aplicados.
+                </TableCell>
+              </TableRow>
+            )}
+            {pagedRows.map((row, i) => {
               const acfg         = TIPO_ACAO_CONFIG[row.tipoAcao];
               const scfg         = ROW_STATUS_CONFIG[row.status];
               const AIcon        = acfg.icon;
@@ -292,13 +460,16 @@ export function ImportacaoPreviewTable({
                 <TableRow
                   key={row.rhm}
                   className={cn(
-                    "border-b border-border/50 transition-colors",
-                    isSelected    && "bg-blue-500/5 dark:bg-blue-500/10",
+                    "border-b border-border/50 transition-colors group",
+                    i % 2 === 1 && "bg-muted/20",
+                    isSelected    && "bg-teal-500/5 dark:bg-teal-500/10",
                     !isSelectable && "opacity-50",
                     row.tipoAcao === "atualizacao" && "border-l-2 border-l-amber-400 dark:border-l-amber-500",
+                    isSelected && row.tipoAcao !== "atualizacao" && "border-l-2 border-l-teal-500",
                   )}
                 >
-                  <TableCell className="pl-4 py-3.5">
+                  {/* Checkbox */}
+                  <TableCell className="pl-5 py-3.5">
                     <Checkbox
                       checked={isSelected}
                       onCheckedChange={() => isSelectable && toggleRow(row.rhm)}
@@ -306,25 +477,34 @@ export function ImportacaoPreviewTable({
                     />
                   </TableCell>
 
-                  <TableCell className="font-mono text-sm font-semibold text-foreground py-3.5">
-                    #{row.rhm}
-                  </TableCell>
-
-                  <TableCell className="text-sm text-muted-foreground py-3.5 truncate" title={row.projeto}>
-                    {row.projeto}
-                  </TableCell>
-
-                  {/* Status Planilha */}
+                  {/* ID Chip */}
                   <TableCell className="py-3.5">
-                    <span className="inline-flex items-center whitespace-nowrap text-xs px-2.5 py-1 rounded-full bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/25 text-amber-700 dark:text-amber-400 font-medium">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-muted border border-border font-mono text-xs font-semibold text-foreground">
+                      #{row.rhm}
+                    </span>
+                  </TableCell>
+
+                  {/* Projeto (2 linhas) */}
+                  <TableCell className="py-3.5">
+                    <p className="text-sm font-medium text-foreground truncate leading-tight" title={row.projeto}>
+                      {row.projeto}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{row.tipo}</p>
+                  </TableCell>
+
+                  {/* Status Planilha — dot + label */}
+                  <TableCell className="py-3.5">
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-400 font-medium">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
                       {labelSituacao(row.situacao)}
                     </span>
                   </TableCell>
 
-                  {/* Status Sistema */}
+                  {/* Status Sistema — dot + label */}
                   <TableCell className="py-3.5">
                     {row.situacaoSistema ? (
-                      <span className="inline-flex items-center whitespace-nowrap text-xs px-2.5 py-1 rounded-full bg-muted border border-border text-muted-foreground font-medium">
+                      <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs px-2.5 py-1 rounded-full bg-muted border border-border text-muted-foreground font-medium">
+                        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
                         {labelSituacao(row.situacaoSistema)}
                       </span>
                     ) : (
@@ -335,32 +515,25 @@ export function ImportacaoPreviewTable({
                   {/* Resultado da Migração */}
                   <TableCell className="text-xs py-3.5 pr-2">
                     {row.tipoAcao === "atualizacao" ? (
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Atual:</span>
-                          <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-muted border border-border text-muted-foreground font-medium">
-                            {labelSituacao(row.situacaoSistema)}
-                          </span>
-                          <span className="text-amber-600 dark:text-amber-400 font-semibold">→</span>
-                          <span className="text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Final:</span>
-                          <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 font-semibold">
-                            {labelSituacao(row.situacao)}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-muted-foreground italic">
-                          Situação do sistema será substituída pela situação da planilha.
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-muted border border-border text-muted-foreground font-medium">
+                          {labelSituacao(row.situacaoSistema)}
+                        </span>
+                        <span className="text-amber-600 dark:text-amber-400 font-bold text-sm">→</span>
+                        <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 font-semibold">
+                          {labelSituacao(row.situacao)}
                         </span>
                       </div>
                     ) : row.tipoAcao === "novo" ? (
                       <span className="inline-flex items-center gap-1.5">
-                        <span className="text-emerald-700 dark:text-emerald-400 font-medium">Será criado com situação:</span>
+                        <span className="text-emerald-700 dark:text-emerald-400 font-medium">Criado com:</span>
                         <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 font-semibold">
                           {labelSituacao(row.situacao)}
                         </span>
                       </span>
                     ) : row.tipoAcao === "sem_alteracao" ? (
                       <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                        Situação mantida:
+                        <span className="text-[10px] uppercase tracking-wide">Mantida:</span>
                         <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-muted border border-border font-medium">
                           {labelSituacao(row.situacao)}
                         </span>
@@ -375,17 +548,17 @@ export function ImportacaoPreviewTable({
                     <Badge
                       variant="outline"
                       className={cn(
-                        "whitespace-nowrap text-[11px] gap-1 px-2.5 py-1 rounded-full border font-medium",
+                        "inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] px-2.5 py-1 rounded-full border font-medium",
                         acfg.pill,
                       )}
                     >
-                      <AIcon className="h-3 w-3 shrink-0" />
+                      <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", acfg.dot)} />
                       {acfg.label}
                     </Badge>
                   </TableCell>
 
                   {/* Progresso */}
-                  <TableCell className="py-3.5 pr-4">
+                  <TableCell className="py-3.5 pr-5">
                     <span className={cn(
                       "flex items-center gap-1.5 text-xs font-medium whitespace-nowrap",
                       scfg.cls,
@@ -401,111 +574,142 @@ export function ImportacaoPreviewTable({
         </Table>
       </div>
 
-      {/* ── Legenda ── */}
-      <div className="px-6 py-2 border-t border-border/50 space-y-1">
-        {counts.atualizacoes > 0 && (
-          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-            <span className="inline-block w-2.5 h-4 rounded-sm bg-amber-400 dark:bg-amber-500 shrink-0" />
-            Linhas destacadas terão a situação do sistema substituída pela situação da planilha.
-          </p>
-        )}
-        <p className="text-[11px] text-muted-foreground italic">
-          A planilha é a fonte oficial. Em caso de divergência, a situação atual do sistema é sobrescrita pela situação da planilha.
-        </p>
-      </div>
+      {/* ════════════════════════════════════════
+          RODAPÉ — legenda + paginação + ações
+      ════════════════════════════════════════ */}
+      <div className="border-t border-border bg-muted/10">
 
-      {/* ── Paginação ── */}
-      {displayRows.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-t border-border bg-muted/20">
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">
-              {displayRows.length} registro(s) — {counts.selecionados} selecionado(s)
-            </span>
+        {/* Legenda */}
+        {counts.atualizacoes > 0 && (
+          <div className="px-6 pt-2.5 pb-1">
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <span className="inline-block w-2.5 h-3.5 rounded-sm bg-amber-400 dark:bg-amber-500 shrink-0" />
+              Linhas destacadas terão a situação do sistema substituída pela situação da planilha.
+            </p>
+          </div>
+        )}
+
+        {/* Paginação */}
+        {displayRows.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-2.5">
+            {/* Por página + range */}
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground">
+                Mostrando <strong>{(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredRows.length)}</strong> de <strong>{filteredRows.length}</strong>
+              </span>
+              <div className="flex items-center gap-1 border-l border-border pl-3">
+                <span className="text-xs text-muted-foreground">Por página:</span>
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <button
+                    key={size}
+                    onClick={() => handlePageSizeChange(size)}
+                    className={cn(
+                      "text-xs px-2 py-0.5 rounded transition-colors",
+                      pageSize === size
+                        ? "bg-teal-600 text-white font-semibold dark:bg-teal-500"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                    )}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Navegação numérica */}
             <div className="flex items-center gap-1">
-              <span className="text-xs text-muted-foreground">Por página:</span>
-              {PAGE_SIZE_OPTIONS.map((size) => (
-                <button
-                  key={size}
-                  onClick={() => handlePageSizeChange(size)}
-                  className={cn(
-                    "text-xs px-2 py-0.5 rounded transition-colors",
-                    pageSize === size
-                      ? "bg-primary text-primary-foreground font-semibold"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted",
-                  )}
-                >
-                  {size}
-                </button>
-              ))}
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+              </button>
+
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const page = totalPages <= 5 ? i + 1
+                  : safePage <= 3 ? i + 1
+                  : safePage >= totalPages - 2 ? totalPages - 4 + i
+                  : safePage - 2 + i;
+                return (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={cn(
+                      "text-xs w-8 h-7 rounded-md border transition-colors font-medium",
+                      safePage === page
+                        ? "bg-teal-600 text-white border-teal-600 dark:bg-teal-500 dark:border-teal-500"
+                        : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30",
+                    )}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage >= totalPages}
+                className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                Próximo <ChevronRight className="h-3.5 w-3.5" />
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={safePage <= 1}
-              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              aria-label="Página anterior"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              Página {safePage} de {totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={safePage >= totalPages}
-              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              aria-label="Próxima página"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
+        )}
+
+        {/* Ações de migração */}
+        <div className="flex flex-wrap items-center gap-2 px-6 pb-4 pt-1 border-t border-border/50">
+          <Button
+            className="bg-teal-600 hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600 text-white h-8 px-4 rounded-lg text-sm font-semibold"
+            onClick={handleMigrarSelecionados}
+            disabled={loading || counts.selecionados === 0}
+          >
+            {loading ? (
+              <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Migrando…</>
+            ) : (
+              `Migrar Selecionados (${counts.selecionados})`
+            )}
+          </Button>
+
+          <Button
+            variant="outline"
+            className="h-8 px-4 rounded-lg text-sm font-medium"
+            onClick={handleMigrarTodos}
+            disabled={loading || selectableRhms.length === 0}
+          >
+            Migrar Todos ({selectableRhms.length})
+          </Button>
+
+          <p className="ml-auto text-[11px] text-muted-foreground italic hidden sm:block">
+            A planilha é a fonte oficial. Em divergência, a situação do sistema é sobrescrita.
+          </p>
         </div>
-      )}
-
-      {/* ── Footer de ações ── */}
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 px-6 py-4 border-t border-border bg-card">
-        <Button
-          className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white h-9 px-5 rounded-xl text-sm font-medium"
-          onClick={handleMigrarSelecionados}
-          disabled={loading || counts.selecionados === 0}
-        >
-          {loading ? (
-            <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Migrando…</>
-          ) : (
-            `Migrar Selecionados (${counts.selecionados})`
-          )}
-        </Button>
-
-        <Button
-          variant="outline"
-          className="h-9 px-5 rounded-xl text-sm font-medium"
-          onClick={handleMigrarTodos}
-          disabled={loading || selectableRhms.length === 0}
-        >
-          Migrar Todos ({selectableRhms.length})
-        </Button>
-
-        <Button
-          variant="ghost"
-          className="h-9 px-4 rounded-xl text-sm text-muted-foreground hover:text-foreground"
-          onClick={onCancel}
-          disabled={loading}
-        >
-          Cancelar
-        </Button>
       </div>
     </div>
   );
 }
 
-// ─── Counter ───────────────────────────────────────────────────────────────
+// ─── SummaryCard ─────────────────────────────────────────────────────────────
 
-function Counter({ label, count, cls }: { label: string; count: number; cls: string }) {
+interface SummaryCardProps {
+  count:       number;
+  label:       string;
+  sub:         string;
+  accentColor: string;
+  cardCls:     string;
+  valueCls:    string;
+  subCls:      string;
+}
+
+function SummaryCard({ count, label, sub, accentColor, cardCls, valueCls, subCls }: SummaryCardProps) {
   return (
-    <div className={cn("h-24 rounded-xl border flex flex-col items-center justify-center", cls)}>
-      <p className="text-3xl font-bold leading-none tabular-nums">{count}</p>
-      <p className="text-[11px] font-medium mt-2 opacity-75">{label}</p>
+    <div className={cn("relative h-24 rounded-xl border flex flex-col justify-center pl-7 pr-4 overflow-hidden", cardCls)}>
+      {/* Accent bar lateral */}
+      <span className={cn("absolute left-0 inset-y-0 w-1 rounded-l-xl", accentColor)} />
+      <p className={cn("text-3xl font-bold leading-none tabular-nums", valueCls)}>{count}</p>
+      <p className="text-[12px] font-semibold text-foreground mt-2 leading-tight">{label}</p>
+      <p className={cn("text-[10px] mt-0.5 leading-tight", subCls)}>{sub}</p>
     </div>
   );
 }
