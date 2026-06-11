@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { History, Download, FileText } from "lucide-react";
 import { useAuth }             from "@/contexts/AuthContext";
 import { useAdminKpis }        from "../hooks/useAdminKpis";
@@ -19,14 +19,24 @@ import type { SprintMetrics } from "../hooks/useSprintHistory";
 import type { ReportConfig }  from "../hooks/useReportBuilder";
 
 export function AdminHistoricoPage() {
-  const { teams }           = useAuth();
-  const { global: kpisG }   = useAdminKpis();
+  const { teams: allTeams }   = useAuth();
+  const { global: kpisG }     = useAdminKpis();
   const { selectedContractId, selectedContract } = useContractContext();
   const { metrics, teamComparativo, loading, filters, setFilters } = useSprintHistory(selectedContractId);
-  const { buildPayload }    = useReportBuilder({ adminKpis: kpisG, allMetrics: metrics, allComparativo: teamComparativo, teams });
+  const { buildPayload }    = useReportBuilder({ adminKpis: kpisG, allMetrics: metrics, allComparativo: teamComparativo, teams: allTeams });
 
   const [selected,   setSelected]   = useState<SprintMetrics | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+
+  // Deduplica por id para evitar itens repetidos no dropdown
+  const teams = useMemo(() => {
+    const seen = new Set<string>();
+    return allTeams.filter(t => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    });
+  }, [allTeams]);
 
   const handleExport = (config: ReportConfig, format: "pdf" | "excel") => {
     try {
