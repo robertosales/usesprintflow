@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { projectsService, type ProjetoAdmin } from '../services/projects.service';
+import {
+  createProjetoAdmin,
+  updateProjetoAdmin,
+  archiveProjetoAdmin,
+  type ProjetoAdmin,
+} from '../services/projects.service';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
@@ -54,9 +59,9 @@ export function useProjetosAdmin(contractId?: string | null) {
 
   useEffect(() => { load(); }, [load]);
 
-  const create  = (payload: any) => projectsService.create(payload).then(() => load());
-  const update  = (id: string, payload: any) => projectsService.update(id, payload).then(() => load());
-  const archive = (id: string) => projectsService.archive(id).then(() => load());
+  const create  = (payload: any) => createProjetoAdmin(payload).then(() => load());
+  const update  = (id: string, payload: any) => updateProjetoAdmin(id, payload).then(() => load());
+  const archive = (id: string) => archiveProjetoAdmin(id).then(() => load());
 
   return { projetos, loading, error, reload: load, create, update, archive };
 }
