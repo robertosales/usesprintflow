@@ -14,7 +14,6 @@ export function AdminUsuariosPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState(false);
 
-  // Verifica se quem está logado é admin_master para controlar visibilidade
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
@@ -30,11 +29,8 @@ export function AdminUsuariosPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold">Usuários</h2>
-          <p className="text-xs text-muted-foreground">Gerencie usuários, perfis RBAC e módulos de acesso</p>
-        </div>
+      {/* Botão Novo Usuário alinhado à direita — sem h2 duplicado */}
+      <div className="flex justify-end">
         <Button size="sm" className="gap-1.5" onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4" /> Novo Usuário
         </Button>
