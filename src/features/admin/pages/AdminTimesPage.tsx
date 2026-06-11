@@ -1,20 +1,15 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Plus, UsersRound } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus } from "lucide-react";
 import { useTeamsAdmin, type TeamAdmin } from "../hooks/useTeamsAdmin";
 import { TeamsTable } from "../components/TeamsTable";
 import { TeamFormDialog } from "../components/TeamFormDialog";
+import { PageHeader } from "../components/PageHeader";
 
-/**
- * Aba "Times" do Dashboard Admin.
- * Usa hook + componentes dedicados do feature/admin, com loading state explícito
- * (evita exibir EmptyState enquanto a query ainda está em andamento).
- */
 export function AdminTimesPage() {
   const { teams, loading, create, update, remove } = useTeamsAdmin();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<TeamAdmin | null>(null);
+  const [editing,    setEditing]    = useState<TeamAdmin | null>(null);
 
   const handleSave = async (data: { name: string; module: string }) => {
     if (editing) return update(editing.id, data);
@@ -26,17 +21,16 @@ export function AdminTimesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold">Times / Squads</h2>
-          <p className="text-xs text-muted-foreground">
-            {loading ? "Carregando..." : `${teams.length} time${teams.length !== 1 ? "s" : ""} cadastrado${teams.length !== 1 ? "s" : ""}`}
-          </p>
-        </div>
-        <Button size="sm" className="gap-1.5" onClick={openNew}>
-          <Plus className="h-4 w-4" /> Novo Time
-        </Button>
-      </div>
+      <PageHeader
+        icon={UsersRound}
+        iconColor="text-blue-400"
+        description={
+          loading
+            ? "Carregando..."
+            : `${teams.length} time${teams.length !== 1 ? "s" : ""} cadastrado${teams.length !== 1 ? "s" : ""}`
+        }
+        actions={[{ label: "Novo Time", icon: Plus, onClick: openNew }]}
+      />
 
       {loading
         ? <Skeleton className="h-64 w-full rounded-xl" />
