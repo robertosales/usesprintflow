@@ -1,17 +1,17 @@
 import { useState, useEffect } from "react";
 import { Plus, Users, FileText } from "lucide-react";
-import { useUsersAdmin }   from "../hooks/useUsersAdmin";
-import { useTeamsAdmin }   from "../hooks/useTeamsAdmin";
-import { useContractName } from "../hooks/useContractName";
-import { UserFormDialog }  from "../components/UserFormDialog";
-import { UserRolesManager } from "@/components/UserRolesManager";
-import { PageHeader }      from "../components/PageHeader";
-import { supabase }        from "@/integrations/supabase/client";
+import { useUsersAdmin }     from "../hooks/useUsersAdmin";
+import { useTeamsAdmin }     from "../hooks/useTeamsAdmin";
+import { useContractContext } from "../contexts/ContractContext";
+import { UserFormDialog }    from "../components/UserFormDialog";
+import { UserRolesManager }  from "@/components/UserRolesManager";
+import { PageHeader }        from "../components/PageHeader";
+import { supabase }          from "@/integrations/supabase/client";
 
 export function AdminUsuariosPage() {
-  const { createUser }   = useUsersAdmin();
-  const { teams }        = useTeamsAdmin();
-  const contractName     = useContractName();
+  const { selectedContractId, selectedContract } = useContractContext();
+  const { createUser }   = useUsersAdmin(selectedContractId);
+  const { teams }        = useTeamsAdmin(selectedContractId);
   const [dialogOpen,         setDialogOpen]         = useState(false);
   const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState(false);
 
@@ -30,8 +30,8 @@ export function AdminUsuariosPage() {
       <PageHeader
         icon={Users}
         iconColor="text-teal-400"
-        description={contractName ? "Usuários cadastrados no contrato" : "Gerencie usuários, perfis RBAC e módulos de acesso"}
-        badges={contractName ? [{ label: contractName, icon: FileText, className: "gap-1 text-[11px] font-medium text-amber-400 border-amber-400/50 bg-amber-400/5" }] : []}
+        description={selectedContract ? "Usuários cadastrados no contrato" : "Todos os usuários cadastrados"}
+        badges={selectedContract ? [{ label: selectedContract.name, icon: FileText, className: "gap-1 text-[11px] font-medium text-amber-400 border-amber-400/50 bg-amber-400/5" }] : []}
         actions={[{ label: "Novo Usuário", icon: Plus, onClick: () => setDialogOpen(true) }]}
       />
       <UserRolesManager />

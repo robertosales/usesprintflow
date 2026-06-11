@@ -1,15 +1,16 @@
 import { Gauge, RefreshCw, AlertTriangle, FileText } from "lucide-react";
 import { useCapacityPlanner } from "../hooks/useCapacityPlanner";
-import { useContractName }   from "../hooks/useContractName";
-import { CapacityGrid }      from "../components/CapacityGrid";
-import { PageHeader }        from "../components/PageHeader";
+import { useContractContext } from "../contexts/ContractContext";
+import { CapacityGrid }       from "../components/CapacityGrid";
+import { PageHeader }         from "../components/PageHeader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button }   from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function AdminCapacidadePage() {
-  const { teamCapacities, overloadedDevs, loading, selectedTeam, setSelectedTeam, reload, uniqueTeams } = useCapacityPlanner();
-  const contractName = useContractName();
+  const { selectedContractId, selectedContract } = useContractContext();
+  const { teamCapacities, overloadedDevs, loading, selectedTeam, setSelectedTeam, reload, uniqueTeams } =
+    useCapacityPlanner(selectedContractId);
 
   const totalDevs     = teamCapacities.reduce((s, t) => s + t.devs.length, 0);
   const totalCapHrs   = teamCapacities.reduce((s, t) => s + t.totalCapacity,  0);
@@ -29,7 +30,7 @@ export function AdminCapacidadePage() {
           ...(!loading && overloadedDevs.length > 0
             ? [{ label: `${overloadedDevs.length} sobrecarregado${overloadedDevs.length !== 1 ? "s" : ""}`, icon: AlertTriangle, className: "gap-1 text-[10px] font-medium text-destructive border-destructive/50 bg-destructive/5" }]
             : []),
-          ...(contractName ? [{ label: contractName, icon: FileText, className: "gap-1 text-[11px] font-medium text-amber-400 border-amber-400/50 bg-amber-400/5" }] : []),
+          ...(selectedContract ? [{ label: selectedContract.name, icon: FileText, className: "gap-1 text-[11px] font-medium text-amber-400 border-amber-400/50 bg-amber-400/5" }] : []),
         ]}
       >
         <Select value={selectedTeam} onValueChange={setSelectedTeam}>

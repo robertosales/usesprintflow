@@ -1,28 +1,13 @@
-/**
- * ProjetosAdminPanel
- * Fase 5c: gestão de projetos no painel Admin.
- * Escreve em public.projects. Campos: contrato, sala (team), módulo.
- * Padrão visual: igual TeamsTable / UsersTable do Admin.
- */
 import { useState, useMemo } from 'react';
 import { Button }      from '@/components/ui/button';
 import { Input }       from '@/components/ui/input';
 import { Label }       from '@/components/ui/label';
 import { Badge }       from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  Dialog, DialogContent, DialogHeader,
-  DialogTitle, DialogFooter, DialogDescription,
-} from '@/components/ui/dialog';
-import {
-  Select, SelectContent, SelectItem,
-  SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  DropdownMenu, DropdownMenuContent,
-  DropdownMenuItem, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ConfirmDialog }      from '@/shared/components/common/ConfirmDialog';
 import { EmptyState }         from '@/shared/components/common/EmptyState';
 import { SkeletonList }       from '@/shared/components/common/SkeletonList';
@@ -30,19 +15,16 @@ import { PaginationControls } from '@/shared/components/common/Pagination';
 import { usePagination }      from '@/shared/hooks/usePagination';
 import { useDebounce }        from '@/shared/hooks/useDebounce';
 import { useProjetosAdmin }   from '../hooks/useProjetosAdmin';
-import { useContractName }    from '../hooks/useContractName';
+import { useContractContext } from '../contexts/ContractContext';
 import { PageHeader }         from './PageHeader';
 import type { ProjetoAdmin }  from '../services/projects.service';
-import {
-  Plus, Search, FolderKanban,
-  MoreHorizontal, Layers, Building2, Users, X, FileText,
-} from 'lucide-react';
+import { Plus, Search, FolderKanban, MoreHorizontal, Layers, Building2, Users, X, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import { useContracts }   from '@/features/admin/hooks/useContracts';
-import { useTeamsAdmin }  from '@/features/admin/hooks/useTeamsAdmin';
+import { useContracts }  from '@/features/admin/hooks/useContracts';
+import { useTeamsAdmin } from '@/features/admin/hooks/useTeamsAdmin';
 
 const MODULE_OPTIONS = [
-  { value: 'sustenance', label: '🛠 Sustentação' },
+  { value: 'sustenance', label: '🔧 Sustentação' },
   { value: 'agile',      label: '⚡ Ágil'         },
   { value: 'mixed',      label: '🔀 Misto'        },
 ];
@@ -62,10 +44,10 @@ const EMPTY_FORM: FormState = {
 };
 
 export function ProjetosAdminPanel() {
-  const { projetos, loading, error, create, update, archive, reload } = useProjetosAdmin();
+  const { selectedContractId, selectedContract } = useContractContext();
+  const { projetos, loading, error, create, update, archive, reload } = useProjetosAdmin(selectedContractId);
   const { contracts } = useContracts();
-  const { teams }     = useTeamsAdmin();
-  const contractName  = useContractName();
+  const { teams }     = useTeamsAdmin(selectedContractId);
 
   const [showForm,      setShowForm]      = useState(false);
   const [editing,       setEditing]       = useState<ProjetoAdmin | null>(null);
@@ -73,7 +55,7 @@ export function ProjetosAdminPanel() {
   const [search,        setSearch]        = useState('');
   const [filterModule,  setFilterModule]  = useState('all');
   const [filterTeam,    setFilterTeam]    = useState('all');
-  const [form,          setForm]          = useState<FormState>(EMPTY_FORM);
+  const [form,          setForm]          = useState<FormState>({ ...EMPTY_FORM, contract_id: selectedContractId ?? '' });
   const debouncedSearch = useDebounce(search, 300);
 
   const hasFilters = debouncedSearch || filterModule !== 'all' || filterTeam !== 'all';
@@ -88,16 +70,19 @@ export function ProjetosAdminPanel() {
 
   const { paginatedItems, currentPage, setCurrentPage, totalItems } = usePagination(filtered, { pageSize: 20 });
 
-  const openCreate = () => { setForm(EMPTY_FORM); setEditing(null); setShowForm(true); };
-  const openEdit   = (p: ProjetoAdmin) => {
+  const openCreate = () => {
+    setForm({ ...EMPTY_FORM, contract_id: selectedContractId ?? '' });
+    setEditing(null); setShowForm(true);
+  };
+  const openEdit = (p: ProjetoAdmin) => {
     setForm({ name: p.name, description: p.description || '', contract_id: p.contract_id || '',
       team_id: p.team_id || '', module_type: p.module_type, code: p.code || '', redmine_id: p.redmine_id?.toString() || '' });
     setEditing(p); setShowForm(true);
   };
 
   const handleSubmit = async () => {
-    if (!form.name.trim())  { toast.error('Preencha o nome do projeto'); return; }
-    if (!form.contract_id)  { toast.error('Selecione o contrato');        return; }
+    if (!form.name.trim()) { toast.error('Preencha o nome do projeto'); return; }
+    if (!form.contract_id) { toast.error('Selecione o contrato');       return; }
     const payload = {
       contract_id: form.contract_id, team_id: form.team_id || null,
       name: form.name.trim(), description: form.description || null,
@@ -120,22 +105,18 @@ export function ProjetosAdminPanel() {
 
   return (
     <div className="space-y-4">
-
-      {/* Cabeçalho padronizado */}
       <PageHeader
         icon={FolderKanban}
         iconColor="text-orange-400"
         description={`${filtered.length} de ${projetos.length} projeto${projetos.length !== 1 ? 's' : ''}`}
-        badges={contractName ? [{ label: contractName, icon: FileText, className: "gap-1 text-[11px] font-medium text-amber-400 border-amber-400/50 bg-amber-400/5" }] : []}
+        badges={selectedContract ? [{ label: selectedContract.name, icon: FileText, className: "gap-1 text-[11px] font-medium text-amber-400 border-amber-400/50 bg-amber-400/5" }] : []}
         actions={[{ label: 'Novo Projeto', icon: Plus, onClick: openCreate }]}
       />
 
-      {/* Filtros */}
       <div className="flex flex-wrap gap-2 items-center">
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar projeto..." value={search}
-            onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
+          <Input placeholder="Buscar projeto..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
         <Select value={filterTeam} onValueChange={v => { setFilterTeam(v); setCurrentPage(1); }}>
           <SelectTrigger className="w-[170px] h-9">
@@ -161,7 +142,6 @@ export function ProjetosAdminPanel() {
         )}
       </div>
 
-      {/* Grid */}
       {filtered.length === 0 ? (
         <EmptyState icon={FolderKanban} title="Nenhum projeto encontrado" />
       ) : (
@@ -203,19 +183,16 @@ export function ProjetosAdminPanel() {
                         <button
                           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left"
                           onClick={() => { const t = teams.find((x: any) => x.id === p.team_id); if (t) setFilterTeam(t.id); }}
-                          title={`Filtrar por ${p.team_name}`}
                         >
                           <Users className="h-3 w-3 shrink-0" /><span className="truncate">{p.team_name}</span>
                         </button>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {modBadge && modLabel && (
-                        <Badge variant="outline" className={`text-[10px] border ${modBadge}`}>
-                          <Layers className="h-2.5 w-2.5 mr-1" />{modLabel}
-                        </Badge>
-                      )}
-                    </div>
+                    {modBadge && modLabel && (
+                      <Badge variant="outline" className={`text-[10px] border ${modBadge}`}>
+                        <Layers className="h-2.5 w-2.5 mr-1" />{modLabel}
+                      </Badge>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -225,7 +202,6 @@ export function ProjetosAdminPanel() {
         </>
       )}
 
-      {/* Dialog criar / editar */}
       <Dialog open={showForm} onOpenChange={o => !o && setShowForm(false)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -289,13 +265,11 @@ export function ProjetosAdminPanel() {
       <ConfirmDialog
         open={!!archiveTarget}
         title="Arquivar projeto?"
-        description={`O projeto "${archiveTarget?.name}" será arquivado e não aparecerá mais para os times. Os dados históricos são preservados.`}
+        description={`O projeto "${archiveTarget?.name}" será arquivado. Os dados históricos são preservados.`}
         onOpenChange={o => !o && setArchiveTarget(null)}
         onConfirm={async () => {
           if (!archiveTarget) return;
-          await archive(archiveTarget.id);
-          toast.success('Projeto arquivado');
-          setArchiveTarget(null);
+          await archive(archiveTarget.id); toast.success('Projeto arquivado'); setArchiveTarget(null);
         }}
       />
     </div>
