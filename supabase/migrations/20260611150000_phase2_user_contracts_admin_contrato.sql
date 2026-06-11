@@ -4,14 +4,13 @@
 -- O que esta migration faz:
 --   1. Adiciona 'admin_contrato' ao enum app_role (se ainda nao existir)
 --   2. Cria tabela user_contracts  (vinculo 1:1 usuario <-> contrato)
---   3. RLS em user_contracts       (usuario ve apenas seu proprio vinculo)
---   4. Atualiza has_role()         (policy helper aceita o novo role)
---   5. Politica RLS em contracts   (admin_contrato ve somente seu contrato)
---   6. Politica RLS em contract_slas e contract_room_teams para admin_contrato
+--   3. RLS em user_contracts       (usa is_admin() — padrao do projeto)
+--   4. Politica RLS em contracts   (admin_contrato ve somente seu contrato)
+--   5. Politica RLS em contract_slas e contract_room_teams para admin_contrato
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
--- 1. Enum app_role — adiciona admin_contrato via DO block (PostgreSQL 55P04)
+-- 1. Enum app_role — adiciona admin_contrato via DO block (idempotente)
 -- ---------------------------------------------------------------------------
 DO $$
 BEGIN
@@ -58,17 +57,17 @@ CREATE TRIGGER trg_user_contracts_updated_at
   FOR EACH ROW EXECUTE FUNCTION public.set_user_contracts_updated_at();
 
 -- ---------------------------------------------------------------------------
--- 3. RLS em user_contracts
+-- 3. RLS em user_contracts  (is_admin() = padrao canonico do projeto)
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.user_contracts ENABLE ROW LEVEL SECURITY;
 
--- Admin ve tudo
+-- Admin ve e gerencia tudo
 DROP POLICY IF EXISTS "user_contracts_admin_all" ON public.user_contracts;
 CREATE POLICY "user_contracts_admin_all"
   ON public.user_contracts
   FOR ALL
-  USING (public.has_role('admin'::public.app_role))
-  WITH CHECK (public.has_role('admin'::public.app_role));
+  USING      (public.is_admin())
+  WITH CHECK (public.is_admin());
 
 -- usuario ve apenas o proprio vinculo
 DROP POLICY IF EXISTS "user_contracts_self_select" ON public.user_contracts;
@@ -80,8 +79,6 @@ CREATE POLICY "user_contracts_self_select"
 -- ---------------------------------------------------------------------------
 -- 4. Politica RLS em contracts — admin_contrato ve apenas SEU contrato
 -- ---------------------------------------------------------------------------
--- NOTA: a politica existente permite admin ver tudo.
--- Adicionamos uma politica aditiva para admin_contrato.
 DROP POLICY IF EXISTS "contracts_admin_contrato_select" ON public.contracts;
 CREATE POLICY "contracts_admin_contrato_select"
   ON public.contracts
@@ -123,14 +120,3 @@ CREATE POLICY "contract_room_teams_admin_contrato_select"
         AND uc.contract_id = contract_room_teams.contract_id
     )
   );
-
--- ---------------------------------------------------------------------------
--- 7. Grant EXECUTE na RPC fn_sla_dashboard_batch para authenticated
---    (ja deve existir, mas garantimos aqui)
--- ---------------------------------------------------------------------------
-GRANT EXECUTE ON FUNCTION public.fn_sla_dashboard_batch(
-  p_team_id     uuid,
-  p_project_id  uuid,
-  p_contract_id uuid,
-  p_limit       int
-) TO authenticated;
