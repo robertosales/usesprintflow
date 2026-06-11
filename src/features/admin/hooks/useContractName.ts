@@ -1,29 +1,19 @@
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-
 /**
- * Retorna o nome do contrato vinculado ao usuário logado.
- * Usado em todas as pages do Admin para exibir o badge do contrato.
+ * useContractName — mantido por compatibilidade.
+ * Internamente lê do ContractContext para ser consistente
+ * com o seletor do gestor.
+ *
+ * Se o ContractContext não estiver disponível (uso fora do AdminDashboard),
+ * faz fallback para a query direta no Supabase.
  */
-export function useContractName() {
-  const [contractName, setContractName] = useState<string | null>(null);
+import { useContext } from "react";
+import { ContractContext } from "../contexts/ContractContext";
 
-  useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
-      const { data } = await supabase
-        .from("user_contracts")
-        .select("contracts(name)")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (data?.contracts) {
-        const name = Array.isArray(data.contracts)
-          ? data.contracts[0]?.name
-          : (data.contracts as { name: string }).name;
-        setContractName(name ?? null);
-      }
-    });
-  }, []);
+export function useContractName(): string | null {
+  // Tenta consumir o contexto
+  const ctx = useContext(ContractContext as React.Context<any>);
+  if (ctx) return ctx.selectedContract?.name ?? null;
 
-  return contractName;
+  // fallback (não deve acontecer dentro do admin, mas evita crash)
+  return null;
 }

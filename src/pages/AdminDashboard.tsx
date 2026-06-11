@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminKpis } from "@/features/admin/hooks/useAdminKpis";
 import { useNotifications } from "@/features/admin/hooks/useNotifications";
+import { ContractProvider } from "@/features/admin/contexts/ContractContext";
+import { ContractSwitcher }   from "@/features/admin/components/ContractSwitcher";
 import { SalaAgilKpis }        from "@/features/admin/components/SalaAgilKpis";
 import { SustentacaoKpis }     from "@/features/admin/components/SustentacaoKpis";
 import { ModuleQuickAccess }   from "@/features/admin/components/ModuleQuickAccess";
@@ -43,7 +45,8 @@ const NAV_ITEMS = [
 
 type PageKey = typeof NAV_ITEMS[number]["key"];
 
-export default function AdminDashboard() {
+// ── Inner component (tem acesso ao ContractContext) ───────────────────────────
+function AdminDashboardInner() {
   const { profile, signOut, teams } = useAuth();
   const { global: g, byTeam, loading, dataWarnings } = useAdminKpis();
   const { notifications, criticalCount, warningCount } = useNotifications(byTeam);
@@ -80,6 +83,7 @@ export default function AdminDashboard() {
       ].join(" ")}
       style={{ background: "hsl(var(--sidebar))", color: "hsl(var(--sidebar-foreground))" }}
     >
+      {/* Logo */}
       <div
         className="flex items-center gap-2.5 px-4 h-14 shrink-0"
         style={{ borderBottom: "1px solid rgba(192,212,208,0.08)" }}
@@ -105,6 +109,10 @@ export default function AdminDashboard() {
         )}
       </div>
 
+      {/* ── Contract Switcher (logo abaixo do logo, acima da nav) ── */}
+      <ContractSwitcher />
+
+      {/* Nav */}
       <nav
         className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto scrollbar-none"
         aria-label="Navegação admin"
@@ -147,7 +155,6 @@ export default function AdminDashboard() {
                 aria-hidden="true"
               />
               {label}
-              {/* Badge "Novo" no item Contratos */}
               {key === "contratos" && (
                 <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-900/60 text-indigo-300">
                   Novo
@@ -158,6 +165,7 @@ export default function AdminDashboard() {
         })}
       </nav>
 
+      {/* Footer */}
       <div
         className="px-3 py-3 space-y-2 shrink-0"
         style={{ borderTop: "1px solid rgba(192,212,208,0.08)" }}
@@ -174,8 +182,7 @@ export default function AdminDashboard() {
           </Badge>
         </div>
         <Button
-          variant="ghost"
-          size="sm"
+          variant="ghost" size="sm"
           className="w-full justify-start h-8 text-xs gap-2 transition-colors"
           style={{ color: "rgba(192,212,208,0.6)" }}
           onMouseEnter={e => {
@@ -210,12 +217,8 @@ export default function AdminDashboard() {
           {loading ? <Skeleton className="h-32 w-full rounded-xl" /> : <SalaAgilKpis kpis={g} sprintAtivo={sprintLabel} />}
           {loading ? <Skeleton className="h-32 w-full rounded-xl" /> : <SustentacaoKpis kpis={g} />}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <div>
-              {loading ? <Skeleton className="h-48 w-full rounded-xl" /> : <TeamDetailPanel byTeam={byTeam} selectedTeam={selectedTeam} onSelect={setSelectedTeam} />}
-            </div>
-            <div>
-              {loading ? <Skeleton className="h-56 w-full rounded-xl" /> : <ComparativeChart byTeam={byTeam} selectedTeam={selectedTeam} />}
-            </div>
+            <div>{loading ? <Skeleton className="h-48 w-full rounded-xl" /> : <TeamDetailPanel byTeam={byTeam} selectedTeam={selectedTeam} onSelect={setSelectedTeam} />}</div>
+            <div>{loading ? <Skeleton className="h-56 w-full rounded-xl" /> : <ComparativeChart byTeam={byTeam} selectedTeam={selectedTeam} />}</div>
           </div>
         </div>
       );
@@ -234,7 +237,6 @@ export default function AdminDashboard() {
           aria-hidden="true"
         />
       )}
-
       {sidebarOpen && (
         <div className="fixed top-0 left-0 z-50 h-screen lg:hidden">
           <Sidebar mobile />
@@ -294,5 +296,14 @@ export default function AdminDashboard() {
         </main>
       </div>
     </div>
+  );
+}
+
+// ── Export: envolve tudo no ContractProvider ──────────────────────────────────
+export default function AdminDashboard() {
+  return (
+    <ContractProvider>
+      <AdminDashboardInner />
+    </ContractProvider>
   );
 }
