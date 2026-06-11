@@ -2094,11 +2094,14 @@ export type Database = {
           created_by: string | null
           description: string | null
           id: string
+          legacy_projetos_id: string | null
           module_type: string
           name: string
           redmine_id: number | null
           room_type: string
+          sla_id: string | null
           status: string
+          team_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2108,11 +2111,14 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          legacy_projetos_id?: string | null
           module_type?: string
           name: string
           redmine_id?: number | null
           room_type?: string
+          sla_id?: string | null
           status?: string
+          team_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2122,11 +2128,14 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          legacy_projetos_id?: string | null
           module_type?: string
           name?: string
           redmine_id?: number | null
           room_type?: string
+          sla_id?: string | null
           status?: string
+          team_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2135,6 +2144,20 @@ export type Database = {
             columns: ["contract_id"]
             isOneToOne: false
             referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_sla_id_fkey"
+            columns: ["sla_id"]
+            isOneToOne: false
+            referencedRelation: "contract_slas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -3656,6 +3679,23 @@ export type Database = {
           sem_contrato: number | null
           tabela: string | null
           total: number | null
+        }
+        Relationships: []
+      }
+      vw_projetos: {
+        Row: {
+          contract_id: string | null
+          contract_name: string | null
+          created_at: string | null
+          descricao: string | null
+          equipe: string | null
+          id: string | null
+          nome: string | null
+          sla: string | null
+          sla_id: string | null
+          source: string | null
+          team_id: string | null
+          updated_at: string | null
         }
         Relationships: []
       }

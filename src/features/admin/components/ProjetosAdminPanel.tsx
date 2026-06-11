@@ -117,7 +117,7 @@ export function ProjetosAdminPanel() {
       name:         form.name.trim(),
       description:  form.description || null,
       code:         form.code        || null,
-      module_type:  form.module_type,
+      module_type:  form.module_type as 'sustenance' | 'agile' | 'mixed',
       redmine_id:   form.redmine_id  ? Number(form.redmine_id) : null,
     };
     try {
