@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminKpis } from "@/features/admin/hooks/useAdminKpis";
 import { useNotifications } from "@/features/admin/hooks/useNotifications";
-import { ContractProvider } from "@/features/admin/contexts/ContractContext";
+import { ContractProvider, useContractContext } from "@/features/admin/contexts/ContractContext";
 import { ContractSwitcher }   from "@/features/admin/components/ContractSwitcher";
 import { SalaAgilKpis }        from "@/features/admin/components/SalaAgilKpis";
 import { SustentacaoKpis }     from "@/features/admin/components/SustentacaoKpis";
@@ -47,8 +47,11 @@ type PageKey = typeof NAV_ITEMS[number]["key"];
 
 // ── Inner component (tem acesso ao ContractContext) ───────────────────────────
 function AdminDashboardInner() {
-  const { profile, signOut, teams } = useAuth();
-  const { global: g, byTeam, loading, dataWarnings } = useAdminKpis();
+  const { profile, signOut, teams: allTeams } = useAuth();
+  const { selectedContractId, selectedContract, isGestor } = useContractContext();
+
+  // KPIs já filtrados pelo contrato selecionado
+  const { global: g, byTeam, loading, dataWarnings } = useAdminKpis(selectedContractId);
   const { notifications, criticalCount, warningCount } = useNotifications(byTeam);
   const navigate = useNavigate();
   const [selectedTeam, setSelectedTeam] = useState("all");
@@ -63,6 +66,9 @@ function AdminDashboardInner() {
   const hora = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const data = now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
+  // Reseta o time selecionado sempre que o contrato mudar
+  useEffect(() => { setSelectedTeam("all"); }, [selectedContractId]);
+
   const sprintLabel = selectedTeam === "all"
     ? (() => {
         const comSprint = byTeam.filter(t => t.sprintAtivo);
@@ -74,7 +80,7 @@ function AdminDashboardInner() {
 
   const handleSignOut = async () => { await signOut(); navigate("/auth"); };
 
-  // ── Sidebar ──────────────────────────────────────────────────────────────────
+  // ── Sidebar ────────────────────────────────────────────────────────────────
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
     <aside
       className={[
@@ -109,8 +115,8 @@ function AdminDashboardInner() {
         )}
       </div>
 
-      {/* ── Contract Switcher (logo abaixo do logo, acima da nav) ── */}
-      <ContractSwitcher />
+      {/* Contract Switcher — só exibe para gestor master */}
+      {isGestor && <ContractSwitcher />}
 
       {/* Nav */}
       <nav
@@ -178,7 +184,7 @@ function AdminDashboardInner() {
             className="ml-auto text-[9px] shrink-0 border-transparent"
             style={{ background: "hsl(var(--sidebar-accent))", color: "rgba(192,212,208,0.8)" }}
           >
-            {teams.length} time{teams.length !== 1 ? "s" : ""}
+            {g.totalTimes} time{g.totalTimes !== 1 ? "s" : ""}
           </Badge>
         </div>
         <Button
@@ -200,6 +206,18 @@ function AdminDashboardInner() {
       </div>
     </aside>
   );
+
+  // ── Cabeçalho da página de conteúdo ─────────────────────────────────────────
+  const pageTitle = NAV_ITEMS.find(n => n.key === activePage)?.label ?? "Dashboard Admin";
+  const contractBadge = selectedContract ? (
+    <span
+      className="hidden sm:inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border"
+      style={{ color: "#f59e0b", borderColor: "rgba(245,158,11,0.4)", background: "rgba(245,158,11,0.06)" }}
+    >
+      <FileText className="h-2.5 w-2.5" />
+      {selectedContract.name}
+    </span>
+  ) : null;
 
   // ── Conteúdo da aba ativa ─────────────────────────────────────────────────
   const renderContent = () => {
@@ -259,9 +277,10 @@ function AdminDashboardInner() {
                 <Menu className="h-5 w-5" />
               </button>
               <div>
-                <h1 className="text-sm font-semibold leading-tight">
-                  {NAV_ITEMS.find(n => n.key === activePage)?.label ?? "Dashboard Admin"}
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-sm font-semibold leading-tight">{pageTitle}</h1>
+                  {contractBadge}
+                </div>
                 <p className="text-[11px] hidden sm:block" style={{ color: "hsl(var(--muted-foreground))" }}>
                   {data} · {hora}
                 </p>
