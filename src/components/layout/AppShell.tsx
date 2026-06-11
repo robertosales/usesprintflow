@@ -525,15 +525,17 @@ function VersionBadge({ collapsed }: { collapsed: boolean }) {
   if (collapsed) return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div className="mt-1 flex items-center justify-center text-[9px] font-mono select-none" style={{ color: SB.muted }}>v{APP_VERSION}</div>
+        <div className="mt-1 flex items-center justify-center text-[9px] font-mono select-none"
+          style={{ color: SB.teal }}>v{APP_VERSION}</div>
       </TooltipTrigger>
       <TooltipContent side="right" className="text-xs">Versão {APP_VERSION} · {APP_BUILD_DATE}</TooltipContent>
     </Tooltip>
   );
   return (
-    <div className="mt-1 px-1 flex items-center justify-between text-[10px] font-mono select-none" style={{ color: SB.muted }}>
+    <div className="mt-1 px-1 flex items-center justify-between text-[10px] font-mono select-none"
+      style={{ color: SB.teal }}>
       <span>v{APP_VERSION}</span>
-      <span style={{ opacity: 0.4 }}>{APP_BUILD_DATE}</span>
+      <span style={{ opacity: 0.6 }}>{APP_BUILD_DATE}</span>
     </div>
   );
 }
