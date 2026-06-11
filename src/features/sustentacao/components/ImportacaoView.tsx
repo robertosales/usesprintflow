@@ -31,9 +31,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 // ─── SheetJS CDN loader ────────────────────────────────────────────────────
-declare global {
-  interface Window { XLSX: any; }
-}
+declare global { interface Window { XLSX: any; } }
 const XLSX_CDN = "https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js";
 function loadXLSX(): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -144,13 +142,6 @@ function removeEmojis(str: string): string {
   ).trim();
 }
 
-function normalizeSLA(raw: string): string | null {
-  if (!raw || raw === "-") return null;
-  if (/\d+\s*x\s*7/i.test(raw)) return "continuo";
-  if (normalize(raw) === "padrao") return "padrao";
-  return raw.trim();
-}
-
 function parseDataInicio(raw: any): Date | null {
   if (!raw) return null;
   if (raw instanceof Date) return isValid(raw) ? raw : null;
@@ -204,16 +195,16 @@ interface ProjetoPreviewRow {
 type ProjetoFilterAcao = "todos" | ProjetoAcao;
 
 const PROJETO_FILTER_OPTIONS: { key: ProjetoFilterAcao; label: string }[] = [
-  { key: "todos",           label: "Todos" },
-  { key: "novo",            label: "Novos" },
-  { key: "existente",       label: "Já existentes" },
-  { key: "erro_validacao",  label: "Erros" },
+  { key: "todos",          label: "Todos" },
+  { key: "novo",           label: "Novos" },
+  { key: "existente",      label: "Já existentes" },
+  { key: "erro_validacao", label: "Erros" },
 ];
 
 const PROJETO_ACAO_CONFIG: Record<ProjetoAcao, { label: string; dot: string; pill: string }> = {
-  novo:           { label: "Novo",          dot: "bg-emerald-500", pill: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" },
-  existente:      { label: "Já existente",  dot: "bg-muted-foreground/40", pill: "bg-muted text-muted-foreground border-border" },
-  erro_validacao: { label: "Erro",          dot: "bg-destructive", pill: "bg-destructive/10 text-destructive border-destructive/20" },
+  novo:           { label: "Novo",         dot: "bg-emerald-500",       pill: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" },
+  existente:      { label: "Já existente", dot: "bg-muted-foreground/40", pill: "bg-muted text-muted-foreground border-border" },
+  erro_validacao: { label: "Erro",         dot: "bg-destructive",        pill: "bg-destructive/10 text-destructive border-destructive/20" },
 };
 
 const MODULE_LABELS: Record<string, string> = {
@@ -255,9 +246,11 @@ export function ImportacaoView() {
   const [projetoResult, setProjetoResult] = useState<{
     importados: number; existentes: number; erros: number; falhas: { nome: string; motivo: string }[];
   } | null>(null);
-  const [projetoSearch,  setProjetoSearch]  = useState("");
-  const [projetoFilter,  setProjetoFilter]  = useState<ProjetoFilterAcao>("todos");
-  const [projetoPagina,  setProjetoPagina]  = useState(1);
+  const [projetoSearch,     setProjetoSearch]     = useState("");
+  const [projetoFilter,     setProjetoFilter]     = useState<ProjetoFilterAcao>("todos");
+  const [projetoPagina,     setProjetoPagina]     = useState(1);
+  // Bug 2 — estado do erro de arquivo fora do padrão
+  const [projetoArquivoErro, setProjetoArquivoErro] = useState<string | null>(null);
   const PROJETO_PAGE_SIZE = 20;
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -388,28 +381,51 @@ export function ImportacaoView() {
     finally  { if (inputRef.current) inputRef.current.value = ""; }
   };
 
-  // ─── Validação prévia de projetos (sem gravar no banco) ───────────────────
+  // ─── Validação prévia de projetos ─────────────────────────────────────────────
+  // FIX Bug 1: setLoading(false) sempre garantido via flag local
+  // FIX Bug 2: estado projetoArquivoErro exibe banner visual de erro
+  // FIX Bug 3: setShowProjetoPreview só abre se houver linhas válidas
 
   const handleFileProjetos = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    if (inputRef.current) inputRef.current.value = "";
     if (!file) return;
-    if (!projetoContractId) { toast.error("Selecione o contrato antes de fazer o upload."); return; }
 
+    if (!projetoContractId) {
+      toast.error("Selecione o contrato antes de fazer o upload.");
+      return;
+    }
+
+    // Limpa estados anteriores
     setProjetoResult(null);
-    setLoading(true);
+    setProjetoArquivoErro(null); // Bug 2: limpa erro anterior ao tentar novo arquivo
     cancelProjetoPreview();
+    setLoading(true);
 
     try {
       const buffer = await file.arrayBuffer();
       const rows   = isXlsxFile(file) ? await parseXlsxToRows(buffer) : parseCsvToRows(buffer);
 
-      if (rows.length === 0) { toast.error("Nenhuma linha encontrada no arquivo."); return; }
+      // Bug 1+2: verifica arquivo vazio — mostra banner, não apenas toast
+      if (rows.length === 0) {
+        setProjetoArquivoErro(
+          "O arquivo não contém linhas de dados. Verifique se a planilha tem pelo menos uma linha além do cabeçalho.",
+        );
+        return; // finally ainda roda porque não usamos return no finally
+      }
 
-      // Verifica colunas obrigatórias
+      // Bug 1+2: verifica coluna Nome obrigatória — mostra banner detalhado
       const sampleKeys = Object.keys(rows[0]);
       const hasNome = sampleKeys.some((k) => ["Nome", "nome", "name"].includes(k));
       if (!hasNome) {
-        toast.error("Coluna 'Nome' não encontrada. Verifique o formato do arquivo.");
+        const colunasEncontradas = sampleKeys.length > 0
+          ? sampleKeys.slice(0, 6).join(", ") + (sampleKeys.length > 6 ? "…" : "")
+          : "nenhuma";
+        setProjetoArquivoErro(
+          `Coluna obrigatória 'Nome' não encontrada. ` +
+          `Colunas detectadas: ${colunasEncontradas}. ` +
+          `O arquivo deve conter as colunas: Nome, Descrição, Código, Redmine ID, Módulo.`,
+        );
         return;
       }
 
@@ -417,37 +433,50 @@ export function ImportacaoView() {
       const existingNorms = new Set(fresh.map((p) => normalize(p.name)));
 
       const preview: ProjetoPreviewRow[] = rows.map((r, idx) => {
-        const linha       = idx + 2;
-        const nome        = String(r["Nome"] || r["nome"] || r["name"] || "").trim();
-        const descricao   = String(r["Descrição"] || r["Descricao"] || r["descricao"] || "").trim() || null;
-        const code        = String(r["Código"] || r["Codigo"] || r["code"] || "").trim() || null;
+        const linha      = idx + 2;
+        const nome       = String(r["Nome"] || r["nome"] || r["name"] || "").trim();
+        const descricao  = String(r["Descrição"] || r["Descricao"] || r["descricao"] || "").trim() || null;
+        const code       = String(r["Código"] || r["Codigo"] || r["code"] || "").trim() || null;
         const redmine_raw = String(r["Redmine ID"] || r["redmine_id"] || "").trim();
-        const redmineId   = redmine_raw ? (Number(redmine_raw) || null) : null;
-        const modRaw      = String(r["Módulo"] || r["Modulo"] || r["module_type"] || "").trim().toLowerCase();
-        const moduleType  = modRaw === "agile" || modRaw === "agil" ? "agile"
-                          : modRaw === "mixed" || modRaw === "misto" ? "mixed" : "sustenance";
+        const redmineId  = redmine_raw ? (Number(redmine_raw) || null) : null;
+        const modRaw     = String(r["Módulo"] || r["Modulo"] || r["module_type"] || "").trim().toLowerCase();
+        const moduleType = modRaw === "agile" || modRaw === "agil" ? "agile"
+                         : modRaw === "mixed" || modRaw === "misto" ? "mixed" : "sustenance";
 
         if (!nome) {
-          return { linha, nome: `(linha ${linha} — sem nome)`, descricao, code, redmineId, moduleType,
-            acao: "erro_validacao" as ProjetoAcao, motivoErro: "Coluna 'Nome' está vazia.", status: "pendente" as const };
+          return {
+            linha, nome: `(linha ${linha} — sem nome)`, descricao, code, redmineId, moduleType,
+            acao: "erro_validacao" as ProjetoAcao,
+            motivoErro: "Campo 'Nome' está vazio nesta linha.",
+            status: "pendente" as const,
+          };
         }
 
         if (existingNorms.has(normalize(nome))) {
-          return { linha, nome, descricao, code, redmineId, moduleType,
-            acao: "existente" as ProjetoAcao, status: "pendente" as const };
+          return { linha, nome, descricao, code, redmineId, moduleType, acao: "existente" as ProjetoAcao, status: "pendente" as const };
         }
 
-        return { linha, nome, descricao, code, redmineId, moduleType,
-          acao: "novo" as ProjetoAcao, status: "pendente" as const };
+        return { linha, nome, descricao, code, redmineId, moduleType, acao: "novo" as ProjetoAcao, status: "pendente" as const };
       });
 
+      // Bug 3: não abre preview se não existem linhas válidas (somente erros)
+      const linhasUteis = preview.filter((r) => r.acao !== "erro_validacao");
+      if (linhasUteis.length === 0 && preview.length > 0) {
+        setProjetoArquivoErro(
+          `Todas as ${preview.length} linha(s) do arquivo têm o campo 'Nome' vazio. ` +
+          `Verifique se o arquivo está no formato correto: Nome, Descrição, Código, Redmine ID, Módulo.`,
+        );
+        return;
+      }
+
+      // Tudo ok — abre o preview
       setProjetoPreviewRows(preview);
       setShowProjetoPreview(true);
     } catch {
       toast.error("Erro ao processar arquivo.");
     } finally {
+      // Bug 1: setLoading(false) SEMPRE executado, independente do caminho
       setLoading(false);
-      if (inputRef.current) inputRef.current.value = "";
     }
   };
 
@@ -677,7 +706,6 @@ export function ImportacaoView() {
           </div>
         </div>
 
-        {/* Dropzone */}
         <label className="flex flex-col items-center justify-center w-full h-48 rounded-2xl border-2 border-dashed border-border hover:border-blue-400 dark:hover:border-blue-500 bg-muted/30 hover:bg-blue-500/5 transition-all cursor-pointer group">
           <input ref={inputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileDemandas} />
           <Upload className="h-10 w-10 text-muted-foreground/50 group-hover:text-blue-500 transition-colors mb-3" />
@@ -685,7 +713,6 @@ export function ImportacaoView() {
           <p className="text-xs text-muted-foreground mt-1">.csv ou .xlsx — exportação padrão do Redmine</p>
         </label>
 
-        {/* Erros de validação */}
         {errors.length > 0 && (
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-2">
             <div className="flex items-center gap-2 text-destructive">
@@ -700,7 +727,6 @@ export function ImportacaoView() {
           </div>
         )}
 
-        {/* Avisos de tipos auto-criados */}
         {autoCreatedTypes.length > 0 && (
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
             <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 mb-1">
@@ -713,7 +739,6 @@ export function ImportacaoView() {
           </div>
         )}
 
-        {/* Resultado */}
         {result && (
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
             <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
@@ -740,7 +765,6 @@ export function ImportacaoView() {
     return (
       <div className="flex flex-col min-h-0 bg-background">
 
-        {/* Topbar sticky */}
         <div className="flex items-center justify-between gap-4 px-6 py-3 border-b border-border bg-card sticky top-0 z-20">
           <div className="flex flex-col gap-0.5 min-w-0">
             <div className="flex items-center gap-1.5 text-sm">
@@ -760,13 +784,7 @@ export function ImportacaoView() {
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 px-4 text-sm rounded-lg"
-              onClick={cancelProjetoPreview}
-              disabled={loading}
-            >
+            <Button variant="outline" size="sm" className="h-8 px-4 text-sm rounded-lg" onClick={cancelProjetoPreview} disabled={loading}>
               Cancelar
             </Button>
             <Button
@@ -775,47 +793,20 @@ export function ImportacaoView() {
               onClick={handleConfirmarProjetos}
               disabled={loading || projetoCounts.novos === 0}
             >
-              {loading ? (
-                <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Importando…</>
-              ) : (
-                `✓  Importar Novos (${projetoCounts.novos})`
-              )}
+              {loading
+                ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Importando…</>
+                : `✓  Importar Novos (${projetoCounts.novos})`
+              }
             </Button>
           </div>
         </div>
 
-        {/* Summary cards */}
         <div className="grid grid-cols-3 gap-3 px-6 pt-5 pb-4">
-          <SummaryCard
-            count={projetoCounts.novos}
-            label="Novos"
-            sub="projetos a criar"
-            accentColor="bg-violet-500"
-            cardCls="bg-violet-500/5 border-violet-500/20"
-            valueCls="text-violet-600 dark:text-violet-400"
-            subCls="text-violet-600/60 dark:text-violet-400/60"
-          />
-          <SummaryCard
-            count={projetoCounts.existentes}
-            label="Já existentes"
-            sub="serão ignorados"
-            accentColor="bg-muted-foreground/30"
-            cardCls="bg-muted/50 border-border"
-            valueCls="text-muted-foreground"
-            subCls="text-muted-foreground/60"
-          />
-          <SummaryCard
-            count={projetoCounts.erros}
-            label="Erros"
-            sub="linhas inválidas"
-            accentColor="bg-destructive"
-            cardCls="bg-destructive/5 border-destructive/20"
-            valueCls="text-destructive"
-            subCls="text-destructive/60"
-          />
+          <SummaryCard count={projetoCounts.novos}      label="Novos"         sub="projetos a criar"  accentColor="bg-violet-500"          cardCls="bg-violet-500/5 border-violet-500/20"      valueCls="text-violet-600 dark:text-violet-400"       subCls="text-violet-600/60 dark:text-violet-400/60" />
+          <SummaryCard count={projetoCounts.existentes} label="Já existentes" sub="serão ignorados"  accentColor="bg-muted-foreground/30" cardCls="bg-muted/50 border-border"                  valueCls="text-muted-foreground"                     subCls="text-muted-foreground/60" />
+          <SummaryCard count={projetoCounts.erros}      label="Erros"          sub="linhas inválidas" accentColor="bg-destructive"         cardCls="bg-destructive/5 border-destructive/20"   valueCls="text-destructive"                          subCls="text-destructive/60" />
         </div>
 
-        {/* Toolbar */}
         <div className="flex items-center gap-3 px-6 pb-3 flex-wrap">
           <div className="relative flex-1 min-w-[200px] max-w-xs">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -847,7 +838,6 @@ export function ImportacaoView() {
           </span>
         </div>
 
-        {/* Tabela */}
         <div className="flex-1 overflow-x-auto border-t border-border">
           <Table className="w-full">
             <TableHeader>
@@ -857,7 +847,7 @@ export function ImportacaoView() {
                 <TableHead className="w-[160px] text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Código</TableHead>
                 <TableHead className="w-[120px] text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Módulo</TableHead>
                 <TableHead className="w-[120px] text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Redmine ID</TableHead>
-                <TableHead className="w-[130px] text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Ação</TableHead>
+                <TableHead className="w-[130px] text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Áção</TableHead>
                 <TableHead className="w-[120px] text-[10px] font-semibold text-muted-foreground uppercase tracking-wider pr-5">Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -873,7 +863,6 @@ export function ImportacaoView() {
                 const acfg    = PROJETO_ACAO_CONFIG[row.acao];
                 const progMap = projetoProgressMap.get(row.linha);
                 const isErr   = row.acao === "erro_validacao";
-
                 return (
                   <TableRow
                     key={row.linha}
@@ -901,60 +890,30 @@ export function ImportacaoView() {
                       )}
                     </TableCell>
                     <TableCell className="py-3.5">
-                      {row.code ? (
-                        <span className="font-mono text-xs text-muted-foreground">{row.code}</span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground/40 italic">—</span>
-                      )}
+                      {row.code
+                        ? <span className="font-mono text-xs text-muted-foreground">{row.code}</span>
+                        : <span className="text-xs text-muted-foreground/40 italic">—</span>}
                     </TableCell>
                     <TableCell className="py-3.5">
-                      <span className="text-xs text-muted-foreground">
-                        {MODULE_LABELS[row.moduleType] ?? row.moduleType}
-                      </span>
+                      <span className="text-xs text-muted-foreground">{MODULE_LABELS[row.moduleType] ?? row.moduleType}</span>
                     </TableCell>
                     <TableCell className="py-3.5">
-                      {row.redmineId ? (
-                        <span className="font-mono text-xs text-muted-foreground">{row.redmineId}</span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground/40 italic">—</span>
-                      )}
+                      {row.redmineId
+                        ? <span className="font-mono text-xs text-muted-foreground">{row.redmineId}</span>
+                        : <span className="text-xs text-muted-foreground/40 italic">—</span>}
                     </TableCell>
                     <TableCell className="py-3.5">
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] px-2.5 py-1 rounded-full border font-medium",
-                          acfg.pill,
-                        )}
-                      >
+                      <Badge variant="outline" className={cn("inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] px-2.5 py-1 rounded-full border font-medium", acfg.pill)}>
                         <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", acfg.dot)} />
                         {acfg.label}
                       </Badge>
                     </TableCell>
                     <TableCell className="py-3.5 pr-5">
-                      {progMap === "importando" && (
-                        <span className="flex items-center gap-1.5 text-xs text-violet-600 dark:text-violet-400 font-medium">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />Importando…
-                        </span>
-                      )}
-                      {progMap === "importado" && (
-                        <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                          <CheckCircle2 className="h-3.5 w-3.5" />Criado
-                        </span>
-                      )}
-                      {progMap === "ignorado" && (
-                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-                          <MinusCircle className="h-3.5 w-3.5" />Ignorado
-                        </span>
-                      )}
-                      {progMap === "erro" && (
-                        <span className="flex items-center gap-1.5 text-xs text-destructive font-medium">
-                          <XCircle className="h-3.5 w-3.5" />Erro
-                        </span>
-                      )}
-                      {!progMap && (
-                        <span className="text-xs text-muted-foreground">Pendente</span>
-                      )}
+                      {progMap === "importando" && <span className="flex items-center gap-1.5 text-xs text-violet-600 dark:text-violet-400 font-medium"><Loader2 className="h-3.5 w-3.5 animate-spin" />Importando…</span>}
+                      {progMap === "importado"  && <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium"><CheckCircle2 className="h-3.5 w-3.5" />Criado</span>}
+                      {progMap === "ignorado"   && <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium"><MinusCircle className="h-3.5 w-3.5" />Ignorado</span>}
+                      {progMap === "erro"       && <span className="flex items-center gap-1.5 text-xs text-destructive font-medium"><XCircle className="h-3.5 w-3.5" />Erro</span>}
+                      {!progMap && <span className="text-xs text-muted-foreground">Pendente</span>}
                     </TableCell>
                   </TableRow>
                 );
@@ -963,33 +922,23 @@ export function ImportacaoView() {
           </Table>
         </div>
 
-        {/* Paginação */}
         {projetoRowsDisplay.length > 0 && (
           <div className="flex items-center justify-between gap-3 px-6 py-3 border-t border-border bg-muted/10">
             <span className="text-xs text-muted-foreground">
               Mostrando <strong>{(projetoSafePage - 1) * PROJETO_PAGE_SIZE + 1}–{Math.min(projetoSafePage * PROJETO_PAGE_SIZE, projetoRowsDisplay.length)}</strong> de <strong>{projetoRowsDisplay.length}</strong>
             </span>
             <div className="flex items-center gap-1">
-              <button
-                onClick={() => setProjetoPagina((p) => Math.max(1, p - 1))}
-                disabled={projetoSafePage <= 1}
-                className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
+              <button onClick={() => setProjetoPagina((p) => Math.max(1, p - 1))} disabled={projetoSafePage <= 1} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                 <ChevronRight className="h-3.5 w-3.5 rotate-180" /> Anterior
               </button>
               <span className="text-xs text-muted-foreground px-2">{projetoSafePage} / {projetoTotalPages}</span>
-              <button
-                onClick={() => setProjetoPagina((p) => Math.min(projetoTotalPages, p + 1))}
-                disabled={projetoSafePage >= projetoTotalPages}
-                className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
+              <button onClick={() => setProjetoPagina((p) => Math.min(projetoTotalPages, p + 1))} disabled={projetoSafePage >= projetoTotalPages} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                 Próximo <ChevronRight className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
         )}
 
-        {/* Aviso erros de validação */}
         {projetoCounts.erros > 0 && (
           <div className="mx-6 mb-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
@@ -999,7 +948,6 @@ export function ImportacaoView() {
             </p>
           </div>
         )}
-
       </div>
     );
   }
@@ -1009,10 +957,9 @@ export function ImportacaoView() {
   return (
     <div className="w-full max-w-2xl mx-auto pt-6 space-y-6">
 
-      {/* Topbar local */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => { setMode(null); setProjetoResult(null); setProjetoContractId(""); }}
+          onClick={() => { setMode(null); setProjetoResult(null); setProjetoContractId(""); setProjetoArquivoErro(null); }}
           className="p-1.5 rounded-lg hover:bg-muted transition-colors"
         >
           <ArrowLeft className="h-4 w-4 text-muted-foreground" />
@@ -1025,12 +972,14 @@ export function ImportacaoView() {
         </div>
       </div>
 
-      {/* Seleção de contrato */}
       <div className="space-y-2">
         <Label htmlFor="contract-select" className="text-sm font-medium">
           Contrato <span className="text-destructive">*</span>
         </Label>
-        <Select value={projetoContractId} onValueChange={setProjetoContractId}>
+        <Select
+          value={projetoContractId}
+          onValueChange={(v) => { setProjetoContractId(v); setProjetoArquivoErro(null); }}
+        >
           <SelectTrigger id="contract-select" className="w-full">
             <SelectValue placeholder="Selecione o contrato dos projetos..." />
           </SelectTrigger>
@@ -1045,7 +994,6 @@ export function ImportacaoView() {
         )}
       </div>
 
-      {/* Dropzone */}
       <label
         className={cn(
           "flex flex-col items-center justify-center w-full h-48 rounded-2xl border-2 border-dashed transition-all",
@@ -1076,7 +1024,22 @@ export function ImportacaoView() {
         )}
       </label>
 
-      {/* Resultado final */}
+      {/* Bug 2 — Banner de erro de arquivo fora do padrão */}
+      {projetoArquivoErro && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-2">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <p className="text-sm font-semibold">Arquivo inválido ou fora do padrão</p>
+          </div>
+          <p className="text-xs text-destructive/80 leading-relaxed">{projetoArquivoErro}</p>
+          <div className="pt-1 border-t border-destructive/20">
+            <p className="text-[11px] text-destructive/60">
+              Formato esperado: colunas <strong>Nome</strong>, Descrição, Código, Redmine ID, Módulo — .csv (separador ;) ou .xlsx
+            </p>
+          </div>
+        </div>
+      )}
+
       {projetoResult && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
           <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
@@ -1084,9 +1047,9 @@ export function ImportacaoView() {
             <p className="text-sm font-semibold">Importação concluída</p>
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <ResultCard count={projetoResult.importados}  label="Importados"     color="violet" />
-            <ResultCard count={projetoResult.existentes}  label="Já existentes"  color="gray" />
-            <ResultCard count={projetoResult.erros}       label="Erros"           color="red" />
+            <ResultCard count={projetoResult.importados} label="Importados"    color="violet" />
+            <ResultCard count={projetoResult.existentes} label="Já existentes" color="gray" />
+            <ResultCard count={projetoResult.erros}      label="Erros"          color="red" />
           </div>
           {projetoResult.falhas.length > 0 && (
             <FalhasDetail falhas={projetoResult.falhas} />
@@ -1100,15 +1063,9 @@ export function ImportacaoView() {
 // ─── SummaryCard ────────────────────────────────────────────────────────────
 
 interface SummaryCardProps {
-  count:       number;
-  label:       string;
-  sub:         string;
-  accentColor: string;
-  cardCls:     string;
-  valueCls:    string;
-  subCls:      string;
+  count: number; label: string; sub: string;
+  accentColor: string; cardCls: string; valueCls: string; subCls: string;
 }
-
 function SummaryCard({ count, label, sub, accentColor, cardCls, valueCls, subCls }: SummaryCardProps) {
   return (
     <div className={cn("relative h-24 rounded-xl border flex flex-col justify-center pl-7 pr-4 overflow-hidden", cardCls)}>
@@ -1154,9 +1111,7 @@ function FalhasDetail({ falhas }: { falhas: { nome: string; motivo: string }[] }
       {expanded && (
         <ul className="space-y-0.5 max-h-32 overflow-y-auto pl-1">
           {falhas.map((f, i) => (
-            <li key={i} className="text-xs text-destructive/80">
-              <strong>{f.nome}</strong>: {f.motivo}
-            </li>
+            <li key={i} className="text-xs text-destructive/80"><strong>{f.nome}</strong>: {f.motivo}</li>
           ))}
         </ul>
       )}
