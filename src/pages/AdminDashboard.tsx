@@ -13,7 +13,7 @@ import { AdminUsuariosPage }   from "@/features/admin/pages/AdminUsuariosPage";
 import { AdminHistoricoPage }  from "@/features/admin/pages/AdminHistoricoPage";
 import { AdminCapacidadePage } from "@/features/admin/pages/AdminCapacidadePage";
 import { AdminIAsPage }        from "@/features/admin/pages/AdminIAsPage";
-import { ContractsDashboard }  from "@/features/contracts/components/ContractsDashboard";
+import { AdminContratosPage }  from "@/features/admin/pages/AdminContratosPage";
 import { ProjetosAdminPanel }  from "@/features/admin/components/ProjetosAdminPanel";
 import { NotificationBell }    from "@/features/admin/components/NotificationBell";
 import { ThemeToggle }         from "@/components/ThemeToggle";
@@ -203,7 +203,7 @@ export default function AdminDashboard() {
       case "usuarios":   return <AdminUsuariosPage />;
       case "projetos":   return <ProjetosAdminPanel />;
       case "ias":        return <AdminIAsPage />;
-      case "contratos":  return <ContractsDashboard />;
+      case "contratos":  return <AdminContratosPage />;
       default: return (
         <div className="space-y-8">
           {loading ? <Skeleton className="h-40 w-full rounded-xl" /> : <ModuleQuickAccess kpis={g} />}
