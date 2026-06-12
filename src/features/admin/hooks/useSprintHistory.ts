@@ -44,6 +44,7 @@ export interface SprintMetrics {
 export interface TeamComparativo {
   teamId:             string;
   teamName:           string;
+  module?:            string;
   avgVelocity:        number;
   avgCompletionRate:  number;
   avgTaxaConclusao:   number;
