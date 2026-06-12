@@ -1,16 +1,17 @@
 // src/contexts/AuthContext.tsx
 /**
- * fix(auth): refreshTeams via team_members em vez de team_modules
+ * fix(auth): refreshTeams via team_members — sem dependência de team_modules
  *
- * team_modules usa policy is_contract_member() que bloqueia membros comuns,
- * retornando [] e fazendo o dashboard mostrar "Sem time".
+ * PROBLEMA RAIZ:
+ *   refreshTeams buscava em team_modules com is_contract_member() que
+ *   bloqueava membros comuns retornando []. Resultado: "Sem time" no dashboard.
  *
- * CORRIGIDO: busca times via team_members (user_id = auth.uid()) que tem
- * a policy tm_select_own ativa. O módulo vem direto de teams.module.
- * Admins continuam vendo todos os times via is_admin().
+ * CORREÇÃO:
+ *   Query em team_members com join direto em teams(id, name, module).
+ *   A policy tm_select_own (user_id = auth.uid()) garante que cada usuário
+ *   vê apenas seus próprios times, sem precisar passar userId como parâmetro.
  *
- * fix(teams-dedup-v2): dedup usa `${id}::${module}` como chave, preservando
- * uma entrada por (time × módulo).
+ * fix(teams-dedup-v2): dedup usa `${id}::${module}` como chave.
  */
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -89,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { mountedRef.current = false; };
   }, []);
 
-  // F4-fix: boot-sync — pré-popula currentTeamIdRef a partir do localStorage
+  // boot-sync — pré-popula currentTeamIdRef a partir do localStorage
   useEffect(() => {
     const saved = localStorage.getItem("selectedTeamId");
     if (saved && !currentTeamIdRef.current) {
@@ -159,8 +160,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshTeams = async () => {
-    // fix: busca via team_members (policy tm_select_own: user_id = auth.uid())
-    // em vez de team_modules (policy is_contract_member que bloqueia membros comuns).
+    // fix(auth): team_members filtrado por RLS (tm_select_own: user_id = auth.uid())
+    // Join direto em teams para obter name e module.
+    // Não usa team_modules — policy is_contract_member() bloqueia membros comuns.
     const { data, error } = await supabase
       .from("team_members")
       .select("team:team_id(id, name, module)");
@@ -172,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return [{ id: row.team.id, name: row.team.name, module: row.team.module ?? "" }];
     });
 
-    // dedup por (id × module) — preserva uma entrada por combinação única
+    // dedup por (id × module)
     const seen = new Set<string>();
     const teamList = rawList.filter(t => {
       const key = `${t.id}::${t.module}`;
