@@ -65,7 +65,7 @@ export function useSprintHistory(contractId?: string | null) {
       let sprintsQuery = supabase
         .from('sprints')
         .select('id, name, team_id, start_date, end_date, goal, teams(name)')
-        .eq('status', 'completed')
+        .eq('is_active', false)
         .order('end_date', { ascending: false });
 
       if (filters.periodo !== 'all') {
