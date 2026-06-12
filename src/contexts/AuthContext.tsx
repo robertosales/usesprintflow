@@ -1,17 +1,16 @@
 // src/contexts/AuthContext.tsx
 /**
- * F4-fix: resolução eager de currentTeamId no boot
+ * fix(auth): refreshTeams via team_members em vez de team_modules
  *
- * fix(teams-dedup-v2): o dedup anterior usava team.id como chave única,
- *   descartando linhas com módulos distintos para o mesmo time.
- *   Isso fazia SustentacaoPage.teams.filter(t => t.module === 'sustentacao')
- *   retornar [] quando a primeira ocorrência do time era de outro módulo
- *   (ex: sala_agil), resultando em currentTeamId=null e board sem cards.
+ * team_modules usa policy is_contract_member() que bloqueia membros comuns,
+ * retornando [] e fazendo o dashboard mostrar "Sem time".
  *
- *   CORRIGIDO: dedup agora usa `${id}::${module}` como chave, preservando
- *   uma entrada por (time × módulo). O dedup ainda evita linhas 100%
- *   duplicadas (mesmo id E mesmo module), que podem ocorrer se team_modules
- *   tiver entradas repetidas.
+ * CORRIGIDO: busca times via team_members (user_id = auth.uid()) que tem
+ * a policy tm_select_own ativa. O módulo vem direto de teams.module.
+ * Admins continuam vendo todos os times via is_admin().
+ *
+ * fix(teams-dedup-v2): dedup usa `${id}::${module}` como chave, preservando
+ * uma entrada por (time × módulo).
  */
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -83,8 +82,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const currentTeamIdRef = useRef<string | null>(null);
   const mountedRef       = useRef(true);
-  // Evita reload da árvore quando onAuthStateChange re-emite eventos para o
-  // mesmo usuário (TOKEN_REFRESHED, re-SIGNED_IN ao voltar de ALT+TAB, etc).
   const loadedUserIdRef  = useRef<string | null>(null);
 
   useEffect(() => {
@@ -162,21 +159,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshTeams = async () => {
+    // fix: busca via team_members (policy tm_select_own: user_id = auth.uid())
+    // em vez de team_modules (policy is_contract_member que bloqueia membros comuns).
     const { data, error } = await supabase
-      .from("team_modules")
-      .select("module, team:team_id(id, name)");
+      .from("team_members")
+      .select("team:team_id(id, name, module)");
 
     if (error) { console.error("[Auth] refreshTeams:", error); return; }
 
     const rawList: AuthTeam[] = (data ?? []).flatMap((row: any) => {
       if (!row.team) return [];
-      return [{ id: row.team.id, name: row.team.name, module: row.module }];
+      return [{ id: row.team.id, name: row.team.name, module: row.team.module ?? "" }];
     });
 
-    // fix(teams-dedup-v2): dedup por (id × module) — preserva uma entrada
-    // por combinação única de time+módulo. Isso garante que
-    // teams.filter(t => t.module === 'sustentacao') nunca retorne []
-    // quando o time também pertence a outros módulos.
+    // dedup por (id × module) — preserva uma entrada por combinação única
     const seen = new Set<string>();
     const teamList = rawList.filter(t => {
       const key = `${t.id}::${t.module}`;
@@ -201,6 +197,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (saved) {
         localStorage.removeItem("selectedTeamId");
         console.warn("[Auth] selectedTeamId inválido removido do localStorage:", saved);
+      }
+      // Auto-seleciona o primeiro time disponível
+      if (teamList.length > 0) {
+        setCurrentTeamId(teamList[0].id);
       }
     }
   };
@@ -289,22 +289,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (event, session) => {
         if (!mountedRef.current) return;
 
-        // IMPORTANTE: o callback de onAuthStateChange roda dentro do lock interno
-        // do auth client. Não aguardar queries aqui; isso segura o lock durante a
-        // troca de senha e permite que outra chamada o roube após o timeout.
         if (session?.user) {
           if (!initialised) return;
           const userId = session.user.id;
-          // Idempotência: se já carregamos dados deste usuário, NÃO ativar
-          // loading=true nem refazer loadUserData. Isso evita o unmount da
-          // árvore (PageLoader em ProtectedRoute) ao voltar de ALT+TAB,
-          // minimizar/restaurar ou em token refresh — preservando estado
-          // local de formulários, drawers e modais.
           if (loadedUserIdRef.current === userId) return;
           setSession(session);
           setUser(session.user);
-          // Marca loading=true para evitar que guards de rota redirecionem
-          // com moduleRoles ainda vazio (race que mandava todos para /sala-agil).
           if (mountedRef.current) setLoading(true);
           setTimeout(() => {
             void loadUserData(userId).finally(() => {
