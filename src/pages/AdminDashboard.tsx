@@ -52,16 +52,20 @@ type PageKey = typeof NAV_ITEMS[number]["key"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Visão Geral — inner page component
-// Recebe byTeam, loading e dataWarnings via props para evitar dupla chamada
+// Recebe byTeam, loading, dataWarnings e timestamps via props
 // ─────────────────────────────────────────────────────────────────────────────
 interface VisaoGeralPageProps {
   byTeam:       TeamKpis[];
   loading:      boolean;
   dataWarnings: string[] | null | undefined;
   globalKpis:   AdminKpis["global"];
+  /** Data formatada ex: "segunda-feira, 15 de junho de 2026" */
+  dataLabel:    string;
+  /** Hora formatada ex: "10:18" */
+  horaLabel:    string;
 }
 
-function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGeralPageProps) {
+function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, dataLabel, horaLabel }: VisaoGeralPageProps) {
   const { selectedContract } = useContractContext();
 
   const {
@@ -79,7 +83,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
   const lastUpdatedLabel = useMemo(() => {
     const diffMs  = Date.now() - lastUpdated.getTime();
     const diffMin = Math.floor(diffMs / 60_000);
-    if (diffMin < 1)  return "agora mesmo";
+    if (diffMin < 1)   return "agora mesmo";
     if (diffMin === 1) return "há 1 minuto";
     return `há ${diffMin} minutos`;
   }, [lastUpdated]);
@@ -94,9 +98,9 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
     if (appliedModule === "todos") return filteredByTeam;
     return filteredByTeam.filter((t) => {
       const m = (t.module ?? "").toLowerCase();
-      if (appliedModule === "sala-agil")  return m.includes("agil") || m.includes("scrum");
+      if (appliedModule === "sala-agil")   return m.includes("agil") || m.includes("scrum");
       if (appliedModule === "sustentacao") return m.includes("sust");
-      if (appliedModule === "rdm")        return m.includes("rdm") || m.includes("muda");
+      if (appliedModule === "rdm")         return m.includes("rdm") || m.includes("muda");
       return true;
     });
   }, [filteredByTeam, appliedModule]);
@@ -110,12 +114,12 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
       : sprintSet.size > 1
       ? `${sprintSet.size} sprints ativas`
       : null;
-    const husAtivas      = filteredByModule.reduce((s, t) => s + (t.husAtivas ?? 0), 0);
-    const husTotais      = filteredByModule.reduce((s, t) => s + (t.husAtivas ?? 0) + (t.husConcluidas ?? 0), 0);
-    const husConcluidas  = filteredByModule.reduce((s, t) => s + (t.husConcluidas ?? 0), 0);
+    const husAtivas       = filteredByModule.reduce((s, t) => s + (t.husAtivas      ?? 0), 0);
+    const husTotais       = filteredByModule.reduce((s, t) => s + (t.husAtivas      ?? 0) + (t.husConcluidas ?? 0), 0);
+    const husConcluidas   = filteredByModule.reduce((s, t) => s + (t.husConcluidas  ?? 0), 0);
     const husConcluidasPct = husTotais > 0 ? Math.round((husConcluidas / husTotais) * 100) : 0;
-    const demandasAbertas = filteredByModule.reduce((s, t) => s + (t.demandasAbertas ?? 0), 0);
-    const slaEmRisco      = filteredByModule.reduce((s, t) => s + (t.slaEmRisco ?? 0), 0);
+    const demandasAbertas  = filteredByModule.reduce((s, t) => s + (t.demandasAbertas ?? 0), 0);
+    const slaEmRisco       = filteredByModule.reduce((s, t) => s + (t.slaEmRisco      ?? 0), 0);
     return { timesAtivos, sprintLabel, husAtivas, husConcluidasPct, demandasAbertas, slaEmRisco };
   }, [filteredByModule]);
 
@@ -145,6 +149,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
       {/* ── 1. CABEÇALHO ─────────────────────────────────────────── */}
       <div className="flex flex-col gap-0.5">
         <div className="flex items-start justify-between gap-4">
+          {/* Título + contrato + última atualização */}
           <div>
             <h1 className="text-xl font-bold tracking-tight">Visão Geral</h1>
             <div className="flex items-center gap-2 mt-1">
@@ -158,6 +163,12 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
                 <RefreshCw className="h-3 w-3 text-muted-foreground animate-spin" />
               )}
             </div>
+          </div>
+
+          {/* Data + hora — visível somente em lg+; no mobile fica no top bar */}
+          <div className="hidden lg:flex flex-col items-end gap-0.5 shrink-0">
+            <span className="text-xs text-muted-foreground capitalize">{dataLabel}</span>
+            <span className="text-sm font-semibold tabular-nums">{horaLabel}</span>
           </div>
         </div>
 
@@ -283,10 +294,11 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
             <div className="px-4 pt-4 pb-2">
               <h2 className="text-sm font-semibold">Detalhe por Time</h2>
             </div>
+            {/* fix: props alinhadas com a interface do TeamDetailPanel */}
             <TeamDetailPanel
               byTeam={filteredByModule}
-              loading={loading}
-              highlightTeamId={scrollTeam !== "all" ? scrollTeam : undefined}
+              selectedTeam={scrollTeam}
+              onSelect={setScrollTeam}
             />
           </div>
           <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
@@ -321,13 +333,14 @@ function AdminDashboardInner() {
   const { global: g, byTeam, loading, dataWarnings } = useAdminKpis(selectedContractId);
   const { notifications, criticalCount, warningCount } = useNotifications(byTeam ?? []);
 
+  // ── Relógio — único setInterval para todo o shell ──────────────────────────
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(id);
   }, []);
-  const hora = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  const data = now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const horaLabel = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const dataLabel = now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   const handleSignOut = async () => { await signOut(); navigate("/auth"); };
 
@@ -443,12 +456,14 @@ function AdminDashboardInner() {
   // ── Render page ────────────────────────────────────────────────────────────
   const renderPage = () => {
     switch (activePage) {
-      case "visao-geral":  return (
+      case "visao-geral": return (
         <VisaoGeralPage
           byTeam={byTeam ?? []}
           loading={loading}
           dataWarnings={dataWarnings}
           globalKpis={g}
+          dataLabel={dataLabel}
+          horaLabel={horaLabel}
         />
       );
       case "historico":   return <AdminHistoricoPage />;
@@ -477,7 +492,7 @@ function AdminDashboardInner() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-h-screen lg:ml-60">
-        {/* Top bar */}
+        {/* Top bar — sem data/hora em desktop (movida para o header da VisaoGeralPage) */}
         <header
           className="sticky top-0 z-20 flex items-center justify-between h-14 px-4 lg:px-6 shrink-0"
           style={{ background: "hsl(var(--topbar))", borderBottom: "1px solid hsl(var(--border))" }}
@@ -490,9 +505,10 @@ function AdminDashboardInner() {
             <Menu className="h-4 w-4" />
           </button>
 
-          <div className="hidden lg:flex flex-col items-start">
-            <span className="text-[11px] text-muted-foreground capitalize">{data}</span>
-            <span className="text-[13px] font-semibold tabular-nums">{hora}</span>
+          {/* Data/hora visível apenas no mobile (top bar), em desktop fica no header da página */}
+          <div className="flex lg:hidden flex-col items-start">
+            <span className="text-[11px] text-muted-foreground capitalize">{dataLabel}</span>
+            <span className="text-[13px] font-semibold tabular-nums">{horaLabel}</span>
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
