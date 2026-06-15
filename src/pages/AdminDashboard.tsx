@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminKpis } from "@/features/admin/hooks/useAdminKpis";
 import { useNotifications } from "@/features/admin/hooks/useNotifications";
+import { useDashboardFilters } from "@/features/admin/hooks/useDashboardFilters";
 import { ContractProvider, useContractContext } from "@/features/admin/contexts/ContractContext";
 import { ContractSwitcher }   from "@/features/admin/components/ContractSwitcher";
 import { SalaAgilKpis }        from "@/features/admin/components/SalaAgilKpis";
@@ -19,6 +20,9 @@ import { AdminContratosPage }  from "@/features/admin/pages/AdminContratosPage";
 import { ProjetosAdminPanel }  from "@/features/admin/components/ProjetosAdminPanel";
 import { NotificationBell }    from "@/features/admin/components/NotificationBell";
 import { ThemeToggle }         from "@/components/ThemeToggle";
+import { DashboardFilters }    from "@/features/admin/components/DashboardFilters";
+import { ExecutiveKpis }       from "@/features/admin/components/ExecutiveKpis";
+import { TeamSummaryCards }    from "@/features/admin/components/TeamSummaryCards";
 import { Button }   from "@/components/ui/button";
 import { Badge }    from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,7 +31,7 @@ import { AxionLogo } from "@/components/AxionLogo";
 import {
   LogOut, Users, UsersRound,
   BarChart3, History, Gauge, AlertTriangle, Sparkles, Menu, X, FileText,
-  FolderKanban, ChevronDown,
+  FolderKanban, RefreshCw, ChevronLeft, ChevronRight,
 } from "lucide-react";
 
 const TEAL = "#0bbcaf";
@@ -45,18 +49,266 @@ const NAV_ITEMS = [
 
 type PageKey = typeof NAV_ITEMS[number]["key"];
 
-// ── Inner component (tem acesso ao ContractContext) ───────────────────────────
-function AdminDashboardInner() {
-  const { profile, signOut, teams: allTeams } = useAuth();
-  const { selectedContractId, selectedContract, isGestor } = useContractContext();
-
-  // KPIs já filtrados pelo contrato selecionado
+// ─────────────────────────────────────────────────────────────────────────────
+// Visão Geral — inner page component
+// ─────────────────────────────────────────────────────────────────────────────
+function VisaoGeralPage() {
+  const { selectedContractId, selectedContract } = useContractContext();
   const { global: g, byTeam, loading, dataWarnings } = useAdminKpis(selectedContractId);
-  const { notifications, criticalCount, warningCount } = useNotifications(byTeam);
+
+  const {
+    pendingFilters,
+    appliedFilters,
+    appliedTeamId,
+    appliedModule,
+    handleChange,
+    handleApply,
+  } = useDashboardFilters();
+
+  // Last updated timestamp
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  useEffect(() => { if (!loading) setLastUpdated(new Date()); }, [loading]);
+  const lastUpdatedLabel = useMemo(() => {
+    const diffMs  = Date.now() - lastUpdated.getTime();
+    const diffMin = Math.floor(diffMs / 60_000);
+    if (diffMin < 1)  return "agora mesmo";
+    if (diffMin === 1) return "há 1 minuto";
+    return `há ${diffMin} minutos`;
+  }, [lastUpdated]);
+
+  // ── Derived data filtered by appliedFilters ──────────────────────────────
+  const filteredByTeam = useMemo(() => {
+    if (appliedTeamId === "all") return byTeam;
+    return byTeam.filter((t) => t.teamId === appliedTeamId);
+  }, [byTeam, appliedTeamId]);
+
+  const filteredByModule = useMemo(() => {
+    if (appliedModule === "todos") return filteredByTeam;
+    return filteredByTeam.filter((t) => {
+      const m = (t.module ?? "").toLowerCase();
+      if (appliedModule === "sala-agil")  return m.includes("agil") || m.includes("scrum");
+      if (appliedModule === "sustentacao") return m.includes("sust");
+      if (appliedModule === "rdm")        return m.includes("rdm") || m.includes("muda");
+      return true;
+    });
+  }, [filteredByTeam, appliedModule]);
+
+  // Executive KPI aggregates
+  const execKpis = useMemo(() => {
+    const timesAtivos    = filteredByModule.length;
+    const sprintSet      = new Set(filteredByModule.map(t => t.sprintAtivo).filter(Boolean));
+    const sprintLabel    = sprintSet.size === 1
+      ? [...sprintSet][0]!
+      : sprintSet.size > 1
+      ? `${sprintSet.size} sprints ativas`
+      : null;
+    const husAtivas      = filteredByModule.reduce((s, t) => s + (t.husAtivas ?? 0), 0);
+    const husTotais      = filteredByModule.reduce((s, t) => s + (t.husAtivas ?? 0) + (t.husConcluidas ?? 0), 0);
+    const husConcluidas  = filteredByModule.reduce((s, t) => s + (t.husConcluidas ?? 0), 0);
+    const husConcluidasPct = husTotais > 0 ? Math.round((husConcluidas / husTotais) * 100) : 0;
+    const demandasAbertas = filteredByModule.reduce((s, t) => s + (t.demandasAbertas ?? 0), 0);
+    const slaEmRisco      = filteredByModule.reduce((s, t) => s + (t.slaEmRisco ?? 0), 0);
+    return { timesAtivos, sprintLabel, husAtivas, husConcluidasPct, demandasAbertas, slaEmRisco };
+  }, [filteredByModule]);
+
+  // Team cards
+  const teamCards = useMemo(() => filteredByModule.map((t) => ({
+    teamId:          t.teamId,
+    teamName:        t.teamName,
+    module:          (t.module ?? "").toLowerCase().includes("agil") ? "sala-agil" : "sustentacao",
+    husAtivas:       t.husAtivas,
+    impedimentos:    t.impedimentos,
+    backlog:         t.backlog,
+    demandasAbertas: t.demandasAbertas,
+    slaEmRisco:      t.slaEmRisco,
+    bloqueadas:      t.bloqueadas,
+    sprintAtivo:     t.sprintAtivo,
+  })), [filteredByModule]);
+
+  // Teams list for filter dropdown
+  const teamsForFilter = useMemo(() => byTeam.map(t => ({ id: t.teamId, name: t.teamName })), [byTeam]);
+
+  const [scrollTeam, setScrollTeam] = useState("all");
+
+  return (
+    <div className="flex flex-col gap-5">
+
+      {/* ── 1. CABEÇALHO ─────────────────────────────────────────── */}
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">Visão Geral</h1>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-sm font-semibold text-foreground">
+                {selectedContract?.name ?? "—"}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                · Última atualização: {lastUpdatedLabel}
+              </span>
+              {loading && (
+                <RefreshCw className="h-3 w-3 text-muted-foreground animate-spin" />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Avisos de dados */}
+        {dataWarnings && dataWarnings.length > 0 && (
+          <Alert variant="destructive" className="mt-2 py-2">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            <AlertDescription className="text-xs">
+              {dataWarnings[0]}
+            </AlertDescription>
+          </Alert>
+        )}
+      </div>
+
+      {/* ── 2. FILTROS GLOBAIS ────────────────────────────────────── */}
+      <DashboardFilters
+        filters={pendingFilters}
+        teams={teamsForFilter}
+        onChange={handleChange}
+        onApply={handleApply}
+        loading={loading}
+      />
+
+      {/* ── 3. CARDS EXECUTIVOS ───────────────────────────────────── */}
+      <section aria-label="Indicadores executivos">
+        <ExecutiveKpis
+          timesAtivos={execKpis.timesAtivos}
+          sprintAtiva={execKpis.sprintLabel}
+          husAtivas={execKpis.husAtivas}
+          husConcluidasPct={execKpis.husConcluidasPct}
+          demandasAbertas={execKpis.demandasAbertas}
+          slaEmRisco={execKpis.slaEmRisco}
+          slaDescricao={execKpis.slaEmRisco > 0 ? "+5 dias sem conclusão" : undefined}
+          loading={loading}
+        />
+      </section>
+
+      {/* ── 4. ACESSO RÁPIDO ─────────────────────────────────────── */}
+      <section aria-label="Acesso rápido">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+          Acesso Rápido
+        </h2>
+        <ModuleQuickAccess />
+      </section>
+
+      {/* ── 5. RESUMO POR TIME ───────────────────────────────────── */}
+      <section aria-label="Resumo por time">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            Resumo por Time
+          </h2>
+          <div className="flex gap-1">
+            <button
+              className="rounded-md border p-1 hover:bg-muted transition-colors"
+              aria-label="Rolar para esquerda"
+              onClick={() => {
+                document.getElementById("team-scroll")?.scrollBy({ left: -260, behavior: "smooth" });
+              }}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              className="rounded-md border p-1 hover:bg-muted transition-colors"
+              aria-label="Rolar para direita"
+              onClick={() => {
+                document.getElementById("team-scroll")?.scrollBy({ left: 260, behavior: "smooth" });
+              }}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div id="team-scroll">
+          <TeamSummaryCards
+            teams={teamCards}
+            loading={loading}
+            onTeamClick={(id) => setScrollTeam(id)}
+          />
+        </div>
+      </section>
+
+      {/* ── 6. INDICADORES POR MÓDULO ────────────────────────────── */}
+      {(appliedModule === "todos" || appliedModule === "sala-agil") && (
+        <section aria-label="Indicadores Sala Ágil">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+            Indicadores por Módulo
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-xl border bg-card shadow-sm p-4">
+              <SalaAgilKpis
+                teamId={appliedTeamId === "all" ? undefined : appliedTeamId}
+                contractId={selectedContractId}
+              />
+            </div>
+            {(appliedModule === "todos" || appliedModule === "sustentacao") && (
+              <div className="rounded-xl border bg-card shadow-sm p-4">
+                <SustentacaoKpis
+                  teamId={appliedTeamId === "all" ? undefined : appliedTeamId}
+                  contractId={selectedContractId}
+                />
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {appliedModule === "sustentacao" && (
+        <section aria-label="Indicadores Sustentação">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+            Indicadores por Módulo
+          </h2>
+          <div className="rounded-xl border bg-card shadow-sm p-4">
+            <SustentacaoKpis
+              teamId={appliedTeamId === "all" ? undefined : appliedTeamId}
+              contractId={selectedContractId}
+            />
+          </div>
+        </section>
+      )}
+
+      {/* ── 7 + 8. DETALHE E DESEMPENHO POR TIME ─────────────────── */}
+      <section aria-label="Detalhamento operacional">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+            <div className="px-4 pt-4 pb-2">
+              <h2 className="text-sm font-semibold">Detalhe por Time</h2>
+            </div>
+            <TeamDetailPanel
+              byTeam={filteredByModule}
+              loading={loading}
+              highlightTeamId={scrollTeam !== "all" ? scrollTeam : undefined}
+            />
+          </div>
+          <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+            <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Desempenho por Time</h2>
+            </div>
+            <div className="px-2 pb-4">
+              <ComparativeChart
+                byTeam={filteredByModule}
+                loading={loading}
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AdminDashboard — shell (sidebar + main)
+// ─────────────────────────────────────────────────────────────────────────────
+function AdminDashboardInner() {
+  const { profile, signOut } = useAuth();
+  const { isGestor } = useContractContext();
   const navigate = useNavigate();
-  const [selectedTeam, setSelectedTeam] = useState("all");
-  const [activePage, setActivePage]     = useState<PageKey>("visao-geral");
-  const [sidebarOpen, setSidebarOpen]   = useState(false);
+  const [activePage, setActivePage] = useState<PageKey>("visao-geral");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -65,18 +317,6 @@ function AdminDashboardInner() {
   }, []);
   const hora = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const data = now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-
-  // Reseta o time selecionado sempre que o contrato mudar
-  useEffect(() => { setSelectedTeam("all"); }, [selectedContractId]);
-
-  const sprintLabel = selectedTeam === "all"
-    ? (() => {
-        const comSprint = byTeam.filter(t => t.sprintAtivo);
-        if (comSprint.length === 0) return null;
-        if (comSprint.length === 1) return comSprint[0].sprintAtivo;
-        return `${comSprint.length} sprints ativas`;
-      })()
-    : byTeam.find(t => t.teamId === selectedTeam)?.sprintAtivo ?? null;
 
   const handleSignOut = async () => { await signOut(); navigate("/auth"); };
 
@@ -96,12 +336,8 @@ function AdminDashboardInner() {
       >
         <AxionLogo size={24} />
         <div className="min-w-0">
-          <p className="text-[15px] font-bold leading-none tracking-tight" style={{ color: "#ffffff" }}>
-            Axion
-          </p>
-          <p className="text-[9px] uppercase tracking-widest leading-none mt-0.5" style={{ color: TEAL }}>
-            Admin
-          </p>
+          <p className="text-[15px] font-bold leading-none tracking-tight" style={{ color: "#ffffff" }}>Axion</p>
+          <p className="text-[9px] uppercase tracking-widest leading-none mt-0.5" style={{ color: TEAL }}>Admin</p>
         </div>
         {mobile && (
           <button
@@ -115,7 +351,7 @@ function AdminDashboardInner() {
         )}
       </div>
 
-      {/* Contract Switcher — só exibe para gestor master */}
+      {/* Contract Switcher — só gestor */}
       {isGestor && <ContractSwitcher />}
 
       {/* Nav */}
@@ -136,33 +372,20 @@ function AdminDashboardInner() {
                 color:      isActive ? "#ffffff" : "rgba(192,212,208,0.7)",
               }}
               onMouseEnter={e => {
-                if (!isActive) {
-                  (e.currentTarget as HTMLElement).style.background = "hsl(var(--sidebar-accent))";
-                  (e.currentTarget as HTMLElement).style.color = "hsl(var(--sidebar-foreground))";
-                }
+                if (!isActive) (e.currentTarget as HTMLElement).style.background = "rgba(192,212,208,0.06)";
               }}
               onMouseLeave={e => {
-                if (!isActive) {
-                  (e.currentTarget as HTMLElement).style.background = "transparent";
-                  (e.currentTarget as HTMLElement).style.color = "rgba(192,212,208,0.7)";
-                }
+                if (!isActive) (e.currentTarget as HTMLElement).style.background = "transparent";
               }}
               aria-current={isActive ? "page" : undefined}
             >
-              {isActive && (
-                <span
-                  className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full"
-                  style={{ background: TEAL }}
-                />
-              )}
-              <Icon
-                className="h-[14px] w-[14px] shrink-0"
-                style={{ color: isActive ? TEAL : "rgba(61,90,86,1)" }}
-                aria-hidden="true"
-              />
-              {label}
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="truncate">{label}</span>
               {key === "contratos" && (
-                <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-900/60 text-indigo-300">
+                <span
+                  className="ml-auto text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
+                  style={{ background: TEAL, color: "#fff" }}
+                >
                   Novo
                 </span>
               )}
@@ -171,178 +394,109 @@ function AdminDashboardInner() {
         })}
       </nav>
 
-      {/* Footer */}
+      {/* User footer */}
       <div
-        className="px-3 py-3 space-y-2 shrink-0"
+        className="px-3 py-3 mt-auto shrink-0"
         style={{ borderTop: "1px solid rgba(192,212,208,0.08)" }}
       >
-        <div className="flex items-center gap-2 text-[11px]" style={{ color: "rgba(192,212,208,0.55)" }}>
-          <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          <span className="truncate">{profile?.display_name || "Admin"}</span>
-          <Badge
-            variant="secondary"
-            className="ml-auto text-[9px] shrink-0 border-transparent"
-            style={{ background: "hsl(var(--sidebar-accent))", color: "rgba(192,212,208,0.8)" }}
+        <div className="flex items-center gap-2.5 mb-2">
+          <div
+            className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
+            style={{ background: TEAL, color: "#fff" }}
           >
-            {g.totalTimes} time{g.totalTimes !== 1 ? "s" : ""}
-          </Badge>
+            {profile?.full_name?.split(" ").slice(0, 2).map((n: string) => n[0]).join("") || "?"}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[12px] font-medium leading-tight truncate" style={{ color: "rgba(192,212,208,0.9)" }}>
+              {profile?.full_name || "Usuário"}
+            </p>
+            <p className="text-[10px] leading-tight" style={{ color: "rgba(192,212,208,0.45)" }}>
+              {profile?.role === "gestor" ? "Gestor" : "Admin"}
+            </p>
+          </div>
         </div>
-        <Button
-          variant="ghost" size="sm"
-          className="w-full justify-start h-8 text-xs gap-2 transition-colors"
-          style={{ color: "rgba(192,212,208,0.6)" }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLElement).style.background = "hsl(var(--sidebar-accent))";
-            (e.currentTarget as HTMLElement).style.color = "hsl(var(--sidebar-foreground))";
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLElement).style.background = "transparent";
-            (e.currentTarget as HTMLElement).style.color = "rgba(192,212,208,0.6)";
-          }}
+        <button
           onClick={handleSignOut}
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[12px] transition-colors"
+          style={{ color: "rgba(192,212,208,0.5)" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(192,212,208,0.06)"; (e.currentTarget as HTMLElement).style.color = "rgba(192,212,208,0.9)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "rgba(192,212,208,0.5)"; }}
         >
-          <LogOut className="h-3.5 w-3.5" aria-hidden="true" /> Sair
-        </Button>
+          <LogOut className="h-3.5 w-3.5" />
+          Sair
+        </button>
       </div>
     </aside>
   );
 
-  // ── Cabeçalho da página de conteúdo ─────────────────────────────────────────
-  const pageTitle = NAV_ITEMS.find(n => n.key === activePage)?.label ?? "Dashboard Admin";
-  const contractBadgeContent = (
-    <>
-      <FileText className="h-2.5 w-2.5" />
-      <span className="truncate max-w-[200px]">
-        {selectedContract?.name ?? "Todos os contratos"}
-      </span>
-      {isGestor && <ChevronDown className="h-2.5 w-2.5 opacity-70" />}
-    </>
-  );
-  const contractBadgeStyle = {
-    color: "#f59e0b",
-    borderColor: "rgba(245,158,11,0.4)",
-    background: "rgba(245,158,11,0.06)",
-  } as const;
-  const contractBadge = isGestor ? (
-    <button
-      type="button"
-      onClick={() => setSidebarOpen(true)}
-      title="Trocar contrato"
-      className="hidden sm:inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors hover:bg-amber-500/10"
-      style={contractBadgeStyle}
-    >
-      {contractBadgeContent}
-    </button>
-  ) : selectedContract ? (
-    <span
-      className="hidden sm:inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border"
-      style={contractBadgeStyle}
-    >
-      <FileText className="h-2.5 w-2.5" />
-      {selectedContract.name}
-    </span>
-  ) : null;
-
-  // ── Conteúdo da aba ativa ─────────────────────────────────────────────────
-  const renderContent = () => {
+  // ── Render page ────────────────────────────────────────────────────────────
+  const renderPage = () => {
     switch (activePage) {
-      case "historico":  return <AdminHistoricoPage />;
-      case "capacidade": return <AdminCapacidadePage />;
-      case "times":      return <AdminTimesPage />;
-      case "usuarios":   return <AdminUsuariosPage />;
-      case "projetos":   return <ProjetosAdminPanel />;
-      case "ias":        return <AdminIAsPage />;
-      case "contratos":  return <AdminContratosPage />;
-      default: return (
-        <div className="space-y-8">
-          {loading ? <Skeleton className="h-40 w-full rounded-xl" /> : <ModuleQuickAccess kpis={g} />}
-          {loading ? <Skeleton className="h-32 w-full rounded-xl" /> : <SalaAgilKpis kpis={g} sprintAtivo={sprintLabel} />}
-          {loading ? <Skeleton className="h-32 w-full rounded-xl" /> : <SustentacaoKpis kpis={g} />}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <div>{loading ? <Skeleton className="h-48 w-full rounded-xl" /> : <TeamDetailPanel byTeam={byTeam} selectedTeam={selectedTeam} onSelect={setSelectedTeam} />}</div>
-            <div>{loading ? <Skeleton className="h-56 w-full rounded-xl" /> : <ComparativeChart byTeam={byTeam} selectedTeam={selectedTeam} />}</div>
-          </div>
-        </div>
-      );
+      case "visao-geral":  return <VisaoGeralPage />;
+      case "historico":   return <AdminHistoricoPage />;
+      case "capacidade":  return <AdminCapacidadePage />;
+      case "times":       return <AdminTimesPage />;
+      case "usuarios":    return <AdminUsuariosPage />;
+      case "projetos":    return <ProjetosAdminPanel />;
+      case "ias":         return <AdminIAsPage />;
+      case "contratos":   return <AdminContratosPage />;
+      default:            return null;
     }
   };
 
   return (
-    <div className="min-h-screen flex" style={{ background: "hsl(var(--background))" }}>
+    <div className="min-h-screen flex bg-background">
+      {/* Desktop sidebar */}
       <Sidebar />
 
+      {/* Mobile sidebar overlay */}
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 lg:hidden"
-          style={{ background: "rgba(0,0,0,0.45)" }}
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-      {sidebarOpen && (
-        <div className="fixed top-0 left-0 z-50 h-screen lg:hidden">
-          <Sidebar mobile />
+        <div className="fixed inset-0 z-40 lg:hidden flex">
+          <div className="flex-1 bg-black/50" onClick={() => setSidebarOpen(false)} />
+          <div className="ml-auto"><Sidebar mobile /></div>
         </div>
       )}
 
-      <div className="flex-1 flex flex-col min-w-0 lg:pl-60">
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-h-screen lg:ml-60">
+        {/* Top bar */}
         <header
-          className="sticky top-0 z-20 backdrop-blur"
-          style={{ background: "hsl(var(--background) / 0.95)", borderBottom: "1px solid hsl(var(--border))" }}
+          className="sticky top-0 z-20 flex items-center justify-between h-14 px-4 lg:px-6 shrink-0"
+          style={{ background: "hsl(var(--topbar))", borderBottom: "1px solid hsl(var(--border))" }}
         >
-          <div className="h-14 px-4 md:px-6 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <button
-                className="lg:hidden"
-                style={{ color: "hsl(var(--muted-foreground))" }}
-                onClick={() => setSidebarOpen(true)}
-                aria-label="Abrir menu"
-              >
-                <Menu className="h-5 w-5" />
-              </button>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-sm font-semibold leading-tight">{pageTitle}</h1>
-                  {contractBadge}
-                </div>
-                <p className="text-[11px] hidden sm:block" style={{ color: "hsl(var(--muted-foreground))" }}>
-                  {data} · {hora}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <ThemeToggle />
-              {!loading && (
-                <NotificationBell
-                  notifications={notifications}
-                  criticalCount={criticalCount}
-                  warningCount={warningCount}
-                />
-              )}
-            </div>
+          <button
+            className="lg:hidden flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Abrir menu"
+          >
+            <Menu className="h-4 w-4" />
+          </button>
+
+          <div className="hidden lg:flex flex-col items-start">
+            <span className="text-[11px] text-muted-foreground capitalize">{data}</span>
+            <span className="text-[13px] font-semibold tabular-nums">{hora}</span>
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto">
+            <ThemeToggle />
+            <NotificationBell />
           </div>
         </header>
 
-        <main className="flex-1 px-4 md:px-6 py-6">
-          {dataWarnings.length > 0 && (
-            <Alert variant="destructive" className="mb-6">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Atenção:</strong> Alguns KPIs podem estar incompletos por volume excessivo de dados:
-                <ul className="mt-1 list-disc pl-4">
-                  {dataWarnings.map((w, i) => <li key={i} className="text-xs">{w}</li>)}
-                </ul>
-              </AlertDescription>
-            </Alert>
-          )}
-          {renderContent()}
+        {/* Page */}
+        <main className="flex-1 p-4 lg:p-6 overflow-auto">
+          {renderPage()}
         </main>
+
+        {/* Footer */}
+        <footer className="text-center text-[11px] text-muted-foreground py-3 border-t px-4">
+          Axion Admin © 2026 · Todos os direitos reservados.
+        </footer>
       </div>
     </div>
   );
 }
 
-// ── Export: envolve tudo no ContractProvider ──────────────────────────────────
 export default function AdminDashboard() {
   return (
     <ContractProvider>
