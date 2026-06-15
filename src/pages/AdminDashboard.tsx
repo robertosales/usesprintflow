@@ -28,6 +28,7 @@ import { Badge }    from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AxionLogo } from "@/components/AxionLogo";
+import type { TeamKpis } from "@/features/admin/hooks/useAdminKpis";
 import {
   LogOut, Users, UsersRound,
   BarChart3, History, Gauge, AlertTriangle, Sparkles, Menu, X, FileText,
@@ -51,10 +52,16 @@ type PageKey = typeof NAV_ITEMS[number]["key"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Visão Geral — inner page component
+// Recebe byTeam, loading e dataWarnings via props para evitar dupla chamada
 // ─────────────────────────────────────────────────────────────────────────────
-function VisaoGeralPage() {
-  const { selectedContractId, selectedContract } = useContractContext();
-  const { global: g, byTeam, loading, dataWarnings } = useAdminKpis(selectedContractId);
+interface VisaoGeralPageProps {
+  byTeam:       TeamKpis[];
+  loading:      boolean;
+  dataWarnings: string[] | null | undefined;
+}
+
+function VisaoGeralPage({ byTeam, loading, dataWarnings }: VisaoGeralPageProps) {
+  const { selectedContract } = useContractContext();
 
   const {
     pendingFilters,
@@ -128,6 +135,7 @@ function VisaoGeralPage() {
   // Teams list for filter dropdown
   const teamsForFilter = useMemo(() => byTeam.map(t => ({ id: t.teamId, name: t.teamName })), [byTeam]);
 
+  const { selectedContractId } = useContractContext();
   const [scrollTeam, setScrollTeam] = useState("all");
 
   return (
@@ -305,10 +313,14 @@ function VisaoGeralPage() {
 // ─────────────────────────────────────────────────────────────────────────────
 function AdminDashboardInner() {
   const { profile, signOut } = useAuth();
-  const { isGestor } = useContractContext();
+  const { isGestor, selectedContractId } = useContractContext();
   const navigate = useNavigate();
   const [activePage, setActivePage] = useState<PageKey>("visao-geral");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // ── KPIs e notificações carregados no shell para alimentar o NotificationBell ──
+  const { global: g, byTeam, loading, dataWarnings } = useAdminKpis(selectedContractId);
+  const { notifications, criticalCount, warningCount } = useNotifications(byTeam ?? []);
 
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -432,7 +444,13 @@ function AdminDashboardInner() {
   // ── Render page ────────────────────────────────────────────────────────────
   const renderPage = () => {
     switch (activePage) {
-      case "visao-geral":  return <VisaoGeralPage />;
+      case "visao-geral":  return (
+        <VisaoGeralPage
+          byTeam={byTeam ?? []}
+          loading={loading}
+          dataWarnings={dataWarnings}
+        />
+      );
       case "historico":   return <AdminHistoricoPage />;
       case "capacidade":  return <AdminCapacidadePage />;
       case "times":       return <AdminTimesPage />;
@@ -479,7 +497,11 @@ function AdminDashboardInner() {
 
           <div className="flex items-center gap-2 ml-auto">
             <ThemeToggle />
-            <NotificationBell />
+            <NotificationBell
+              notifications={notifications}
+              criticalCount={criticalCount}
+              warningCount={warningCount}
+            />
           </div>
         </header>
 
