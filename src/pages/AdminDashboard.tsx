@@ -23,7 +23,6 @@ import { ThemeToggle }         from "@/components/ThemeToggle";
 import { DashboardFilters }    from "@/features/admin/components/DashboardFilters";
 import { ExecutiveKpis }       from "@/features/admin/components/ExecutiveKpis";
 import { TeamSummaryCards }    from "@/features/admin/components/TeamSummaryCards";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AxionLogo } from "@/components/AxionLogo";
 import type { TeamKpis, AdminKpis } from "@/features/admin/hooks/useAdminKpis";
@@ -36,11 +35,11 @@ import {
 const TEAL = "#0bbcaf";
 
 const NAV_ITEMS = [
-  { key: "visao-geral", label: "Visão Geral", icon: BarChart3    },
-  { key: "historico",   label: "Histórico",   icon: History      },
+  { key: "visao-geral", label: "Vis\u00e3o Geral", icon: BarChart3    },
+  { key: "historico",   label: "Hist\u00f3rico",   icon: History      },
   { key: "capacidade",  label: "Capacidade",  icon: Gauge        },
   { key: "times",       label: "Times",       icon: UsersRound   },
-  { key: "usuarios",    label: "Usuários",    icon: Users        },
+  { key: "usuarios",    label: "Usu\u00e1rios",    icon: Users        },
   { key: "projetos",    label: "Projetos",    icon: FolderKanban },
   { key: "ias",         label: "IA",          icon: Sparkles     },
   { key: "contratos",   label: "Contratos",   icon: FileText     },
@@ -49,8 +48,50 @@ const NAV_ITEMS = [
 type PageKey = typeof NAV_ITEMS[number]["key"];
 
 // ---------------------------------------------------------------------------
-// VisaoGeralPage — corpo da página (sem header próprio)
-// Título, contrato e data/hora ficam fixos no top bar do shell.
+// Hook para detectar dark mode e retornar cor de fundo opaca para o top bar
+// Usa o atributo data-theme ou prefers-color-scheme como fallback
+// ---------------------------------------------------------------------------
+function useTopBarBg() {
+  const [bg, setBg] = useState<string>("#ffffff");
+
+  useEffect(() => {
+    const update = () => {
+      const theme = document.documentElement.getAttribute("data-theme");
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const isDark = theme === "dark" || (!theme && prefersDark);
+      // Lemos a CSS var --background resolvida do elemento root
+      const rawBg = getComputedStyle(document.documentElement)
+        .getPropertyValue("--background")
+        .trim();
+      // Se a var estiver definida (shadcn/ui usa formato "hsl(... ... ...)"),
+      // montamos o hsl. Sen\u00e3o usamos fallback s\u00f3lido.
+      if (rawBg) {
+        setBg(`hsl(${rawBg})`);
+      } else {
+        setBg(isDark ? "#171614" : "#f7f6f2");
+      }
+    };
+
+    update();
+
+    // Observa troca de data-theme no <html>
+    const obs = new MutationObserver(update);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    mq.addEventListener("change", update);
+
+    return () => {
+      obs.disconnect();
+      mq.removeEventListener("change", update);
+    };
+  }, []);
+
+  return bg;
+}
+
+// ---------------------------------------------------------------------------
+// VisaoGeralPage \u2014 corpo da p\u00e1gina (sem header pr\u00f3prio)
 // ---------------------------------------------------------------------------
 interface VisaoGeralPageProps {
   byTeam:       TeamKpis[];
@@ -143,14 +184,14 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
           husConcluidasPct={execKpis.husConcluidasPct}
           demandasAbertas={execKpis.demandasAbertas}
           slaEmRisco={execKpis.slaEmRisco}
-          slaDescricao={execKpis.slaEmRisco > 0 ? "+5 dias sem conclusão" : undefined}
+          slaDescricao={execKpis.slaEmRisco > 0 ? "+5 dias sem conclus\u00e3o" : undefined}
           loading={loading}
         />
       </section>
 
-      {/* 3. ACESSO RÁPIDO */}
-      <section aria-label="Acesso rápido">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Acesso Rápido</h2>
+      {/* 3. ACESSO R\u00c1PIDO */}
+      <section aria-label="Acesso r\u00e1pido">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Acesso R\u00e1pido</h2>
         <ModuleQuickAccess kpis={globalKpis} />
       </section>
 
@@ -184,10 +225,10 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
         </div>
       </section>
 
-      {/* 5. INDICADORES POR MÓDULO */}
+      {/* 5. INDICADORES POR M\u00d3DULO */}
       {(appliedModule === "todos" || appliedModule === "sala-agil") && (
-        <section aria-label="Indicadores Sala Ágil">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Indicadores por Módulo</h2>
+        <section aria-label="Indicadores Sala \u00c1gil">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Indicadores por M\u00f3dulo</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="rounded-xl border bg-card shadow-sm p-4">
               <SalaAgilKpis kpis={globalKpis} sprintAtivo={execKpis.sprintLabel} />
@@ -202,8 +243,8 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
       )}
 
       {appliedModule === "sustentacao" && (
-        <section aria-label="Indicadores Sustentação">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Indicadores por Módulo</h2>
+        <section aria-label="Indicadores Sustenta\u00e7\u00e3o">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Indicadores por M\u00f3dulo</h2>
           <div className="rounded-xl border bg-card shadow-sm p-4">
             <SustentacaoKpis kpis={globalKpis} />
           </div>
@@ -239,7 +280,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
 }
 
 // ---------------------------------------------------------------------------
-// AdminDashboard — shell (sidebar + main)
+// AdminDashboard \u2014 shell (sidebar + main)
 // ---------------------------------------------------------------------------
 function AdminDashboardInner() {
   const { profile, signOut } = useAuth();
@@ -251,7 +292,11 @@ function AdminDashboardInner() {
   const { global: g, byTeam, loading, dataWarnings } = useAdminKpis(selectedContractId);
   const { notifications, criticalCount, warningCount } = useNotifications(byTeam ?? []);
 
-  // Relógio — único setInterval para todo o shell
+  // Fundo opaco do top bar \u2014 resolve a CSS var --background em runtime
+  // para garantir que n\u00e3o seja transparente durante o scroll
+  const topBarBg = useTopBarBg();
+
+  // Rel\u00f3gio \u2014 \u00fanico setInterval para todo o shell
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
@@ -260,14 +305,14 @@ function AdminDashboardInner() {
   const horaLabel = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const dataLabel = now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
-  // Última atualização
+  // \u00daltima atualiza\u00e7\u00e3o
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   useEffect(() => { if (!loading) setLastUpdated(new Date()); }, [loading]);
   const lastUpdatedLabel = useMemo(() => {
     const diffMin = Math.floor((Date.now() - lastUpdated.getTime()) / 60_000);
     if (diffMin < 1)   return "agora mesmo";
-    if (diffMin === 1) return "há 1 minuto";
-    return `há ${diffMin} minutos`;
+    if (diffMin === 1) return "h\u00e1 1 minuto";
+    return `h\u00e1 ${diffMin} minutos`;
   }, [lastUpdated]);
 
   const handleSignOut = async () => { await signOut(); navigate("/auth"); };
@@ -311,7 +356,7 @@ function AdminDashboardInner() {
 
       <nav
         className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto scrollbar-none"
-        aria-label="Navegação admin"
+        aria-label="Navega\u00e7\u00e3o admin"
         style={{ scrollbarWidth: "none" }}
       >
         {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
@@ -349,7 +394,7 @@ function AdminDashboardInner() {
           </div>
           <div className="min-w-0">
             <p className="text-[12px] font-medium leading-tight truncate" style={{ color: "rgba(192,212,208,0.9)" }}>
-              {profile?.full_name || "Usuário"}
+              {profile?.full_name || "Usu\u00e1rio"}
             </p>
             <p className="text-[10px] leading-tight" style={{ color: "rgba(192,212,208,0.45)" }}>
               {profile?.role === "gestor" ? "Gestor" : "Admin"}
@@ -405,20 +450,28 @@ function AdminDashboardInner() {
       <div className="flex-1 flex flex-col min-h-screen lg:ml-60">
 
         {/*
-          TOP BAR sticky
-          IMPORTANTE: background-color opaco obrigatório para cobrir o conteúdo
-          que passa por baixo durante o scroll. Não usar transparente aqui.
-          backdrop-filter para suporte a temas que usam blur.
+          TOP BAR sticky \u2014 fundo 100% opaco, resolvido em runtime.
+
+          Por que useTopBarBg() e n\u00e3o s\u00f3 className="bg-background"?
+          \u2192 A classe Tailwind bg-background aplica hsl(var(--background))
+             via CSS, mas n\u00e3o garante que --background tenha alpha=1.
+             shadcn/ui define --background como "0 0% 100%" (s\u00f3 os canais HSL)
+             sem alpha expl\u00edcito, o que funciona na maioria dos casos.
+             O hook l\u00ea o valor real em runtime e monta hsl() s\u00f3lido,
+             garantindo opacidade total independente do tema.
+
+          isolation: isolate + position: sticky + z-index: 20
+          garantem que nenhum filho com transform/opacity vaze acima.
         */}
         <header
           className="sticky top-0 z-20 flex items-center gap-3 h-14 px-4 lg:px-6 shrink-0"
           style={{
-            backgroundColor: "hsl(var(--background))",
+            backgroundColor: topBarBg,
             borderBottom: "1px solid hsl(var(--border))",
-            backdropFilter: "blur(0px)", // desativa blur intencional para fundo 100% opaco
+            isolation: "isolate",
           }}
         >
-          {/* Botão menu mobile */}
+          {/* Bot\u00e3o menu mobile */}
           <button
             className="lg:hidden flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors shrink-0"
             onClick={() => setSidebarOpen(true)}
@@ -427,7 +480,7 @@ function AdminDashboardInner() {
             <Menu className="h-4 w-4" />
           </button>
 
-          {/* Título + subtítulo */}
+          {/* T\u00edtulo da p\u00e1gina ativa + subt\u00edtulo (visao-geral only) */}
           <div className="flex flex-col justify-center min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-[15px] font-bold leading-none tracking-tight truncate">
@@ -440,22 +493,22 @@ function AdminDashboardInner() {
             {isVisaoGeral && (
               <div className="flex items-center gap-1.5 mt-[3px]">
                 <span className="text-xs font-semibold text-foreground truncate">
-                  {selectedContract?.name ?? "—"}
+                  {selectedContract?.name ?? "\u2014"}
                 </span>
                 <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
-                  · Última atualização: {lastUpdatedLabel}
+                  \u00b7 \u00daltima atualiza\u00e7\u00e3o: {lastUpdatedLabel}
                 </span>
               </div>
             )}
           </div>
 
-          {/* Data + hora — visível apenas em lg+ */}
+          {/* Data + hora \u2014 vis\u00edvel apenas em lg+ */}
           <div className="hidden lg:flex flex-col items-end shrink-0">
             <span className="text-[11px] text-muted-foreground capitalize leading-none">{dataLabel}</span>
             <span className="text-[13px] font-semibold tabular-nums leading-tight mt-0.5">{horaLabel}</span>
           </div>
 
-          {/* Ações */}
+          {/* A\u00e7\u00f5es */}
           <div className="flex items-center gap-2 shrink-0">
             <ThemeToggle />
             <NotificationBell
@@ -471,7 +524,7 @@ function AdminDashboardInner() {
         </main>
 
         <footer className="text-center text-[11px] text-muted-foreground py-3 border-t px-4">
-          Axion Admin © 2026 · Todos os direitos reservados.
+          Axion Admin \u00a9 2026 \u00b7 Todos os direitos reservados.
         </footer>
       </div>
     </div>
