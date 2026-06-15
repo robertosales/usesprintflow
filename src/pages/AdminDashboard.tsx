@@ -28,7 +28,7 @@ import { Badge }    from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AxionLogo } from "@/components/AxionLogo";
-import type { TeamKpis } from "@/features/admin/hooks/useAdminKpis";
+import type { TeamKpis, AdminKpis } from "@/features/admin/hooks/useAdminKpis";
 import {
   LogOut, Users, UsersRound,
   BarChart3, History, Gauge, AlertTriangle, Sparkles, Menu, X, FileText,
