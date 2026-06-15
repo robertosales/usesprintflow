@@ -36,11 +36,11 @@ import {
 const TEAL = "#0bbcaf";
 
 const NAV_ITEMS = [
-  { key: "visao-geral", label: "Vis\u00e3o Geral", icon: BarChart3    },
-  { key: "historico",   label: "Hist\u00f3rico",   icon: History      },
+  { key: "visao-geral", label: "Visão Geral", icon: BarChart3    },
+  { key: "historico",   label: "Histórico",   icon: History      },
   { key: "capacidade",  label: "Capacidade",  icon: Gauge        },
   { key: "times",       label: "Times",       icon: UsersRound   },
-  { key: "usuarios",    label: "Usu\u00e1rios",   icon: Users        },
+  { key: "usuarios",    label: "Usuários",    icon: Users        },
   { key: "projetos",    label: "Projetos",    icon: FolderKanban },
   { key: "ias",         label: "IA",          icon: Sparkles     },
   { key: "contratos",   label: "Contratos",   icon: FileText     },
@@ -48,10 +48,10 @@ const NAV_ITEMS = [
 
 type PageKey = typeof NAV_ITEMS[number]["key"];
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
 // VisaoGeralPage — corpo da página (sem header próprio)
-// O título, contrato e data/hora ficam fixos no top bar do shell.
-// ─────────────────────────────────────────────────────────────────────────────
+// Título, contrato e data/hora ficam fixos no top bar do shell.
+// ---------------------------------------------------------------------------
 interface VisaoGeralPageProps {
   byTeam:       TeamKpis[];
   loading:      boolean;
@@ -118,7 +118,6 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
   return (
     <div className="flex flex-col gap-5">
 
-      {/* Avisos de integridade de dados */}
       {dataWarnings && dataWarnings.length > 0 && (
         <Alert variant="destructive" className="py-2">
           <AlertTriangle className="h-3.5 w-3.5" />
@@ -144,14 +143,14 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
           husConcluidasPct={execKpis.husConcluidasPct}
           demandasAbertas={execKpis.demandasAbertas}
           slaEmRisco={execKpis.slaEmRisco}
-          slaDescricao={execKpis.slaEmRisco > 0 ? "+5 dias sem conclus\u00e3o" : undefined}
+          slaDescricao={execKpis.slaEmRisco > 0 ? "+5 dias sem conclusão" : undefined}
           loading={loading}
         />
       </section>
 
       {/* 3. ACESSO RÁPIDO */}
-      <section aria-label="Acesso r\u00e1pido">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Acesso R\u00e1pido</h2>
+      <section aria-label="Acesso rápido">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Acesso Rápido</h2>
         <ModuleQuickAccess kpis={globalKpis} />
       </section>
 
@@ -187,8 +186,8 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
 
       {/* 5. INDICADORES POR MÓDULO */}
       {(appliedModule === "todos" || appliedModule === "sala-agil") && (
-        <section aria-label="Indicadores Sala \u00c1gil">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Indicadores por M\u00f3dulo</h2>
+        <section aria-label="Indicadores Sala Ágil">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Indicadores por Módulo</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="rounded-xl border bg-card shadow-sm p-4">
               <SalaAgilKpis kpis={globalKpis} sprintAtivo={execKpis.sprintLabel} />
@@ -203,8 +202,8 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
       )}
 
       {appliedModule === "sustentacao" && (
-        <section aria-label="Indicadores Sustenta\u00e7\u00e3o">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Indicadores por M\u00f3dulo</h2>
+        <section aria-label="Indicadores Sustentação">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Indicadores por Módulo</h2>
           <div className="rounded-xl border bg-card shadow-sm p-4">
             <SustentacaoKpis kpis={globalKpis} />
           </div>
@@ -239,9 +238,9 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
 // AdminDashboard — shell (sidebar + main)
-// ─────────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
 function AdminDashboardInner() {
   const { profile, signOut } = useAuth();
   const { isGestor, selectedContractId, selectedContract } = useContractContext();
@@ -267,8 +266,8 @@ function AdminDashboardInner() {
   const lastUpdatedLabel = useMemo(() => {
     const diffMin = Math.floor((Date.now() - lastUpdated.getTime()) / 60_000);
     if (diffMin < 1)   return "agora mesmo";
-    if (diffMin === 1) return "h\u00e1 1 minuto";
-    return `h\u00e1 ${diffMin} minutos`;
+    if (diffMin === 1) return "há 1 minuto";
+    return `há ${diffMin} minutos`;
   }, [lastUpdated]);
 
   const handleSignOut = async () => { await signOut(); navigate("/auth"); };
@@ -276,7 +275,9 @@ function AdminDashboardInner() {
   const isVisaoGeral = activePage === "visao-geral";
   const activeLabel  = NAV_ITEMS.find(n => n.key === activePage)?.label ?? "";
 
-  // ── Sidebar ────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
+  // Sidebar
+  // ---------------------------------------------------------------------------
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
     <aside
       className={[
@@ -310,7 +311,7 @@ function AdminDashboardInner() {
 
       <nav
         className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto scrollbar-none"
-        aria-label="Navega\u00e7\u00e3o admin"
+        aria-label="Navegação admin"
         style={{ scrollbarWidth: "none" }}
       >
         {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
@@ -348,7 +349,7 @@ function AdminDashboardInner() {
           </div>
           <div className="min-w-0">
             <p className="text-[12px] font-medium leading-tight truncate" style={{ color: "rgba(192,212,208,0.9)" }}>
-              {profile?.full_name || "Usu\u00e1rio"}
+              {profile?.full_name || "Usuário"}
             </p>
             <p className="text-[10px] leading-tight" style={{ color: "rgba(192,212,208,0.45)" }}>
               {profile?.role === "gestor" ? "Gestor" : "Admin"}
@@ -403,14 +404,19 @@ function AdminDashboardInner() {
 
       <div className="flex-1 flex flex-col min-h-screen lg:ml-60">
 
-        {/* ── TOP BAR sticky ─────────────────────────────────────────────────
-            Layout: [menu?] | [título + subtítulo] | [data/hora] | [ações]
-            O título muda conforme a página ativa.
-            Para Visão Geral exibe também contrato + última atualização.
-        ───────────────────────────────────────────────────────────────────── */}
+        {/*
+          TOP BAR sticky
+          IMPORTANTE: background-color opaco obrigatório para cobrir o conteúdo
+          que passa por baixo durante o scroll. Não usar transparente aqui.
+          backdrop-filter para suporte a temas que usam blur.
+        */}
         <header
           className="sticky top-0 z-20 flex items-center gap-3 h-14 px-4 lg:px-6 shrink-0"
-          style={{ background: "hsl(var(--topbar))", borderBottom: "1px solid hsl(var(--border))" }}
+          style={{
+            backgroundColor: "hsl(var(--background))",
+            borderBottom: "1px solid hsl(var(--border))",
+            backdropFilter: "blur(0px)", // desativa blur intencional para fundo 100% opaco
+          }}
         >
           {/* Botão menu mobile */}
           <button
@@ -421,7 +427,7 @@ function AdminDashboardInner() {
             <Menu className="h-4 w-4" />
           </button>
 
-          {/* Título + subtítulo — ocupa o espaço disponível */}
+          {/* Título + subtítulo */}
           <div className="flex flex-col justify-center min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-[15px] font-bold leading-none tracking-tight truncate">
@@ -431,14 +437,13 @@ function AdminDashboardInner() {
                 <RefreshCw className="h-3 w-3 text-muted-foreground animate-spin shrink-0" aria-label="Carregando" />
               )}
             </div>
-            {/* Subtítulo exclusivo da Visão Geral */}
             {isVisaoGeral && (
               <div className="flex items-center gap-1.5 mt-[3px]">
                 <span className="text-xs font-semibold text-foreground truncate">
-                  {selectedContract?.name ?? "\u2014"}
+                  {selectedContract?.name ?? "—"}
                 </span>
                 <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
-                  \u00b7 \u00daltima atualiza\u00e7\u00e3o: {lastUpdatedLabel}
+                  · Última atualização: {lastUpdatedLabel}
                 </span>
               </div>
             )}
@@ -466,7 +471,7 @@ function AdminDashboardInner() {
         </main>
 
         <footer className="text-center text-[11px] text-muted-foreground py-3 border-t px-4">
-          Axion Admin \u00a9 2026 \u00b7 Todos os direitos reservados.
+          Axion Admin © 2026 · Todos os direitos reservados.
         </footer>
       </div>
     </div>
