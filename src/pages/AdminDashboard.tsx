@@ -23,8 +23,6 @@ import { ThemeToggle }         from "@/components/ThemeToggle";
 import { DashboardFilters }    from "@/features/admin/components/DashboardFilters";
 import { ExecutiveKpis }       from "@/features/admin/components/ExecutiveKpis";
 import { TeamSummaryCards }    from "@/features/admin/components/TeamSummaryCards";
-import { Button }   from "@/components/ui/button";
-import { Badge }    from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AxionLogo } from "@/components/AxionLogo";
@@ -38,57 +36,38 @@ import {
 const TEAL = "#0bbcaf";
 
 const NAV_ITEMS = [
-  { key: "visao-geral", label: "Visão Geral", icon: BarChart3     },
-  { key: "historico",   label: "Histórico",   icon: History       },
-  { key: "capacidade",  label: "Capacidade",  icon: Gauge         },
-  { key: "times",       label: "Times",       icon: UsersRound    },
-  { key: "usuarios",    label: "Usuários",    icon: Users         },
-  { key: "projetos",    label: "Projetos",    icon: FolderKanban  },
-  { key: "ias",         label: "IA",          icon: Sparkles      },
-  { key: "contratos",   label: "Contratos",   icon: FileText      },
+  { key: "visao-geral", label: "Vis\u00e3o Geral", icon: BarChart3    },
+  { key: "historico",   label: "Hist\u00f3rico",   icon: History      },
+  { key: "capacidade",  label: "Capacidade",  icon: Gauge        },
+  { key: "times",       label: "Times",       icon: UsersRound   },
+  { key: "usuarios",    label: "Usu\u00e1rios",   icon: Users        },
+  { key: "projetos",    label: "Projetos",    icon: FolderKanban },
+  { key: "ias",         label: "IA",          icon: Sparkles     },
+  { key: "contratos",   label: "Contratos",   icon: FileText     },
 ] as const;
 
 type PageKey = typeof NAV_ITEMS[number]["key"];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Visão Geral — inner page component
-// Recebe byTeam, loading, dataWarnings e timestamps via props
+// VisaoGeralPage — corpo da página (sem header próprio)
+// O título, contrato e data/hora ficam fixos no top bar do shell.
 // ─────────────────────────────────────────────────────────────────────────────
 interface VisaoGeralPageProps {
   byTeam:       TeamKpis[];
   loading:      boolean;
   dataWarnings: string[] | null | undefined;
   globalKpis:   AdminKpis["global"];
-  /** Data formatada ex: "segunda-feira, 15 de junho de 2026" */
-  dataLabel:    string;
-  /** Hora formatada ex: "10:18" */
-  horaLabel:    string;
 }
 
-function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, dataLabel, horaLabel }: VisaoGeralPageProps) {
-  const { selectedContract } = useContractContext();
-
+function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGeralPageProps) {
   const {
     pendingFilters,
-    appliedFilters,
     appliedTeamId,
     appliedModule,
     handleChange,
     handleApply,
   } = useDashboardFilters();
 
-  // Last updated timestamp
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  useEffect(() => { if (!loading) setLastUpdated(new Date()); }, [loading]);
-  const lastUpdatedLabel = useMemo(() => {
-    const diffMs  = Date.now() - lastUpdated.getTime();
-    const diffMin = Math.floor(diffMs / 60_000);
-    if (diffMin < 1)   return "agora mesmo";
-    if (diffMin === 1) return "há 1 minuto";
-    return `há ${diffMin} minutos`;
-  }, [lastUpdated]);
-
-  // ── Derived data filtered by appliedFilters ──────────────────────────────
   const filteredByTeam = useMemo(() => {
     if (appliedTeamId === "all") return byTeam;
     return byTeam.filter((t) => t.teamId === appliedTeamId);
@@ -105,25 +84,21 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, dataLabel, 
     });
   }, [filteredByTeam, appliedModule]);
 
-  // Executive KPI aggregates
   const execKpis = useMemo(() => {
-    const timesAtivos    = filteredByModule.length;
-    const sprintSet      = new Set(filteredByModule.map(t => t.sprintAtivo).filter(Boolean));
-    const sprintLabel    = sprintSet.size === 1
+    const timesAtivos     = filteredByModule.length;
+    const sprintSet       = new Set(filteredByModule.map(t => t.sprintAtivo).filter(Boolean));
+    const sprintLabel     = sprintSet.size === 1
       ? [...sprintSet][0]!
-      : sprintSet.size > 1
-      ? `${sprintSet.size} sprints ativas`
-      : null;
-    const husAtivas       = filteredByModule.reduce((s, t) => s + (t.husAtivas      ?? 0), 0);
-    const husTotais       = filteredByModule.reduce((s, t) => s + (t.husAtivas      ?? 0) + (t.husConcluidas ?? 0), 0);
-    const husConcluidas   = filteredByModule.reduce((s, t) => s + (t.husConcluidas  ?? 0), 0);
+      : sprintSet.size > 1 ? `${sprintSet.size} sprints ativas` : null;
+    const husAtivas        = filteredByModule.reduce((s, t) => s + (t.husAtivas      ?? 0), 0);
+    const husTotais        = filteredByModule.reduce((s, t) => s + (t.husAtivas      ?? 0) + (t.husConcluidas ?? 0), 0);
+    const husConcluidas    = filteredByModule.reduce((s, t) => s + (t.husConcluidas  ?? 0), 0);
     const husConcluidasPct = husTotais > 0 ? Math.round((husConcluidas / husTotais) * 100) : 0;
     const demandasAbertas  = filteredByModule.reduce((s, t) => s + (t.demandasAbertas ?? 0), 0);
     const slaEmRisco       = filteredByModule.reduce((s, t) => s + (t.slaEmRisco      ?? 0), 0);
     return { timesAtivos, sprintLabel, husAtivas, husConcluidasPct, demandasAbertas, slaEmRisco };
   }, [filteredByModule]);
 
-  // Team cards
   const teamCards = useMemo(() => filteredByModule.map((t) => ({
     teamId:          t.teamId,
     teamName:        t.teamName,
@@ -137,53 +112,21 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, dataLabel, 
     sprintAtivo:     t.sprintAtivo,
   })), [filteredByModule]);
 
-  // Teams list for filter dropdown
   const teamsForFilter = useMemo(() => byTeam.map(t => ({ id: t.teamId, name: t.teamName })), [byTeam]);
-
-  const { selectedContractId } = useContractContext();
   const [scrollTeam, setScrollTeam] = useState("all");
 
   return (
     <div className="flex flex-col gap-5">
 
-      {/* ── 1. CABEÇALHO ─────────────────────────────────────────── */}
-      <div className="flex flex-col gap-0.5">
-        <div className="flex items-start justify-between gap-4">
-          {/* Título + contrato + última atualização */}
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">Visão Geral</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-sm font-semibold text-foreground">
-                {selectedContract?.name ?? "—"}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                · Última atualização: {lastUpdatedLabel}
-              </span>
-              {loading && (
-                <RefreshCw className="h-3 w-3 text-muted-foreground animate-spin" />
-              )}
-            </div>
-          </div>
+      {/* Avisos de integridade de dados */}
+      {dataWarnings && dataWarnings.length > 0 && (
+        <Alert variant="destructive" className="py-2">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          <AlertDescription className="text-xs">{dataWarnings[0]}</AlertDescription>
+        </Alert>
+      )}
 
-          {/* Data + hora — visível somente em lg+; no mobile fica no top bar */}
-          <div className="hidden lg:flex flex-col items-end gap-0.5 shrink-0">
-            <span className="text-xs text-muted-foreground capitalize">{dataLabel}</span>
-            <span className="text-sm font-semibold tabular-nums">{horaLabel}</span>
-          </div>
-        </div>
-
-        {/* Avisos de dados */}
-        {dataWarnings && dataWarnings.length > 0 && (
-          <Alert variant="destructive" className="mt-2 py-2">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            <AlertDescription className="text-xs">
-              {dataWarnings[0]}
-            </AlertDescription>
-          </Alert>
-        )}
-      </div>
-
-      {/* ── 2. FILTROS GLOBAIS ────────────────────────────────────── */}
+      {/* 1. FILTROS */}
       <DashboardFilters
         filters={pendingFilters}
         teams={teamsForFilter}
@@ -192,7 +135,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, dataLabel, 
         loading={loading}
       />
 
-      {/* ── 3. CARDS EXECUTIVOS ───────────────────────────────────── */}
+      {/* 2. CARDS EXECUTIVOS */}
       <section aria-label="Indicadores executivos">
         <ExecutiveKpis
           timesAtivos={execKpis.timesAtivos}
@@ -201,41 +144,33 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, dataLabel, 
           husConcluidasPct={execKpis.husConcluidasPct}
           demandasAbertas={execKpis.demandasAbertas}
           slaEmRisco={execKpis.slaEmRisco}
-          slaDescricao={execKpis.slaEmRisco > 0 ? "+5 dias sem conclusão" : undefined}
+          slaDescricao={execKpis.slaEmRisco > 0 ? "+5 dias sem conclus\u00e3o" : undefined}
           loading={loading}
         />
       </section>
 
-      {/* ── 4. ACESSO RÁPIDO ─────────────────────────────────────── */}
-      <section aria-label="Acesso rápido">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-          Acesso Rápido
-        </h2>
+      {/* 3. ACESSO RÁPIDO */}
+      <section aria-label="Acesso r\u00e1pido">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Acesso R\u00e1pido</h2>
         <ModuleQuickAccess kpis={globalKpis} />
       </section>
 
-      {/* ── 5. RESUMO POR TIME ───────────────────────────────────── */}
+      {/* 4. RESUMO POR TIME */}
       <section aria-label="Resumo por time">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Resumo por Time
-          </h2>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Resumo por Time</h2>
           <div className="flex gap-1">
             <button
               className="rounded-md border p-1 hover:bg-muted transition-colors"
               aria-label="Rolar para esquerda"
-              onClick={() => {
-                document.getElementById("team-scroll")?.scrollBy({ left: -260, behavior: "smooth" });
-              }}
+              onClick={() => document.getElementById("team-scroll")?.scrollBy({ left: -260, behavior: "smooth" })}
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
               className="rounded-md border p-1 hover:bg-muted transition-colors"
               aria-label="Rolar para direita"
-              onClick={() => {
-                document.getElementById("team-scroll")?.scrollBy({ left: 260, behavior: "smooth" });
-              }}
+              onClick={() => document.getElementById("team-scroll")?.scrollBy({ left: 260, behavior: "smooth" })}
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -250,24 +185,17 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, dataLabel, 
         </div>
       </section>
 
-      {/* ── 6. INDICADORES POR MÓDULO ────────────────────────────── */}
+      {/* 5. INDICADORES POR MÓDULO */}
       {(appliedModule === "todos" || appliedModule === "sala-agil") && (
-        <section aria-label="Indicadores Sala Ágil">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-            Indicadores por Módulo
-          </h2>
+        <section aria-label="Indicadores Sala \u00c1gil">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Indicadores por M\u00f3dulo</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="rounded-xl border bg-card shadow-sm p-4">
-              <SalaAgilKpis
-                kpis={globalKpis}
-                sprintAtivo={execKpis.sprintLabel}
-              />
+              <SalaAgilKpis kpis={globalKpis} sprintAtivo={execKpis.sprintLabel} />
             </div>
             {(appliedModule === "todos" || appliedModule === "sustentacao") && (
               <div className="rounded-xl border bg-card shadow-sm p-4">
-                <SustentacaoKpis
-                  kpis={globalKpis}
-                />
+                <SustentacaoKpis kpis={globalKpis} />
               </div>
             )}
           </div>
@@ -275,26 +203,21 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, dataLabel, 
       )}
 
       {appliedModule === "sustentacao" && (
-        <section aria-label="Indicadores Sustentação">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-            Indicadores por Módulo
-          </h2>
+        <section aria-label="Indicadores Sustenta\u00e7\u00e3o">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Indicadores por M\u00f3dulo</h2>
           <div className="rounded-xl border bg-card shadow-sm p-4">
-            <SustentacaoKpis
-              kpis={globalKpis}
-            />
+            <SustentacaoKpis kpis={globalKpis} />
           </div>
         </section>
       )}
 
-      {/* ── 7 + 8. DETALHE E DESEMPENHO POR TIME ─────────────────── */}
+      {/* 6 + 7. DETALHE E DESEMPENHO POR TIME */}
       <section aria-label="Detalhamento operacional">
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
             <div className="px-4 pt-4 pb-2">
               <h2 className="text-sm font-semibold">Detalhe por Time</h2>
             </div>
-            {/* fix: props alinhadas com a interface do TeamDetailPanel */}
             <TeamDetailPanel
               byTeam={filteredByModule}
               selectedTeam={scrollTeam}
@@ -302,14 +225,11 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, dataLabel, 
             />
           </div>
           <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
-            <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+            <div className="px-4 pt-4 pb-2">
               <h2 className="text-sm font-semibold">Desempenho por Time</h2>
             </div>
             <div className="px-2 pb-4">
-              <ComparativeChart
-                byTeam={filteredByModule}
-                loading={loading}
-              />
+              <ComparativeChart byTeam={filteredByModule} loading={loading} />
             </div>
           </div>
         </div>
@@ -324,16 +244,15 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, dataLabel, 
 // ─────────────────────────────────────────────────────────────────────────────
 function AdminDashboardInner() {
   const { profile, signOut } = useAuth();
-  const { isGestor, selectedContractId } = useContractContext();
-  const navigate = useNavigate();
-  const [activePage, setActivePage] = useState<PageKey>("visao-geral");
+  const { isGestor, selectedContractId, selectedContract } = useContractContext();
+  const navigate  = useNavigate();
+  const [activePage, setActivePage]   = useState<PageKey>("visao-geral");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // ── KPIs e notificações carregados no shell para alimentar o NotificationBell ──
   const { global: g, byTeam, loading, dataWarnings } = useAdminKpis(selectedContractId);
   const { notifications, criticalCount, warningCount } = useNotifications(byTeam ?? []);
 
-  // ── Relógio — único setInterval para todo o shell ──────────────────────────
+  // Relógio — único setInterval para todo o shell
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
@@ -342,7 +261,20 @@ function AdminDashboardInner() {
   const horaLabel = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const dataLabel = now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
+  // Última atualização
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  useEffect(() => { if (!loading) setLastUpdated(new Date()); }, [loading]);
+  const lastUpdatedLabel = useMemo(() => {
+    const diffMin = Math.floor((Date.now() - lastUpdated.getTime()) / 60_000);
+    if (diffMin < 1)   return "agora mesmo";
+    if (diffMin === 1) return "h\u00e1 1 minuto";
+    return `h\u00e1 ${diffMin} minutos`;
+  }, [lastUpdated]);
+
   const handleSignOut = async () => { await signOut(); navigate("/auth"); };
+
+  const isVisaoGeral = activePage === "visao-geral";
+  const activeLabel  = NAV_ITEMS.find(n => n.key === activePage)?.label ?? "";
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
@@ -353,7 +285,6 @@ function AdminDashboardInner() {
       ].join(" ")}
       style={{ background: "hsl(var(--sidebar))", color: "hsl(var(--sidebar-foreground))" }}
     >
-      {/* Logo */}
       <div
         className="flex items-center gap-2.5 px-4 h-14 shrink-0"
         style={{ borderBottom: "1px solid rgba(192,212,208,0.08)" }}
@@ -375,13 +306,11 @@ function AdminDashboardInner() {
         )}
       </div>
 
-      {/* Contract Switcher — só gestor */}
       {isGestor && <ContractSwitcher />}
 
-      {/* Nav */}
       <nav
         className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto scrollbar-none"
-        aria-label="Navegação admin"
+        aria-label="Navega\u00e7\u00e3o admin"
         style={{ scrollbarWidth: "none" }}
       >
         {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
@@ -390,39 +319,26 @@ function AdminDashboardInner() {
             <button
               key={key}
               onClick={() => { setActivePage(key); if (mobile) setSidebarOpen(false); }}
-              className="w-full flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] font-medium transition-colors text-left relative"
+              className="w-full flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] font-medium transition-colors text-left"
               style={{
                 background: isActive ? "hsl(var(--sidebar-active))" : "transparent",
                 color:      isActive ? "#ffffff" : "rgba(192,212,208,0.7)",
               }}
-              onMouseEnter={e => {
-                if (!isActive) (e.currentTarget as HTMLElement).style.background = "rgba(192,212,208,0.06)";
-              }}
-              onMouseLeave={e => {
-                if (!isActive) (e.currentTarget as HTMLElement).style.background = "transparent";
-              }}
+              onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "rgba(192,212,208,0.06)"; }}
+              onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
               aria-current={isActive ? "page" : undefined}
             >
               <Icon className="h-4 w-4 shrink-0" />
               <span className="truncate">{label}</span>
               {key === "contratos" && (
-                <span
-                  className="ml-auto text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
-                  style={{ background: TEAL, color: "#fff" }}
-                >
-                  Novo
-                </span>
+                <span className="ml-auto text-[9px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: TEAL, color: "#fff" }}>Novo</span>
               )}
             </button>
           );
         })}
       </nav>
 
-      {/* User footer */}
-      <div
-        className="px-3 py-3 mt-auto shrink-0"
-        style={{ borderTop: "1px solid rgba(192,212,208,0.08)" }}
-      >
+      <div className="px-3 py-3 mt-auto shrink-0" style={{ borderTop: "1px solid rgba(192,212,208,0.08)" }}>
         <div className="flex items-center gap-2.5 mb-2">
           <div
             className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
@@ -432,7 +348,7 @@ function AdminDashboardInner() {
           </div>
           <div className="min-w-0">
             <p className="text-[12px] font-medium leading-tight truncate" style={{ color: "rgba(192,212,208,0.9)" }}>
-              {profile?.full_name || "Usuário"}
+              {profile?.full_name || "Usu\u00e1rio"}
             </p>
             <p className="text-[10px] leading-tight" style={{ color: "rgba(192,212,208,0.45)" }}>
               {profile?.role === "gestor" ? "Gestor" : "Admin"}
@@ -453,7 +369,6 @@ function AdminDashboardInner() {
     </aside>
   );
 
-  // ── Render page ────────────────────────────────────────────────────────────
   const renderPage = () => {
     switch (activePage) {
       case "visao-geral": return (
@@ -462,27 +377,23 @@ function AdminDashboardInner() {
           loading={loading}
           dataWarnings={dataWarnings}
           globalKpis={g}
-          dataLabel={dataLabel}
-          horaLabel={horaLabel}
         />
       );
-      case "historico":   return <AdminHistoricoPage />;
-      case "capacidade":  return <AdminCapacidadePage />;
-      case "times":       return <AdminTimesPage />;
-      case "usuarios":    return <AdminUsuariosPage />;
-      case "projetos":    return <ProjetosAdminPanel />;
-      case "ias":         return <AdminIAsPage />;
-      case "contratos":   return <AdminContratosPage />;
-      default:            return null;
+      case "historico":  return <AdminHistoricoPage />;
+      case "capacidade": return <AdminCapacidadePage />;
+      case "times":      return <AdminTimesPage />;
+      case "usuarios":   return <AdminUsuariosPage />;
+      case "projetos":   return <ProjetosAdminPanel />;
+      case "ias":        return <AdminIAsPage />;
+      case "contratos":  return <AdminContratosPage />;
+      default:           return null;
     }
   };
 
   return (
     <div className="min-h-screen flex bg-background">
-      {/* Desktop sidebar */}
       <Sidebar />
 
-      {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 lg:hidden flex">
           <div className="flex-1 bg-black/50" onClick={() => setSidebarOpen(false)} />
@@ -490,28 +401,57 @@ function AdminDashboardInner() {
         </div>
       )}
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col min-h-screen lg:ml-60">
-        {/* Top bar — sem data/hora em desktop (movida para o header da VisaoGeralPage) */}
+
+        {/* ── TOP BAR sticky ─────────────────────────────────────────────────
+            Layout: [menu?] | [título + subtítulo] | [data/hora] | [ações]
+            O título muda conforme a página ativa.
+            Para Visão Geral exibe também contrato + última atualização.
+        ───────────────────────────────────────────────────────────────────── */}
         <header
-          className="sticky top-0 z-20 flex items-center justify-between h-14 px-4 lg:px-6 shrink-0"
+          className="sticky top-0 z-20 flex items-center gap-3 h-14 px-4 lg:px-6 shrink-0"
           style={{ background: "hsl(var(--topbar))", borderBottom: "1px solid hsl(var(--border))" }}
         >
+          {/* Botão menu mobile */}
           <button
-            className="lg:hidden flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors"
+            className="lg:hidden flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors shrink-0"
             onClick={() => setSidebarOpen(true)}
             aria-label="Abrir menu"
           >
             <Menu className="h-4 w-4" />
           </button>
 
-          {/* Data/hora visível apenas no mobile (top bar), em desktop fica no header da página */}
-          <div className="flex lg:hidden flex-col items-start">
-            <span className="text-[11px] text-muted-foreground capitalize">{dataLabel}</span>
-            <span className="text-[13px] font-semibold tabular-nums">{horaLabel}</span>
+          {/* Título + subtítulo — ocupa o espaço disponível */}
+          <div className="flex flex-col justify-center min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-[15px] font-bold leading-none tracking-tight truncate">
+                {activeLabel}
+              </h1>
+              {loading && isVisaoGeral && (
+                <RefreshCw className="h-3 w-3 text-muted-foreground animate-spin shrink-0" aria-label="Carregando" />
+              )}
+            </div>
+            {/* Subtítulo exclusivo da Visão Geral */}
+            {isVisaoGeral && (
+              <div className="flex items-center gap-1.5 mt-[3px]">
+                <span className="text-xs font-semibold text-foreground truncate">
+                  {selectedContract?.name ?? "\u2014"}
+                </span>
+                <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
+                  \u00b7 \u00daltima atualiza\u00e7\u00e3o: {lastUpdatedLabel}
+                </span>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-2 ml-auto">
+          {/* Data + hora — visível apenas em lg+ */}
+          <div className="hidden lg:flex flex-col items-end shrink-0">
+            <span className="text-[11px] text-muted-foreground capitalize leading-none">{dataLabel}</span>
+            <span className="text-[13px] font-semibold tabular-nums leading-tight mt-0.5">{horaLabel}</span>
+          </div>
+
+          {/* Ações */}
+          <div className="flex items-center gap-2 shrink-0">
             <ThemeToggle />
             <NotificationBell
               notifications={notifications}
@@ -521,14 +461,12 @@ function AdminDashboardInner() {
           </div>
         </header>
 
-        {/* Page */}
         <main className="flex-1 p-4 lg:p-6 overflow-auto">
           {renderPage()}
         </main>
 
-        {/* Footer */}
         <footer className="text-center text-[11px] text-muted-foreground py-3 border-t px-4">
-          Axion Admin © 2026 · Todos os direitos reservados.
+          Axion Admin \u00a9 2026 \u00b7 Todos os direitos reservados.
         </footer>
       </div>
     </div>
