@@ -58,9 +58,10 @@ interface VisaoGeralPageProps {
   byTeam:       TeamKpis[];
   loading:      boolean;
   dataWarnings: string[] | null | undefined;
+  globalKpis:   AdminKpis["global"];
 }
 
-function VisaoGeralPage({ byTeam, loading, dataWarnings }: VisaoGeralPageProps) {
+function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGeralPageProps) {
   const { selectedContract } = useContractContext();
 
   const {
@@ -199,7 +200,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings }: VisaoGeralPageProps) 
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
           Acesso Rápido
         </h2>
-        <ModuleQuickAccess />
+        <ModuleQuickAccess kpis={globalKpis} />
       </section>
 
       {/* ── 5. RESUMO POR TIME ───────────────────────────────────── */}
@@ -247,15 +248,14 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings }: VisaoGeralPageProps) 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="rounded-xl border bg-card shadow-sm p-4">
               <SalaAgilKpis
-                teamId={appliedTeamId === "all" ? undefined : appliedTeamId}
-                contractId={selectedContractId}
+                kpis={globalKpis}
+                sprintAtivo={execKpis.sprintLabel}
               />
             </div>
             {(appliedModule === "todos" || appliedModule === "sustentacao") && (
               <div className="rounded-xl border bg-card shadow-sm p-4">
                 <SustentacaoKpis
-                  teamId={appliedTeamId === "all" ? undefined : appliedTeamId}
-                  contractId={selectedContractId}
+                  kpis={globalKpis}
                 />
               </div>
             )}
@@ -270,8 +270,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings }: VisaoGeralPageProps) 
           </h2>
           <div className="rounded-xl border bg-card shadow-sm p-4">
             <SustentacaoKpis
-              teamId={appliedTeamId === "all" ? undefined : appliedTeamId}
-              contractId={selectedContractId}
+              kpis={globalKpis}
             />
           </div>
         </section>
@@ -449,6 +448,7 @@ function AdminDashboardInner() {
           byTeam={byTeam ?? []}
           loading={loading}
           dataWarnings={dataWarnings}
+          globalKpis={g}
         />
       );
       case "historico":   return <AdminHistoricoPage />;
