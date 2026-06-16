@@ -3,43 +3,59 @@
 --
 -- PROBLEMAS CORRIGIDOS:
 --
---   1. profiles_select_same_contract usa coluna contract_id que
---      NAO existe na tabela profiles → policy sempre quebrada.
---      SOLUCAO: dropar a policy invalida.
+--   1. profiles_select_same_contract — usava contract_id inexistente.
+--      SOLUCAO: drop.
 --
---   2. tm_member_insert_self tinha WITH CHECK circular:
---      exigia is_team_member() antes de o usuario ser membro,
---      bloqueando sempre o INSERT de novos membros.
+--   2. team_members: policies fantasmas criadas fora das migrations
+--      (tm_admin_write, tm_select_admin, tm_select_own,
+--       tm_select_same_contract) substituiram as policies canonicas.
+--      tm_select_same_contract usava contract_id inexistente.
+--      SOLUCAO: drop de todas as fantasmas, recriar canonicas.
+--
+--   3. tm_member_insert_self tinha WITH CHECK circular:
+--      exigia is_team_member() antes de o usuario ser membro.
 --      SOLUCAO: WITH CHECK (user_id = auth.uid()) apenas.
 --
---   3. team_members_can_view_profiles — recriada de forma
+--   4. team_members_can_view_profiles — recriada de forma
 --      idempotente para garantir consistencia em todos os ambientes.
 --
--- NAO ALTERA:
---   • profiles_admin_delete
---   • profiles_admin_select_all
---   • profiles_admin_update_all
---   • profiles_insert_own
---   • profiles_select_own
---   • profiles_update_own
---   • tm_admin_all
---   • tm_member_select
+-- ESTADO FINAL ESPERADO:
+--   profiles      → 7 policies
+--   team_members  → 3 policies (tm_admin_all, tm_member_insert_self,
+--                                tm_member_select)
 -- ============================================================
 
 BEGIN;
 
 -- ────────────────────────────────────────────────────────────
--- 1. REMOVE policy invalida (referencia coluna inexistente)
+-- 1. PROFILES: remove policy invalida
 -- ────────────────────────────────────────────────────────────
 DROP POLICY IF EXISTS "profiles_select_same_contract" ON public.profiles;
 
 -- ────────────────────────────────────────────────────────────
--- 2. CORRIGE: tm_member_insert_self (WITH CHECK circular)
+-- 2. TEAM_MEMBERS: remove todas as policies fantasmas
 -- ────────────────────────────────────────────────────────────
--- A versao anterior exigia is_team_member() no INSERT, mas o
--- usuario ainda NAO e membro nesse momento → bloqueava sempre.
+DROP POLICY IF EXISTS "tm_admin_write"        ON public.team_members;
+DROP POLICY IF EXISTS "tm_select_admin"       ON public.team_members;
+DROP POLICY IF EXISTS "tm_select_own"         ON public.team_members;
+DROP POLICY IF EXISTS "tm_select_same_contract" ON public.team_members;
+-- remove tambem a versao anterior do insert (sera recriada corrigida)
 DROP POLICY IF EXISTS "tm_member_insert_self" ON public.team_members;
+-- remove versao anterior do select canonico (sera recriada)
+DROP POLICY IF EXISTS "tm_member_select"      ON public.team_members;
 
+-- ────────────────────────────────────────────────────────────
+-- 3. TEAM_MEMBERS: recriar policies canonicas
+-- ────────────────────────────────────────────────────────────
+
+-- Membro: pode VER membros do proprio time
+CREATE POLICY "tm_member_select"
+ON public.team_members
+FOR SELECT
+USING (public.is_team_member(auth.uid(), team_id));
+
+-- Membro: pode se auto-inserir (aceitar convite / entrar no time)
+-- WITH CHECK simples: so o proprio usuario pode se inserir
 CREATE POLICY "tm_member_insert_self"
 ON public.team_members
 FOR INSERT
@@ -48,10 +64,9 @@ WITH CHECK (
 );
 
 -- ────────────────────────────────────────────────────────────
--- 3. GARANTE: team_members_can_view_profiles (idempotente)
+-- 4. PROFILES: recriar team_members_can_view_profiles (idempotente)
 -- ────────────────────────────────────────────────────────────
--- Permite que membros do mesmo time vejam os perfis uns dos outros.
--- Necessario para o dashboard exibir nomes/avatares dos colegas.
+-- Permite que membros do mesmo time vejam perfis dos colegas.
 DROP POLICY IF EXISTS "team_members_can_view_profiles" ON public.profiles;
 
 CREATE POLICY "team_members_can_view_profiles"
@@ -74,36 +89,20 @@ COMMIT;
 -- VALIDACAO (executar manualmente no Supabase SQL Editor)
 -- ────────────────────────────────────────────────────────────
 --
--- 1. Listar policies ativas em profiles (deve ter 7 entradas):
 -- SELECT policyname, cmd
 -- FROM pg_policies
--- WHERE tablename = 'profiles'
--- ORDER BY policyname;
+-- WHERE tablename IN ('profiles', 'team_members')
+-- ORDER BY tablename, policyname;
 --
--- Esperado:
---   profiles_admin_delete          | DELETE
---   profiles_admin_select_all      | SELECT
---   profiles_admin_update_all      | UPDATE
---   profiles_insert_own            | INSERT
---   profiles_select_own            | SELECT
---   profiles_update_own            | UPDATE
---   team_members_can_view_profiles | SELECT
+-- ESPERADO (10 linhas no total):
 --
--- 2. Listar policies em team_members (deve ter 3 entradas):
--- SELECT policyname, cmd
--- FROM pg_policies
--- WHERE tablename = 'team_members'
--- ORDER BY policyname;
---
--- Esperado:
---   tm_admin_all          | ALL
---   tm_member_insert_self | INSERT
---   tm_member_select      | SELECT
---
--- 3. Teste INSERT como membro (deve funcionar):
--- INSERT INTO public.team_members (team_id, user_id, role)
---   VALUES ('<team-uuid>', auth.uid(), 'developer');
---
--- 4. Teste INSERT no time alheio (deve falhar com RLS violation):
--- INSERT INTO public.team_members (team_id, user_id, role)
---   VALUES ('<qualquer-team-uuid>', '<outro-user-uuid>', 'developer');
+-- profiles     | profiles_admin_delete          | DELETE
+-- profiles     | profiles_admin_select_all      | SELECT
+-- profiles     | profiles_admin_update_all      | UPDATE
+-- profiles     | profiles_insert_own            | INSERT
+-- profiles     | profiles_select_own            | SELECT
+-- profiles     | profiles_update_own            | UPDATE
+-- profiles     | team_members_can_view_profiles | SELECT
+-- team_members | tm_admin_all                   | ALL
+-- team_members | tm_member_insert_self          | INSERT
+-- team_members | tm_member_select               | SELECT
