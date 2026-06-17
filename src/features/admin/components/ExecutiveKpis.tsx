@@ -30,25 +30,25 @@ const ACCENT_CLASSES: Record<KpiCardProps["accent"], { icon: string; value: stri
 function KpiCard({ icon, label, value, sub, accent }: KpiCardProps) {
   const c = ACCENT_CLASSES[accent];
   return (
-    <div className="flex-1 min-w-[140px] rounded-xl border bg-card p-4 shadow-sm flex flex-col gap-2">
-      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${c.bg}`}>
+    <div className="flex flex-col gap-1.5 rounded-xl bg-card p-4 shadow-sm border border-border/40">
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${c.bg} mb-1`}>
         <span className={`h-4 w-4 ${c.icon}`}>{icon}</span>
       </div>
       <div>
         <p className={`text-2xl font-bold leading-none tabular-nums ${c.value}`}>{value}</p>
-        {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+        <p className="text-[10px] text-muted-foreground font-medium mt-1">{label}</p>
+        {sub && <p className="text-[9px] text-muted-foreground/70 mt-0.5">{sub}</p>}
       </div>
-      <p className="text-xs text-muted-foreground leading-snug">{label}</p>
     </div>
   );
 }
 
 function KpiSkeleton() {
   return (
-    <div className="flex-1 min-w-[140px] rounded-xl border bg-card p-4 shadow-sm flex flex-col gap-2">
+    <div className="flex flex-col gap-2 rounded-xl bg-card p-4 shadow-sm border border-border/40">
       <Skeleton className="h-8 w-8 rounded-lg" />
-      <Skeleton className="h-7 w-16" />
-      <Skeleton className="h-3 w-24" />
+      <Skeleton className="h-6 w-12 mt-1" />
+      <Skeleton className="h-3 w-20" />
     </div>
   );
 }
@@ -65,14 +65,14 @@ export function ExecutiveKpis({
 }: ExecutiveKpisProps) {
   if (loading) {
     return (
-      <div className="flex flex-wrap gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {Array.from({ length: 5 }).map((_, i) => <KpiSkeleton key={i} />)}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-wrap gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
       <KpiCard
         icon={<UsersRound className="h-4 w-4" />}
         label="Times Ativos"
@@ -81,7 +81,7 @@ export function ExecutiveKpis({
       />
       <KpiCard
         icon={<Zap className="h-4 w-4" />}
-        label="Sprint Ativa"
+        label="Sprints Ativas"
         value={sprintAtiva ?? "—"}
         accent="blue"
       />
@@ -89,7 +89,7 @@ export function ExecutiveKpis({
         icon={<LayoutList className="h-4 w-4" />}
         label="HUs Ativas"
         value={husAtivas}
-        sub={`${husConcluidasPct}% do total concluído`}
+        sub={`${husConcluidasPct}% concluído`}
         accent="blue"
       />
       <KpiCard
