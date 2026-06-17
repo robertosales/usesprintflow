@@ -1,34 +1,31 @@
-/**
- * TeamDetailPanel — Detalhe por Time
- *
- * fix: dedup de teamId no Select e na tabela (evita duplicacao de times)
- * fix: refinamento visual — tabela mais compacta e titulo com peso correto
- */
 import { useMemo } from "react";
 import { Badge }  from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Zap, Shield } from "lucide-react";
+import { Zap, Shield, ChevronRight } from "lucide-react";
 import type { AdminKpis, TeamKpis } from "../hooks/useAdminKpis";
 
-interface Props { byTeam: AdminKpis["byTeam"]; selectedTeam: string; onSelect: (v: string) => void; }
+interface Props {
+  byTeam: AdminKpis["byTeam"];
+  selectedTeam: string;
+  onSelect: (v: string) => void;
+  onViewDetails?: (teamId: string) => void;
+}
 
-/** Celula numerica com destaque condicional — compacta */
 function NumCell({
   value,
   critical = false,
   positive = false,
 }: { value: number | string; critical?: boolean; positive?: boolean }) {
   const base = "text-xs text-center py-2";
-  if (critical) return <TableCell className={`${base} bg-red-50 text-red-600 font-semibold`}>{value}</TableCell>;
-  if (positive) return <TableCell className={`${base} text-emerald-600 font-semibold`}>{value}</TableCell>;
+  if (critical) return <TableCell className={`${base} bg-red-50 text-red-600 font-semibold dark:bg-red-950/20`}>{value}</TableCell>;
+  if (positive) return <TableCell className={`${base} text-emerald-600 font-semibold dark:text-emerald-400`}>{value}</TableCell>;
   return <TableCell className={`${base} text-foreground`}>{value}</TableCell>;
 }
 
-/** Linha — Sustentacao */
-function SustentacaoRow({ t }: { t: TeamKpis }) {
+function SustentacaoRow({ t, index, onViewDetails }: { t: TeamKpis; index: number; onViewDetails?: (id: string) => void }) {
   return (
-    <TableRow className="hover:bg-muted/30">
+    <TableRow className={`hover:bg-muted/30 ${index % 2 === 0 ? "bg-muted/10" : "bg-transparent"} group`}>
       <TableCell className="py-2">
         <div className="flex items-center gap-1.5">
           <Shield className="h-3 w-3 text-blue-500 shrink-0" aria-hidden="true" />
@@ -42,14 +39,21 @@ function SustentacaoRow({ t }: { t: TeamKpis }) {
       <NumCell value={t.demandasConcluidas} positive />
       <NumCell value={t.slaEmRisco}          critical={t.slaEmRisco > 0} />
       <NumCell value={t.demandasBloqueadas}  critical={t.demandasBloqueadas > 0} />
+      <TableCell className="py-2 text-right">
+        <button
+          onClick={() => onViewDetails?.(t.teamId)}
+          className="text-[10px] text-primary font-semibold flex items-center gap-0.5 ml-auto opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          Ver detalhes <ChevronRight className="h-3 w-3" />
+        </button>
+      </TableCell>
     </TableRow>
   );
 }
 
-/** Linha — Sala Agil */
-function SalaAgilRow({ t }: { t: TeamKpis }) {
+function SalaAgilRow({ t, index, onViewDetails }: { t: TeamKpis; index: number; onViewDetails?: (id: string) => void }) {
   return (
-    <TableRow className="hover:bg-muted/30">
+    <TableRow className={`hover:bg-muted/30 ${index % 2 === 0 ? "bg-muted/10" : "bg-transparent"} group`}>
       <TableCell className="py-2">
         <div className="flex items-center gap-1.5">
           <Zap className="h-3 w-3 text-primary shrink-0" aria-hidden="true" />
@@ -63,16 +67,19 @@ function SalaAgilRow({ t }: { t: TeamKpis }) {
       <NumCell value={t.husConcluidasNoSprint} positive />
       <NumCell value={t.impedimentosAbertos}   critical={t.impedimentosAbertos > 0} />
       <NumCell value={t.backlogTotal} />
+      <TableCell className="py-2 text-right">
+        <button
+          onClick={() => onViewDetails?.(t.teamId)}
+          className="text-[10px] text-primary font-semibold flex items-center gap-0.5 ml-auto opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          Ver detalhes <ChevronRight className="h-3 w-3" />
+        </button>
+      </TableCell>
     </TableRow>
   );
 }
 
-export function TeamDetailPanel({ byTeam, selectedTeam, onSelect }: Props) {
-  /**
-   * dedup: a RPC pode devolver o mesmo teamId mais de uma vez (ex: times que
-   * aparecem em mais de um modulo ou quando o AuthContext re-hidrata).
-   * Usamos o primeiro registro encontrado por teamId como fonte verdadeira.
-   */
+export function TeamDetailPanel({ byTeam, selectedTeam, onSelect, onViewDetails }: Props) {
   const uniqueTeams = useMemo(() => {
     const seen = new Set<string>();
     return byTeam.filter(t => {
@@ -87,19 +94,14 @@ export function TeamDetailPanel({ byTeam, selectedTeam, onSelect }: Props) {
     : uniqueTeams.filter(t => t.teamId === selectedTeam);
 
   return (
-    <div className="space-y-2">
-      {/* Cabecalho */}
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Detalhe por Time
-        </h3>
+    <div className="space-y-4">
+      <div className="flex items-center justify-end">
         <Select value={selectedTeam} onValueChange={onSelect}>
-          <SelectTrigger className="h-7 text-xs w-44">
+          <SelectTrigger className="h-8 text-xs w-48 bg-muted/20 border-none shadow-none">
             <SelectValue placeholder="Todos os times" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all" className="text-xs">Todos os times</SelectItem>
-            {/* Select tambem usa uniqueTeams para nao duplicar opcoes */}
             {uniqueTeams.map(t => (
               <SelectItem key={t.teamId} value={t.teamId} className="text-xs">
                 {t.teamName}
@@ -110,26 +112,27 @@ export function TeamDetailPanel({ byTeam, selectedTeam, onSelect }: Props) {
       </div>
 
       {shown.length === 0 ? (
-        <p className="text-xs text-muted-foreground text-center py-4">Nenhum time encontrado.</p>
+        <p className="text-xs text-muted-foreground text-center py-8 bg-muted/10 rounded-lg">Nenhum time encontrado.</p>
       ) : (
-        <div className="rounded-lg border border-border overflow-hidden shadow-sm">
+        <div className="rounded-lg border border-border/50 overflow-hidden">
           <div className="overflow-x-auto">
-            <Table className="min-w-[580px]">
+            <Table className="min-w-[620px]">
               <TableHeader>
-                <TableRow className="bg-muted/60 hover:bg-muted/60">
-                  <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2">Time</TableHead>
-                  <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2 text-center">Módulo</TableHead>
-                  <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2 text-center">Abertas</TableHead>
-                  <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2 text-center">Concluídas</TableHead>
-                  <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2 text-center">SLA Risco</TableHead>
-                  <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2 text-center">Bloqueadas</TableHead>
+                <TableRow className="bg-muted/40 hover:bg-muted/40 border-b">
+                  <TableHead className="text-[10px] font-bold uppercase tracking-wider py-3 text-foreground/70">Time</TableHead>
+                  <TableHead className="text-[10px] font-bold uppercase tracking-wider py-3 text-center text-foreground/70">Módulo</TableHead>
+                  <TableHead className="text-[10px] font-bold uppercase tracking-wider py-3 text-center text-foreground/70">Abertas</TableHead>
+                  <TableHead className="text-[10px] font-bold uppercase tracking-wider py-3 text-center text-foreground/70">Concluídas</TableHead>
+                  <TableHead className="text-[10px] font-bold uppercase tracking-wider py-3 text-center text-foreground/70">SLA Risco</TableHead>
+                  <TableHead className="text-[10px] font-bold uppercase tracking-wider py-3 text-center text-foreground/70">Bloqueadas</TableHead>
+                  <TableHead className="py-3"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {shown.map(t =>
-                  t.module === "sala_agil"
-                    ? <SalaAgilRow  key={t.teamId} t={t} />
-                    : <SustentacaoRow key={t.teamId} t={t} />
+                {shown.map((t, i) =>
+                  (t.module ?? "").toLowerCase().includes("agil")
+                    ? <SalaAgilRow  key={t.teamId} t={t} index={i} onViewDetails={onViewDetails} />
+                    : <SustentacaoRow key={t.teamId} t={t} index={i} onViewDetails={onViewDetails} />
                 )}
               </TableBody>
             </Table>

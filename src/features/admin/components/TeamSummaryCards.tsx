@@ -1,93 +1,72 @@
-import { ChevronRight } from "lucide-react";
+import { Shield, Zap, ChevronRight, AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 
-type TeamKind = "sala-agil" | "sustentacao" | string;
-
-interface TeamSummaryItem {
-  teamId: string;
-  teamName: string;
-  module: TeamKind;
-  // Sala Ágil
-  husAtivas?: number;
-  impedimentos?: number;
-  backlog?: number;
-  // Sustentação / RDM
-  demandasAbertas?: number;
-  slaEmRisco?: number;
-  bloqueadas?: number;
-  sprintAtivo?: string | null;
+interface TeamCardProps {
+  t: {
+    teamId: string;
+    teamName: string;
+    module: string;
+    husAtivas: number;
+    impedimentos: number;
+    backlog: number;
+    demandasAbertas: number;
+    slaEmRisco: number;
+    bloqueadas: number;
+    sprintAtivo: string | null;
+  };
+  onClick?: () => void;
 }
 
 interface TeamSummaryCardsProps {
-  teams: TeamSummaryItem[];
+  teams: TeamCardProps["t"][];
   loading: boolean;
   onTeamClick?: (teamId: string) => void;
 }
 
-const MODULE_COLORS: Record<string, { badge: string; dot: string }> = {
-  "sala-agil":  { badge: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",  dot: "bg-blue-500" },
-  sustentacao:  { badge: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300",  dot: "bg-teal-500" },
-  rdm:          { badge: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300", dot: "bg-purple-500" },
-};
-
-function getModuleColor(module: string) {
-  return MODULE_COLORS[module] ?? { badge: "bg-muted text-muted-foreground", dot: "bg-gray-400" };
-}
-
-function getModuleLabel(module: string) {
-  if (module === "sala-agil")  return "Sala Ágil";
-  if (module === "sustentacao") return "Sustentação";
-  if (module === "rdm")        return "RDM";
-  return module;
-}
-
-function TeamCard({ t, onClick }: { t: TeamSummaryItem; onClick?: () => void }) {
-  const isSalaAgil = t.module === "sala-agil";
-  const colors = getModuleColor(t.module);
+function TeamCard({ t, onClick }: TeamCardProps) {
+  const isAgil = t.module === "sala-agil";
 
   return (
     <div
-      className="min-w-[220px] max-w-[260px] rounded-xl border bg-card shadow-sm p-4 flex flex-col gap-3 shrink-0 cursor-pointer hover:shadow-md transition-shadow"
       onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && onClick?.()}
-      aria-label={`Ver detalhes do time ${t.teamName}`}
+      className="min-w-[240px] max-w-[280px] rounded-xl bg-card p-5 shadow-sm border border-border/50 hover:border-primary/50 transition-all cursor-pointer group shrink-0"
     >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold leading-tight">{t.teamName}</p>
-          {t.sprintAtivo && (
-            <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{t.sprintAtivo}</p>
-          )}
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className={`p-1.5 rounded-lg ${isAgil ? "bg-primary/10 text-primary" : "bg-blue-50 text-blue-600 dark:bg-blue-950/40"}`}>
+            {isAgil ? <Zap className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold truncate group-hover:text-primary transition-colors">{t.teamName}</h3>
+            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+              {isAgil ? "Sala Ágil" : "Sustentação"}
+            </span>
+          </div>
         </div>
-        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${colors.badge}`}>
-          {getModuleLabel(t.module)}
-        </span>
       </div>
 
-      {/* Metrics */}
-      <div className="space-y-1.5">
-        {isSalaAgil ? (
+      <div className="space-y-2 mb-4">
+        {isAgil ? (
           <>
-            <Metric label="HUs Ativas"  value={t.husAtivas  ?? 0} />
-            <Metric label="Impedimentos" value={t.impedimentos ?? 0} danger={(t.impedimentos ?? 0) > 0} />
-            <Metric label="Backlog"     value={t.backlog    ?? 0} />
+            <Metric label="HUs Ativas" value={t.husAtivas} />
+            <Metric label="Impedimentos" value={t.impedimentos} danger={t.impedimentos > 0} />
+            <Metric label="Backlog" value={t.backlog} />
           </>
         ) : (
           <>
-            <Metric label="Demandas Abertas" value={t.demandasAbertas ?? 0} />
-            <Metric label="SLA em Risco"     value={t.slaEmRisco     ?? 0} danger={(t.slaEmRisco ?? 0) > 0} />
-            <Metric label="Bloqueadas"       value={t.bloqueadas     ?? 0} warn={(t.bloqueadas ?? 0) > 0} />
+            <Metric label="Demandas Abertas" value={t.demandasAbertas} />
+            <Metric label="SLA em Risco" value={t.slaEmRisco} danger={t.slaEmRisco > 0} />
+            <Metric label="Bloqueadas" value={t.bloqueadas} warn={t.bloqueadas > 0} />
           </>
         )}
       </div>
 
-      {/* Footer link */}
-      <div className="flex items-center gap-1 text-[11px] font-medium mt-auto pt-1 border-t">
-        <span className="text-primary">Ver detalhes</span>
-        <ChevronRight className="h-3 w-3 text-primary" />
+      <div className="pt-3 border-t border-border/50 flex items-center justify-between">
+        <span className="text-[10px] text-primary font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+          Ver detalhes
+        </span>
+        <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
       </div>
     </div>
   );
@@ -105,15 +84,15 @@ function Metric({
   warn?: boolean;
 }) {
   const valueClass = danger
-    ? "text-red-600 dark:text-red-400 font-semibold"
+    ? "text-destructive font-bold"
     : warn
-    ? "text-orange-500 dark:text-orange-400 font-semibold"
-    : "font-medium";
+    ? "text-orange-500 font-bold"
+    : "font-semibold text-foreground";
 
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className={`text-sm tabular-nums ${valueClass}`}>{value}</span>
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className={`text-xs tabular-nums ${valueClass}`}>{value}</span>
     </div>
   );
 }
@@ -121,11 +100,16 @@ function Metric({
 export function TeamSummaryCards({ teams, loading, onTeamClick }: TeamSummaryCardsProps) {
   if (loading) {
     return (
-      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+      <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-none">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="min-w-[220px] max-w-[260px] rounded-xl border bg-card shadow-sm p-4 flex flex-col gap-3 shrink-0">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-3 w-20" />
+          <div key={i} className="min-w-[240px] rounded-xl bg-card p-5 shadow-sm border border-border/50 shrink-0 space-y-4">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-8 w-8 rounded-lg" />
+              <div className="space-y-1">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            </div>
             <div className="space-y-2">
               <Skeleton className="h-3 w-full" />
               <Skeleton className="h-3 w-full" />
@@ -139,14 +123,15 @@ export function TeamSummaryCards({ teams, loading, onTeamClick }: TeamSummaryCar
 
   if (teams.length === 0) {
     return (
-      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-        Nenhum time encontrado para os filtros selecionados.
+      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3 bg-muted/5 rounded-xl border border-dashed">
+        <AlertTriangle className="h-8 w-8 opacity-20" />
+        <p className="text-sm">Nenhum time encontrado para os filtros selecionados.</p>
       </div>
     );
   }
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin snap-x snap-mandatory">
+    <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-none snap-x snap-mandatory">
       {teams.map((t) => (
         <div key={t.teamId} className="snap-start">
           <TeamCard t={t} onClick={() => onTeamClick?.(t.teamId)} />

@@ -23,6 +23,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { DashboardFilters } from "@/features/admin/components/DashboardFilters";
 import { ExecutiveKpis } from "@/features/admin/components/ExecutiveKpis";
 import { TeamSummaryCards } from "@/features/admin/components/TeamSummaryCards";
+import { TeamDetailDrawer } from "@/features/admin/components/TeamDetailDrawer";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AxionLogo } from "@/components/AxionLogo";
 import type { TeamKpis, AdminKpis } from "@/features/admin/hooks/useAdminKpis";
@@ -59,9 +60,6 @@ const NAV_ITEMS = [
 
 type PageKey = (typeof NAV_ITEMS)[number]["key"];
 
-// ---------------------------------------------------------------------------
-// Hook para detectar dark mode e retornar cor de fundo opaca para o top bar
-// ---------------------------------------------------------------------------
 function useTopBarBg() {
   const [bg, setBg] = useState<string>("#ffffff");
 
@@ -77,15 +75,11 @@ function useTopBarBg() {
         setBg(isDark ? "#171614" : "#f7f6f2");
       }
     };
-
     update();
-
     const obs = new MutationObserver(update);
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     mq.addEventListener("change", update);
-
     return () => {
       obs.disconnect();
       mq.removeEventListener("change", update);
@@ -95,17 +89,15 @@ function useTopBarBg() {
   return bg;
 }
 
-// ---------------------------------------------------------------------------
-// VisaoGeralPage — corpo da página (sem header próprio)
-// ---------------------------------------------------------------------------
 interface VisaoGeralPageProps {
   byTeam: TeamKpis[];
   loading: boolean;
   dataWarnings: string[] | null | undefined;
   globalKpis: AdminKpis["global"];
+  onViewTeamDetails: (id: string) => void;
 }
 
-function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGeralPageProps) {
+function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamDetails }: VisaoGeralPageProps) {
   const { pendingFilters, appliedTeamId, appliedModule, handleChange, handleApply } = useDashboardFilters();
 
   const filteredByTeam = useMemo(() => {
@@ -162,7 +154,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
   const [scrollTeam, setScrollTeam] = useState("all");
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       {dataWarnings && dataWarnings.length > 0 && (
         <Alert variant="destructive" className="py-2">
           <AlertTriangle className="h-3.5 w-3.5" />
@@ -179,9 +171,9 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
         loading={loading}
       />
 
-      {/* 2. ACESSO RÁPIDO — primeiro item de conteúdo após os filtros */}
+      {/* 2. ACESSO RÁPIDO */}
       <section aria-label="Acesso rápido">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Acesso Rápido</h2>
+        <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3">Acesso Rápido</h2>
         <ModuleQuickAccess kpis={globalKpis} />
       </section>
 
@@ -201,8 +193,8 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
 
       {/* 4. RESUMO POR TIME */}
       <section aria-label="Resumo por time">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Resumo por Time</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Resumo por Time</h2>
           <div className="flex gap-1">
             <button
               className="rounded-md border p-1 hover:bg-muted transition-colors"
@@ -220,15 +212,15 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
             </button>
           </div>
         </div>
-        <div id="team-scroll">
-          <TeamSummaryCards teams={teamCards} loading={loading} onTeamClick={(id) => setScrollTeam(id)} />
+        <div id="team-scroll" className="overflow-hidden">
+          <TeamSummaryCards teams={teamCards} loading={loading} onTeamClick={onViewTeamDetails} />
         </div>
       </section>
 
       {/* 5. INDICADORES POR MÓDULO */}
       {(appliedModule === "todos" || appliedModule === "sala-agil") && (
         <section aria-label="Indicadores Sala Ágil">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-4">
             Indicadores por Módulo
           </h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -246,7 +238,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
 
       {appliedModule === "sustentacao" && (
         <section aria-label="Indicadores Sustentação">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-4">
             Indicadores por Módulo
           </h2>
           <div className="rounded-xl border bg-card shadow-sm p-4">
@@ -257,18 +249,25 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
 
       {/* 6 + 7. DETALHE E DESEMPENHO POR TIME */}
       <section aria-label="Detalhamento operacional">
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
-            <div className="px-4 pt-4 pb-2">
-              <h2 className="text-sm font-semibold">Detalhe por Time</h2>
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <div className="rounded-xl border bg-card shadow-sm overflow-hidden xl:col-span-2 flex flex-col">
+            <div className="px-4 py-3 border-b bg-muted/20">
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Detalhe por Time</h2>
             </div>
-            <TeamDetailPanel byTeam={filteredByModule} selectedTeam={scrollTeam} onSelect={setScrollTeam} />
+            <div className="p-4 flex-1">
+              <TeamDetailPanel
+                byTeam={filteredByModule}
+                selectedTeam={scrollTeam}
+                onSelect={setScrollTeam}
+                onViewDetails={onViewTeamDetails}
+              />
+            </div>
           </div>
-          <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
-            <div className="px-4 pt-4 pb-2">
-              <h2 className="text-sm font-semibold">Desempenho por Time</h2>
+          <div className="rounded-xl border bg-card shadow-sm overflow-hidden xl:col-span-1 flex flex-col">
+            <div className="px-4 py-3 border-b bg-muted/20">
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Desempenho por Time</h2>
             </div>
-            <div className="px-2 pb-4">
+            <div className="p-4 flex-1 flex flex-col justify-center">
               <ComparativeChart byTeam={filteredByModule} selectedTeam={scrollTeam} />
             </div>
           </div>
@@ -278,15 +277,13 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
   );
 }
 
-// ---------------------------------------------------------------------------
-// AdminDashboard — shell (sidebar + main)
-// ---------------------------------------------------------------------------
 function AdminDashboardInner() {
   const { profile, signOut } = useAuth();
   const { isGestor, selectedContractId, selectedContract } = useContractContext();
   const navigate = useNavigate();
   const [activePage, setActivePage] = useState<PageKey>("visao-geral");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [detailTeamId, setDetailTeamId] = useState<string | null>(null);
 
   const { global: g, byTeam, loading, dataWarnings } = useAdminKpis(selectedContractId);
   const { notifications, criticalCount, warningCount } = useNotifications(byTeam ?? []);
@@ -325,9 +322,6 @@ function AdminDashboardInner() {
   const isVisaoGeral = activePage === "visao-geral";
   const activeLabel = NAV_ITEMS.find((n) => n.key === activePage)?.label ?? "";
 
-  // ---------------------------------------------------------------------------
-  // Sidebar
-  // ---------------------------------------------------------------------------
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
     <aside
       className={[
@@ -449,7 +443,15 @@ function AdminDashboardInner() {
   const renderPage = () => {
     switch (activePage) {
       case "visao-geral":
-        return <VisaoGeralPage byTeam={byTeam ?? []} loading={loading} dataWarnings={dataWarnings} globalKpis={g} />;
+        return (
+          <VisaoGeralPage
+            byTeam={byTeam ?? []}
+            loading={loading}
+            dataWarnings={dataWarnings}
+            globalKpis={g}
+            onViewTeamDetails={setDetailTeamId}
+          />
+        );
       case "historico":
         return <AdminHistoricoPage />;
       case "capacidade":
@@ -472,7 +474,6 @@ function AdminDashboardInner() {
   return (
     <div className="min-h-screen flex bg-background">
       <Sidebar />
-
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 lg:hidden flex">
           <div className="flex-1 bg-black/50" onClick={() => setSidebarOpen(false)} />
@@ -481,7 +482,6 @@ function AdminDashboardInner() {
           </div>
         </div>
       )}
-
       <div className="flex-1 flex flex-col min-h-screen lg:ml-60">
         <header
           className="sticky top-0 z-20 flex items-center gap-3 h-14 px-4 lg:px-6 shrink-0"
@@ -498,41 +498,45 @@ function AdminDashboardInner() {
           >
             <Menu className="h-4 w-4" />
           </button>
-
-          <div className="flex flex-col justify-center min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col items-center justify-center min-w-0 flex-1">
+            <div className="flex items-center justify-center gap-2">
               <h1 className="text-[15px] font-bold leading-none tracking-tight truncate">{activeLabel}</h1>
               {loading && isVisaoGeral && (
                 <RefreshCw className="h-3 w-3 text-muted-foreground animate-spin shrink-0" aria-label="Carregando" />
               )}
             </div>
             {isVisaoGeral && (
-              <div className="flex items-center gap-1.5 mt-[3px]">
-                <span className="text-xs font-semibold text-foreground truncate">{selectedContract?.name ?? "—"}</span>
+              <div className="flex items-center justify-center gap-1.5 mt-[3px]">
+                <span className="text-xs font-semibold text-foreground truncate">
+                  {selectedContract?.name ?? "CONTRATO DE FABRICA PF"}
+                </span>
                 <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
                   · Última atualização: {lastUpdatedLabel}
                 </span>
               </div>
             )}
           </div>
-
           <div className="hidden lg:flex flex-col items-end shrink-0">
             <span className="text-[11px] text-muted-foreground capitalize leading-none">{dataLabel}</span>
             <span className="text-[13px] font-semibold tabular-nums leading-tight mt-0.5">{horaLabel}</span>
           </div>
-
           <div className="flex items-center gap-2 shrink-0">
             <ThemeToggle />
             <NotificationBell notifications={notifications} criticalCount={criticalCount} warningCount={warningCount} />
           </div>
         </header>
-
         <main className="flex-1 p-4 lg:p-6 overflow-auto">{renderPage()}</main>
-
         <footer className="text-center text-[11px] text-muted-foreground py-3 border-t px-4">
           Axion Admin © 2026 · Todos os direitos reservados.
         </footer>
       </div>
+
+      <TeamDetailDrawer
+        teamId={detailTeamId}
+        open={!!detailTeamId}
+        onClose={() => setDetailTeamId(null)}
+        allKpis={byTeam ?? []}
+      />
     </div>
   );
 }
